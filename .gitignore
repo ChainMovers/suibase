@@ -1,0 +1,15 @@
+# macos cruft
+.DS_Store
+
+#### Python Ignores
+# Virtual environment
+env
+.env
+# Compiled code
+__pycache__
+
+# pytest cruft
+.pytest_cache
+
+# vscode cruft
+.vscode
