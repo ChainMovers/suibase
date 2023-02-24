@@ -1,0 +1,289 @@
+#!/bin/bash
+
+# Do not call this script directly. It is a "common script" called by the other scripts.
+#
+# It initializes a bunch of environment variable, verify that some initialization took 
+# place, identify some common user errors etc...
+
+# DTP does not work with version below these.
+MIN_SUI_VERSION="sui 0.22.0"
+MIN_RUST_VERSION="rustc 1.65.0"
+
+# Mandatory command line input
+SCRIPTS_DIR=$1
+SCRIPT_NAME=$2
+NETNAME=$3
+SUI_REPO_BRANCH=$4
+
+# Utility functions.
+setup_error() { echo "$*" 1>&2 ; exit 1; }
+export -f setup_error
+version_greater_equal() { printf '%s\n%s\n' "$2" "$1" | sort --check=quiet --version-sort; }
+export -f version_greater_equal
+script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
+export -f script_cmd
+beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
+export -f beginswith
+
+# Two very convenient variables for directories.
+SUI_BASE_DIR="$(cd "$(dirname "$SCRIPTS_DIR")"; pwd)" # This does one-level above /scripts (absolute path).
+WORKDIRS="$SUI_BASE_DIR/workdirs"
+
+# Some other commonly used locations.
+MOVE_SRC_DIR_REL="$SCRIPTS_DIR/../move"
+MOVE_SRC_DIR="$(cd "$(dirname "$MOVE_SRC_DIR_REL")"; pwd)/$(basename "$MOVE_SRC_DIR_REL")"
+LOCAL_BIN="$HOME/.local/bin"
+
+SUI_REPO_DIR="$WORKDIRS/$SUI_REPO_BRANCH-branch"
+SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
+
+NETWORK_DATA_DIR="$WORKDIRS/$NETNAME-workdir"
+PUBLISHED_DATA_DIR="$NETWORK_DATA_DIR/published_data"
+
+# Configuration files (often needed for sui CLI calls)
+NETWORK_CONFIG="$NETWORK_DATA_DIR/network.yaml"
+CLIENT_CONFIG="$NETWORK_DATA_DIR/client.yaml"
+
+SCRIPT_OUTPUT="$PUBLISHED_DATA_DIR/publish_output.txt"
+PACKAGE_ID_OUTPUT="$PUBLISHED_DATA_DIR/package_id.txt"
+CLIENT_ADDRESSES_OUTPUT="$PUBLISHED_DATA_DIR/client_addresses.txt"
+
+build_sui_repo_branch() {
+
+  # Verify Sui pre-requisites are installed.
+  which curl &> /dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites";
+  which git &> /dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites";
+  which cmake &> /dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites";
+  which rustc &> /dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites";
+  which cargo &> /dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites";
+
+  # Verify Rust is recent enough.
+  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version";
+
+  # If not already done, get the github sui $SUI_REPO_BRANCH.
+  if [ ! -d "$WORKDIRS/$SUI_REPO_BRANCH-branch" ]
+  then
+    git clone -b devnet https://github.com/MystenLabs/sui.git "$WORKDIRS/$SUI_REPO_BRANCH-branch"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
+  fi
+
+  # Update sui devnet local repo (if needed)
+  (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git remote update >& /dev/null)
+  V1=$(cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; git rev-parse HEAD)
+  V2=$(cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; git rev-parse '@{u}')
+  if [ "$V1" != "$V2" ]
+  then 
+    # Does a bit more than needed, but should allow to recover
+    # from most operator error...
+    echo Updating sui $NETNAME in sui-base...
+    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git switch $SUI_REPO_BRANCH > /dev/null)
+    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git fetch > /dev/null)
+    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
+    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git merge '@{u}')
+  fi
+
+  # Verify sui built is latest.
+  echo Building $NETNAME using latest Sui $SUI_REPO_BRANCH branch...
+  (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; cargo build)
+
+  # Sanity test that the sui binary works
+  if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+    setup_error "$SUI_BIN_DIR/sui binary not found"
+  fi
+
+  update_SUI_VERSION_var;
+
+  # Check if sui is recent enough.
+  version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
+}
+
+export -f build_sui_repo_branch
+
+check_dev_setup() {
+  # Sanity check the setup was completed successfully.
+  #
+  # This should be check for most scripts.
+  #
+  # This is to minimize support/confusion. First, get the initial setup right
+  # before letting the user do more damage...
+  if [ ! -d "$WORKDIRS" ]; then
+    setup_error "$WORKDIRS missing. Please run '$NETNAME update' first"
+  fi
+
+  if [ ! -d "$WORKDIRS/$SUI_REPO_BRANCH-branch" ]; then
+    setup_error "$WORKDIRS/sui-$SUI_REPO_BRANCH-branch missing. Please run '$NETNAME update' first"
+  fi
+
+  if [ ! -d "$WORKDIRS/$NETNAME-workdir" ]; then
+    setup_error "$WORKDIRS/$NETNAME-workdir missing. Please run '$NETNAME update' first"
+  fi
+
+  if [ ! -f "$NETWORK_CONFIG" ]; then
+    setup_error "$NETWORK_CONFIG missing. Please run '$NETNAME update' first"
+  fi
+
+  if [ ! -f "$CLIENT_CONFIG" ]; then
+    setup_error "$CLIENT_CONFIG missing. Please run '$NETNAME update' first"
+  fi
+}
+export -f check_dev_setup
+
+
+is_localnet_installed() {
+
+  # Just check if present on the filesystem, not if running or executeable.
+  # Detect if any problem. Return true only if installation is likely healthy.
+  #
+  # That one is differnt than check_dev_setup because we do not want to 
+  # report error, we just want to detect and fix automatically.
+  if [ ! -d "$WORKDIRS" ]; then
+    false; return;
+  fi
+
+  if [ ! -d "$WORKDIRS/$SUI_REPO_BRANCH-branch" ]; then
+    false; return;
+  fi
+
+  if [ ! -d "$WORKDIRS/$NETNAME-workdir" ]; then
+    false; return;
+  fi
+
+  if [ ! -f "$NETWORK_CONFIG" ]; then
+    false; return;
+  fi
+
+  if [ ! -f "$CLIENT_CONFIG" ]; then
+    false; return;
+  fi
+
+  if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+    false; return;
+  fi
+
+  true; return;
+}
+export -f is_localnet_installed
+
+common_init_dev_setup() {
+  # This is intended to be a fast initialization setup, and
+  # no-op if already all setup. Intent is just to fix symlinks if
+  # user did accidently deleted them and save the day.
+  mkdir -p "$WORKDIRS"
+  mkdir -p "$WORKDIRS/$NETNAME-workdir"
+
+  echo "Output location = $WORKDIRS"
+}
+export -f common_init_dev_setup
+
+update_SUI_PROCESS_PID_var() {
+  # Useful to check if the sui process is running (this is the parent for the "localnet")
+  #
+  # Details on the cryptic parsing:
+  #   Get ps with "sui start" in its command line, grep exclude itself from the list, head takes the first process (should 
+  #   not be more than one) the 1st sed remove leading space, the 2nd sed split words into line and finally the pid is the 
+  #   word on the first/head line.
+  #
+  SUI_PROCESS_PID=$(ps x -o pid,cmd | grep "sui start" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+}
+export -f update_SUI_PROCESS_PID_var
+
+update_SUI_VERSION_var() {
+  # Take note that $SUI_BIN_DIR here is used to properly consider if the
+  # context of the script is localnet, devnet, testnet, mainet... (they
+  # are not the same binaries and versions).
+  SUI_VERSION=$($SUI_BIN_DIR/sui --version)
+  if [ -z "$SUI_VERSION" ]; then
+    setup_error "$SUI_BIN_DIR/sui --version not running as expected"
+  fi
+}
+export -f update_SUI_VERSION_var
+
+stop_sui_process() {
+  # success/failure is reflected by the SUI_PROCESS_PID var.
+  # noop if the process is already stopped.
+  update_SUI_PROCESS_PID_var;
+  if [ ! -z "$SUI_PROCESS_PID" ]; then  
+    echo "Stopping $NETNAME (process pid $SUI_PROCESS_PID)"
+    skill -9 $SUI_PROCESS_PID
+    # Make sure it is dead.
+    end=$((SECONDS+15))
+    DEAD=false
+    AT_LEAST_ONE_SECOND=false
+    while [ $SECONDS -lt $end ]; do
+      update_SUI_PROCESS_PID_var;
+      if [ -z "$SUI_PROCESS_PID" ]; then
+        break
+      else
+        echo -n "."
+        sleep 1
+        AT_LEAST_ONE_SECOND=true
+      fi
+    done
+
+    # Just UI aesthetic newline for when there was "." printed.
+    if [ "$AT_LEAST_ONE_SECOND" = true ]; then
+      echo 
+    fi
+
+    if [ ! -z "$SUI_PROCESS_PID" ]; then
+      setup_error "Sui process pid=$SUI_PROCESS_PID still running. Try again, or stop (kill) the sui process yourself before proceeding."
+    fi
+  fi
+}
+export -f stop_sui_process
+
+start_sui_process() {
+  # success/failure is reflected by the SUI_PROCESS_PID var.
+  # noop if the process is already started.
+
+  # Detect an installation problem (took a while to debug when it did happen)
+  if [ ! -f "$NETWORK_CONFIG" ]; then
+    setup_error "$NETWORK_CONFIG missing. Please re-run '$NETNAME update' to fix."
+  fi
+
+  if [ ! -f "$CLIENT_CONFIG" ]; then
+    setup_error "$CLIENT_CONFIG missing. Please re-run '$NETNAME update' to fix."
+  fi
+
+  update_SUI_PROCESS_PID_var;
+  if [ -z "$SUI_PROCESS_PID" ]; then
+    echo "Starting localnet process (may take up to 30 secs)"
+    $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG" >& "$NETWORK_DATA_DIR/sui-process.log" &
+    NEW_SUI_PID=$!    
+
+    # Loop until "sui client" confirms to be working, or exit if that takes
+    # more than 30 seconds.
+    end=$((SECONDS+30))
+    ALIVE=false
+    AT_LEAST_ONE_SECOND=false
+    while [ $SECONDS -lt $end ]; do
+      CHECK_ALIVE=$($SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
+      if [ ! -z "$CHECK_ALIVE" ]; then
+        ALIVE=true
+        break
+      else
+        echo -n "."
+        sleep 1
+        AT_LEAST_ONE_SECOND=true
+      fi      
+    done
+
+    # Just UI aesthetic newline for when there was "." printed.
+    if [ "$AT_LEAST_ONE_SECOND" = true ]; then
+      echo 
+    fi
+
+    # Act on success/failure of the sui process responding to "sui client".
+    if [ "$ALIVE" = false ]; then 
+      echo "Sui process not responding. Try again? (may be the host is too slow?)."
+      exit;
+    fi
+
+    update_SUI_PROCESS_PID_var;
+    echo "localnet started (process pid $SUI_PROCESS_PID)"
+    update_SUI_VERSION_var;
+    echo "$SUI_VERSION"
+  fi
+}
+export -f start_sui_process
+

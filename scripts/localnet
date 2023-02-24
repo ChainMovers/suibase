@@ -1,0 +1,233 @@
+#!/bin/bash
+
+# Script to create and control a Sui local network.
+
+
+NETNAME="localnet"
+SUI_REPO_BRANCH="devnet"
+SUI_SCRIPT="lsui"
+
+usage() {
+  echo "Usage: localnet [COMMAND]"
+  echo
+  echo "Simulate a sui network running fully on this machine"
+  echo "Accessible from http://0.0.0.0:9000"
+  echo
+  echo "COMMAND:"
+  echo "   start:  start localnet (sui process will run in background)"
+  echo "   stop:   stop the localnet (sui process will exit)"
+  echo "   status: indicate if running or not"
+  echo "   update: Update local sui repo branch and regen localnet."
+  echo "   regen:  Regenerate localnet. Useful for recovering."  
+  echo
+
+  if [ -d "$HOME/sui-base/localnet-workdir" ]; then
+    echo "All localnet DB and temporary files are in $HOME/sui-base/localnet-workdir"
+  fi
+  exit
+}
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "sui-base-script-name" ]]; then
+  echo "localnet"
+  exit
+fi
+
+# One command always expected from the user.
+CMD_START_REQ=false
+CMD_STOP_REQ=false
+CMD_STATUS_REQ=false
+CMD_UPDATE_REQ=false
+CMD_REGEN_REQ=false
+
+case "$1" in
+  start) CMD_START_REQ=true ;;
+  stop) CMD_STOP_REQ=true ;;
+  status) CMD_STATUS_REQ=true ;;
+  update) CMD_UPDATE_REQ=true ;;
+  regen) CMD_REGEN_REQ=true ;;
+  *) usage;;
+esac
+
+shift # Consume the command.
+
+# Advanced optional params that are not in the documentation.
+DEBUG_RUN=false
+GENESIS=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        # -t|--target) target="$2"; shift ;; That's an example with a parameter
+        # -f|--flag) flag=1 ;; That's an example flag
+        -g|--genesis) GENESIS=true ;;
+        -d|--debug) DEBUG_RUN=true ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+if [ "$GENESIS" = true ]; then
+  echo "Genesis flag set. Will regenerate the default client addresses and coin objects for localnet."
+fi
+
+if [ "$DEBUG_RUN" = true ]; then
+  echo "Debug flag set. Will run Localnet in foreground Ctrl-C to Exit"
+fi
+
+# Call the initialization code common to all script.
+SCRIPT_READLINK="$(readlink -f "$0")"
+SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
+SCRIPT_DIR="$(dirname $SCRIPT_READLINK)"
+source "$SCRIPT_DIR/script_common" "$SCRIPT_DIR" "$SCRIPT_NAME" "$NETNAME" "$SUI_REPO_BRANCH"
+
+# First, take care of the easy "status" command that does not touch anything.
+update_SUI_PROCESS_PID_var;
+if [ "$CMD_STATUS_REQ" = true ]; then    
+  if is_localnet_installed; then  
+    if [ -z "$SUI_PROCESS_PID" ]; then
+      echo "localnet not running"
+    else
+      echo "localnet running (process pid $SUI_PROCESS_PID)"
+      update_SUI_VERSION_var;
+      echo "$SUI_VERSION"
+    fi  
+  else
+    echo "localnet not installed"
+  fi
+  exit
+fi
+
+# Second, take care of the case that just stop/start the localnet.
+if [ "$CMD_START_REQ" = true ]; then
+  if is_localnet_installed; then
+    if [ "$SUI_PROCESS_PID" ]; then
+      echo "localnet already running (process pid $SUI_PROCESS_PID)"
+      update_SUI_VERSION_var;
+      echo "$SUI_VERSION"    
+    else
+      start_sui_process;
+    fi
+    exit
+  fi
+  # Note: If localnet not install, keep going to install it.
+fi
+
+if [ "$CMD_STOP_REQ" = true ]; then
+  if is_localnet_installed; then
+    if [ "$SUI_PROCESS_PID" ]; then
+      stop_sui_process;
+      # Confirm result (although stop_sui_process may have handled error already)
+      update_SUI_PROCESS_PID_var;
+      if [ "$SUI_PROCESS_PID" ]; then
+        setup_error "Failed to stop localnet"
+      else
+        echo "localnet now stopped"
+      fi
+    else
+      echo "localnet already stopped"
+    fi
+  else
+    echo "localnet not installed"
+  fi
+  exit
+fi
+
+common_init_dev_setup;
+
+# Finally, take care of the more complicated cases that involves
+# git, localnet workdir/config creation and genesis.
+
+# The script should not be called from a location that could get deleted.
+# It would work (on Linux), but it is just to avoid user confusion later.
+
+CWD=$(pwd -P)
+if [[ "$CWD" = "$NETWORK_DATA_DIR"* ]]; then
+  echo "This script should not be called from a location that could be deleted [$NETWORK_DATA_DIR]."
+  setup_error "Change current directory location and try again."
+fi
+
+if [[ "$CWD" = "$PUBLISHED_DATA_DIR"* ]]; then
+  echo "This script should not be called from a location that could be deleted [$PUBLISHED_DATA_DIR]."
+  setup_error "Change current directory location and try again."
+fi
+
+# Stop localnet (noop if not running)
+stop_sui_process;
+
+# Sui repo should not be updated on a regen
+if [ "$CMD_REGEN_REQ" = false ]; then
+  build_sui_repo_branch;
+fi
+
+# Clean-up previous localnet (if exists)
+RM_DIR="$NETWORK_DATA_DIR"
+if [ -d "$RM_DIR" ]; then
+  echo "Removing existing $RM_DIR directory"
+  rm -rf "$RM_DIR"
+fi
+
+# Delete localnet publish directory (if exists) to force re-publication.
+RM_DIR="$PUBLISH_DATA_DIR"
+if [ -d "$RM_DIR" ]; then
+  echo "Removing existing $RM_DIR directory"
+  rm -rf "$RM_DIR"
+fi
+
+if [ "$GENESIS" = true ]; then
+   echo "Generating NEW genesis configuration file only"
+   $SUI_BIN_DIR/sui genesis --working-dir "$GENESIS_DATA_DIR" --write-config "$GENESIS_DATA_DIR/config.yaml.new"
+   diff "$GENESIS_DATA_DIR/config.yaml.new" "$GENESIS_DATA_DIR/config.yaml"
+   exit
+fi
+
+echo "Creating new $NETNAME directory"
+mkdir -p "$NETWORK_DATA_DIR"
+if [ "$DEBUG_RUN" = true ]; then
+  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$NETWORK_DATA_DIR"
+else
+  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$NETWORK_DATA_DIR" >& /dev/null
+fi
+
+yes | cp -rf "$GENESIS_DATA_DIR/sui.keystore" "$NETWORK_DATA_DIR"
+yes | cp -rf "$GENESIS_DATA_DIR/client.yaml" "$NETWORK_DATA_DIR"
+
+# Replace placeholder string in client.yaml with an absolute path to the keystore.
+# Notice sed uses '+'' for seperator instead of '/' to avoid clash
+# with directory path. Also uses a .bak temp file because Mac (BSD) does not
+# allow in-place file change.
+SEARCH_STRING="<PUT_WORKING_DIR_PATH_HERE>"
+REPLACE_STRING="$NETWORK_DATA_DIR"
+sed -i.bak -e "s+$SEARCH_STRING+$REPLACE_STRING+g" "$NETWORK_DATA_DIR/client.yaml" && rm "$NETWORK_DATA_DIR/client.yaml.bak"
+
+# When need to start in foreground to debug.
+if [ "$DEBUG_RUN" = true ]; then
+  echo "Starting localnet process (foreground for debug)"
+  $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG"
+  exit
+fi
+
+# Start the new localnet normally.
+start_sui_process;
+
+# Make sure localnet exists in sui envs (ignore errors because likely already exists)
+echo "========"
+$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias localnet --rpc http://0.0.0.0:9000 >& /dev/null
+
+# Make localnet the active envs (should already be done, just in case, do it again here).
+$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env localnet > /dev/null
+
+# print sui envs to help debugging (if someone else is using this script).
+$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" envs
+echo "========"
+echo "All addresses with coins:"
+$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" addresses
+echo "========"
+
+WALLET_ADDR=$($SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" active-address)
+echo "All coins owned by $WALLET_ADDR (active):"
+$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" gas
+echo "========"
+echo
+echo "Remember:"
+echo "  Use \"lsui\" to access your localnet"
+echo
+echo "Success. Try it by typing \"lsui client gas\""

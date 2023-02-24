@@ -1,0 +1,86 @@
+#!/bin/bash
+
+# Get the fully qualified path of the /scripts directory
+# which is relative to *this* script being executed.
+SCRIPT_READLINK="$(readlink -f "$0")"
+SCRIPTS_DIR="$(dirname $SCRIPT_READLINK)/scripts"
+
+# Utility functions.
+setup_error() { echo "$*" 1>&2 ; exit 1; }
+is_user_root () { [ "${EUID:-$(id -u)}" -eq 0 ]; }
+
+# Function to simply create or update a symlink in 
+# ~/.local/bin toward a script in /scripts target.
+#
+# Has no effect if symlink already exists and matching.
+update_bin_path() { 
+  UBP_SRC_DIR="$HOME/.local/bin"
+  UBP_TARGET="$SCRIPTS_DIR/$1"
+  if [ -d "$UBP_SRC_DIR" ]; then
+    if [ ! -L "$UBP_SRC_DIR/$1" ]; then
+      ln -s "$UBP_TARGET" "$UBP_SRC_DIR/$1"
+      echo "   Symlink added: $UBP_SRC_DIR/$1 -> $UBP_TARGET"
+    else
+      # Verify link is as intended, if not replace it.
+      UBP_READLINK=$( readlink -f "$UBP_SRC_DIR/$1" )
+      if [[ "$UBP_READLINK" != "$UBP_TARGET" ]]; then
+         ln -sf "$UBP_TARGET" "$UBP_SRC_DIR/$1"
+         echo "   Symlink updated: $UBP_SRC_DIR/$1 -> $UBP_TARGET"
+      fi
+    fi
+  fi
+}
+
+main() {
+  if is_user_root; then
+    setup_error "Should not install sui-base as root (or sudo)"
+  fi
+
+  username=$(whoami)
+  echo Starting installation of sui-base...
+  update_bin_path "localnet"
+  #update_bin_path "testnet"
+  #update_bin_path "devnet"
+  update_bin_path "lsui"
+  #update_bin_path "tsui"
+  #update_bin_path "dsui"
+
+  # Final test that the scripts are "callable" by the user without
+  # specifying a path.
+  #
+  # This installation script should remain "self-contain" and
+  # avoid dependencies. It creates symlinks to other scripts, 
+  # but does not call into them, other then for this trivial
+  # final test.
+  test=$(localnet sui-base-script-name)
+  if [ "$test" != "localnet" ]; then
+    setup_error "setup of localnet symlink failed"
+  fi
+
+  test=$(lsui sui-base-script-name)
+  if [ "$test" != "lsui" ]; then
+    setup_error "setup of lsui symlink failed"
+  fi
+
+  #test=$(tsui sui-base-script-name)
+  #if [ "$test" != "tsui" ]; then
+  #  setup_error "setup of tsui symlink failed"
+  #fi
+
+  #test=$(dsui sui-base-script-name)
+  #if [ "$test" != "dsui" ]; then
+  #  setup_error "setup of dsui symlink failed"
+  #fi
+
+  echo 
+  echo "Scripts now accessible. For more info type \"localnet\"."
+  echo
+  echo "You can also now optionally start your localnet with:"
+  echo "  \$ localnet start"
+  echo
+  echo "Expect the first localnet creation to take minutes."
+  echo
+  echo "sui-base installation successful for user [$username]"
+}
+
+main;

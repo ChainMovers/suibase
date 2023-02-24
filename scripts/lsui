@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+# Equivalent to sui, but target the localnet and its proper config files (network.yaml and client.yaml)
+
+NETNAME="localnet"
+SUI_REPO_BRANCH="devnet"
+SUI_SCRIPT="lsui"
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "sui-base-script-name" ]]; then
+  echo $SUI_SCRIPT
+  exit
+fi
+
+# Just find the absolute path of the "dtp-dev" where most
+# dependencies will be downloaded and build/runtime files
+# will be located.
+SCRIPT_READLINK="$(readlink -f "$0")"
+SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
+SCRIPT_DIR="$(dirname $SCRIPT_READLINK)"
+source "$SCRIPT_DIR/script_common" "$SCRIPT_DIR" "$SCRIPT_NAME" "$NETNAME" "$SUI_REPO_BRANCH"
+
+check_dev_setup
+
+# Use the proper config automatically.
+SUI_SUBCOMMAND=$1
+if [[ "$1" = "client" || "$1" == "console" ]]; then  
+  shift 1
+  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
+  exit
+fi
+
+if [[ "$1" == "network" ]]; then
+  shift 1
+  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --network.config "$NETWORK_CONFIG" "$@"
+  exit
+fi
+
+if [[ "$1" == "genesis" ]]; then
+  if [[ "$2" == "--help" || "$2" == "-h" ]]; then
+    $SUI_BIN_DIR/sui genesis --help
+  fi
+  echo
+  setup_error "Error: Use dtp/script/init-localnet instead for re-initializing localnet"
+fi
+
+if [[ "$1" == "start" ]]; then
+  if [[ "$2" == "--help" || "$2" == "-h" ]]; then
+    $SUI_BIN_DIR/sui start --help
+  fi
+  echo
+  # TODO Consider implementing a start-localnet script instead.
+  setup_error "Error: Use dtp/script/init-localnet instead for re-initializing localnet"
+fi
+
+if [[ "$1" == "keytool" ]]; then
+  shift 1
+  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$KEYSTORE_FILE" "$@"
+  exit
+fi
+
+# Default
+$SUI_BIN_DIR/sui "$@"

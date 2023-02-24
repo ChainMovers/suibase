@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Function to remove sui-base scripts symlinks in ~/.local/bin
+# Has no effect if symlink does not exists.
+remove_bin_path() { 
+  UBP_SRC_DIR="$HOME/.local/bin"
+  if [ -d "$UBP_SRC_DIR" ]; then
+    if [ -L "$UBP_SRC_DIR/$1" ]; then
+      rm -f "$UBP_SRC_DIR/$1"
+      echo "   Symlink removed: $UBP_SRC_DIR/$1"
+    fi
+  fi
+}
+
+main() {
+
+  # TODO Check if localnet or other processes need to be stopped/killed.
+
+  username=$(whoami)
+
+  echo
+  remove_bin_path "localnet"
+  remove_bin_path "testnet"
+  remove_bin_path "devnet"
+  remove_bin_path "lsui"
+  remove_bin_path "tsui"
+  remove_bin_path "dsui"
+  echo
+  echo "sui-base scripts uninstalled successfully for user [$username]"  
+  echo
+}
+
+main;
