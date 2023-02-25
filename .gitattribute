@@ -1,0 +1,13 @@
+# Use Move syntax highlighter for Move IR code
+*.mvir linguist-language=Move
+
+# Default GitHub behaviour is LF for text files.
+* text=auto
+
+# Windows batch command always CRLF line endings.
+# Cover case of a a WSL checkout but executed by Windows.
+*.{cmd,[cC][mM][dD]} text eol=crlf
+*.{bat,[bB][aA][tT]} text eol=crlf
+
+# Enforce bash scripts always LF.
+*.sh text eol=lf
