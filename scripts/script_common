@@ -30,8 +30,8 @@ SUI_BASE_DIR="$(cd "$(dirname "$SCRIPTS_DIR")"; pwd)" # This does one-level abov
 WORKDIRS="$SUI_BASE_DIR/workdirs"
 
 # Some other commonly used locations.
-MOVE_SRC_DIR_REL="$SCRIPTS_DIR/../move"
-MOVE_SRC_DIR="$(cd "$(dirname "$MOVE_SRC_DIR_REL")"; pwd)/$(basename "$MOVE_SRC_DIR_REL")"
+#MOVE_SRC_DIR_REL="$SCRIPTS_DIR/../move"
+#MOVE_SRC_DIR="$(cd "$(dirname "$MOVE_SRC_DIR_REL")"; pwd)/$(basename "$MOVE_SRC_DIR_REL")"
 LOCAL_BIN="$HOME/.local/bin"
 
 SUI_REPO_DIR="$WORKDIRS/$SUI_REPO_BRANCH-branch"
@@ -45,9 +45,9 @@ PUBLISHED_DATA_DIR="$NETWORK_DATA_DIR/published_data"
 NETWORK_CONFIG="$NETWORK_DATA_DIR/network.yaml"
 CLIENT_CONFIG="$NETWORK_DATA_DIR/client.yaml"
 
-SCRIPT_OUTPUT="$PUBLISHED_DATA_DIR/publish_output.txt"
-PACKAGE_ID_OUTPUT="$PUBLISHED_DATA_DIR/package_id.txt"
-CLIENT_ADDRESSES_OUTPUT="$PUBLISHED_DATA_DIR/client_addresses.txt"
+#SCRIPT_OUTPUT="$PUBLISHED_DATA_DIR/publish_output.txt"
+#PACKAGE_ID_OUTPUT="$PUBLISHED_DATA_DIR/package_id.txt"
+#CLIENT_ADDRESSES_OUTPUT="$PUBLISHED_DATA_DIR/client_addresses.txt"
 
 build_sui_repo_branch() {
 
@@ -164,16 +164,13 @@ is_localnet_installed() {
 }
 export -f is_localnet_installed
 
-common_init_dev_setup() {
-  # This is intended to be a fast initialization setup, and
-  # no-op if already all setup. Intent is just to fix symlinks if
-  # user did accidently deleted them and save the day.
+common_create_workdirs() {
   mkdir -p "$WORKDIRS"
   mkdir -p "$WORKDIRS/$NETNAME-workdir"
 
   echo "Output location = $WORKDIRS"
 }
-export -f common_init_dev_setup
+export -f common_create_workdirs
 
 update_SUI_PROCESS_PID_var() {
   # Useful to check if the sui process is running (this is the parent for the "localnet")
@@ -287,3 +284,113 @@ start_sui_process() {
 }
 export -f start_sui_process
 
+ensure_client_OK() {
+  # This is just in case the user switch the envs on the clients instead of simply using
+  # the scripts... we have then to fix things up here. Not an error unless the fix fails.
+
+  # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
+
+  # Make sure localnet exists in sui envs (ignore errors because likely already exists) 
+  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $NETNAME --rpc http://0.0.0.0:9000 >& /dev/null
+
+  # Make localnet the active envs (should already be done, just in case, do it again here).
+  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $NETNAME > /dev/null
+}
+export -f ensure_client_OK
+
+publish_clear_output() {
+  if [ -n "$MOVE_TOML_PACKAGE_NAME" ]; then
+    rm -rf "$PUBLISH_DATA_DIR/$MOVE_TOML_PACKAGE_NAME/package_id.txt"
+  fi
+  # Following files created only on confirmed success of publication.
+  #rm -rf "$PUBLISH_DATA_DIR/client_addresses.txt"
+}
+export -f publish_clear_output
+
+# Check if there is a Move.toml at specified (parameter) directory.
+#
+# If not found, then look deeper at move/Move.toml.
+#
+# If not found, the variable is unset.
+#
+# When found, while at it, update also the following variable:
+#   MOVE_TOML_PACKAGE_NAME
+update_MOVE_TOML_DIR_var() {
+  unset MOVE_TOML_DIR
+  unset MOVE_TOML_PACKAGE_NAME
+
+  if [ -f $1/Move.toml ]; then
+    MOVE_TOML_DIR=$1
+  else
+    if [ -f $1/move/Move.toml ]; then
+      MOVE_TOML_DIR=$1/move
+    fi
+  fi
+
+  if [ -n "$MOVE_TOML_DIR" ]; then
+    # Extract "name" key from toml, we can do something less hackish if ever worth it...
+    # ... reality is the whole publish/upgrade process will likely change by mainnet.
+    MOVE_TOML_PACKAGE_NAME=$(sed -n '/^name *=* */{s///;s/^"//;s/"$//;p;}' "$MOVE_TOML_DIR/Move.toml")
+  fi
+}
+export -f update_MOVE_TOML_DIR_var
+
+publish_localnet() {  
+  ensure_client_OK;
+
+  if [ -z "$MOVE_TOML_PACKAGE_NAME" ]; then
+    echo "Package name could not be found"
+    exit
+  fi
+
+  INSTALL_DIR="$PUBLISHED_DATA_DIR/$MOVE_TOML_PACKAGE_NAME"
+
+  echo "Publishing [$MOVE_TOML_PACKAGE_NAME] in [$INSTALL_DIR]..."
+  mkdir -p "$INSTALL_DIR"
+
+  # Set the output for the "script_cmd"
+  SCRIPT_OUTPUT="$INSTALL_DIR/publish_output.txt"
+
+  # Run all unit tests.
+  script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
+
+  # Build the Move package for publication.
+  echo Publishing...
+  script_cmd "lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\""
+
+  # Grab the first line with an immutable "ID" after the "Created Objects" string.
+  id_line=$(cat "$SCRIPT_OUTPUT" | sed '1,/Created Objects/d' | grep 'ID' | grep 'Immutable')
+
+  if [ -z "$id_line" ]; then
+    setup_error "Could not find the package id from $SCRIPT_OUTPUT"
+  fi
+
+  ID=""
+  for i in $id_line
+  do  
+    if beginswith 0x $i; then
+      ID=$i
+      break;
+    fi  
+  done
+
+  if [ -z "$ID" ]; then
+    setup_error "Could not find Package id in $SCRIPT_OUTPUT"
+  fi
+
+  # TODO Validate the package ID is all hexadecimal
+
+  # Test the publication by retreiving object information from the network
+  # using that parsed package id.
+  script_cmd "lsui client object $ID"
+  validation=$(lsui client object $ID | grep "Move Package")
+  if [ -z "$validation" ]; then
+    setup_error "Unexpected object type (Not a Move Package)"
+  fi
+
+  echo "$ID" > "$INSTALL_DIR/package_id.txt"
+  echo
+  echo PackageID is [$ID]
+  echo Publication Successful
+}
+export -f publish_localnet

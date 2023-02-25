@@ -2,27 +2,32 @@
 
 # Script to create and control a Sui local network.
 
-
 NETNAME="localnet"
 SUI_REPO_BRANCH="devnet"
 SUI_SCRIPT="lsui"
 
 usage() {
-  echo "Usage: localnet [COMMAND]"
+  echo "Usage: localnet [COMMAND] <Options>"
   echo
   echo "Simulate a sui network running fully on this machine"
   echo "Accessible from http://0.0.0.0:9000"
   echo
   echo "COMMAND:"
-  echo "   start:  start localnet (sui process will run in background)"
-  echo "   stop:   stop the localnet (sui process will exit)"
-  echo "   status: indicate if running or not"
-  echo "   update: Update local sui repo branch and regen localnet."
-  echo "   regen:  Regenerate localnet. Useful for recovering."  
   echo
-
-  if [ -d "$HOME/sui-base/localnet-workdir" ]; then
-    echo "All localnet DB and temporary files are in $HOME/sui-base/localnet-workdir"
+  echo "   start:   start localnet (sui process will run in background)"
+  echo "   stop:    stop the localnet (sui process will exit)"
+  echo "   status:  indicate if running or not"
+  echo
+  echo "   update:  Update local sui repo branch and regen localnet."
+  echo
+  echo "   regen:   Regenerate localnet. Useful for recovering."
+  echo
+  echo "   publish: Publish module specified in the Move.toml found"
+  echo "            in current directory or optional '--path <path>'"
+  echo
+  # Quick check if installed, then help the user about the location.
+  if [ -d "$HOME/sui-base/workdirs" ]; then
+    echo "All localnet DB and sui-base outputs are in $HOME/sui-base/workdirs"
   fi
   exit
 }
@@ -39,6 +44,7 @@ CMD_STOP_REQ=false
 CMD_STATUS_REQ=false
 CMD_UPDATE_REQ=false
 CMD_REGEN_REQ=false
+CMD_PUBLISH_REQ=false
 
 case "$1" in
   start) CMD_START_REQ=true ;;
@@ -46,12 +52,13 @@ case "$1" in
   status) CMD_STATUS_REQ=true ;;
   update) CMD_UPDATE_REQ=true ;;
   regen) CMD_REGEN_REQ=true ;;
+  publish) CMD_PUBLISH_REQ=true ;;
   *) usage;;
 esac
 
 shift # Consume the command.
 
-# Advanced optional params that are not in the documentation.
+# Optional params (some are "advanced for debugging" and not in the help).
 DEBUG_RUN=false
 GENESIS=false
 while [[ "$#" -gt 0 ]]; do
@@ -60,6 +67,7 @@ while [[ "$#" -gt 0 ]]; do
         # -f|--flag) flag=1 ;; That's an example flag
         -g|--genesis) GENESIS=true ;;
         -d|--debug) DEBUG_RUN=true ;;
+        -p|--path) OPTIONAL_PATH="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -71,6 +79,22 @@ fi
 
 if [ "$DEBUG_RUN" = true ]; then
   echo "Debug flag set. Will run Localnet in foreground Ctrl-C to Exit"
+fi
+
+# Detect invalid COMMAND and Option combinations.
+
+# For now, -p <path> is valid only with the command 'publish'
+if [ -n "$OPTIONAL_PATH" ]; then
+  if [ "$CMD_PUBLISH_REQ" = true ]; then
+    # Validate if the path exists.
+    if [ ! -d "$OPTIONAL_PATH" ]; then
+      echo "Path [$OPTIONAL_PATH] not found"
+      exit
+    fi
+  else
+    echo "-p <path> option not valid with this command";
+    exit
+  fi
 fi
 
 # Call the initialization code common to all script.
@@ -131,13 +155,45 @@ if [ "$CMD_STOP_REQ" = true ]; then
   exit
 fi
 
-common_init_dev_setup;
+if [ "$CMD_PUBLISH_REQ" = true ]; then
+  if [ -n "$OPTIONAL_PATH" ]; then
+    update_MOVE_TOML_DIR_var $OPTIONAL_PATH;
+  else
+    update_MOVE_TOML_DIR_var $PWD;
+  fi
+
+  if [ -z $MOVE_TOML_DIR ]; then
+    echo "\"$NETNAME publish\" must have Move.toml in current directory or --path specified"
+  fi
+
+  if is_localnet_installed; then
+    # publication requires localnet to run. 
+    # If stopped, then try (once) to start it.
+    update_SUI_PROCESS_PID_var;
+    if [ "$SUI_PROCESS_PID" ]; then
+      publish_localnet;
+    else
+      start_sui_process;
+      if [ "$SUI_PROCESS_PID" ]; then
+        publish_localnet;
+      else
+        echo "Unable to start localnet"
+      fi
+    fi
+  else
+    echo "localnet not installed."
+  fi
+  exit
+fi
 
 # Finally, take care of the more complicated cases that involves
 # git, localnet workdir/config creation and genesis.
 
+common_create_workdirs; # Create $WORKDIRS (as needed)
+
 # The script should not be called from a location that could get deleted.
-# It would work (on Linux), but it is just to avoid user confusion later.
+# It would work (on Linux) because of reference counting, but it could
+# lead to some confusion for the user.
 
 CWD=$(pwd -P)
 if [[ "$CWD" = "$NETWORK_DATA_DIR"* ]]; then
@@ -208,12 +264,8 @@ fi
 # Start the new localnet normally.
 start_sui_process;
 
-# Make sure localnet exists in sui envs (ignore errors because likely already exists)
 echo "========"
-$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias localnet --rpc http://0.0.0.0:9000 >& /dev/null
-
-# Make localnet the active envs (should already be done, just in case, do it again here).
-$SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env localnet > /dev/null
+ensure_client_OK;
 
 # print sui envs to help debugging (if someone else is using this script).
 $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" envs
@@ -231,3 +283,4 @@ echo "Remember:"
 echo "  Use \"lsui\" to access your localnet"
 echo
 echo "Success. Try it by typing \"lsui client gas\""
+
