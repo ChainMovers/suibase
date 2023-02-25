@@ -58,6 +58,7 @@ Session.vim
 .vscode/ltex.disabledRules.en-US.txt
 .vscode/ltex.dictionary.en-US.txt
 .vscode/settings.json
+.vscode/launch.json
 
 ## Ignore tags created by etags, ctags, gtags (GNU global) and cscope
 TAGS
