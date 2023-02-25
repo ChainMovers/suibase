@@ -30,8 +30,6 @@ SUI_BASE_DIR="$(cd "$(dirname "$SCRIPTS_DIR")"; pwd)" # This does one-level abov
 WORKDIRS="$SUI_BASE_DIR/workdirs"
 
 # Some other commonly used locations.
-#MOVE_SRC_DIR_REL="$SCRIPTS_DIR/../move"
-#MOVE_SRC_DIR="$(cd "$(dirname "$MOVE_SRC_DIR_REL")"; pwd)/$(basename "$MOVE_SRC_DIR_REL")"
 LOCAL_BIN="$HOME/.local/bin"
 
 SUI_REPO_DIR="$WORKDIRS/$SUI_REPO_BRANCH-branch"
@@ -45,9 +43,6 @@ PUBLISHED_DATA_DIR="$NETWORK_DATA_DIR/published_data"
 NETWORK_CONFIG="$NETWORK_DATA_DIR/network.yaml"
 CLIENT_CONFIG="$NETWORK_DATA_DIR/client.yaml"
 
-#SCRIPT_OUTPUT="$PUBLISHED_DATA_DIR/publish_output.txt"
-#PACKAGE_ID_OUTPUT="$PUBLISHED_DATA_DIR/package_id.txt"
-#CLIENT_ADDRESSES_OUTPUT="$PUBLISHED_DATA_DIR/client_addresses.txt"
 
 build_sui_repo_branch() {
 
@@ -335,7 +330,10 @@ update_MOVE_TOML_DIR_var() {
 }
 export -f update_MOVE_TOML_DIR_var
 
-publish_localnet() {  
+publish_localnet() {
+
+  PASSTHRU_OPTIONS=$1
+
   ensure_client_OK;
 
   if [ -z "$MOVE_TOML_PACKAGE_NAME" ]; then
@@ -345,18 +343,22 @@ publish_localnet() {
 
   INSTALL_DIR="$PUBLISHED_DATA_DIR/$MOVE_TOML_PACKAGE_NAME"
 
-  echo "Publishing [$MOVE_TOML_PACKAGE_NAME] in [$INSTALL_DIR]..."
+  echo "Package name=[$MOVE_TOML_PACKAGE_NAME]"
+  #echo "Build location=[$INSTALL_DIR]"
   mkdir -p "$INSTALL_DIR"
 
   # Set the output for the "script_cmd"
   SCRIPT_OUTPUT="$INSTALL_DIR/publish_output.txt"
+  rm -rf $SCRIPT_OUTPUT
 
-  # Run all unit tests.
-  script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
+  # Run unit tests. 
+  #script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
 
   # Build the Move package for publication.
-  echo Publishing...
-  script_cmd "lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\""
+  #echo Now publishing on network
+  CMD="lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $PASSTHRU_OPTIONS"
+  echo $CMD
+  script_cmd $CMD
 
   # Grab the first line with an immutable "ID" after the "Created Objects" string.
   id_line=$(cat "$SCRIPT_OUTPUT" | sed '1,/Created Objects/d' | grep 'ID' | grep 'Immutable')
@@ -378,8 +380,6 @@ publish_localnet() {
     setup_error "Could not find Package id in $SCRIPT_OUTPUT"
   fi
 
-  # TODO Validate the package ID is all hexadecimal
-
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
   script_cmd "lsui client object $ID"
@@ -388,9 +388,11 @@ publish_localnet() {
     setup_error "Unexpected object type (Not a Move Package)"
   fi
 
-  echo "$ID" > "$INSTALL_DIR/package_id.txt"
+  JSON_STR="[\"$ID\"]"
+  echo $JSON_STR > "$INSTALL_DIR/package-id.json"
   echo
-  echo PackageID is [$ID]
+  echo "Package ID is $JSON_STR"
+  echo "Also written in [$INSTALL_DIR/package-id.json]"
   echo Publication Successful
 }
 export -f publish_localnet

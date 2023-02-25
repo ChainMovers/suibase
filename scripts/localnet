@@ -61,14 +61,26 @@ shift # Consume the command.
 # Optional params (some are "advanced for debugging" and not in the help).
 DEBUG_RUN=false
 GENESIS=false
+
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         # -t|--target) target="$2"; shift ;; That's an example with a parameter
         # -f|--flag) flag=1 ;; That's an example flag
+
         -g|--genesis) GENESIS=true ;;
+
         -d|--debug) DEBUG_RUN=true ;;
-        -p|--path) OPTIONAL_PATH="$2"; shift ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+
+        -p|--path)
+           # see: https://stackoverflow.com/questions/9018723/what-is-the-simplest-way-to-remove-a-trailing-slash-from-each-parameter
+           OPTIONAL_PATH="${2%/}"; shift ;;
+
+        *)
+        if [ "$CMD_PUBLISH_REQ" = true ]; then
+          PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1"
+        else
+          echo "Unknown parameter passed: $1"; exit 1
+        fi ;;
     esac
     shift
 done
@@ -171,11 +183,11 @@ if [ "$CMD_PUBLISH_REQ" = true ]; then
     # If stopped, then try (once) to start it.
     update_SUI_PROCESS_PID_var;
     if [ "$SUI_PROCESS_PID" ]; then
-      publish_localnet;
+      publish_localnet $PASSTHRU_OPTIONS;
     else
       start_sui_process;
       if [ "$SUI_PROCESS_PID" ]; then
-        publish_localnet;
+        publish_localnet $PASSTHRU_OPTIONS;
       else
         echo "Unable to start localnet"
       fi
