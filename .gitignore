@@ -44,7 +44,7 @@ yarn-error.log*
 .husky/.gitignore
 .husky/_
 
-## Editors 
+## Editors
 *.swp
 *.swo
 Session.vim
@@ -57,6 +57,7 @@ Session.vim
 **/.history/
 .vscode/ltex.disabledRules.en-US.txt
 .vscode/ltex.dictionary.en-US.txt
+.vscode/settings.json
 
 ## Ignore tags created by etags, ctags, gtags (GNU global) and cscope
 TAGS
