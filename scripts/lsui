@@ -34,9 +34,27 @@ check_dev_setup;
 
 # Use the proper config automatically.
 SUI_SUBCOMMAND=$1
-if [[ $SUI_SUBCOMMAND = "client" || "$1" == "console" ]]; then  
+
+LAST_ARG="${@: -1}"
+LAST_ARG_IS_HELP=false
+if [[ "$LAST_ARG" == "--help" || "$LAST_ARG" == "-h" ]]; then
+  LAST_ARG_IS_HELP=true
+fi
+
+if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
   shift 1
   $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
+
+  # Print a friendly warning if localnet sui process found not running.
+  # Might help explain weird error messages...
+  if [ "$LAST_ARG_IS_HELP" = false ]; then
+    update_SUI_PROCESS_PID_var;
+    if [ -z "$SUI_PROCESS_PID" ]; then
+      echo
+      echo "Warning: localnet not running"
+      echo "Do 'localnet start' to get it started."
+    fi
+  fi
   exit
 fi
 
