@@ -37,7 +37,7 @@ SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
 
 NETWORK_DATA_DIR="$WORKDIRS/$NETNAME-workdir"
-PUBLISHED_DATA_DIR="$NETWORK_DATA_DIR/published_data"
+PUBLISHED_DATA_DIR="$NETWORK_DATA_DIR/published-data"
 
 # Configuration files (often needed for sui CLI calls)
 NETWORK_CONFIG="$NETWORK_DATA_DIR/network.yaml"
