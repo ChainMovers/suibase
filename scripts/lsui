@@ -1,6 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# Equivalent to sui, but target the localnet and its proper config files (network.yaml and client.yaml)
+# This script simply call the proper sui binary (provided by Mysten Lab) that match
+# the binary running for your localnet.
+#
+# Your localnet should have been installed with the sui-base "localnet" script.
+#
+# You use 'lsui' in the same way you would use 'sui' from Mysten. Example:
+#    'lsui client gas'
+#
+# One convenience is you do not have to specify the --client.config,
+# , --network.config and --keystore-path options on the command line. 
+#
 
 NETNAME="localnet"
 SUI_REPO_BRANCH="devnet"
@@ -12,52 +22,60 @@ if [[ "$1" == "sui-base-script-name" ]]; then
   exit
 fi
 
-# Just find the absolute path of the "dtp-dev" where most
-# dependencies will be downloaded and build/runtime files
-# will be located.
+# Call script_common which is stored at a relative location to *this* script.
+# To find the path to *this* script, use readlink to resolve the symbolic link.
 SCRIPT_READLINK="$(readlink -f "$0")"
 SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
 SCRIPT_DIR="$(dirname $SCRIPT_READLINK)"
 source "$SCRIPT_DIR/script_common" "$SCRIPT_DIR" "$SCRIPT_NAME" "$NETNAME" "$SUI_REPO_BRANCH"
 
-check_dev_setup
+# Quick sanity check that sui-base was properly installed.
+check_dev_setup;
 
 # Use the proper config automatically.
 SUI_SUBCOMMAND=$1
-if [[ "$1" = "client" || "$1" == "console" ]]; then  
+if [[ $SUI_SUBCOMMAND = "client" || "$1" == "console" ]]; then  
   shift 1
   $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
   exit
 fi
 
-if [[ "$1" == "network" ]]; then
+if [[ $SUI_SUBCOMMAND == "network" ]]; then
   shift 1
   $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --network.config "$NETWORK_CONFIG" "$@"
   exit
 fi
 
-if [[ "$1" == "genesis" ]]; then
+if [[ $SUI_SUBCOMMAND == "genesis" ]]; then
+  # Protect the user from damaging its localnet
   if [[ "$2" == "--help" || "$2" == "-h" ]]; then
     $SUI_BIN_DIR/sui genesis --help
   fi
   echo
-  setup_error "Error: Use dtp/script/init-localnet instead for re-initializing localnet"
+  setup_error "Use sui-base 'localnet start' script instead"
 fi
 
-if [[ "$1" == "start" ]]; then
+if [[ $SUI_SUBCOMMAND == "start" ]]; then
+  # Protect the user from starting more than one sui process.
   if [[ "$2" == "--help" || "$2" == "-h" ]]; then
     $SUI_BIN_DIR/sui start --help
   fi
-  echo
-  # TODO Consider implementing a start-localnet script instead.
-  setup_error "Error: Use dtp/script/init-localnet instead for re-initializing localnet"
+  echo  
+  setup_error "Use sui-base 'localnet start' script instead"
 fi
 
-if [[ "$1" == "keytool" ]]; then
+# Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided 
+# more than once, but cannot be used multiple times?
+#
+# This is because by default lsui point to the keystore created with the localnet.
+#
+# TODO Fix this. Still default to workdirs, but allow user to override with its own --keystore-path.
+#
+if [[ $SUI_SUBCOMMAND == "keytool" ]]; then
   shift 1
-  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$KEYSTORE_FILE" "$@"
+  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$NETWORK_DATA_DIR/sui.keystore" "$@"
   exit
 fi
 
-# Default
+# By default, just pass transparently everything to the proper sui binary.
 $SUI_BIN_DIR/sui "$@"
