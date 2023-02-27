@@ -2,7 +2,7 @@
 
 # Do not call this script directly. It is a "common script" called by the other scripts.
 #
-# It initializes a bunch of environment variable, verify that some initialization took 
+# It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
 
 # DTP does not work with version below these.
@@ -67,7 +67,7 @@ build_sui_repo_branch() {
   V1=$(cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; git rev-parse HEAD)
   V2=$(cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; git rev-parse '@{u}')
   if [ "$V1" != "$V2" ]
-  then 
+  then
     # Does a bit more than needed, but should allow to recover
     # from most operator error...
     echo Updating sui $NETNAME in sui-base...
@@ -129,7 +129,7 @@ is_localnet_installed() {
   # Just check if present on the filesystem, not if running or executeable.
   # Detect if any problem. Return true only if installation is likely healthy.
   #
-  # That one is differnt than check_dev_setup because we do not want to 
+  # That one is differnt than check_dev_setup because we do not want to
   # report error, we just want to detect and fix automatically.
   if [ ! -d "$WORKDIRS" ]; then
     false; return;
@@ -171,11 +171,15 @@ update_SUI_PROCESS_PID_var() {
   # Useful to check if the sui process is running (this is the parent for the "localnet")
   #
   # Details on the cryptic parsing:
-  #   Get ps with "sui start" in its command line, grep exclude itself from the list, head takes the first process (should 
-  #   not be more than one) the 1st sed remove leading space, the 2nd sed split words into line and finally the pid is the 
+  #   Get ps with "sui start" in its command line, grep exclude itself from the list, head takes the first process (should
+  #   not be more than one) the 1st sed remove leading space, the 2nd sed split words into line and finally the pid is the
   #   word on the first/head line.
   #
-  SUI_PROCESS_PID=$(ps x -o pid,cmd | grep "sui start" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+  if [[ $(uname) == "Darwin" ]]; then
+    SUI_PROCESS_PID=$(ps x -o pid,comm | grep "sui" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+  else
+    SUI_PROCESS_PID=$(ps x -o pid,cmd | grep "sui start" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+  fi
 }
 export -f update_SUI_PROCESS_PID_var
 
@@ -194,9 +198,14 @@ stop_sui_process() {
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already stopped.
   update_SUI_PROCESS_PID_var;
-  if [ ! -z "$SUI_PROCESS_PID" ]; then  
+  if [ ! -z "$SUI_PROCESS_PID" ]; then
     echo "Stopping $NETNAME (process pid $SUI_PROCESS_PID)"
-    skill -9 $SUI_PROCESS_PID
+    if [[ $(uname) == "Darwin" ]]; then
+      kill -9 $SUI_PROCESS_PID
+    else
+      skill -9 $SUI_PROCESS_PID
+    fi
+
     # Make sure it is dead.
     end=$((SECONDS+15))
     DEAD=false
@@ -214,7 +223,7 @@ stop_sui_process() {
 
     # Just UI aesthetic newline for when there was "." printed.
     if [ "$AT_LEAST_ONE_SECOND" = true ]; then
-      echo 
+      echo
     fi
 
     if [ ! -z "$SUI_PROCESS_PID" ]; then
@@ -241,7 +250,7 @@ start_sui_process() {
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process (may take up to 30 secs)"
     $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG" >& "$NETWORK_DATA_DIR/sui-process.log" &
-    NEW_SUI_PID=$!    
+    NEW_SUI_PID=$!
 
     # Loop until "sui client" confirms to be working, or exit if that takes
     # more than 30 seconds.
@@ -257,16 +266,16 @@ start_sui_process() {
         echo -n "."
         sleep 1
         AT_LEAST_ONE_SECOND=true
-      fi      
+      fi
     done
 
     # Just UI aesthetic newline for when there was "." printed.
     if [ "$AT_LEAST_ONE_SECOND" = true ]; then
-      echo 
+      echo
     fi
 
     # Act on success/failure of the sui process responding to "sui client".
-    if [ "$ALIVE" = false ]; then 
+    if [ "$ALIVE" = false ]; then
       echo "Sui process not responding. Try again? (may be the host is too slow?)."
       exit;
     fi
@@ -285,7 +294,7 @@ ensure_client_OK() {
 
   # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
 
-  # Make sure localnet exists in sui envs (ignore errors because likely already exists) 
+  # Make sure localnet exists in sui envs (ignore errors because likely already exists)
   $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $NETNAME --rpc http://0.0.0.0:9000 >& /dev/null
 
   # Make localnet the active envs (should already be done, just in case, do it again here).
@@ -351,7 +360,7 @@ publish_localnet() {
   SCRIPT_OUTPUT="$INSTALL_DIR/publish_output.txt"
   rm -rf $SCRIPT_OUTPUT
 
-  # Run unit tests. 
+  # Run unit tests.
   #script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
 
   # Build the Move package for publication.
@@ -369,11 +378,11 @@ publish_localnet() {
 
   ID=""
   for i in $id_line
-  do  
+  do
     if beginswith 0x $i; then
       ID=$i
       break;
-    fi  
+    fi
   done
 
   if [ -z "$ID" ]; then

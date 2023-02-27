@@ -5,6 +5,7 @@
 # Using a common one, often already added to .bashrc or .profile,
 # but likely will need to revisit/fix this a few time...
 OS_DIR_ON_PATH="$HOME/.local/bin"
+OS_DIR_ON_PATH_ALT="~/.local/bin"
 
 # Get the fully qualified path of the /scripts directory
 # which is relative to *this* script being executed.
@@ -18,7 +19,7 @@ is_user_root () { [ "${EUID:-$(id -u)}" -eq 0 ]; }
 # Function to simply create/update symlinks in $OS_DIR_ON_PATH
 #
 # Has no effect if symlink already exists and matching.
-update_bin_path() { 
+update_bin_path() {
   UBP_TARGET="$SCRIPTS_DIR/$1"
   if [ -d "$OS_DIR_ON_PATH" ]; then
     if [ ! -L "$OS_DIR_ON_PATH/$1" ]; then
@@ -45,8 +46,11 @@ main() {
     mkdir -p "$OS_DIR_ON_PATH"
   fi
 
+  # if [[ ":$PATH:" == *":$OS_DIR_ON_PATH:"* ]]; then
   if [[ ":$PATH:" == *":$OS_DIR_ON_PATH:"* ]]; then
-    echo "Starting installation of sui-base..."
+      echo "Starting installation of sui-base..."
+  elif [[ ":$PATH:" == *":$OS_DIR_ON_PATH_ALT:"* ]]; then
+      echo "Starting installation of sui-base..."
   else
     echo "Please add $OS_DIR_ON_PATH to your \$PATH variable"
     echo
@@ -68,7 +72,7 @@ main() {
   # specifying a path.
   #
   # This installation script should remain "self-contain" and
-  # avoid dependencies. It creates symlinks to other scripts, 
+  # avoid dependencies. It creates symlinks to other scripts,
   # but does not call into them, other then for this trivial
   # final test.
   test=$(localnet sui-base-script-name)
@@ -91,7 +95,7 @@ main() {
   #  setup_error "setup of dsui symlink failed"
   #fi
 
-  echo 
+  echo
   echo "Scripts now accessible. For more info type \"localnet\"."
   echo
   echo "You can also now optionally start your localnet with:"
