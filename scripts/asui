@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# This script simply forward the command line to the proper sui-base script 
+# that was selected to be active (e.g. 'localnet set-active').
+#
+# The end result is the proper Sui binary (provided by Mysten) will 
+# eventually get called.
+#
+# So, you use 'asui' in the same way you would use 'sui' from Mysten. Example:
+#    'asui client gas'
+#
+# One convenience is you do not have to specify the --client.config,
+# , --network.config and --keystore-path options on the command line. 
+#
+
+
+NETNAME="NULL"
+SUI_REPO_BRANCH="NULL"
+SUI_SCRIPT="asui"
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "sui-base-script-name" ]]; then
+  echo $SUI_SCRIPT
+  exit
+fi
+
+
+# Call script_common which is stored at a relative location to *this* script.
+# To find the path to *this* script, use readlink to resolve the symbolic link.
+SCRIPT_READLINK="$(readlink -f "$0")"
+SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
+SCRIPT_DIR="$(dirname $SCRIPT_READLINK)"
+source "$SCRIPT_DIR/script_common" "$SCRIPT_DIR" "$SCRIPT_NAME" "$NETNAME" "$SUI_REPO_BRANCH"
+
+# Now we can use the same functions as all the other scripts.
+update_ACTIVE_WORKDIR_var;
+
+case "$ACTIVE_WORKDIR" in
+    "localnet") lsui "$@" ;;
+    "devnet") dsui "$@" ;;
+    "testnet") tsui "$@" ;;
+    *) 
+    echo "No active workdir was set (e.g. 'localnet set-active')";
+    exit ;;
+esac
+

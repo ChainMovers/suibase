@@ -30,18 +30,18 @@ SUI_BASE_DIR="$(cd "$(dirname "$SCRIPTS_DIR")"; pwd)" # This does one-level abov
 WORKDIRS="$SUI_BASE_DIR/workdirs"
 
 # Some other commonly used locations.
-LOCAL_BIN="$HOME/.local/bin"
+LOCAL_BIN="~/.local/bin"
 
-SUI_REPO_DIR="$WORKDIRS/$SUI_REPO_BRANCH-branch"
+SUI_REPO_DIR="$WORKDIRS/$NETNAME/sui-repo"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
 
-NETWORK_DATA_DIR="$WORKDIRS/$NETNAME-workdir"
-PUBLISHED_DATA_DIR="$NETWORK_DATA_DIR/published-data"
+CONFIG_DATA_DIR="$WORKDIRS/$NETNAME/config"
+PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
 
 # Configuration files (often needed for sui CLI calls)
-NETWORK_CONFIG="$NETWORK_DATA_DIR/network.yaml"
-CLIENT_CONFIG="$NETWORK_DATA_DIR/client.yaml"
+NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
+CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
 
 
 build_sui_repo_branch() {
@@ -57,29 +57,29 @@ build_sui_repo_branch() {
   version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version";
 
   # If not already done, get the github sui $SUI_REPO_BRANCH.
-  if [ ! -d "$WORKDIRS/$SUI_REPO_BRANCH-branch" ]
+  if [ ! -d "$SUI_REPO_DIR" ]
   then
-    git clone -b devnet https://github.com/MystenLabs/sui.git "$WORKDIRS/$SUI_REPO_BRANCH-branch"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
+    git clone -b devnet https://github.com/MystenLabs/sui.git "$SUI_REPO_DIR"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
   fi
 
   # Update sui devnet local repo (if needed)
-  (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git remote update >& /dev/null)
-  V1=$(cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; git rev-parse HEAD)
-  V2=$(cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; git rev-parse '@{u}')
+  (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
+  V1=$(cd "$SUI_REPO_DIR"; git rev-parse HEAD)
+  V2=$(cd "$SUI_REPO_DIR"; git rev-parse '@{u}')
   if [ "$V1" != "$V2" ]
   then
     # Does a bit more than needed, but should allow to recover
     # from most operator error...
     echo Updating sui $NETNAME in sui-base...
-    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git switch $SUI_REPO_BRANCH > /dev/null)
-    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git fetch > /dev/null)
-    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
-    (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch" && git merge '@{u}')
+    (cd "$SUI_REPO_DIR" && git switch $SUI_REPO_BRANCH > /dev/null)
+    (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
+    (cd "$SUI_REPO_DIR" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
+    (cd "$SUI_REPO_DIR" && git merge '@{u}')
   fi
 
   # Verify sui built is latest.
   echo Building $NETNAME using latest Sui $SUI_REPO_BRANCH branch...
-  (cd "$WORKDIRS/$SUI_REPO_BRANCH-branch"; cargo build)
+  (cd "$SUI_REPO_DIR"; cargo build)
 
   # Sanity test that the sui binary works
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
@@ -105,12 +105,12 @@ check_dev_setup() {
     setup_error "$WORKDIRS missing. Please run '$NETNAME update' first"
   fi
 
-  if [ ! -d "$WORKDIRS/$SUI_REPO_BRANCH-branch" ]; then
-    setup_error "$WORKDIRS/sui-$SUI_REPO_BRANCH-branch missing. Please run '$NETNAME update' first"
+  if [ ! -d "$SUI_REPO_DIR" ]; then
+    setup_error "$SUI_REPO_DIR missing. Please run '$NETNAME update' first"
   fi
 
-  if [ ! -d "$WORKDIRS/$NETNAME-workdir" ]; then
-    setup_error "$WORKDIRS/$NETNAME-workdir missing. Please run '$NETNAME update' first"
+  if [ ! -d "$WORKDIRS/$NETNAME" ]; then
+    setup_error "$WORKDIRS/$NETNAME missing. Please run '$NETNAME update' first"
   fi
 
   if [ ! -f "$NETWORK_CONFIG" ]; then
@@ -129,17 +129,21 @@ is_localnet_installed() {
   # Just check if present on the filesystem, not if running or executeable.
   # Detect if any problem. Return true only if installation is likely healthy.
   #
-  # That one is differnt than check_dev_setup because we do not want to
+  # That one is different than check_dev_setup because we do not want to
   # report error, we just want to detect and fix automatically.
   if [ ! -d "$WORKDIRS" ]; then
     false; return;
   fi
 
-  if [ ! -d "$WORKDIRS/$SUI_REPO_BRANCH-branch" ]; then
+  if [ ! -d "$WORKDIRS/$NETNAME" ]; then
     false; return;
   fi
 
-  if [ ! -d "$WORKDIRS/$NETNAME-workdir" ]; then
+  if [ ! -d "$SUI_REPO_DIR" ]; then
+    false; return;
+  fi
+
+  if [ ! -d "$CONFIG_DATA_DIR" ]; then
     false; return;
   fi
 
@@ -161,11 +165,41 @@ export -f is_localnet_installed
 
 common_create_workdirs() {
   mkdir -p "$WORKDIRS"
-  mkdir -p "$WORKDIRS/$NETNAME-workdir"
+  mkdir -p "$WORKDIRS/$NETNAME"
 
-  echo "Output location = $WORKDIRS"
+  # Check if there is an active symlink, if not, create one.  
+  # (Note: if the symlink is broken, do not attempt to fix it.
+  #  The symlink represent the "user intent" and must be 
+  #  preserved when it exists).
+  if [ ! -L "$WORKDIRS/active" ]; then
+     set_active_workdir;
+  fi  
 }
 export -f common_create_workdirs
+
+set_active_workdir() {
+  # Create a symlink to the current $NETNAME if not already done.
+  update_ACTIVE_WORKDIR_var;
+  if [ ! -L "$WORKDIRS/active" ]; then
+    ln -s "$WORKDIRS/$NETNAME" "$WORKDIRS/active"
+  else 
+    if [[ "$ACTIVE_WORKDIR" != "$NETNAME" ]]; then
+      ln -sf "$WORKDIRS/$NETNAME" "$WORKDIRS/active"
+    fi
+  fi
+}
+export -f set_active_workdir
+
+update_ACTIVE_WORKDIR_var() {
+  # This is the active $NETNAME (deduced from the symlink).
+  if [ ! -L $WORKDIRS/active ]; then
+    unset ACTIVE_WORKDIR
+  else
+    RESOLVED_PATH="$(readlink -f $WORKDIRS/active)"
+    ACTIVE_WORKDIR="$(basename $RESOLVED_PATH)"
+  fi
+}
+export -f update_ACTIVE_WORKDIR_var
 
 update_SUI_PROCESS_PID_var() {
   # Useful to check if the sui process is running (this is the parent for the "localnet")
@@ -248,8 +282,8 @@ start_sui_process() {
 
   update_SUI_PROCESS_PID_var;
   if [ -z "$SUI_PROCESS_PID" ]; then
-    echo "Starting localnet process (may take up to 30 secs)"
-    $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG" >& "$NETWORK_DATA_DIR/sui-process.log" &
+    echo "Starting localnet process"
+    $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
     NEW_SUI_PID=$!
 
     # Loop until "sui client" confirms to be working, or exit if that takes
@@ -287,6 +321,11 @@ start_sui_process() {
   fi
 }
 export -f start_sui_process
+
+update_SUI_REPO_INFO_var() {
+  SUI_REPO_INFO="github branch $(cd $SUI_REPO_DIR; git branch --show-current)"
+}
+export -f update_SUI_REPO_INFO_var
 
 ensure_client_OK() {
   # This is just in case the user switch the envs on the clients instead of simply using
@@ -405,3 +444,4 @@ publish_localnet() {
   echo Publication Successful
 }
 export -f publish_localnet
+

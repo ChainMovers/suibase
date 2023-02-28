@@ -25,6 +25,7 @@ main() {
   remove_bin_path "lsui"
   remove_bin_path "tsui"
   remove_bin_path "dsui"
+  remove_bin_path "asui"
   echo
   echo "sui-base scripts uninstalled successfully for user [$username]"  
   echo

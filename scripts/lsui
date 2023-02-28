@@ -22,6 +22,12 @@ if [[ "$1" == "sui-base-script-name" ]]; then
   exit
 fi
 
+# Display some sui-base related info if called without any parameters.
+DISPLAY_SUI_BASE_HELP=false
+if [ $# -eq 0 ]; then
+  DISPLAY_SUI_BASE_HELP=true
+fi
+
 # Call script_common which is stored at a relative location to *this* script.
 # To find the path to *this* script, use readlink to resolve the symbolic link.
 SCRIPT_READLINK="$(readlink -f "$0")"
@@ -36,9 +42,8 @@ check_dev_setup;
 SUI_SUBCOMMAND=$1
 
 LAST_ARG="${@: -1}"
-LAST_ARG_IS_HELP=false
 if [[ "$LAST_ARG" == "--help" || "$LAST_ARG" == "-h" ]]; then
-  LAST_ARG_IS_HELP=true
+  DISPLAY_SUI_BASE_HELP=true
 fi
 
 if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
@@ -47,7 +52,7 @@ if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
 
   # Print a friendly warning if localnet sui process found not running.
   # Might help explain weird error messages...
-  if [ "$LAST_ARG_IS_HELP" = false ]; then
+  if [ "$DISPLAY_SUI_BASE_HELP" = false ]; then
     update_SUI_PROCESS_PID_var;
     if [ -z "$SUI_PROCESS_PID" ]; then
       echo
@@ -91,9 +96,17 @@ fi
 #
 if [[ $SUI_SUBCOMMAND == "keytool" ]]; then
   shift 1
-  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$NETWORK_DATA_DIR/sui.keystore" "$@"
+  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
   exit
 fi
 
 # By default, just pass transparently everything to the proper sui binary.
 $SUI_BIN_DIR/sui "$@"
+
+if [ "$DISPLAY_SUI_BASE_HELP" = true ]; then
+  update_ACTIVE_WORKDIR_var;
+  if [ -n "$ACTIVE_WORKDIR" ]; then
+    echo
+    echo "$ACTIVE_WORKDIR is set-active for asui"
+  fi
+fi

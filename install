@@ -67,6 +67,7 @@ main() {
   update_bin_path "lsui"
   #update_bin_path "tsui"
   #update_bin_path "dsui"
+  update_bin_path "asui"
 
   # Final test that the scripts are "callable" by the user without
   # specifying a path.
@@ -94,6 +95,11 @@ main() {
   #if [ "$test" != "dsui" ]; then
   #  setup_error "setup of dsui symlink failed"
   #fi
+
+  test=$(asui sui-base-script-name)
+  if [ "$test" != "asui" ]; then
+    setup_error "setup of asui symlink failed"
+  fi
 
   echo
   echo "Scripts now accessible. For more info type \"localnet\"."

@@ -25,6 +25,16 @@ usage() {
   echo "   publish: Publish module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
   echo
+  echo "   set-active:"
+  echo "            Makes localnet the active context for many"
+  echo "            development tools and the 'asui' script."
+  echo
+  echo "   set-sui-repo:"
+  echo "            Allow to specify a '--path <path>' to use your own"
+  echo "            local repo instead of the default latest from github."
+  echo "            Just omit '--path' to return to default."
+  echo
+
   # Quick check if installed, then help the user about the location.
   if [ -d "$HOME/sui-base/workdirs" ]; then
     echo "All localnet DB and sui-base outputs are in $HOME/sui-base/workdirs"
@@ -45,6 +55,8 @@ CMD_STATUS_REQ=false
 CMD_UPDATE_REQ=false
 CMD_REGEN_REQ=false
 CMD_PUBLISH_REQ=false
+CMD_SET_ACTIVE_REQ=false
+CMD_SET_SUI_REPO_REQ=false
 
 case "$1" in
   start) CMD_START_REQ=true ;;
@@ -53,6 +65,8 @@ case "$1" in
   update) CMD_UPDATE_REQ=true ;;
   regen) CMD_REGEN_REQ=true ;;
   publish) CMD_PUBLISH_REQ=true ;;
+  set-active) CMD_SET_ACTIVE_REQ=true ;;
+  set-sui-repo) CMD_SET_SUI_REPO_REQ=true ;;
   *) usage;;
 esac
 
@@ -109,6 +123,11 @@ if [ -n "$OPTIONAL_PATH" ]; then
   fi
 fi
 
+if [ "$CMD_SET_SUI_REPO_REQ" = true ]; then
+  echo "You want this feature? Not sure if it was needed. Ask the developer to work on it."
+  exit
+fi
+
 # Call the initialization code common to all script.
 SCRIPT_READLINK="$(readlink -f "$0")"
 SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
@@ -120,12 +139,20 @@ update_SUI_PROCESS_PID_var;
 if [ "$CMD_STATUS_REQ" = true ]; then    
   if is_localnet_installed; then  
     if [ -z "$SUI_PROCESS_PID" ]; then
-      echo "localnet not running"
+      echo -e "localnet \033[1;31mSTOPPED\033[0m"
     else
-      echo "localnet running (process pid $SUI_PROCESS_PID)"
-      update_SUI_VERSION_var;
-      echo "$SUI_VERSION"
-    fi  
+      echo -e "localnet \033[1;32mRUNNING\033[0m (process pid $SUI_PROCESS_PID)"
+    fi
+    update_SUI_VERSION_var;
+    echo "$SUI_VERSION"
+    #update_SUI_REPO_INFO_var;
+    #echo "$SUI_VERSION ($SUI_REPO_INFO)"
+    update_ACTIVE_WORKDIR_var;
+    if [[ "$ACTIVE_WORKDIR" == "$NETNAME" ]]; then
+      echo "$ACTIVE_WORKDIR is set-active for asui"
+    else
+      echo -e "\033[1;33mWarning:\033[0m $NETNAME is NOT active for asui"
+    fi
   else
     echo "localnet not installed"
   fi
@@ -198,6 +225,21 @@ if [ "$CMD_PUBLISH_REQ" = true ]; then
   exit
 fi
 
+if [ "$CMD_SET_ACTIVE_REQ" = true ]; then
+  if is_localnet_installed; then
+    update_ACTIVE_WORKDIR_var;
+    if [[ "$ACTIVE_WORKDIR" == "$NETNAME" ]]; then
+      echo "$NETNAME is already active"
+    else
+      echo "Making $NETNAME active"
+      set_active_workdir;
+    fi
+  else
+    echo "localnet not installed."
+  fi
+  exit
+fi
+
 # Finally, take care of the more complicated cases that involves
 # git, localnet workdir/config creation and genesis.
 
@@ -208,8 +250,8 @@ common_create_workdirs; # Create $WORKDIRS (as needed)
 # lead to some confusion for the user.
 
 CWD=$(pwd -P)
-if [[ "$CWD" = "$NETWORK_DATA_DIR"* ]]; then
-  echo "This script should not be called from a location that could be deleted [$NETWORK_DATA_DIR]."
+if [[ "$CWD" = "$CONFIG_DATA_DIR"* ]]; then
+  echo "This script should not be called from a location that could be deleted [$CONFIG_DATA_DIR]."
   setup_error "Change current directory location and try again."
 fi
 
@@ -217,6 +259,8 @@ if [[ "$CWD" = "$PUBLISHED_DATA_DIR"* ]]; then
   echo "This script should not be called from a location that could be deleted [$PUBLISHED_DATA_DIR]."
   setup_error "Change current directory location and try again."
 fi
+
+echo "Output location = $WORKDIRS/$NETNAME"
 
 # Stop localnet (noop if not running)
 stop_sui_process;
@@ -227,7 +271,7 @@ if [ "$CMD_REGEN_REQ" = false ]; then
 fi
 
 # Clean-up previous localnet (if exists)
-RM_DIR="$NETWORK_DATA_DIR"
+RM_DIR="$CONFIG_DATA_DIR"
 if [ -d "$RM_DIR" ]; then
   echo "Removing existing $RM_DIR directory"
   rm -rf "$RM_DIR"
@@ -247,24 +291,24 @@ if [ "$GENESIS" = true ]; then
    exit
 fi
 
-echo "Creating new $NETNAME directory"
-mkdir -p "$NETWORK_DATA_DIR"
+echo "Creating new $NETNAME"
+mkdir -p "$CONFIG_DATA_DIR"
 if [ "$DEBUG_RUN" = true ]; then
-  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$NETWORK_DATA_DIR"
+  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR"
 else
-  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$NETWORK_DATA_DIR" >& /dev/null
+  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR" >& /dev/null
 fi
 
-yes | cp -rf "$GENESIS_DATA_DIR/sui.keystore" "$NETWORK_DATA_DIR"
-yes | cp -rf "$GENESIS_DATA_DIR/client.yaml" "$NETWORK_DATA_DIR"
+yes | cp -rf "$GENESIS_DATA_DIR/sui.keystore" "$CONFIG_DATA_DIR"
+yes | cp -rf "$GENESIS_DATA_DIR/client.yaml" "$CONFIG_DATA_DIR"
 
 # Replace placeholder string in client.yaml with an absolute path to the keystore.
 # Notice sed uses '+'' for seperator instead of '/' to avoid clash
 # with directory path. Also uses a .bak temp file because Mac (BSD) does not
 # allow in-place file change.
 SEARCH_STRING="<PUT_WORKING_DIR_PATH_HERE>"
-REPLACE_STRING="$NETWORK_DATA_DIR"
-sed -i.bak -e "s+$SEARCH_STRING+$REPLACE_STRING+g" "$NETWORK_DATA_DIR/client.yaml" && rm "$NETWORK_DATA_DIR/client.yaml.bak"
+REPLACE_STRING="$CONFIG_DATA_DIR"
+sed -i.bak -e "s+$SEARCH_STRING+$REPLACE_STRING+g" "$CONFIG_DATA_DIR/client.yaml" && rm "$CONFIG_DATA_DIR/client.yaml.bak"
 
 # When need to start in foreground to debug.
 if [ "$DEBUG_RUN" = true ]; then
@@ -295,4 +339,3 @@ echo "Remember:"
 echo "  Use \"lsui\" to access your localnet"
 echo
 echo "Success. Try it by typing \"lsui client gas\""
-
