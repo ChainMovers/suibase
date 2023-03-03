@@ -33,6 +33,12 @@ tmp
 **/target
 .pre-commit*
 
+# Move build files
+*.mv
+
+# Move build output (specific to sui-base repo)
+**/move/build
+
 # logs
 wallet.log.*
 sui.log.*
@@ -56,10 +62,10 @@ Session.vim
 .favorites.json
 .settings/
 **/.history/
-.vscode/ltex.disabledRules.en-US.txt
-.vscode/ltex.dictionary.en-US.txt
-.vscode/settings.json
-.vscode/launch.json
+**/.vscode/ltex.disabledRules.en-US.txt
+**/.vscode/ltex.dictionary.en-US.txt
+**/.vscode/settings.json
+**/.vscode/launch.json
 
 ## Ignore tags created by etags, ctags, gtags (GNU global) and cscope
 TAGS

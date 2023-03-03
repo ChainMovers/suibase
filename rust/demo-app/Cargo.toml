@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/demo",
+    "crates/sui-base-helper", # Access info about your localnet and more.
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+
+[workspace.dependencies]
+# Built is done using the same workdir made active 
+# with sui-base 'asui'.
+#
+# This help keeping your selected network, app and SDKs and whatnot
+# use the *same* binary versions.
+#
+# If you prefer the "typical" rust way of indepedently get the latest
+# crates remotely from git, then comment out the 'path' dependencies
+# and un-comment out the 'git' ones.
+sui-sdk = { path = "../../workdirs/active/sui-repo/crates/sui-sdk/" }
+sui-json-rpc-types = { path = "../../workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
+sui-keys = { path = "../../workdirs/active/sui-repo/crates/sui-keys/" }
+sui-types = { path = "../../workdirs/active/sui-repo/crates/sui-types/" }
+sui-adapter = { path = "../../workdirs/active/sui-repo/crates/sui-adapter/" }
+
+# Comment these "git" dependencies if using the above "path" dependencies.
+#sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
+#sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-json-rpc-types" }
+#sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-keys" }
+#sui-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-types" }
+#sui-adapter = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-adapter" }
+
+futures = "0.3.25"
+
+tokio = { version = "1.24.1", features = ["full"] }
+telemetry-subscribers = { version = "0.2.0" }
+
+anyhow = { version = "1.0.65", features = ["backtrace"] }
+thiserror = "1.0.37"
+
+# No upgrade to v4 until color are back.
+clap = { version = "3.2.22", features = [
+    "derive",
+] } 
+
+colored = { version = "2.0.0" }
+
+[workspace.dependencies.serial_test]
+# Intended to be used as [dev-dependencies] only.
+#
+# Attribute macros to control how test can run sequentially/parallel.
+#    https://tevps.net/blog/serial_test/ 
+#
+# Imagine a RWLock, the attributes do the following:
+#   [serial]     : Equivalent to a writer lock on the "RWLock".
+#   [parallel]   : Equivalent to a reader lock on the "RWLock".
+#   No Attribute : Can run at anytime, ignores the RWLock.
+#
+# Why is that here?
+# Sui "simple transaction" must be single threaded for owned objects and 
+# if you test with a single local wallet (which is often the case), then 
+# you have to be careful of doing the test serial.
+version = "=0.9.0" # Force a version known to be OK.

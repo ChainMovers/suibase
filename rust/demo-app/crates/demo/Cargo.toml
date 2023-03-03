@@ -1,0 +1,19 @@
+[package]
+name = "demo"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio.workspace = true
+anyhow.workspace = true
+
+sui-sdk.workspace = true
+sui-json-rpc-types.workspace = true
+sui-types.workspace = true
+sui-keys.workspace = true
+
+clap.workspace = true
+futures.workspace = true
+colored.workspace = true
+
+sui-base-helper = { path = "../sui-base-helper/" }
