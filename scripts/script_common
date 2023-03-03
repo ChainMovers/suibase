@@ -380,7 +380,7 @@ export -f update_MOVE_TOML_DIR_var
 
 publish_localnet() {
 
-  PASSTHRU_OPTIONS=$1
+  PASSTHRU_OPTIONS="$@"
 
   ensure_client_OK;
 
@@ -396,7 +396,7 @@ publish_localnet() {
   mkdir -p "$INSTALL_DIR"
 
   # Set the output for the "script_cmd"
-  SCRIPT_OUTPUT="$INSTALL_DIR/publish_output.txt"
+  SCRIPT_OUTPUT="$INSTALL_DIR/publish-output.txt"
   rm -rf $SCRIPT_OUTPUT
 
   # Run unit tests.
@@ -404,25 +404,46 @@ publish_localnet() {
 
   # Build the Move package for publication.
   #echo Now publishing on network
-  CMD="lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $PASSTHRU_OPTIONS"
-  echo $CMD
-  script_cmd $CMD
+  CMD="lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $PASSTHRU_OPTIONS --json > \"$INSTALL_DIR/publish-output.json\""
 
-  # Grab the first line with an immutable "ID" after the "Created Objects" string.
-  id_line=$(cat "$SCRIPT_OUTPUT" | sed '1,/Created Objects/d' | grep 'ID' | grep 'Immutable')
+  # echo $CMD
+  echo Publishing...
+  script_cmd $CMD;
 
-  if [ -z "$id_line" ]; then
+  #  TODO Investigate problem with exit status here...
+
+  # Grab the first packageId line after the "events:" and "publish:" string have been met (in order).
+  # Will be a problem if can publish multiple package at same time, json format change etc.
+  # Certainly not perfect, but good enough for today...
+  #
+  # Details on cryptic sed line (it is multiple steps, each seperated by a ';')
+  #   Remove everything until '"events":'', everything until '"publish":'', all quotes and all commas.
+  #   Then tr remove whitespace (keeps newlines) and grep the first packageId line met (head -1)
+  #
+  ID_LINE=$(cat $INSTALL_DIR/publish-output.json | sed '1,/\"events\":/d; 1,/\"publish\":/d; s/\"//g; s/,//g' | tr -d "[:blank:]" | grep packageId | head -1)
+
+  # echo "id_line=[$ID_LINE]"
+
+  if [ -z "$ID_LINE" ]; then
     setup_error "Could not find the package id from $SCRIPT_OUTPUT"
   fi
 
+  # Extract first hexadecimal literal found.
+  # Define the seperator (IFS) as the JSON ':'
   ID=""
-  for i in $id_line
+  IFS=":"
+  for i in $ID_LINE
   do
     if beginswith 0x $i; then
       ID=$i
       break;
     fi
   done
+
+  # Best-practice to revert IFS to default.
+  unset IFS
+
+  # echo "ID=[$ID]"
 
   if [ -z "$ID" ]; then
     setup_error "Could not find Package id in $SCRIPT_OUTPUT"
@@ -431,17 +452,16 @@ publish_localnet() {
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
   script_cmd "lsui client object $ID"
+  echo Verifying client can access new package on network...
   validation=$(lsui client object $ID | grep "Move Package")
   if [ -z "$validation" ]; then
     setup_error "Unexpected object type (Not a Move Package)"
   fi
-
   JSON_STR="[\"$ID\"]"
   echo $JSON_STR > "$INSTALL_DIR/package-id.json"
-  echo
+
   echo "Package ID is $JSON_STR"
   echo "Also written in [$INSTALL_DIR/package-id.json]"
   echo Publication Successful
 }
 export -f publish_localnet
-

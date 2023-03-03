@@ -91,7 +91,11 @@ while [[ "$#" -gt 0 ]]; do
 
         *)
         if [ "$CMD_PUBLISH_REQ" = true ]; then
-          PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1"
+          case $1 in
+            --json) echo "--json option superfluous. JSON always generated on publish by sui-base. See publish-output.json." ;;
+            --install-dir) echo "Do no specify --install-dir when publishing with sui-base. Output is always in published-data location instead." ;;
+            *) PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1" ;;
+          esac
         else
           echo "Unknown parameter passed: $1"; exit 1
         fi ;;
