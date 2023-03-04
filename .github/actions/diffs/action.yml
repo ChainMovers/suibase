@@ -27,7 +27,7 @@ runs:
             - 'docs/**'
             - 'mkdocs.yml'
             - '*.md'
-            - '.github/workflows/docs.yml'
+            - '.github/workflows/deploy.yml'
           isMove:
             - 'move/sources/**'
             - 'Move.toml'
