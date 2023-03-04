@@ -23,6 +23,19 @@ theme:
   logo: assets/logo.png
   icon:
     repo: fontawesome/brands/github
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
   features:
     # - announce.dismiss
     - content.code.annotate
@@ -92,6 +105,11 @@ markdown_extensions:
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.tilde
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
 
 ##########################################################################
 # Adding new content to the cookbook?
