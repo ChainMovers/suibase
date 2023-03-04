@@ -33,4 +33,4 @@ jobs:
           path: .cache
       - run: pip install mkdocs-material
       - run: pip install mkdocs-git-revision-date-localized-plugin
-      - run: mkdocs gh-deploy --force
+      - run: mkdocs gh-deploy --config-file docs/mkdocs.yml --force
