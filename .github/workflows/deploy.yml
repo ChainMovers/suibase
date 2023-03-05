@@ -20,10 +20,12 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-#    needs: diff
-#    if: needs.diff.outputs.isDoc == 'true'
+    #    needs: diff
+    #    if: needs.diff.outputs.isDoc == 'true'
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v4
         with:
           python-version: 3.x
@@ -33,4 +35,5 @@ jobs:
           path: .cache
       - run: pip install mkdocs-material
       - run: pip install mkdocs-git-revision-date-localized-plugin
+      - run: pip install mkdocs-minify-plugin
       - run: mkdocs gh-deploy --config-file docs/mkdocs.yml --force
