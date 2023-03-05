@@ -139,7 +139,7 @@ nav:
           - "Subject3": cookbook/test/Subject3.md
 
   - "Sui-Base":
-      - "Home": index.md
+      - "Sui-Base": index.md
       - "Installation": how-to/todo.md
       - "Using Localnet": how-to/todo.md
       - "Using Devnet": how-to/todo.md
@@ -151,5 +151,5 @@ nav:
           - "Some-Example": python/README.md
 
   - "Community":
-      - "External Links": community/links.md
-      - "Contribute": community/contribute.md
+      - "Contribute": community.md
+      - "External Links": links.md
