@@ -44,7 +44,7 @@ theme:
     - content.tooltips
     # - header.autohide
     - navigation.expand
-    - navigation.indexes
+    # - navigation.indexes   Note: Incompatible with toc.integrate
     - navigation.instant
     # - navigation.prune
     - navigation.sections
@@ -122,14 +122,12 @@ plugins:
 ##########################################################################
 nav:
   - "Sui Cookbook":
-      - "Getting Started":
-          - "Introduction": cookbook.md
-          - "Sui Installation": cookbook/sui-install.md
+      - "Introduction": cookbook/index.md
 
+      # Uncomment these to see better how the cookbook may look like
       - "Guides":
           - "Sui Basic Concepts": cookbook/sui-intro.md
           - "Move Language": cookbook/move.md
-
       - "Code Snippets":
           - "Example 1": cookbook/test/Subject1.md
           - "Example 2": cookbook/test/Subject2.md
@@ -139,17 +137,17 @@ nav:
           - "Subject3": cookbook/test/Subject3.md
 
   - "Sui-Base":
-      - "Sui-Base": index.md
-      - "Installation": how-to/todo.md
-      - "Using Localnet": how-to/todo.md
-      - "Using Devnet": how-to/todo.md
-      - "Sui-Base Scripts": how-to/scripts.md
-      - "Path and Env": reference.md
-      - "Rust":
-          - "Demo-App": rust/demo-app/README.md
-      - "Python":
-          - "Some-Example": python/README.md
+      - Getting Started:
+          - "What is Sui-Base?": index.md
+          - "Installation": how-to/install.md
+      - References:
+          - "Sui-Base Scripts": how-to/scripts.md
+          - "Path and Env": references.md
+          - "Rust":
+              - "Demo-App": rust/demo-app/README.md
+          - "Python":
+              - "Some-Example": python/README.md
 
   - "Community":
-      - "Contribute": community.md
-      - "External Links": links.md
+      - "Contribute": community/index.md
+      - "Resources": links.md
