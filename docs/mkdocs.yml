@@ -146,7 +146,7 @@ nav:
           - "Rust":
               - "Demo-App": rust/demo-app/README.md
           - "Python":
-              - "Some-Example": python/README.md
+              - "Overview": python/README.md
 
   - "Community":
       - "Contribute": community/index.md
