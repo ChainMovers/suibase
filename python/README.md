@@ -1,12 +1,25 @@
-# sui-base : Python
+---
+hide:
+  - toc
+---
 
-Contains python CLI examples and docs for interacting with Sui blockchain
+## sui-base Python
 
-## Dependencies
+Contains python program examples for interacting with Sui blockchain. The demo applications
+require `pysui` Python SUI Client SDK to run.
 
-1 Recommended to always setup a python virtual environment
-2 Examples rely on [pysui](https://github.com/FrankC01/pysui)
+## Pre Setup
 
-## TODO
+You should first setup `sui-base` by following steps found [Here](../how-to/install.md)
 
-Everything
+## Setup
+
+??? abstract "Setup Steps"
+
+    ```
+    $ cd sui-base
+    $ python3 -m venv env
+    $ . env/bin/activate
+    $ pip install -U pip
+    $ pip install pysui
+    ```
