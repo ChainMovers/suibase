@@ -1,0 +1,12 @@
+---
+keystore:
+  File: <PUT_WORKING_DIR_PATH_HERE>/sui.keystore
+envs:
+  - alias: localnet
+    rpc: "http://0.0.0.0:9000"
+    ws: ~
+  - alias: devnet
+    rpc: "https://fullnode.devnet.sui.io:443"
+    ws: ~
+active_env: localnet
+active_address: "0xb45df0d0dba1afad9bfdcd28de40af2bef5033f1b4ef7bf0ea46bd4d8145a3e4"

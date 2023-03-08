@@ -8,7 +8,7 @@ hide:
 
   * Linux - (Ubuntu tested, others may work)
   * macOS
-  * Windows 10/11 WSL (Ubuntu tested only)
+  * Windows 10/11 WSL2 (Ubuntu tested only)
 
 **Prerequisites**
 
@@ -16,8 +16,10 @@ Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites)
 
 You can skip the section about installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config to exist).
 
-!!! note
-    To avoid version mismatch issues, sui-base automatically download the source code and builds its own sui client binaries for each workdir. The Sui code is left in each workdir on-purpose. Your apps will now be able to refer to the same local Sui Rust SDK crates, and be "in sync" with everything else.
+??? question "How will sui-base get the Sui binaries?"
+    sui-base download the source code and builds its own sui client for each workdir. This allows to have binaries always ready for each targeted network (something not easy to do with the normal Sui procedure of only one binary installed at the time).
+    
+    Your app can also refer to these local Sui Rust SDK crates and avoid potential obscure bug because of a binary version mismatch with a target network.
 
 **Sui-Base Installation**
 ``` console

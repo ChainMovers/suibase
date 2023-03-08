@@ -5,8 +5,8 @@
 # It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
 
-# DTP does not work with version below these.
-MIN_SUI_VERSION="sui 0.22.0"
+# Sui-base does not work with version below these.
+MIN_SUI_VERSION="sui 0.27.0"
 MIN_RUST_VERSION="rustc 1.65.0"
 
 # Mandatory command line input
@@ -34,7 +34,6 @@ LOCAL_BIN="~/.local/bin"
 
 SUI_REPO_DIR="$WORKDIRS/$NETNAME/sui-repo"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
-GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
 
 CONFIG_DATA_DIR="$WORKDIRS/$NETNAME/config"
 PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
@@ -43,8 +42,18 @@ PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
 NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
 CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
 
+# This is the default repo for localnet/devnet/testnet scripts.
+# Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
+SUI_REPO_DIR_DEFAULT="$WORKDIRS/$NETNAME/sui-repo-default"
+
+# Location for genesis data for "default" repo.
+DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
+
+# Location for generated genesis data (on first start after set-sui-repo)
+GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$NETNAME/genesis-data"
 
 build_sui_repo_branch() {
+  ALLOW_DOWNLOAD="$1";
 
   # Verify Sui pre-requisites are installed.
   which curl &> /dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites";
@@ -56,29 +65,40 @@ build_sui_repo_branch() {
   # Verify Rust is recent enough.
   version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version";
 
-  # If not already done, get the github sui $SUI_REPO_BRANCH.
-  if [ ! -d "$SUI_REPO_DIR" ]
-  then
-    git clone -b devnet https://github.com/MystenLabs/sui.git "$SUI_REPO_DIR"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
-  fi
+  if [ "$ALLOW_DOWNLOAD" = "false" ]; then
+    echo "Skipping git clone/fetch/pull because set-sui-repo is set."
+    echo "Building $NETNAME at [$RESOLVED_SUI_REPO_DIR]"
+    if [ ! -d "$RESOLVED_SUI_REPO_DIR" ]; then
+      echo "Error: repo not found at [$RESOLVED_SUI_REPO_DIR]"
+      echo "Either create this repo, or revert localnet to work with"
+      echo "the default repo by typing \"localnet set-sui-repo\"".
+      exit
+    fi
+  else
+    # If not already done, initialize the default repo.
+    if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]
+    then
+      git clone -b devnet https://github.com/MystenLabs/sui.git "$SUI_REPO_DIR_DEFAULT"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
+      set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
+    fi
 
-  # Update sui devnet local repo (if needed)
-  (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
-  V1=$(cd "$SUI_REPO_DIR"; git rev-parse HEAD)
-  V2=$(cd "$SUI_REPO_DIR"; git rev-parse '@{u}')
-  if [ "$V1" != "$V2" ]
-  then
-    # Does a bit more than needed, but should allow to recover
-    # from most operator error...
-    echo Updating sui $NETNAME in sui-base...
-    (cd "$SUI_REPO_DIR" && git switch $SUI_REPO_BRANCH > /dev/null)
-    (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
-    (cd "$SUI_REPO_DIR" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
-    (cd "$SUI_REPO_DIR" && git merge '@{u}')
+    # Update sui devnet local repo (if needed)
+    (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
+    V1=$(cd "$SUI_REPO_DIR"; git rev-parse HEAD)
+    V2=$(cd "$SUI_REPO_DIR"; git rev-parse '@{u}')
+    if [ "$V1" != "$V2" ]
+    then
+      # Does a bit more than needed, but should allow to recover
+      # from most operator error...
+      echo Updating sui $NETNAME in sui-base...
+      (cd "$SUI_REPO_DIR" && git switch $SUI_REPO_BRANCH > /dev/null)
+      (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
+      (cd "$SUI_REPO_DIR" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
+      (cd "$SUI_REPO_DIR" && git merge '@{u}')
+    fi    
+    echo "Building $NETNAME using latest Sui $SUI_REPO_BRANCH branch..."
   fi
-
-  # Verify sui built is latest.
-  echo Building $NETNAME using latest Sui $SUI_REPO_BRANCH branch...
+  
   (cd "$SUI_REPO_DIR"; cargo build)
 
   # Sanity test that the sui binary works
@@ -122,7 +142,6 @@ check_dev_setup() {
   fi
 }
 export -f check_dev_setup
-
 
 is_localnet_installed() {
 
@@ -323,7 +342,15 @@ start_sui_process() {
 export -f start_sui_process
 
 update_SUI_REPO_INFO_var() {
-  SUI_REPO_INFO="github branch $(cd $SUI_REPO_DIR; git branch --show-current)"
+  # This is intended for display to user (human).
+  BRANCH_NAME = $(cd $SUI_REPO_DIR; git branch --show-current)
+  if is_sui_repo_dir_default; then
+    SUI_REPO_INFO="git branch is [$BRANCH_NAME]"
+  else
+    RESOLVED_SUI_REPO=$(readlink $SUI_REPO_DIR)
+    RESOLVED_SUI_REPO_BASENAME=$(basename "$RESOLVE_SUI_REPO")
+    SUI_REPO_INFO="git branch is [$BRANCH_NAME], sui-repo set to [$RESOLVED_SUI_REPO_BASENAME]"
+  fi  
 }
 export -f update_SUI_REPO_INFO_var
 
@@ -404,9 +431,9 @@ publish_localnet() {
 
   # Build the Move package for publication.
   #echo Now publishing on network
-  CMD="lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $PASSTHRU_OPTIONS --json > \"$INSTALL_DIR/publish-output.json\""
+  CMD="lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $PASSTHRU_OPTIONS --json 2>&1 1>$INSTALL_DIR/publish-output.json"
 
-  # echo $CMD
+  echo $CMD
   echo Publishing...
   script_cmd $CMD;
 
@@ -425,7 +452,8 @@ publish_localnet() {
   # echo "id_line=[$ID_LINE]"
 
   if [ -z "$ID_LINE" ]; then
-    setup_error "Could not find the package id from $SCRIPT_OUTPUT"
+    cat "$INSTALL_DIR/publish-output.json"
+    setup_error "Could not find the package id from $SCRIPT_OUTPUT"    
   fi
 
   # Extract first hexadecimal literal found.
@@ -443,9 +471,10 @@ publish_localnet() {
   # Best-practice to revert IFS to default.
   unset IFS
 
-  # echo "ID=[$ID]"
+  echo "ID=[$ID]"
 
   if [ -z "$ID" ]; then
+    cat "$INSTALL_DIR/publish-output.json"
     setup_error "Could not find Package id in $SCRIPT_OUTPUT"
   fi
 
@@ -453,9 +482,10 @@ publish_localnet() {
   # using that parsed package id.
   script_cmd "lsui client object $ID"
   echo Verifying client can access new package on network...
-  validation=$(lsui client object $ID | grep "Move Package")
+  validation=$(lsui client object $ID | grep -i "package")
   if [ -z "$validation" ]; then
-    setup_error "Unexpected object type (Not a Move Package)"
+    cat "$INSTALL_DIR/publish-output.json"
+    setup_error "Unexpected object type (Not a package)"
   fi
   JSON_STR="[\"$ID\"]"
   echo $JSON_STR > "$INSTALL_DIR/package-id.json"
@@ -465,3 +495,74 @@ publish_localnet() {
   echo Publication Successful
 }
 export -f publish_localnet
+
+
+# Verify if $SUI_REPO_DIR symlink is toward a user repo (not default).
+#
+# false if the symlink does not exist.
+#
+# (Note: does not care if the target directory exists).
+is_sui_repo_dir_override() {
+  # Verify if symlink resolves and is NOT toward the default.
+  if [ -L "$SUI_REPO_DIR" ]; then
+    RESOLVED_SUI_REPO_DIR=$(readlink $SUI_REPO_DIR)
+    if [ "$RESOLVED_SUI_REPO_DIR" != "$SUI_REPO_DIR_DEFAULT" ]; then
+      true; return;
+    fi
+  fi
+  false; return;
+}
+export -f is_sui_repo_dir_override 
+
+is_sui_repo_dir_default() {
+  # Just negate is_sui_repo_dir_override
+  if is_sui_repo_dir_override; then
+    false; return
+  fi
+  true; return
+}
+export -f is_sui_repo_dir_default
+
+set_sui_repo_dir_default() {
+  if is_sui_repo_dir_override; then    
+    rm -f "$SUI_REPO_DIR"
+    echo "Removed set-sui-repo to [$RESOLVED_SUI_REPO_DIR]"
+  fi
+
+  # Link to the default directory if already exists.  
+  if [ -d "$SUI_REPO_DIR_DEFAULT" ]; then
+    set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
+  else
+    # No default directory.
+    # Still a success as long the symlink is gone.
+    echo "sui-repo use now the default repo [$SUI_REPO_DIR_DEFAULT]"
+  fi  
+}
+export -f set_sui_repo_dir_default
+
+set_sui_repo_dir() {
+
+  OPTIONAL_PATH="$@"
+
+  # User errors?
+  if [ ! -d "$OPTIONAL_PATH" ]; then
+    setup_error "Path [$OPTIONAL_PATH] not found"
+  fi
+
+  # The -T is important because target is a directory and without it
+  # the command line arguments would be interpreted in the 3rd form
+  # described in "man ln".
+  ln -sfT "$OPTIONAL_PATH" "$SUI_REPO_DIR"
+
+  # Verify success.
+  if is_sui_repo_dir_default; then
+    echo "$NETNAME use now the default repo [$OPTIONAL_PATH]"
+  else
+    if is_sui_repo_dir_override; then
+      echo "$NETNAME set-sui-repo is now [$OPTIONAL_PATH]"
+    else
+      setup_error "$NETNAME set-sui-repo failed [$OPTIONAL_PATH]";
+    fi
+  fi
+}
+export -f set_sui_repo_dir

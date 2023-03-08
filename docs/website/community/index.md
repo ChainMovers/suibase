@@ -29,7 +29,7 @@ You can run the whole website locally with just pip and git (See [here :octicons
 
 ??? abstract "Installation Steps"
 
-    ```
+    ``` console
     $ cd ~
     $ git clone https://github.com/sui-base/sui-base.git
     $ cd sui-base/docs

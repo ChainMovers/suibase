@@ -1,0 +1,78 @@
+---
+validator_config_info: ~
+parameters:
+  timestamp_ms: 1678265858465
+  protocol_version: 1
+  allow_insertion_of_extra_objects: true
+  initial_sui_custody_account_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
+  initial_validator_stake_mist: 25000000000000000
+  governance_start_epoch: 0
+committee_size: 4
+grpc_load_shed: ~
+grpc_concurrency_limit: 20000000000
+accounts:
+  - address: 40add5b758b9a6a44b7138af94a4d0466b73efcbfa0fbb35940ed6fbc284b0a7
+    gas_objects:
+      - object_id: "0x8adebc07ad78d8a2fe3817422a82b8cd3912c7bd4d836cac235c421bd97003f1"
+        gas_value: 800000000000000
+      - object_id: "0xe9d3b609e92abccea2634bddff8db2b3a0040e54ec8e0b3522a5d478dcc8c9db"
+        gas_value: 800000000000000
+      - object_id: "0x79990504a8f9cf74273d64111574a1cb18c7d70e5a60b374435f9b3314aa0d6a"
+        gas_value: 800000000000000
+      - object_id: "0xf9f8d1e484a46cf67f59a5b0c6ebe46a9c9a5be26a5f1a8c57790574b81e6326"
+        gas_value: 800000000000000
+      - object_id: "0xd70af0610f82f189ebfcd21e3d451734e273cf768b8163b3d4aa911d85545e23"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: 57090aa46dec347398b68c83adfbbb85b10208bddc852e0206b1bc52435b8ad4
+    gas_objects:
+      - object_id: "0x9d704923e3475728157db93caa148ed774d69352a0ad03966a1b5e68df9d3708"
+        gas_value: 800000000000000
+      - object_id: "0xc7f652d60ffed98ef7e4646130dc0fd2dd20dea89ddde56ad7760ca7815af1d0"
+        gas_value: 800000000000000
+      - object_id: "0x9ede3028b3b6c98ac28fa03ae2ac653129c0d159419f7bd64863dc826e40431e"
+        gas_value: 800000000000000
+      - object_id: "0x9b6b58bc91cb203a9750762fcd4ac069757735a32afe9349c1605e68f9b07709"
+        gas_value: 800000000000000
+      - object_id: "0x905daa8e1cca6d1604fb7f6180cb2381cfd19c4a3d32c6901bebda01ab4c81f9"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: 773b5e34b1821687c81f27f8856d395772b1310211127565b15a906ae42615be
+    gas_objects:
+      - object_id: "0x51f3809ef835fd9000bbadf032ef3dbbaa21708a83429ac11d23314ce2139c57"
+        gas_value: 800000000000000
+      - object_id: "0x4db8e9917e4ff94bf2612b0977ce6218babe9f2c70b7588d73c9b6c756b4797e"
+        gas_value: 800000000000000
+      - object_id: "0x09ab16db7b7c5e39b1c1f9ee31656df52c1701ebbbaf60ff9f0258deab363eb0"
+        gas_value: 800000000000000
+      - object_id: "0x687678bf98146dfa00232c274e18ae458eafa3395b2dfc8d414deedd7b89355c"
+        gas_value: 800000000000000
+      - object_id: "0xf7fedecfb4050158e83e7ee0c5f80ca04d3da0f6e2423dd84378347daa148c36"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: b3ceefe0d095e701739e6e1e03dfa71a95fffbe4f716094b615863d002b30502
+    gas_objects:
+      - object_id: "0xd85a7615bf94e30e7fc5fca524b3fcf27ec606c76eefdd6d8f70dc517a06d8e0"
+        gas_value: 800000000000000
+      - object_id: "0x1e62d2fb7abaeba5c828f33e4b6df74116ca844303e64e03102dfc5b3a04fd00"
+        gas_value: 800000000000000
+      - object_id: "0x4e2eef9145dcb5cc142eb95ea037910fe0cbc09a7a4170ac9c869894f0d4d349"
+        gas_value: 800000000000000
+      - object_id: "0x074a6af375d0c4c7b7b1391cef91d1ae0ce4b6fe46cab5eb40d6152754fbd813"
+        gas_value: 800000000000000
+      - object_id: "0xf4800b92018e44e9b62bab30124e075325399ad0076f28cafa8aa3277ecd0952"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: b45df0d0dba1afad9bfdcd28de40af2bef5033f1b4ef7bf0ea46bd4d8145a3e4
+    gas_objects:
+      - object_id: "0xd40b9470a6730c60c7ff941640ef453bb690bab27901304b9892d9723d356c01"
+        gas_value: 800000000000000
+      - object_id: "0x41a277b964fba182f4d97e860db44b7a22869218944c15fc1b88b701076b6547"
+        gas_value: 800000000000000
+      - object_id: "0x23f2033ed2e4bd4f1c23c0390f5ea41d5973f080f8ae6e26ab4d63a2d06738e4"
+        gas_value: 800000000000000
+      - object_id: "0xcf17da2cef5c03ce778d679fc9accb2fd3e40a631ea8a610f7a0d99851fd5065"
+        gas_value: 800000000000000
+      - object_id: "0x68a3b9f0600942602fb575863470100bd83817ff2c720cbff8647e66591750d4"
+        gas_value: 800000000000000
+    gas_object_ranges: []

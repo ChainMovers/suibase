@@ -18,9 +18,11 @@ usage() {
   echo "   stop:    stop the localnet (sui process will exit)"
   echo "   status:  indicate if running or not"
   echo
-  echo "   update:  Update local sui repo branch and regen localnet."
+  echo "   update:  Update local sui repo and regen localnet."
+  echo "            Note: Will not do any git operations if your own"
+  echo "                  repo is configured with set-sui-repo."
   echo
-  echo "   regen:   Regenerate localnet. Useful for recovering."
+  echo "   regen:   Only regenerate localnet. Useful for recovering."
   echo
   echo "   publish: Publish module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
@@ -37,7 +39,7 @@ usage() {
 
   # Quick check if installed, then help the user about the location.
   if [ -d "$HOME/sui-base/workdirs" ]; then
-    echo "All localnet DB and sui-base outputs are in $HOME/sui-base/workdirs"
+    echo "All localnet DB and sui-base outputs are in ~/sui-base/workdirs"
   fi
   exit
 }
@@ -87,8 +89,12 @@ while [[ "$#" -gt 0 ]]; do
 
         -p|--path)
            # see: https://stackoverflow.com/questions/9018723/what-is-the-simplest-way-to-remove-a-trailing-slash-from-each-parameter
-           OPTIONAL_PATH="${2%/}"; shift ;;
-
+           OPTIONAL_PATH="${2%/}"; shift
+           if [ -z "$OPTIONAL_PATH" ]; then
+             echo "--path <path> must be specified"
+             exit
+           fi
+           ;;
         *)
         if [ "$CMD_PUBLISH_REQ" = true ]; then
           case $1 in
@@ -113,9 +119,9 @@ fi
 
 # Detect invalid COMMAND and Option combinations.
 
-# For now, -p <path> is valid only with the command 'publish'
+# Check if '-p <path>'' is used with a valid subcommand
 if [ -n "$OPTIONAL_PATH" ]; then
-  if [ "$CMD_PUBLISH_REQ" = true ]; then
+  if [ "$CMD_PUBLISH_REQ" = true ] || [ "$CMD_SET_SUI_REPO_REQ" = true ]; then
     # Validate if the path exists.
     if [ ! -d "$OPTIONAL_PATH" ]; then
       echo "Path [$OPTIONAL_PATH] not found"
@@ -127,16 +133,25 @@ if [ -n "$OPTIONAL_PATH" ]; then
   fi
 fi
 
-if [ "$CMD_SET_SUI_REPO_REQ" = true ]; then
-  echo "You want this feature? Not sure if it was needed. Ask the developer to work on it."
-  exit
-fi
-
 # Call the initialization code common to all script.
 SCRIPT_READLINK="$(readlink -f "$0")"
 SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
 SCRIPT_DIR="$(dirname $SCRIPT_READLINK)"
 source "$SCRIPT_DIR/script_common" "$SCRIPT_DIR" "$SCRIPT_NAME" "$NETNAME" "$SUI_REPO_BRANCH"
+
+echo_help_on_not_installed() {
+    echo "localnet not initialized"
+  
+    if is_sui_repo_dir_default; then
+      echo
+      echo "Do \"localnet start\" to use default latest Sui repo (recommended)"
+      echo
+      echo "Check \"localnet --help\" for more advanced configuration"
+    else
+      echo
+      echo "Do \"localnet start\" to initialize"
+    fi
+}
 
 # First, take care of the easy "status" command that does not touch anything.
 update_SUI_PROCESS_PID_var;
@@ -152,13 +167,16 @@ if [ "$CMD_STATUS_REQ" = true ]; then
     #update_SUI_REPO_INFO_var;
     #echo "$SUI_VERSION ($SUI_REPO_INFO)"
     update_ACTIVE_WORKDIR_var;
-    if [[ "$ACTIVE_WORKDIR" == "$NETNAME" ]]; then
+    if [ "$ACTIVE_WORKDIR" = "$NETNAME" ]; then
       echo "$ACTIVE_WORKDIR is set-active for asui"
     else
       echo -e "\033[1;33mWarning:\033[0m $NETNAME is NOT active for asui"
     fi
+    if is_sui_repo_dir_override; then
+      echo "$ACTIVE_WORKDIR is set-sui-repo to [$RESOLVED_SUI_REPO_DIR]"
+    fi
   else
-    echo "localnet not installed"
+    echo_help_on_not_installed;
   fi
   exit
 fi
@@ -193,7 +211,7 @@ if [ "$CMD_STOP_REQ" = true ]; then
       echo "localnet already stopped"
     fi
   else
-    echo "localnet not installed"
+    echo_help_on_not_installed;
   fi
   exit
 fi
@@ -224,7 +242,7 @@ if [ "$CMD_PUBLISH_REQ" = true ]; then
       fi
     fi
   else
-    echo "localnet not installed."
+    echo_help_on_not_installed;
   fi
   exit
 fi
@@ -239,9 +257,16 @@ if [ "$CMD_SET_ACTIVE_REQ" = true ]; then
       set_active_workdir;
     fi
   else
-    echo "localnet not installed."
+    echo_help_on_not_installed;
   fi
   exit
+fi
+
+# Detect user action that should be NOOP.
+if [ "$CMD_SET_SUI_REPO_REQ" = true ] && [ -z "$OPTIONAL_PATH" ]; then
+  if is_sui_repo_dir_default; then
+    setup_error "localnet already using default repo. no change."
+  fi
 fi
 
 # Finally, take care of the more complicated cases that involves
@@ -264,54 +289,118 @@ if [[ "$CWD" = "$PUBLISHED_DATA_DIR"* ]]; then
   setup_error "Change current directory location and try again."
 fi
 
-echo "Output location = $WORKDIRS/$NETNAME"
-
 # Stop localnet (noop if not running)
 stop_sui_process;
-
-# Sui repo should not be updated on a regen
-if [ "$CMD_REGEN_REQ" = false ]; then
-  build_sui_repo_branch;
-fi
 
 # Clean-up previous localnet (if exists)
 RM_DIR="$CONFIG_DATA_DIR"
 if [ -d "$RM_DIR" ]; then
-  echo "Removing existing $RM_DIR directory"
+  echo "Clearing existing localnet data (preparing for genesis)"
   rm -rf "$RM_DIR"
 fi
 
 # Delete localnet publish directory (if exists) to force re-publication.
 RM_DIR="$PUBLISH_DATA_DIR"
-if [ -d "$RM_DIR" ]; then
-  echo "Removing existing $RM_DIR directory"
+if [ -d "$RM_DIR" ]; then  
   rm -rf "$RM_DIR"
 fi
 
-if [ "$GENESIS" = true ]; then
-   echo "Generating NEW genesis configuration file only"
-   $SUI_BIN_DIR/sui genesis --working-dir "$GENESIS_DATA_DIR" --write-config "$GENESIS_DATA_DIR/config.yaml.new"
-   diff "$GENESIS_DATA_DIR/config.yaml.new" "$GENESIS_DATA_DIR/config.yaml"
+if [ "$CMD_SET_SUI_REPO_REQ" = true ]; then
+  update_SUI_PROCESS_PID_var;
+  if [ "$SUI_PROCESS_PID" ]; then
+    # Force to stop. Otherwise the running process and config will be out-of-sync.
+    setup_error "Can't change config while localnet running. Do \"localnet stop\"."
+  fi
+
+  if [ -z "$OPTIONAL_PATH" ]; then
+    set_sui_repo_dir_default;
+  else
+    set_sui_repo_dir "$OPTIONAL_PATH";
+  fi
+
+  # Clean-up generated genesis data whenever switching repo.
+  RM_DIR="$GENERATED_GENESIS_DATA_DIR"
+  if [ -d "$RM_DIR" ]; then
+    rm -rf "$RM_DIR"
+  fi
+
+  exit
+fi
+
+# Create and build the sui-repo.
+# Should not download on a regen or set-sui-repo, but still need to do "cargo build" in case the 
+# binary are not up to data (or done yet).
+ALLOW_DOWNLOAD="true" # Using string because passing outside as param
+if [ "$CMD_REGEN_REQ" = true ]; then
+  ALLOW_DOWNLOAD="false"
+fi
+if is_sui_repo_dir_override; then
+  ALLOW_DOWNLOAD="false"
+fi
+
+build_sui_repo_branch "$ALLOW_DOWNLOAD";
+
+if [ "$GENESIS" = "true" ]; then
+   # This is to help debugging. Not the "normal" genesis 
+   echo "Generating NEW genesis configuration file only"   
+   $SUI_BIN_DIR/sui genesis --working-dir "$DEFAULT_GENESIS_DATA_DIR" --write-config "$DEFAULT_GENESIS_DATA_DIR/config.yaml.new"
+   diff "$DEFAULT_GENESIS_DATA_DIR/config.yaml.new" "$DEFAULT_GENESIS_DATA_DIR/config.yaml"
    exit
 fi
 
-echo "Creating new $NETNAME"
+echo "Creating new $NETNAME" 
 mkdir -p "$CONFIG_DATA_DIR"
-if [ "$DEBUG_RUN" = true ]; then
-  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR"
+
+# Two type of genesis:
+#  (1) Using "static" genesis data when for default repo.
+#  (2) Using generated data after a set-sui-repo.
+if is_sui_repo_dir_default; then
+  # Find which static genesis_data version should be used.
+  # Only two so far >=0.28 and everything else below.  
+  if version_greater_equal "$($SUI_BIN_DIR/sui -V)" "sui 0.28"; then
+    STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.28"
+  else
+    STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
+  fi  
+
+  if [ "$DEBUG_RUN" = true ]; then
+    $SUI_BIN_DIR/sui genesis --from-config "$STATIC_SOURCE_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR"
+  else
+    $SUI_BIN_DIR/sui genesis --from-config "$STATIC_SOURCE_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR" >& /dev/null
+  fi
+
+  yes | cp -rf "$STATIC_SOURCE_DIR/sui.keystore" "$CONFIG_DATA_DIR"
+  yes | cp -rf "$STATIC_SOURCE_DIR/client.yaml" "$CONFIG_DATA_DIR"
+
+  SEARCH_STRING="<PUT_WORKING_DIR_PATH_HERE>"
+  REPLACE_STRING="$CONFIG_DATA_DIR"
 else
-  $SUI_BIN_DIR/sui genesis --from-config "$GENESIS_DATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR" >& /dev/null
+  # This is the logic for when set-sui-repo
+  if [ ! -d "$GENERATED_GENESIS_DATA_DIR" ]; then
+    mkdir -p "$GENERATED_GENESIS_DATA_DIR"
+    # Generate the genesis data for the very first time.
+    $SUI_BIN_DIR/sui genesis --working-dir "$GENERATED_GENESIS_DATA_DIR"
+    # Generate the config.yaml that will allow a deterministic setup.
+    $SUI_BIN_DIR/sui genesis --working-dir "$GENERATED_GENESIS_DATA_DIR" --write-config "$GENERATED_GENESIS_DATA_DIR/config.yaml"
+  fi  
+
+  if [ "$DEBUG_RUN" = true ]; then
+    $SUI_BIN_DIR/sui genesis --from-config "$GENERATED_GENESIS_DATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR"
+  else
+    $SUI_BIN_DIR/sui genesis --from-config "$GENERATED_GENESIS_DATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR" >& /dev/null
+  fi
+
+  yes | cp -rf "$GENERATED_GENESIS_DATA_DIR/sui.keystore" "$CONFIG_DATA_DIR"
+  yes | cp -rf "$GENERATED_GENESIS_DATA_DIR/client.yaml" "$CONFIG_DATA_DIR"
+
+  SEARCH_STRING="genesis-data"
+  REPLACE_STRING="config"
 fi
 
-yes | cp -rf "$GENESIS_DATA_DIR/sui.keystore" "$CONFIG_DATA_DIR"
-yes | cp -rf "$GENESIS_DATA_DIR/client.yaml" "$CONFIG_DATA_DIR"
-
-# Replace placeholder string in client.yaml with an absolute path to the keystore.
+# Replace a string in client.yaml to end up with an absolute path to the keystore.
 # Notice sed uses '+'' for seperator instead of '/' to avoid clash
 # with directory path. Also uses a .bak temp file because Mac (BSD) does not
 # allow in-place file change.
-SEARCH_STRING="<PUT_WORKING_DIR_PATH_HERE>"
-REPLACE_STRING="$CONFIG_DATA_DIR"
 sed -i.bak -e "s+$SEARCH_STRING+$REPLACE_STRING+g" "$CONFIG_DATA_DIR/client.yaml" && rm "$CONFIG_DATA_DIR/client.yaml.bak"
 
 # When need to start in foreground to debug.
@@ -343,3 +432,4 @@ echo "Remember:"
 echo "  Use \"lsui\" to access your localnet"
 echo
 echo "Success. Try it by typing \"lsui client gas\""
+
