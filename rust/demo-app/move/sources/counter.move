@@ -4,10 +4,6 @@
 //
 // There is only one Counter object created per package published.
 //
-// That object instance can be found by any clients through a RPC query.
-// 
-// TODO Modify to use template type so it is not so trivial may be?
-// TODO Add capability of clearing only from creator?
 module demo::Counter {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self,TxContext};

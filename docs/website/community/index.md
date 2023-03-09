@@ -17,11 +17,9 @@ For Sui-Base (+any 3rd party dev tool welcome to join):
 
 ## How to be a writer for the Cookbook?
 
-Anyone can participate.
+Anyone can participate. 
 
 The website is built from markdown files (.md) and served directly from [github :octicons-link-external-16:](https://github.com/sui-base/sui-base/tree/main/docs/website). You submit changes with a pull request.
-
-Do not hesitate to reach out on [Discord :octicons-link-external-16:](https://discord.gg/Erb6SwsVbH) for assistance.
 
 **Running/Editing the website**
 

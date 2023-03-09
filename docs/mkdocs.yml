@@ -128,13 +128,9 @@ nav:
       - "Guides":
           - "Sui Basic Concepts": cookbook/sui-intro.md
           - "Move Language": cookbook/move.md
+          - "Fullnode Setup": cookbook/fullnode.md
       - "Code Snippets":
-          - "Example 1": cookbook/test/Subject1.md
-          - "Example 2": cookbook/test/Subject2.md
-          - "Big Subject":
-              - "SubjectSub1": cookbook/test/SubjectSub1.md
-              - "SubjectSub2": cookbook/test/SubjectSub2.md
-          - "Subject3": cookbook/test/Subject3.md
+          - "Example": cookbook/example.md
 
   - "Sui-Base":
       - Getting Started:
@@ -142,7 +138,7 @@ nav:
           - "Installation": how-to/install.md
       - References:
           - "Sui-Base Scripts": how-to/scripts.md
-          - "Path and Env": references.md
+          - "API and Conventions": references.md
           - "Rust":
               - "Demo-App": rust/demo-app/README.md
           - "Python":

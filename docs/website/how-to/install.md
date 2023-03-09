@@ -17,9 +17,9 @@ Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites)
 You can skip the section about installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config to exist).
 
 ??? question "How will sui-base get the Sui binaries?"
-    sui-base download the source code and builds its own sui client for each workdir. This allows to have binaries always ready for each targeted network (something not easy to do with the normal Sui procedure of only one binary installed at the time).
+    sui-base automatically download the code and builds a sui client for each workdir. One binary to target each network. This is better than a manual procedure installing a single binary per user and "switch network"... which does not work well if the binary happens to not be compatible with one of the network.
     
-    Your app can also refer to these local Sui Rust SDK crates and avoid potential obscure bug because of a binary version mismatch with a target network.
+    Your app can also refer to the same local Sui Rust SDK crates downloaded by sui-base, and further minimize compatibility issues.
 
 **Sui-Base Installation**
 ``` console
@@ -34,7 +34,7 @@ Sui-base is not intrusive on your system. The installation is per user:
    - The installation only creates symlinks in ~/.local/bin
 
 ??? question "Why does sui-base need to be cloned in the user home (~) directory?"
-    Sui-base value come from having many tools using its workdirs. It benefits from being easily found... and any software can figure out where the user home directory is located. The choice was about favoring simplicity (over flexibility of being cloned anywhere).
+    Sui-base workdir is an "open standard" and benefit from being easily found by many apps/sdks. The user home directory is easy to access for most apps and scripts...
 
 **Starting Localnet**
 ``` console
