@@ -6,7 +6,12 @@ By default, each address has 5 coins with 8 Sui each, but can be customized to b
 
 The sui-base-helper Rust module provides utilities such as getting the id of the last package that you did publish on localnet/devnet/testnet.
 
+## Documentation
+
+Online docs can be found [Here](https://sui-base.io/)
+
 ## Installation
+
 - Install the Sui Requirements (Git, Rust etc...)
   The Sui binaries are not needed (the script download Sui repo)
 
@@ -14,25 +19,28 @@ The sui-base-helper Rust module provides utilities such as getting the id of the
 
 - run './install'. It creates only symlinks in the user account (no system change)
 
-- run 'localnet start' ... will take many minutes to create the localnet.  
+- run 'localnet start' ... will take many minutes to create the localnet.
 
 The localnet will be at http://0.0.0.0:9000
 
 ## Where is the sui client?
-You must type "lsui" instead of "sui". 
+
+You must type "lsui" instead of "sui".
 
 Example, do "lsui client gas" instead of "sui client gas".
 
 Why is that? sui-base also support "dsui" and "tsui" for respectively devnet and testnet... and each can be different binaries!
 
 ## Features (work in progress)
-  - Keeps localnet/devnet/testnet keystores seperated.
-  - Does not touch the user ~/.sui and its keystore (assumes might be used later for mainnet).
-  - Repeatable localnet that can be reset quickly with the same pre-funded address.
-  - Customizable pre-funding amount (See scripts/genesis/config.yaml ).
-  - Convenient Sui CLI frontends for each network ("dsui" for devnet, "tsui" for testnet...)
+
+- Keeps localnet/devnet/testnet keystores seperated.
+- Does not touch the user ~/.sui and its keystore (assumes might be used later for mainnet).
+- Repeatable localnet that can be reset quickly with the same pre-funded address.
+- Customizable pre-funding amount (See scripts/genesis/config.yaml ).
+- Convenient Sui CLI frontends for each network ("dsui" for devnet, "tsui" for testnet...)
 
 ## Initial State
+
 Always same 5 client addresses. The 0xc7148~89a7 is the default active client.
 
 ```
@@ -56,33 +64,35 @@ $ lsui client gas
  0xc8381677d3c213f9b0e9ef3d2d14051458b6af8a | 800000000000000
  0xd0b2b2227244707bce233d13bf537af7a6710c01 | 800000000000000
 ```
+
 (Default 40 Sui per client, you can customize to as much as you need)
 
 ## Development Setup
- ```
+
+```
 <Your home directory>
-     │
-     ├── <Other Rust app can also refer to "~/sui-base/workdirs/devnet-branch">
-     |
-     └── sui-base/    # This git cloned repo
-           ├── install            # Do './install' first
-           |
-           ├── rust/
-           |    ├── hello-app     # An hello world! example.
-           |    └── ...           
-           |
-           ├── scripts/
-           │    ├── localnet      # To manage your localnet
-           │    ├── lsui          # Sui CLI frontend for localnet
-           │    ├── dsui          # Sui CLI frontend for live devnet
-           │    └── tsui          # Sui CLI frontend for live testnet
-           │       
-           └── workdirs/       # Created by the scripts
-                ├── devnet-branch      # Complete local repo of Sui devnet branch.
-                ├── testnet-branch     # Complete local repo of Sui testnet branch (later)
-                ├── localnet-workdir   # All localnet files. runs at http://0.0.0.0:9000
-                ├── devnet-workdir     # Keystore for live devnet network
-                └── testnet-workdir    # Keystore for live tesnet network
+    │
+    ├── <Other Rust app can also refer to "~/sui-base/workdirs/devnet-branch">
+    |
+    └── sui-base/    # This git cloned repo
+          ├── install            # Do './install' first
+          |
+          ├── rust/
+          |    ├── hello-app     # An hello world! example.
+          |    └── ...
+          |
+          ├── scripts/
+          │    ├── localnet      # To manage your localnet
+          │    ├── lsui          # Sui CLI frontend for localnet
+          │    ├── dsui          # Sui CLI frontend for live devnet
+          │    └── tsui          # Sui CLI frontend for live testnet
+          │
+          └── workdirs/       # Created by the scripts
+               ├── devnet-branch      # Complete local repo of Sui devnet branch.
+               ├── testnet-branch     # Complete local repo of Sui testnet branch (later)
+               ├── localnet-workdir   # All localnet files. runs at http://0.0.0.0:9000
+               ├── devnet-workdir     # Keystore for live devnet network
+               └── testnet-workdir    # Keystore for live tesnet network
 ```
 
 ================
