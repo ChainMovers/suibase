@@ -2,10 +2,10 @@
 
 # Script to create and control a Sui local network.
 
-# Source 'sui-base/script_common'.
+# Source 'sui-base/__script-common'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="localnet"
-source "$HOME/sui-base/scripts/script_common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/sui-base/scripts/__script-common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 usage() {
   echo "Usage: localnet [COMMAND] <Options>"
@@ -305,7 +305,7 @@ stop_sui_process;
 # Clean-up previous localnet (if exists)
 RM_DIR="$CONFIG_DATA_DIR"
 if [ -d "$RM_DIR" ]; then
-  echo "Clearing existing localnet data (preparing for genesis)"
+  echo "Clearing existing localnet data"
   rm -rf "$RM_DIR"
 fi
 

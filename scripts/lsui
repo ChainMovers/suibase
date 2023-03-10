@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script simply call the proper sui binary (provided by Mysten Lab) that match
+# This script simply call the proper sui binary (provided by Mysten Lab) and config that match
 # the binary running for your localnet.
 #
 # Your localnet should have been installed when you did "localnet start".
@@ -12,10 +12,10 @@
 # , --network.config and --keystore-path options on the command line.
 #
 
-# Source 'sui-base/script_common'.
+# Source 'sui-base/__script-common'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="localnet"
-source "$HOME/sui-base/scripts/script_common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/sui-base/scripts/__script-common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "sui-base-script-name" ]]; then
@@ -24,84 +24,4 @@ if [[ "$1" == "sui-base-script-name" ]]; then
   exit
 fi
 
-# Display some sui-base related info if called without any parameters.
-DISPLAY_SUI_BASE_HELP=false
-if [ $# -eq 0 ]; then
-  DISPLAY_SUI_BASE_HELP=true
-fi
-
-# Quick sanity check that sui-base was properly installed.
-check_dev_setup;
-
-# Use the proper config automatically.
-SUI_SUBCOMMAND=$1
-
-LAST_ARG="${@: -1}"
-if [[ "$LAST_ARG" == "--help" || "$LAST_ARG" == "-h" ]]; then
-  DISPLAY_SUI_BASE_HELP=true
-fi
-
-if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
-  shift 1
-  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
-
-  # Print a friendly warning if localnet sui process found not running.
-  # Might help explain weird error messages...
-  if [ "$DISPLAY_SUI_BASE_HELP" = false ]; then
-    update_SUI_PROCESS_PID_var;
-    if [ -z "$SUI_PROCESS_PID" ]; then
-      echo
-      echo "Warning: localnet not running"
-      echo "Do 'localnet start' to get it started."
-    fi
-  fi
-  exit
-fi
-
-if [[ $SUI_SUBCOMMAND == "network" ]]; then
-  shift 1
-  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --network.config "$NETWORK_CONFIG" "$@"
-  exit
-fi
-
-if [[ $SUI_SUBCOMMAND == "genesis" ]]; then
-  # Protect the user from damaging its localnet
-  if [[ "$2" == "--help" || "$2" == "-h" ]]; then
-    $SUI_BIN_DIR/sui genesis --help
-  fi
-  echo
-  setup_error "Use sui-base 'localnet start' script instead"
-fi
-
-if [[ $SUI_SUBCOMMAND == "start" ]]; then
-  # Protect the user from starting more than one sui process.
-  if [[ "$2" == "--help" || "$2" == "-h" ]]; then
-    $SUI_BIN_DIR/sui start --help
-  fi
-  echo
-  setup_error "Use sui-base 'localnet start' script instead"
-fi
-
-# Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided
-# more than once, but cannot be used multiple times?
-#
-# This is because by default lsui point to the keystore created with the localnet.
-#
-# TODO Fix this. Still default to workdirs, but allow user to override with its own --keystore-path.
-#
-if [[ $SUI_SUBCOMMAND == "keytool" ]]; then
-  shift 1
-  $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
-  exit
-fi
-
-# By default, just pass transparently everything to the proper sui binary.
-$SUI_BIN_DIR/sui "$@"
-
-if [ "$DISPLAY_SUI_BASE_HELP" = true ]; then
-  update_ACTIVE_WORKDIR_var;
-  if [ -n "$ACTIVE_WORKDIR" ]; then
-    echo
-    echo "$ACTIVE_WORKDIR is set-active for asui"
-  fi
-fi
+sui_exec "$@"
