@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Do not call this script directly. It is a "common script" called by the other scripts.
+# Do not call this script directly. It is a "common script" sourced by other sui-base scripts.
 #
 # It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
@@ -9,11 +9,35 @@
 MIN_SUI_VERSION="sui 0.27.0"
 MIN_RUST_VERSION="rustc 1.65.0"
 
-# Mandatory command line input
-SCRIPTS_DIR=$1
-SCRIPT_NAME=$2
-NETNAME=$3
-SUI_REPO_BRANCH=$4
+# Mandatory command line:
+#    $1 : Should be the "$0" of the caller script.
+#    $2 : Should be the workdir string (e.g. "active", "localnet"... )
+SCRIPTS_DIR="$(dirname $1)"
+SCRIPT_NAME="$(basename $1)"
+WORKDIR="$2"
+
+# Initialize variables driven by $WORKDIR
+case $WORKDIR in
+  localnet)
+    SUI_REPO_BRANCH="devnet"
+    SUI_SCRIPT="lsui"
+    ;;
+  devnet)
+    SUI_REPO_BRANCH="devnet"
+    SUI_SCRIPT="dsui"
+    ;;
+  testnet)
+    SUI_REPO_BRANCH="testnet"
+    SUI_SCRIPT="tsui"
+    ;;
+  active)
+    SUI_REPO_BRANCH="NULL"
+    SUI_SCRIPT="asui"
+    ;;
+  *)
+    setup_error "script_common: not supported workdir [$WORKDIR]"
+    ;;
+esac
 
 # Utility functions.
 setup_error() { echo "$*" 1>&2 ; exit 1; }
@@ -26,16 +50,16 @@ beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
 export -f beginswith
 
 # Two very convenient variables for directories.
-SUI_BASE_DIR="$(cd "$(dirname "$SCRIPTS_DIR")"; pwd)" # This does one-level above /scripts (absolute path).
+SUI_BASE_DIR="$HOME/sui-base"
 WORKDIRS="$SUI_BASE_DIR/workdirs"
 
 # Some other commonly used locations.
-LOCAL_BIN="~/.local/bin"
+LOCAL_BIN="$HOME/.local/bin"
 
-SUI_REPO_DIR="$WORKDIRS/$NETNAME/sui-repo"
+SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 
-CONFIG_DATA_DIR="$WORKDIRS/$NETNAME/config"
+CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
 
 # Configuration files (often needed for sui CLI calls)
@@ -44,13 +68,13 @@ CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
 
 # This is the default repo for localnet/devnet/testnet scripts.
 # Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
-SUI_REPO_DIR_DEFAULT="$WORKDIRS/$NETNAME/sui-repo-default"
+SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
 
 # Location for genesis data for "default" repo.
 DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
 
 # Location for generated genesis data (on first start after set-sui-repo)
-GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$NETNAME/genesis-data"
+GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$WORKDIR/genesis-data"
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
@@ -67,7 +91,7 @@ build_sui_repo_branch() {
 
   if [ "$ALLOW_DOWNLOAD" = "false" ]; then
     echo "Skipping git clone/fetch/pull because set-sui-repo is set."
-    echo "Building $NETNAME at [$RESOLVED_SUI_REPO_DIR]"
+    echo "Building $WORKDIR at [$RESOLVED_SUI_REPO_DIR]"
     if [ ! -d "$RESOLVED_SUI_REPO_DIR" ]; then
       echo "Error: repo not found at [$RESOLVED_SUI_REPO_DIR]"
       echo "Either create this repo, or revert localnet to work with"
@@ -76,9 +100,13 @@ build_sui_repo_branch() {
     fi
   else
     # If not already done, initialize the default repo.
-    if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]
-    then
+    if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]; then
       git clone -b devnet https://github.com/MystenLabs/sui.git "$SUI_REPO_DIR_DEFAULT"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
+      set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
+    fi
+
+    # Add back the default sui-repo link in case its was deleted.
+    if [ ! -L "$SUI_REPO_DIR" ]; then
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
     fi
 
@@ -90,15 +118,15 @@ build_sui_repo_branch() {
     then
       # Does a bit more than needed, but should allow to recover
       # from most operator error...
-      echo Updating sui $NETNAME in sui-base...
+      echo Updating sui $WORKDIR in sui-base...
       (cd "$SUI_REPO_DIR" && git switch $SUI_REPO_BRANCH > /dev/null)
       (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
       (cd "$SUI_REPO_DIR" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
       (cd "$SUI_REPO_DIR" && git merge '@{u}')
-    fi    
-    echo "Building $NETNAME using latest Sui $SUI_REPO_BRANCH branch..."
+    fi
+    echo "Building $WORKDIR using latest Sui $SUI_REPO_BRANCH branch..."
   fi
-  
+
   (cd "$SUI_REPO_DIR"; cargo build)
 
   # Sanity test that the sui binary works
@@ -122,23 +150,23 @@ check_dev_setup() {
   # This is to minimize support/confusion. First, get the initial setup right
   # before letting the user do more damage...
   if [ ! -d "$WORKDIRS" ]; then
-    setup_error "$WORKDIRS missing. Please run '$NETNAME update' first"
+    setup_error "$WORKDIRS missing. Please run '$WORKDIR update' first"
   fi
 
   if [ ! -d "$SUI_REPO_DIR" ]; then
-    setup_error "$SUI_REPO_DIR missing. Please run '$NETNAME update' first"
+    setup_error "$SUI_REPO_DIR missing. Please run '$WORKDIR update' first"
   fi
 
-  if [ ! -d "$WORKDIRS/$NETNAME" ]; then
-    setup_error "$WORKDIRS/$NETNAME missing. Please run '$NETNAME update' first"
+  if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
+    setup_error "$WORKDIRS/$WORKDIR missing. Please run '$WORKDIR update' first"
   fi
 
   if [ ! -f "$NETWORK_CONFIG" ]; then
-    setup_error "$NETWORK_CONFIG missing. Please run '$NETNAME update' first"
+    setup_error "$NETWORK_CONFIG missing. Please run '$WORKDIR update' first"
   fi
 
   if [ ! -f "$CLIENT_CONFIG" ]; then
-    setup_error "$CLIENT_CONFIG missing. Please run '$NETNAME update' first"
+    setup_error "$CLIENT_CONFIG missing. Please run '$WORKDIR update' first"
   fi
 }
 export -f check_dev_setup
@@ -154,7 +182,7 @@ is_localnet_installed() {
     false; return;
   fi
 
-  if [ ! -d "$WORKDIRS/$NETNAME" ]; then
+  if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
     false; return;
   fi
 
@@ -184,33 +212,36 @@ export -f is_localnet_installed
 
 common_create_workdirs() {
   mkdir -p "$WORKDIRS"
-  mkdir -p "$WORKDIRS/$NETNAME"
 
-  # Check if there is an active symlink, if not, create one.  
+  if [ "$WORKDIR" != "active" ]; then
+    mkdir -p "$WORKDIRS/$WORKDIR"
+  fi
+
+  # Check if there is an active symlink, if not, create one.
   # (Note: if the symlink is broken, do not attempt to fix it.
-  #  The symlink represent the "user intent" and must be 
+  #  The symlink represent the "user intent" and must be
   #  preserved when it exists).
   if [ ! -L "$WORKDIRS/active" ]; then
      set_active_workdir;
-  fi  
+  fi
 }
 export -f common_create_workdirs
 
 set_active_workdir() {
-  # Create a symlink to the current $NETNAME if not already done.
+  # Create a symlink to the current $WORKDIR if not already done.
   update_ACTIVE_WORKDIR_var;
   if [ ! -L "$WORKDIRS/active" ]; then
-    ln -s "$WORKDIRS/$NETNAME" "$WORKDIRS/active"
-  else 
-    if [[ "$ACTIVE_WORKDIR" != "$NETNAME" ]]; then
-      ln -sf "$WORKDIRS/$NETNAME" "$WORKDIRS/active"
+    ln -s "$WORKDIRS/$WORKDIR" "$WORKDIRS/active"
+  else
+    if [[ "$ACTIVE_WORKDIR" != "$WORKDIR" ]]; then
+      ln -sfT "$WORKDIRS/$WORKDIR" "$WORKDIRS/active"
     fi
   fi
 }
 export -f set_active_workdir
 
 update_ACTIVE_WORKDIR_var() {
-  # This is the active $NETNAME (deduced from the symlink).
+  # This is the active $WORKDIR (deduced from the symlink).
   if [ ! -L $WORKDIRS/active ]; then
     unset ACTIVE_WORKDIR
   else
@@ -252,7 +283,7 @@ stop_sui_process() {
   # noop if the process is already stopped.
   update_SUI_PROCESS_PID_var;
   if [ ! -z "$SUI_PROCESS_PID" ]; then
-    echo "Stopping $NETNAME (process pid $SUI_PROCESS_PID)"
+    echo "Stopping $WORKDIR (process pid $SUI_PROCESS_PID)"
     if [[ $(uname) == "Darwin" ]]; then
       kill -9 $SUI_PROCESS_PID
     else
@@ -292,11 +323,11 @@ start_sui_process() {
 
   # Detect an installation problem (took a while to debug when it did happen)
   if [ ! -f "$NETWORK_CONFIG" ]; then
-    setup_error "$NETWORK_CONFIG missing. Please re-run '$NETNAME update' to fix."
+    setup_error "$NETWORK_CONFIG missing. Please re-run '$WORKDIR update' to fix."
   fi
 
   if [ ! -f "$CLIENT_CONFIG" ]; then
-    setup_error "$CLIENT_CONFIG missing. Please re-run '$NETNAME update' to fix."
+    setup_error "$CLIENT_CONFIG missing. Please re-run '$WORKDIR update' to fix."
   fi
 
   update_SUI_PROCESS_PID_var;
@@ -350,7 +381,7 @@ update_SUI_REPO_INFO_var() {
     RESOLVED_SUI_REPO=$(readlink $SUI_REPO_DIR)
     RESOLVED_SUI_REPO_BASENAME=$(basename "$RESOLVE_SUI_REPO")
     SUI_REPO_INFO="git branch is [$BRANCH_NAME], sui-repo set to [$RESOLVED_SUI_REPO_BASENAME]"
-  fi  
+  fi
 }
 export -f update_SUI_REPO_INFO_var
 
@@ -361,10 +392,10 @@ ensure_client_OK() {
   # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
 
   # Make sure localnet exists in sui envs (ignore errors because likely already exists)
-  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $NETNAME --rpc http://0.0.0.0:9000 >& /dev/null
+  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000 >& /dev/null
 
   # Make localnet the active envs (should already be done, just in case, do it again here).
-  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $NETNAME > /dev/null
+  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR > /dev/null
 }
 export -f ensure_client_OK
 
@@ -453,7 +484,7 @@ publish_localnet() {
 
   if [ -z "$ID_LINE" ]; then
     cat "$INSTALL_DIR/publish-output.json"
-    setup_error "Could not find the package id from $SCRIPT_OUTPUT"    
+    setup_error "Could not find the package id from $SCRIPT_OUTPUT"
   fi
 
   # Extract first hexadecimal literal found.
@@ -509,10 +540,12 @@ is_sui_repo_dir_override() {
     if [ "$RESOLVED_SUI_REPO_DIR" != "$SUI_REPO_DIR_DEFAULT" ]; then
       true; return;
     fi
+  else
+    unset RESOLVED_SUI_REPO_DIR
   fi
   false; return;
 }
-export -f is_sui_repo_dir_override 
+export -f is_sui_repo_dir_override
 
 is_sui_repo_dir_default() {
   # Just negate is_sui_repo_dir_override
@@ -524,19 +557,19 @@ is_sui_repo_dir_default() {
 export -f is_sui_repo_dir_default
 
 set_sui_repo_dir_default() {
-  if is_sui_repo_dir_override; then    
+  if is_sui_repo_dir_override; then
     rm -f "$SUI_REPO_DIR"
     echo "Removed set-sui-repo to [$RESOLVED_SUI_REPO_DIR]"
   fi
 
-  # Link to the default directory if already exists.  
+  # Link to the default directory if already exists.
   if [ -d "$SUI_REPO_DIR_DEFAULT" ]; then
     set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
   else
     # No default directory.
     # Still a success as long the symlink is gone.
     echo "sui-repo use now the default repo [$SUI_REPO_DIR_DEFAULT]"
-  fi  
+  fi
 }
 export -f set_sui_repo_dir_default
 
@@ -556,12 +589,12 @@ set_sui_repo_dir() {
 
   # Verify success.
   if is_sui_repo_dir_default; then
-    echo "$NETNAME use now the default repo [$OPTIONAL_PATH]"
+    echo "$WORKDIR use now the default repo [$OPTIONAL_PATH]"
   else
     if is_sui_repo_dir_override; then
-      echo "$NETNAME set-sui-repo is now [$OPTIONAL_PATH]"
+      echo "$WORKDIR set-sui-repo is now [$OPTIONAL_PATH]"
     else
-      setup_error "$NETNAME set-sui-repo failed [$OPTIONAL_PATH]";
+      setup_error "$WORKDIR set-sui-repo failed [$OPTIONAL_PATH]";
     fi
   fi
 }

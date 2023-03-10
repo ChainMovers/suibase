@@ -3,22 +3,24 @@
 # This script simply call the proper sui binary (provided by Mysten Lab) that match
 # the binary running for your localnet.
 #
-# Your localnet should have been installed with the sui-base "localnet" script.
+# Your localnet should have been installed when you did "localnet start".
 #
 # You use 'lsui' in the same way you would use 'sui' from Mysten. Example:
 #    'lsui client gas'
 #
 # One convenience is you do not have to specify the --client.config,
-# , --network.config and --keystore-path options on the command line. 
+# , --network.config and --keystore-path options on the command line.
 #
 
-NETNAME="localnet"
-SUI_REPO_BRANCH="devnet"
-SUI_SCRIPT="lsui"
+# Source 'sui-base/script_common'.
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="localnet"
+source "$HOME/sui-base/scripts/script_common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "sui-base-script-name" ]]; then
-  echo $SUI_SCRIPT
+  # This also test if the sourced "script_common" works ($SUI_SCRIPT should be "lsui")
+  echo "$SUI_SCRIPT"
   exit
 fi
 
@@ -27,13 +29,6 @@ DISPLAY_SUI_BASE_HELP=false
 if [ $# -eq 0 ]; then
   DISPLAY_SUI_BASE_HELP=true
 fi
-
-# Call script_common which is stored at a relative location to *this* script.
-# To find the path to *this* script, use readlink to resolve the symbolic link.
-SCRIPT_READLINK="$(readlink -f "$0")"
-SCRIPT_NAME="$(basename $SCRIPT_READLINK)"
-SCRIPT_DIR="$(dirname $SCRIPT_READLINK)"
-source "$SCRIPT_DIR/script_common" "$SCRIPT_DIR" "$SCRIPT_NAME" "$NETNAME" "$SUI_REPO_BRANCH"
 
 # Quick sanity check that sui-base was properly installed.
 check_dev_setup;
@@ -83,11 +78,11 @@ if [[ $SUI_SUBCOMMAND == "start" ]]; then
   if [[ "$2" == "--help" || "$2" == "-h" ]]; then
     $SUI_BIN_DIR/sui start --help
   fi
-  echo  
+  echo
   setup_error "Use sui-base 'localnet start' script instead"
 fi
 
-# Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided 
+# Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided
 # more than once, but cannot be used multiple times?
 #
 # This is because by default lsui point to the keystore created with the localnet.
