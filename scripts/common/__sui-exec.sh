@@ -13,9 +13,9 @@
 
 # The workdir name is the directory name of *this* script location.
 
-# Source 'sui-base/__script-common'.
+# Source 'sui-base/common/__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="$(basename $(dirname "$SCRIPT_COMMON_CALLER"))"
-source "$HOME/sui-base/scripts/__script-common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 sui_exec "$@"

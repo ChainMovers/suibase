@@ -13,14 +13,14 @@
 # , --network.config and --keystore-path options on the command line.
 #
 
-# Source 'sui-base/__script-common'.
+# Source 'sui-base/common/__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="active"
-source "$HOME/sui-base/scripts/__script-common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "sui-base-script-name" ]]; then
-  # This also test if the sourced "script_common" works ($SUI_SCRIPT should be "asui")
+  # This also test if the sourced "globals" works ($SUI_SCRIPT should be "asui")
   echo "$SUI_SCRIPT"
   exit
 fi

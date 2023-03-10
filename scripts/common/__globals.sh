@@ -35,7 +35,7 @@ case $WORKDIR in
     SUI_SCRIPT="asui"
     ;;
   *)
-    echo "script_common: not supported workdir [$WORKDIR]"
+    echo "globals: not supported workdir [$WORKDIR]"
     ;;
 esac
 
@@ -221,7 +221,7 @@ common_create_workdirs() {
 
   # Create the sui-exec file (if does not exists)
   if [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ]; then
-    cp "$SCRIPTS_DIR/__sui-exec" "$WORKDIRS/$WORKDIR/sui-exec"
+    cp "$SCRIPTS_DIR/common/__sui-exec.sh" "$WORKDIRS/$WORKDIR/sui-exec"
   fi
 
   # Check if there is an active symlink, if not, create one.
@@ -566,7 +566,7 @@ export -f is_sui_repo_dir_default
 set_sui_repo_dir_default() {
   if is_sui_repo_dir_override; then
     rm -f "$SUI_REPO_DIR"
-    echo "Removed set-sui-repo to [$RESOLVED_SUI_REPO_DIR]"
+    echo "Removed set-sui-repo [$RESOLVED_SUI_REPO_DIR]"
   fi
 
   # Link to the default directory if already exists.
@@ -575,7 +575,7 @@ set_sui_repo_dir_default() {
   else
     # No default directory.
     # Still a success as long the symlink is gone.
-    echo "sui-repo use now the default repo [$SUI_REPO_DIR_DEFAULT]"
+    echo "$WORKDIR using default local sui repo"
   fi
 }
 export -f set_sui_repo_dir_default
@@ -596,7 +596,7 @@ set_sui_repo_dir() {
 
   # Verify success.
   if is_sui_repo_dir_default; then
-    echo "$WORKDIR use now the default repo [$OPTIONAL_PATH]"
+    echo "$WORKDIR using default local sui repo [$OPTIONAL_PATH]"
   else
     if is_sui_repo_dir_override; then
       echo "$WORKDIR set-sui-repo is now [$OPTIONAL_PATH]"

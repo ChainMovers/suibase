@@ -2,10 +2,10 @@
 
 # Script to create and control a Sui local network.
 
-# Source 'sui-base/__script-common'.
+# Source 'sui-base/common/__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="localnet"
-source "$HOME/sui-base/scripts/__script-common" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 usage() {
   echo "Usage: localnet [COMMAND] <Options>"
@@ -47,7 +47,7 @@ usage() {
 
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "sui-base-script-name" ]]; then
-  # This also test if the sourced "script_common" works ($SCRIPT_NAME should be "localnet")
+  # This also test if the sourced "globals" works ($SCRIPT_NAME should be "localnet")
   echo "$SCRIPT_NAME"
   exit
 fi
