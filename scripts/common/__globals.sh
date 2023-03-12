@@ -303,7 +303,7 @@ set_active_symlink_force() {
   else
     update_ACTIVE_WORKDIR_var;
     if [ "$ACTIVE_WORKDIR" != "$WORKDIR_PARAM" ]; then
-      ln -sfT "$WORKDIRS/$WORKDIR_PARAM" "$WORKDIRS/active"
+      ln -nsf "$WORKDIRS/$WORKDIR_PARAM" "$WORKDIRS/active"
       update_ACTIVE_WORKDIR_var;
     fi
   fi
@@ -319,7 +319,7 @@ set_config_symlink_force() {
   else
     RESOLVED_DIR="$(readlink -f "$WORKDIRS/$WORKDIR_PARAM/config")"
     if [ "$RESOLVED_DIR" != "$TARGET_DIR" ]; then
-      ln -sfT "$TARGET_DIR" "$WORKDIRS/$WORKDIR_PARAM/config"
+      ln -nsf "$TARGET_DIR" "$WORKDIRS/$WORKDIR_PARAM/config"
     fi
   fi
 }
@@ -666,10 +666,10 @@ set_sui_repo_dir() {
     setup_error "Path [$OPTIONAL_PATH] not found"
   fi
 
-  # The -T is important because target is a directory and without it
+  # The -n is important because target is a directory and without it
   # the command line arguments would be interpreted in the 3rd form
   # described in "man ln".
-  ln -sfT "$OPTIONAL_PATH" "$SUI_REPO_DIR"
+  ln -nsf "$OPTIONAL_PATH" "$SUI_REPO_DIR"
 
   # Verify success.
   if is_sui_repo_dir_default; then
