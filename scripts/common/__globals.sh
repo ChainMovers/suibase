@@ -12,7 +12,7 @@ MIN_RUST_VERSION="rustc 1.65.0"
 # Mandatory command line:
 #    $1 : Should be the "$0" of the caller script.
 #    $2 : Should be the workdir string (e.g. "active", "localnet"... )
-SCRIPTS_DIR="$(dirname $1)"
+SCRIPT_PATH="$(dirname $1)"
 SCRIPT_NAME="$(basename $1)"
 WORKDIR="$2"
 
@@ -34,6 +34,10 @@ case $WORKDIR in
     SUI_REPO_BRANCH="NULL"
     SUI_SCRIPT="asui"
     ;;
+  cargobin)
+    SUI_REPO_BRANCH="NULL"
+    SUI_SCRIPT="csui"
+    ;;
   *)
     echo "globals: not supported workdir [$WORKDIR]"
     ;;
@@ -49,13 +53,13 @@ export -f script_cmd
 beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
 export -f beginswith
 
-# Two very convenient variables for directories.
+# Two key directories location.
 SUI_BASE_DIR="$HOME/sui-base"
 WORKDIRS="$SUI_BASE_DIR/workdirs"
 
 # Some other commonly used locations.
 LOCAL_BIN="$HOME/.local/bin"
-
+SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
 SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 
@@ -144,13 +148,31 @@ build_sui_repo_branch() {
 
 export -f build_sui_repo_branch
 
-check_dev_setup() {
-  # Sanity check the setup was completed successfully.
+check_workdir_ok() {
+
+  # Sanity check the workdir initialization was done successfully.
   #
-  # This should be check for most scripts.
+  # This should be done early for most script call.
   #
   # This is to minimize support/confusion. First, get the initial setup right
   # before letting the user do more damage...
+  if [ "$WORKDIR" = "cargobin" ]; then
+    # Special case because no repo etc... (later to be handled better by sui-base.yaml)
+    # Just check for the basic.
+    if [ ! -f "$HOME/.cargo/bin/sui" ]; then
+      setup_error "This script is for user who choose to install ~/.cargo/bin/sui. You do not have it installed."
+    fi
+
+    if [ ! -d "$WORKDIRS" ]; then
+      setup_error "$WORKDIRS missing. Please run '~/sui-base/install' to repair"
+    fi
+
+    if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
+      setup_error "$WORKDIRS/$WORKDIR missing. Please run '~/sui-base/install' to repair"
+    fi
+    return
+  fi
+
   if [ ! -d "$WORKDIRS" ]; then
     setup_error "$WORKDIRS missing. Please run '$WORKDIR update' first"
   fi
@@ -171,14 +193,14 @@ check_dev_setup() {
     setup_error "$CLIENT_CONFIG missing. Please run '$WORKDIR update' first"
   fi
 }
-export -f check_dev_setup
+export -f check_workdir_ok
 
 is_localnet_installed() {
 
   # Just check if present on the filesystem, not if running or executeable.
   # Detect if any problem. Return true only if installation is likely healthy.
   #
-  # That one is different than check_dev_setup because we do not want to
+  # That one is different than check_workdir_ok because we do not want to
   # report error, we just want to detect and fix automatically.
   if [ ! -d "$WORKDIRS" ]; then
     false; return;
@@ -212,44 +234,100 @@ is_localnet_installed() {
 }
 export -f is_localnet_installed
 
-common_create_workdirs() {
-  mkdir -p "$WORKDIRS"
-
-  if [ "$WORKDIR" != "active" ]; then
-    mkdir -p "$WORKDIRS/$WORKDIR"
-  fi
+create_sui_exec_as_needed() {
+  WORKDIR_PARAM="$1"
 
   # Create the sui-exec file (if does not exists)
-  if [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ]; then
-    cp "$SCRIPTS_DIR/common/__sui-exec.sh" "$WORKDIRS/$WORKDIR/sui-exec"
-  fi
-
-  # Check if there is an active symlink, if not, create one.
-  # (Note: if the symlink is broken, do not attempt to fix it.
-  #  The symlink represent the "user intent" and must be
-  #  preserved when it exists).
-  if [ ! -L "$WORKDIRS/active" ]; then
-     set_active_workdir;
+  if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/sui-exec" ]; then
+    cp "$SCRIPTS_DIR/common/__sui-exec.sh" "$WORKDIRS/$WORKDIR_PARAM/sui-exec"
   fi
 }
-export -f common_create_workdirs
 
-set_active_workdir() {
-  # Create a symlink to the current $WORKDIR if not already done.
-  update_ACTIVE_WORKDIR_var;
+create_active_symlink_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  # Protect against self-reference.
+  if [ "$WORKDIR_PARAM" == "active" ]; then
+    return
+  fi
+
+  # Create a new active symlink, but not overwrite an
+  # existing one (because it represents the user intent).
   if [ ! -L "$WORKDIRS/active" ]; then
-    ln -s "$WORKDIRS/$WORKDIR" "$WORKDIRS/active"
+     set_active_symlink_force "$WORKDIR_PARAM"
+  fi
+}
+
+create_config_symlink_as_needed() {
+  WORKDIR_PARAM="$1"
+  TARGET_CONFIG="$2"
+
+  # Create a new config symlink, but not overwrite an
+  # existing one (because it represents the user intent).
+  if [ ! -L "$WORKDIRS/$WORKDIR_PARAM/config" ]; then
+     set_config_symlink_force "$WORKDIR_PARAM" "$TARGET_CONFIG"
+  fi
+}
+
+create_workdir_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  mkdir -p "$WORKDIRS"
+
+  if [ "$WORKDIR_PARAM" = "active" ]; then
+    update_ACTIVE_WORKDIR_var;
+    if [ -z "$ACTIVE_WORKDIR" ] || [ ! -d "$WORKDIRS/$ACTIVE_WORKDIR" ]; then
+      # Do not create an "active" directory, but...
+      return
+    fi
+    # ... keep going to repair if pointing to a valid directory.
+    WORKDIR_PARAM="$ACTIVE_WORKDIR"
   else
-    if [[ "$ACTIVE_WORKDIR" != "$WORKDIR" ]]; then
-      ln -sfT "$WORKDIRS/$WORKDIR" "$WORKDIRS/active"
+    mkdir -p "$WORKDIRS/$WORKDIR_PARAM"
+    create_active_symlink_as_needed "$WORKDIR_PARAM";
+  fi
+
+  create_sui_exec_as_needed "$WORKDIR_PARAM";
+
+  if [ "$WORKDIR_PARAM" = "cargobin" ]; then
+    create_config_symlink_as_needed "$WORKDIR_PARAM" "$HOME/.sui/sui_config"
+  fi
+}
+export -f create_workdir_as_needed
+
+set_active_symlink_force() {
+  WORKDIR_PARAM="$1"
+  # Create or force the active symlink to the specified target.
+  if [ ! -L "$WORKDIRS/active" ]; then
+    ln -s "$WORKDIRS/$WORKDIR_PARAM" "$WORKDIRS/active"
+  else
+    update_ACTIVE_WORKDIR_var;
+    if [ "$ACTIVE_WORKDIR" != "$WORKDIR_PARAM" ]; then
+      ln -sfT "$WORKDIRS/$WORKDIR_PARAM" "$WORKDIRS/active"
+      update_ACTIVE_WORKDIR_var;
     fi
   fi
 }
-export -f set_active_workdir
+export -f set_active_symlink_force
+
+set_config_symlink_force() {
+  WORKDIR_PARAM="$1"
+  TARGET_DIR="$2"
+  # Create or force the active symlink to the specified target.
+  if [ ! -L "$WORKDIRS/$WORKDIR_PARAM/config" ]; then
+    ln -s "$TARGET_DIR" "$WORKDIRS/$WORKDIR_PARAM/config"
+  else
+    RESOLVED_DIR="$(readlink -f "$WORKDIRS/$WORKDIR_PARAM/config")"
+    if [ "$RESOLVED_DIR" != "$TARGET_DIR" ]; then
+      ln -sfT "$TARGET_DIR" "$WORKDIRS/$WORKDIR_PARAM/config"
+    fi
+  fi
+}
+export -f set_active_symlink_force
 
 update_ACTIVE_WORKDIR_var() {
-  # This is the active $WORKDIR (deduced from the symlink).
-  if [ ! -L $WORKDIRS/active ]; then
+  # Identify the active workdir, if any (deduce from the symlink).
+  if [ ! -L "$WORKDIRS/active" ]; then
     unset ACTIVE_WORKDIR
   else
     RESOLVED_PATH="$(readlink -f $WORKDIRS/active)"
@@ -534,7 +612,6 @@ publish_localnet() {
 }
 export -f publish_localnet
 
-
 # Verify if $SUI_REPO_DIR symlink is toward a user repo (not default).
 #
 # false if the symlink does not exist.
@@ -616,7 +693,19 @@ sui_exec() {
   fi
 
   # Quick sanity check that sui-base was properly installed.
-  check_dev_setup;
+  check_workdir_ok;
+
+  # Identify the binary to execute
+  case $WORKDIR in
+  cargobin)
+    # Special case for cargobin workdir
+    SUI_BIN="$HOME/.cargo/bin/sui"
+    ;;
+  *)
+    # All other workdir use the proper repo binary.
+    SUI_BIN="$SUI_BIN_DIR/sui"
+    ;;
+  esac
 
   # Use the proper config automatically.
   SUI_SUBCOMMAND=$1
@@ -628,7 +717,7 @@ sui_exec() {
 
   if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
     shift 1
-    $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
+    $SUI_BIN $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
 
     # Print a friendly warning if localnet sui process found not running.
     # Might help explain weird error messages...
@@ -645,14 +734,14 @@ sui_exec() {
 
   if [[ $SUI_SUBCOMMAND == "network" ]]; then
     shift 1
-    $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --network.config "$NETWORK_CONFIG" "$@"
+    $SUI_BIN $SUI_SUBCOMMAND --network.config "$NETWORK_CONFIG" "$@"
     exit
   fi
 
   if [[ $SUI_SUBCOMMAND == "genesis" ]]; then
     # Protect the user from damaging its localnet
     if [[ "$2" == "--help" || "$2" == "-h" ]]; then
-      $SUI_BIN_DIR/sui genesis --help
+      $SUI_BIN genesis --help
     fi
     echo
     setup_error "Use sui-base 'localnet start' script instead"
@@ -661,7 +750,7 @@ sui_exec() {
   if [[ $SUI_SUBCOMMAND == "start" ]]; then
     # Protect the user from starting more than one sui process.
     if [[ "$2" == "--help" || "$2" == "-h" ]]; then
-      $SUI_BIN_DIR/sui start --help
+      $SUI_BIN start --help
     fi
     echo
     setup_error "Use sui-base 'localnet start' script instead"
@@ -676,12 +765,12 @@ sui_exec() {
   #
   if [[ $SUI_SUBCOMMAND == "keytool" ]]; then
     shift 1
-    $SUI_BIN_DIR/sui $SUI_SUBCOMMAND --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+    $SUI_BIN $SUI_SUBCOMMAND --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
     exit
   fi
 
   # By default, just pass transparently everything to the proper sui binary.
-  $SUI_BIN_DIR/sui "$@"
+  $SUI_BIN "$@"
 
   if [ "$DISPLAY_SUI_BASE_HELP" = true ]; then
     update_ACTIVE_WORKDIR_var;
@@ -692,3 +781,33 @@ sui_exec() {
   fi
 }
 export -f sui_exec
+
+create_cargobin_as_needed() {
+  # Will check to install/repair cargobin workdir.
+  # NOOP when already installed.
+  #
+  # Reminder: Do not assume $WORKDIR is cargobin at any point
+  #           while this function is run (the workdir context
+  #           may not exist yet or be something else).
+  if [ ! -f "$HOME/.cargo/bin/sui" ]; then
+    return
+  fi
+
+  if [ ! -d "$WORKDIRS/cargobin" ]; then
+    workdir_was_missing=true
+  else
+    workdir_was_missing=false
+  fi
+
+  # Always called, because can do both create/repair.
+  create_workdir_as_needed "cargobin"
+
+  if [ "$workdir_was_missing" = true ]; then
+    if [ -d "$WORKDIRS/cargobin" ]; then
+      echo "Created workdir for existing ~/.cargo/bin/sui client"
+    else
+      echo "Warning: workdir creation for ~/.cargo/bin/sui client failed."
+    fi
+  fi
+}
+export -f create_cargobin_as_needed

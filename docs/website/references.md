@@ -8,7 +8,7 @@ Sui-Base define a few conventions to coordinate among SDKs, apps and user.
 
 ## Filesystem Path Convention
 
-There are 6 <WORKDIR\>:<br> active, localnet, devnet, testnet, mainnet and cargobinsui
+There are 6 <WORKDIR\>:<br> active, localnet, devnet, testnet, mainnet and cargobin
 
 Each <WORKDIR\> has the following components:
 
@@ -51,7 +51,7 @@ Applications can expect the components to be always at these **fix** locations:
 TODO next:
 
 - What is the "active" workdir?
-- What is the "cargobinsui" workdir?
+- What is the "cargobin" workdir?
 - How to use the sui-exec script?
 - How to use the publish-output.json?
 

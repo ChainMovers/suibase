@@ -2,7 +2,7 @@
 
 # Script to create and control a Sui local network.
 
-# Source 'sui-base/common/__globals.sh'.
+# Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="localnet"
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
@@ -152,6 +152,8 @@ echo_help_on_not_installed() {
 
 # First, take care of the easy "status" command that does not touch anything.
 update_SUI_PROCESS_PID_var;
+update_ACTIVE_WORKDIR_var;
+
 if [ "$CMD_STATUS_REQ" = true ]; then
   if is_localnet_installed; then
     if [ -z "$SUI_PROCESS_PID" ]; then
@@ -163,8 +165,6 @@ if [ "$CMD_STATUS_REQ" = true ]; then
     echo "$SUI_VERSION"
     #update_SUI_REPO_INFO_var;
     #echo "$SUI_VERSION ($SUI_REPO_INFO)"
-    update_ACTIVE_WORKDIR_var;
-
     DISPLAY_AS_WARNING=true
     DISPLAY_FIELD="$ACTIVE_WORKDIR"
     if [ "$ACTIVE_WORKDIR" = "$WORKDIR" ]; then
@@ -259,12 +259,11 @@ fi
 
 if [ "$CMD_SET_ACTIVE_REQ" = true ]; then
   if is_localnet_installed; then
-    update_ACTIVE_WORKDIR_var;
     if [[ "$ACTIVE_WORKDIR" == "$WORKDIR" ]]; then
       echo "$WORKDIR is already active"
     else
       echo "Making $WORKDIR active"
-      set_active_workdir;
+      set_active_symlink_force "$WORKDIR";
     fi
   else
     echo_help_on_not_installed;
@@ -282,7 +281,7 @@ fi
 # Finally, take care of the more complicated cases that involves
 # git, localnet workdir/config creation and genesis.
 
-common_create_workdirs; # Create $WORKDIRS (as needed)
+create_workdir_as_needed "$WORKDIR"; # Create/repair $WORKDIR
 
 # The script should not be called from a location that could get deleted.
 # It would work (on Linux) because of reference counting, but it could

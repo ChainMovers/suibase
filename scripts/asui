@@ -13,7 +13,7 @@
 # , --network.config and --keystore-path options on the command line.
 #
 
-# Source 'sui-base/common/__globals.sh'.
+# Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="active"
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
@@ -32,6 +32,7 @@ case "$ACTIVE_WORKDIR" in
     "localnet") lsui "$@" ;;
     "devnet") dsui "$@" ;;
     "testnet") tsui "$@" ;;
+    "cargobin") csui "$@" ;;
     *)
     echo "No active workdir was set (e.g. 'localnet set-active')";
     exit ;;

@@ -2,14 +2,17 @@ name: Detect Changes
 description: Defines variables indicating the parts of the code that changed
 outputs:
   isDoc:
-    description: True when changes happened to some documentation
+    description: True when changes related to documentation
     value: "${{ steps.diff.outputs.isDoc }}"
   isRust:
-    description: True when changes happened to the Rust code
+    description: True when changes related to Rust
     value: "${{ steps.diff.outputs.isRust }}"
   isMove:
-    description: True when changes happened to the Move code
+    description: True when changes related to Move
     value: "${{ steps.diff.outputs.isMove }}"
+  isScript:
+    description: True when changes related sui-base scripts
+    value: "${{ steps.diff.outputs.isScript }}"
 
 runs:
   using: composite
@@ -31,3 +34,8 @@ runs:
           isMove:
             - 'move/sources/**'
             - 'Move.toml'
+          isScript:
+            - 'scripts/**'
+            - 'install'
+            - 'uninstall'
+            - '.github/workflows/scripts-tests.yml'

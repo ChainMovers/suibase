@@ -42,7 +42,7 @@ impl SuiBaseHelper {
     // Select an existing workdir by name.
     //
     // Possible values are:
-    //   "cargobinsui", "localnet", "devnet", "testnet", "mainnet" and
+    //   "cargobin", "localnet", "devnet", "testnet", "mainnet" and
     //    other custom names might be supported in future.
     //
     pub fn select_workdir(
