@@ -33,6 +33,54 @@ update_bin_path() {
   fi
 }
 
+is_local_bin_on_path() {
+  # Check if the installation dir is in the $PATH variable.
+  if [[ ":$PATH:" == *":$OS_DIR_ON_PATH:"* ]]; then
+      true; return
+  elif [[ ":$PATH:" == *":$OS_DIR_ON_PATH_ALT:"* ]]; then
+      true; return
+  fi
+  false; return
+}
+
+setup_local_bin_as_needed() {
+  # Create $OS_DIR_ON_PATH if it does not exists.
+  if [ ! -d "$OS_DIR_ON_PATH" ]; then
+    mkdir -p "$OS_DIR_ON_PATH"
+  fi
+
+  if is_local_bin_on_path; then
+    return
+  fi
+
+##### That may work, but affraid to enable it without testing
+# if [[ $(uname) == "Darwin" ]]; then
+    # On macOS, default to .zprofile since catalina, before
+    # it was .bash_profile.
+#    if [ -f "$HOME/.zprofile" ]; then
+#      TARGET_FILE="$HOME/.zprofile"
+#    else
+#      if [ -f "$HOME/.bash_profile" ]; then
+#        TARGET_FILE="$HOME/.bash_profile"
+#      else
+#        echo "No profile files found"
+#      fi
+#    fi
+#    if [ -n "$TARGET_FILE" ]; then
+      # https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path
+#      echo 'export PATH="${PATH:+${PATH}:}~/.local/bin"' >>"$TARGET_FILE"
+#      source "$TARGET_FILE"
+#    fi
+#  fi
+
+  echo "Please add $OS_DIR_ON_PATH to your \$PATH variable"
+  echo
+  echo "The installation will not proceed until you complete this step."
+  echo
+  echo "(Please report this to the developer to make the install script better)"
+  exit 1
+}
+
 main() {
   if is_user_root; then
     setup_error "Should not install sui-base as root (or sudo)"
@@ -45,24 +93,9 @@ main() {
     exit 1
   fi
 
-  # Create $OS_DIR_ON_PATH if it does not exists.
-  if [ ! -d "$OS_DIR_ON_PATH" ]; then
-    mkdir -p "$OS_DIR_ON_PATH"
-  fi
+  setup_local_bin_as_needed;
 
-  # if [[ ":$PATH:" == *":$OS_DIR_ON_PATH:"* ]]; then
-  if [[ ":$PATH:" == *":$OS_DIR_ON_PATH:"* ]]; then
-      echo "Starting installation of sui-base..."
-  elif [[ ":$PATH:" == *":$OS_DIR_ON_PATH_ALT:"* ]]; then
-      echo "Starting installation of sui-base..."
-  else
-    echo "Please add $OS_DIR_ON_PATH to your \$PATH variable"
-    echo
-    echo "The installation will not proceed until you complete this step."
-    echo
-    echo "(Please report this to the developer to make the install script better)"
-    exit 1
-  fi
+  echo "Starting installation of sui-base..."
 
   username=$(whoami)
   update_bin_path "localnet"
