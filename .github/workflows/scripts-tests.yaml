@@ -35,6 +35,6 @@ jobs:
       - name: Run sui-base tests
         run: |
           mkdir -p $HOME/.local/bin
-          echo ::add-path::$HOME/.local/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/sui-base
           $HOME/sui-base/scripts/common/__scripts-tests.sh --github
