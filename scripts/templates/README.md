@@ -1,0 +1,1 @@
+Templates files are used when creating a new workdir.

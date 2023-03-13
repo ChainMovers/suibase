@@ -23,7 +23,7 @@ jobs:
   test:
     name: Test on ${{ matrix.os }}
     #needs: diff
-    #if: needs.diff.outputs.isScript == 'true'
+    #if: ${{ (needs.diff.outputs.isScript == 'true') || (github.event_name == 'workflow_dispatch') }}
 
     runs-on: ${{ matrix.os }}
     strategy:
@@ -32,9 +32,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Run sui-base tests
+      - name: Prepare environment
         run: |
           mkdir -p $HOME/.local/bin
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/sui-base
-          $HOME/sui-base/scripts/common/__scripts-tests.sh --github
+      - name: Run sui-base tests
+        run: $HOME/sui-base/scripts/common/__scripts-tests.sh --github

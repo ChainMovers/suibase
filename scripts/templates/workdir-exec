@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# This script simply call the sui-base script intended to control the workdir.
+#
+# You use 'workdir-exec' in the same way you would use, say, 'localnet', 'devnet'...
+#
+# Example:
+#    'localnet start' is equivalent to
+#    '~/sui-base/workdirs/localnet/workdir-exec start'
+#
+# Never move this script outside of its workdir. It must stay here to run
+# within its intended context.
+
+# Implementation details:
+#   Initialize which context to use (with WORKDIR)
+#   The WORKDIR variable is the directory name of *this* script location.
+#   (e.g. localnet, devnet, cargobin etc...)
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="$(basename $(dirname "$SCRIPT_COMMON_CALLER"))"
+source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
+# Call the common code that can handle all the possible context.
+source "$HOME/sui-base/scripts/common/__workdir-exec.sh"
+workdir_exec "$@"
