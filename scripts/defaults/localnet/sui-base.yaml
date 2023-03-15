@@ -1,0 +1,21 @@
+# network_type: local | remote | switchable
+#
+# Typically, you will not override this variable. It defines if the
+# workdir is starting a local Sui process or communicate with a
+# remote network.
+#
+# "switchable" is for the Mysten Lab ~/.cargo/bin/sui binary
+# installation procedure and the user can switch the target
+# network "at will". In this case, the network type is unknown
+# and some features will not work (notably there is no sui-repo).
+#
+network_type: local
+
+# This control the *default* git repo being used and updated to latest
+# when building the client to communicate with the network.
+#
+# Take note that these variables are ignored when there is
+# a 'set-sui-repo' forcing the use of a repo.
+#
+default_repo_url: "https://github.com/MystenLabs/sui.git"
+default_repo_branch: "devnet"

@@ -97,52 +97,21 @@ main() {
 
   echo "Starting installation of sui-base..."
 
-  username=$(whoami)
-  update_bin_path "localnet"
-  #update_bin_path "testnet"
-  #update_bin_path "devnet"
-  update_bin_path "lsui"
-  update_bin_path "csui"
-  #update_bin_path "tsui"
-  #update_bin_path "dsui"
-  update_bin_path "asui"
+  script_list=("localnet" "devnet" "lsui" "dsui" "csui" "asui")
+
+  for script_name in ${script_list[@]}; do
+    update_bin_path $script_name
+  done
 
   # Final test that the scripts are "callable" by the user without
   # specifying a path.
-  #
-  # This installation script should remain "self-contain" and
-  # avoid dependencies. It creates symlinks to other scripts,
-  # but does not call into them, other then for this trivial
-  # final test.
-  test=$(localnet sui-base-script-name)
-  if [ "$test" != "localnet" ]; then
-    setup_error "setup of localnet symlink failed [$test]"
-  fi
-
-  test=$(lsui sui-base-script-name)
-  if [ "$test" != "lsui" ]; then
-    setup_error "setup of lsui symlink failed [$test]"
-  fi
-
-  test=$(csui sui-base-script-name)
-  if [ "$test" != "csui" ]; then
-    setup_error "setup of csui symlink failed [$test]"
-  fi
-
-  #test=$(tsui sui-base-script-name)
-  #if [ "$test" != "tsui" ]; then
-  #  setup_error "setup of tsui symlink failed"
-  #fi
-
-  #test=$(dsui sui-base-script-name)
-  #if [ "$test" != "dsui" ]; then
-  #  setup_error "setup of dsui symlink failed"
-  #fi
-
-  test=$(asui sui-base-script-name)
-  if [ "$test" != "asui" ]; then
-    setup_error "setup of asui symlink failed"
-  fi
+  for script_name in ${script_list[@]}; do
+    # Call into each script which should return a string echoing... its own name.
+    test=$($script_name sui-base-script-name)
+    if [ "$test" != "$script_name" ]; then
+      setup_error "setup of $script_name symlink failed [$test]"
+    fi
+  done
 
   echo Scripts installed and verified.
 
@@ -154,6 +123,7 @@ main() {
 
   create_cargobin_as_needed;
 
+  username=$(whoami)
   echo
   echo "You can now start your localnet with:"
   echo "  \$ localnet start"

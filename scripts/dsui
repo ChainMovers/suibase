@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# This script simply call the proper sui binary (provided by Mysten Lab) and config that match
-# the binary running for your localnet.
+# This script simply call the proper sui binary and config combination to interact
+# with remote devnet Sui network (operated by Mysten Lab).
 #
-# Your localnet should have been installed when you did "localnet start".
+# Your devnet workdir should have been created when you did 'devnet start' or 'devnet update'.
 #
-# You use 'lsui' in the same way you would use 'sui' from Mysten. Example:
-#    'lsui client gas'
+# You use 'dsui' in the same way you would use 'sui' from Mysten. Example:
+#    'dsui client gas'
 #
 # One convenience is you do not have to specify the --client.config,
 # , --network.config and --keystore-path options on the command line.
@@ -14,7 +14,7 @@
 
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="cargobin"
+WORKDIR="devnet"
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 source "$HOME/sui-base/scripts/common/__sui-exec.sh"
 

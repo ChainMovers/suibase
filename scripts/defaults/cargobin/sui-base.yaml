@@ -1,0 +1,5 @@
+# See scripts/defaults/localnet/sui-base.yaml for documentation.
+network_type: switchable
+
+default_repo_url: ~
+default_repo_branch: ~

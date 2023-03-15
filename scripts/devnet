@@ -4,7 +4,7 @@
 
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="localnet"
+WORKDIR="devnet"
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Trap the case of doing just a self-test for installation.

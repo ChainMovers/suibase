@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# This script simply call the sui-base script intended to control the workdir.
+# This script control this "workdir".
 #
-# You use 'workdir-exec' in the same way you would use, say, 'localnet', 'devnet'...
+# You use 'workdir-exec' in the same way you would use 'localnet', 'devnet' sui-base scripts...
 #
 # Example:
 #    'localnet start' is equivalent to

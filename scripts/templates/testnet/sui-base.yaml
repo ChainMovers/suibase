@@ -1,0 +1,8 @@
+# This file allows to override one or more variables from the
+# defaults defined at:
+#   ~/sui-base/workdirs/scripts/defaults/testnet/sui-base.yaml
+#
+# Documentation: https://sui-base.io/how-to/configure-sui-base-yaml
+#
+# (if website is down, check under sui-base/docs/website/how-to)
+

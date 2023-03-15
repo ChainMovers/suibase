@@ -16,18 +16,14 @@ sui_exec() {
   check_workdir_ok;
 
   # Identify the binary to execute
-  case $WORKDIR in
-  cargobin)
+  if [ "$WORKDIR" = "cargobin" ]; then
     # Special case for cargobin workdir
     SUI_BIN="$HOME/.cargo/bin/sui"
-    ;;
-  *)
-    # All other workdir use the proper repo binary.
+  else
+    # All other workdir use the binary from their repo.
     SUI_BIN="$SUI_BIN_DIR/sui"
-    ;;
-  esac
+  fi
 
-  # Use the proper config automatically.
   SUI_SUBCOMMAND=$1
 
   LAST_ARG="${@: -1}"
@@ -39,16 +35,19 @@ sui_exec() {
     shift 1
     $SUI_BIN $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
 
-    # Print a friendly warning if localnet sui process found not running.
-    # Might help explain weird error messages...
-    if [ "$DISPLAY_SUI_BASE_HELP" = false ]; then
-      update_SUI_PROCESS_PID_var;
-      if [ -z "$SUI_PROCESS_PID" ]; then
-        echo
-        echo "Warning: localnet not running"
-        echo "Do 'localnet start' to get it started."
+    if [ "$WORKDIR" = "localnet" ]; then
+      # Print a friendly warning if localnet sui process found not running.
+      # Might help explain weird error messages...
+      if [ "$DISPLAY_SUI_BASE_HELP" = false ]; then
+        update_SUI_PROCESS_PID_var;
+        if [ -z "$SUI_PROCESS_PID" ]; then
+          echo
+          echo "Warning: localnet not running"
+          echo "Do 'localnet start' to get it started."
+        fi
       fi
     fi
+
     exit
   fi
 

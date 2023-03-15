@@ -62,7 +62,6 @@ LOCAL_BIN="$HOME/.local/bin"
 SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
 SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
-
 CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
 
@@ -74,11 +73,38 @@ CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
 # Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
 SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
 
+# This is the default config for localnet/devnet/testnet scripts.
+# Normally $CONFIG_DATA_DIR will symlink to CONFIG_DATA_DIR_DEFAULT
+CONFIG_DATA_DIR_DEFAULT="$WORKDIRS/$WORKDIR/config-default"
+
 # Location for genesis data for "default" repo.
 DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
 
 # Location for generated genesis data (on first start after set-sui-repo)
 GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$WORKDIR/genesis-data"
+
+# The two shims find in each $WORKDIR
+SUI_EXEC="$WORKDIRS/$WORKDIR/sui-exec"
+WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
+
+# Now load all the $CFG_ variables from the sui-base.yaml files.
+source "$SCRIPTS_DIR/common/__parse-yaml.sh"
+update_sui_base_yaml() {
+  # Load defaults.
+  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval $(parse_yaml "$YAML_FILE" "CFG_")
+  fi
+
+  # Load overrides from workdir.
+  YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval $(parse_yaml "$YAML_FILE" "CFG_")
+  fi
+}
+export -f update_sui_base_yaml
+
+update_sui_base_yaml;
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
@@ -149,12 +175,11 @@ build_sui_repo_branch() {
 export -f build_sui_repo_branch
 
 check_workdir_ok() {
-
-  # Sanity check the workdir initialization was done successfully.
+  # Sanity check the workdir looks operational.
   #
   # This should be done early for most script call.
   #
-  # This is to minimize support/confusion. First, get the initial setup right
+  # This is to minimize support/confusion. First, get the setup right
   # before letting the user do more damage...
   if [ "$WORKDIR" = "cargobin" ]; then
     # Special case because no repo etc... (later to be handled better by sui-base.yaml)
@@ -170,6 +195,7 @@ check_workdir_ok() {
     if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
       setup_error "$WORKDIRS/$WORKDIR missing. Please run '~/sui-base/install' to repair"
     fi
+    # Success
     return
   fi
 
@@ -177,12 +203,17 @@ check_workdir_ok() {
     setup_error "$WORKDIRS missing. Please run '$WORKDIR update' first"
   fi
 
+  if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
+    setup_error "$WORKDIRS/$WORKDIR missing. Please run '$WORKDIR update' first"
+  fi
+
   if [ ! -d "$SUI_REPO_DIR" ]; then
     setup_error "$SUI_REPO_DIR missing. Please run '$WORKDIR update' first"
   fi
 
-  if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
-    setup_error "$WORKDIRS/$WORKDIR missing. Please run '$WORKDIR update' first"
+  if [ "$CFG_network_type" = "remote" ]; then
+    # Good enough for workdir like devnet/testnet.
+    return
   fi
 
   if [ ! -f "$NETWORK_CONFIG" ]; then
@@ -195,13 +226,14 @@ check_workdir_ok() {
 }
 export -f check_workdir_ok
 
-is_localnet_installed() {
-
-  # Just check if present on the filesystem, not if running or executeable.
-  # Detect if any problem. Return true only if installation is likely healthy.
+is_workdir_initialized() {
+  # Just check if enough present on the filesystem to allow configuration, not
+  # if there is enough for running the sui client.
   #
-  # That one is different than check_workdir_ok because we do not want to
-  # report error, we just want to detect and fix automatically.
+  # In other word, detect if at least the "create" command was performed.
+  #
+  # This function is different than check_workdir_ok which is more exhaustive
+  # and requires healthy client binaries.
   if [ ! -d "$WORKDIRS" ]; then
     false; return;
   fi
@@ -210,32 +242,19 @@ is_localnet_installed() {
     false; return;
   fi
 
-  if [ ! -d "$SUI_REPO_DIR" ]; then
+  if [ ! -f "$WORKDIRS/$WORKDIR/sui-base.yaml" ]; then
     false; return;
   fi
 
-  if [ ! -d "$CONFIG_DATA_DIR" ]; then
+  if [ ! -L "$WORKDIRS/$WORKDIR/config" ]; then
     false; return;
   fi
 
-  if [ ! -f "$NETWORK_CONFIG" ]; then
-    false; return;
-  fi
-
-  if [ ! -f "$CLIENT_CONFIG" ]; then
-    false; return;
-  fi
-
-  if [ ! -f "$SUI_BIN_DIR/sui" ]; then
-    false; return;
-  fi
-
-  true; return;
+  true; return
 }
-export -f is_localnet_installed
+export -f is_workdir_initialized
 
-
-update_template_file() {
+update_exec_shim() {
   WORKDIR_PARAM="$1"
   FILENAME="$2"
 
@@ -253,12 +272,12 @@ update_template_file() {
     }
   fi
 }
-export -f update_template_file
+export -f update_exec_shim
 
 create_exec_shims_as_needed() {
   WORKDIR_PARAM="$1"
-  update_template_file "$WORKDIR_PARAM" "sui-exec"
-  update_template_file "$WORKDIR_PARAM" "workdir-exec"
+  update_exec_shim "$WORKDIR_PARAM" "sui-exec"
+  update_exec_shim "$WORKDIR_PARAM" "workdir-exec"
 }
 export -f create_exec_shims_as_needed
 
@@ -304,7 +323,10 @@ create_workdir_as_needed() {
     # ... keep going to repair if pointing to a valid directory.
     WORKDIR_PARAM="$ACTIVE_WORKDIR"
   else
-    mkdir -p "$WORKDIRS/$WORKDIR_PARAM"
+    if [ ! -d "$WORKDIRS/$WORKDIR_PARAM" ]; then
+      # "Create" using the template.
+      cp -r "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" "$WORKDIRS"
+    fi
     create_active_symlink_as_needed "$WORKDIR_PARAM";
   fi
 
@@ -313,6 +335,11 @@ create_workdir_as_needed() {
   if [ "$WORKDIR_PARAM" = "cargobin" ]; then
     create_config_symlink_as_needed "$WORKDIR_PARAM" "$HOME/.sui/sui_config"
   fi
+
+  if [ "$WORKDIR_PARAM" = "devnet" ] || [ "$WORKDIR_PARAM" = "localnet" ]; then
+    create_config_symlink_as_needed "$WORKDIR_PARAM" "$WORKDIRS/$WORKDIR_PARAM/config-default"
+  fi
+
 }
 export -f create_workdir_as_needed
 
@@ -344,7 +371,7 @@ set_config_symlink_force() {
     fi
   fi
 }
-export -f set_active_symlink_force
+export -f set_config_symlink_force
 
 update_ACTIVE_WORKDIR_var() {
   # Identify the active workdir, if any (deduce from the symlink).
@@ -496,12 +523,15 @@ ensure_client_OK() {
   # the scripts... we have then to fix things up here. Not an error unless the fix fails.
 
   # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
+  #if [ "$CFG_network_type" = "local" ]; then
+    # Make sure localnet exists in sui envs (ignore errors because likely already exists)
+    #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
+    $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000 >& /dev/null
 
-  # Make sure localnet exists in sui envs (ignore errors because likely already exists)
-  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000 >& /dev/null
-
-  # Make localnet the active envs (should already be done, just in case, do it again here).
-  $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR > /dev/null
+    # Make localnet the active envs (should already be done, just in case, do it again here).
+    #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
+    $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR > /dev/null
+  #fi
 }
 export -f ensure_client_OK
 
