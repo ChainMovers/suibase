@@ -17,9 +17,10 @@ apply_sui_base_yaml_to_config_yaml() {
 
   _CUR_VALUE=$(grep " gas_value:" "$_GENDATA_DIR/config.yaml" | head -1 | tr -cd '[:digit:]')
 
-  if [ "$_CUR_VALUE" = "$CFG_initial_fund_per_address" ]; then
+  if [ "$_CUR_VALUE" != "$CFG_initial_fund_per_address" ]; then
     local _SEARCH_STRING="gas_value:.*\$"
     local _REPLACE_STRING="gas_value: $CFG_initial_fund_per_address"
+    # echo "sed -i.bak -e \"s/$_SEARCH_STRING/$_REPLACE_STRING/g\" \"$_GENDATA_DIR/config.yaml\" && rm \"$_GENDATA_DIR/config.yaml.bak\""
     sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" "$_GENDATA_DIR/config.yaml" && rm "$_GENDATA_DIR/config.yaml.bak"
   fi
 
