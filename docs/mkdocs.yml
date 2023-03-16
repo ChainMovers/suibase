@@ -139,6 +139,7 @@ nav:
       - References:
           - "Sui-Base Scripts": how-to/scripts.md
           - "API and Conventions": references.md
+          - "Workdir Customization": how-to/configure-sui-base-yaml.md
           - "Rust":
               - "Demo-App": rust/demo-app/README.md
           - "Python":

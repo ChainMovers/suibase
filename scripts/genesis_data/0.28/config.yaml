@@ -1,78 +1,209 @@
 ---
 validator_config_info: ~
 parameters:
-  timestamp_ms: 1678265858465
+  timestamp_ms: 1678930421837
   protocol_version: 1
   allow_insertion_of_extra_objects: true
   initial_sui_custody_account_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
   initial_validator_stake_mist: 25000000000000000
   governance_start_epoch: 0
+  epoch_duration_ms: 86400000
 committee_size: 4
 grpc_load_shed: ~
 grpc_concurrency_limit: 20000000000
 accounts:
-  - address: 40add5b758b9a6a44b7138af94a4d0466b73efcbfa0fbb35940ed6fbc284b0a7
+  - address: 0e9ddce22ecd959a64960de9b64c1926a9a168935f4205c0c5298383518655af
     gas_objects:
-      - object_id: "0x8adebc07ad78d8a2fe3817422a82b8cd3912c7bd4d836cac235c421bd97003f1"
+      - object_id: "0x65bd0109a93e35e58c3b453bc0f5cc0a3292d737602f935b7e34fca012836ac7"
         gas_value: 800000000000000
-      - object_id: "0xe9d3b609e92abccea2634bddff8db2b3a0040e54ec8e0b3522a5d478dcc8c9db"
+      - object_id: "0x118e987f76446e9441d2f6ce95f2896ef801413f3d81e684d9bdc1ee15667c1e"
         gas_value: 800000000000000
-      - object_id: "0x79990504a8f9cf74273d64111574a1cb18c7d70e5a60b374435f9b3314aa0d6a"
+      - object_id: "0x621dd58cd788ff4b9a393281b7a222417a726cef2df9e33e0ea7b7f56a176076"
         gas_value: 800000000000000
-      - object_id: "0xf9f8d1e484a46cf67f59a5b0c6ebe46a9c9a5be26a5f1a8c57790574b81e6326"
+      - object_id: "0x831cc384957d247dc72c0933b2b9306f7252a016ba292362900dc3d20908f58e"
         gas_value: 800000000000000
-      - object_id: "0xd70af0610f82f189ebfcd21e3d451734e273cf768b8163b3d4aa911d85545e23"
+      - object_id: "0x3da8f2ae42098099e9a8c76bf8315567b3d1434889c8c43d869c372302bfed0a"
         gas_value: 800000000000000
     gas_object_ranges: []
-  - address: 57090aa46dec347398b68c83adfbbb85b10208bddc852e0206b1bc52435b8ad4
+  - address: 25e46d813a7ddfb65cfb246dcc01bbfffdf820382468ead601a84830f4ac94da
     gas_objects:
-      - object_id: "0x9d704923e3475728157db93caa148ed774d69352a0ad03966a1b5e68df9d3708"
+      - object_id: "0xe0efd8c66eefdca0d675cab8c73b16d965656eec26faec6fddbaa9229e997ccd"
         gas_value: 800000000000000
-      - object_id: "0xc7f652d60ffed98ef7e4646130dc0fd2dd20dea89ddde56ad7760ca7815af1d0"
+      - object_id: "0x1553cdc7200e1cedcee3c71e110177b83e9e9845d79157e45d5a2027ad793231"
         gas_value: 800000000000000
-      - object_id: "0x9ede3028b3b6c98ac28fa03ae2ac653129c0d159419f7bd64863dc826e40431e"
+      - object_id: "0x2fbf29de09a2cfca2d3c54e55357a797769eca508da613f5a31e0586d0384388"
         gas_value: 800000000000000
-      - object_id: "0x9b6b58bc91cb203a9750762fcd4ac069757735a32afe9349c1605e68f9b07709"
+      - object_id: "0x2c18b7fedbea6a6025e6e3364b8eba404a40e9cbe311145403d764d0c98b27c6"
         gas_value: 800000000000000
-      - object_id: "0x905daa8e1cca6d1604fb7f6180cb2381cfd19c4a3d32c6901bebda01ab4c81f9"
+      - object_id: "0xc25b1cb072a4b0c2332377f0e3855385d1b77d80a6a82c4df97758047b80fb99"
         gas_value: 800000000000000
     gas_object_ranges: []
-  - address: 773b5e34b1821687c81f27f8856d395772b1310211127565b15a906ae42615be
+  - address: 3c73d9f2b6d93615e710490d568af807e186697cdc42b536f430db1c6873cde7
     gas_objects:
-      - object_id: "0x51f3809ef835fd9000bbadf032ef3dbbaa21708a83429ac11d23314ce2139c57"
+      - object_id: "0x493ff0a470d783bcdb351e922ee4dc610e0a2670fb02604b35aea1281874c232"
         gas_value: 800000000000000
-      - object_id: "0x4db8e9917e4ff94bf2612b0977ce6218babe9f2c70b7588d73c9b6c756b4797e"
+      - object_id: "0x3fbbffd96c12a3e5653af4bdc9b5657c4ff76a4eb4c8c10ebfa1c48bb4b1e3da"
         gas_value: 800000000000000
-      - object_id: "0x09ab16db7b7c5e39b1c1f9ee31656df52c1701ebbbaf60ff9f0258deab363eb0"
+      - object_id: "0x060566ed27ba40e825854928f885b4fe2258b468fcf2eae1e25fbb6317f30ce6"
         gas_value: 800000000000000
-      - object_id: "0x687678bf98146dfa00232c274e18ae458eafa3395b2dfc8d414deedd7b89355c"
+      - object_id: "0x60b463466a29399d47037aecca7931888c91055943f1a2f5cde1a66d759bdf5f"
         gas_value: 800000000000000
-      - object_id: "0xf7fedecfb4050158e83e7ee0c5f80ca04d3da0f6e2423dd84378347daa148c36"
+      - object_id: "0xc8f659f10e5f5c536f9921c8364605f81c4e01512f36970710e0485933132abb"
         gas_value: 800000000000000
     gas_object_ranges: []
-  - address: b3ceefe0d095e701739e6e1e03dfa71a95fffbe4f716094b615863d002b30502
+  - address: 48c84402a189efc940c7841df5a23db79b928871e295832a52fd156ab64b2958
     gas_objects:
-      - object_id: "0xd85a7615bf94e30e7fc5fca524b3fcf27ec606c76eefdd6d8f70dc517a06d8e0"
+      - object_id: "0x3ea542072a07e7e6e5086da8b781217d6aa0f53ef304dcf5895e35e5f275aa0e"
         gas_value: 800000000000000
-      - object_id: "0x1e62d2fb7abaeba5c828f33e4b6df74116ca844303e64e03102dfc5b3a04fd00"
+      - object_id: "0x6fb36f66e08ea8418089ef0885d881206f2acb8e9e472fa94f43be69025c3854"
         gas_value: 800000000000000
-      - object_id: "0x4e2eef9145dcb5cc142eb95ea037910fe0cbc09a7a4170ac9c869894f0d4d349"
+      - object_id: "0x3abb0c548c366e7b70cd9a79553e896689795e7d454b309d99b2b9e24586f987"
         gas_value: 800000000000000
-      - object_id: "0x074a6af375d0c4c7b7b1391cef91d1ae0ce4b6fe46cab5eb40d6152754fbd813"
+      - object_id: "0xc51c537d874a4b3cbd3ade8499a9f1562e847624d32bf3adf2b80333c5084fd6"
         gas_value: 800000000000000
-      - object_id: "0xf4800b92018e44e9b62bab30124e075325399ad0076f28cafa8aa3277ecd0952"
+      - object_id: "0x8082a250159535996da042312ffb77a13e0eddff255a674e052ff5a357e87622"
         gas_value: 800000000000000
     gas_object_ranges: []
-  - address: b45df0d0dba1afad9bfdcd28de40af2bef5033f1b4ef7bf0ea46bd4d8145a3e4
+  - address: 6cdd4ebfbefa0cc93bdb15abc90eba317111f198045318fa16ddefccc4a0234b
     gas_objects:
-      - object_id: "0xd40b9470a6730c60c7ff941640ef453bb690bab27901304b9892d9723d356c01"
+      - object_id: "0xc06c3f9820e819e6ecd17e2ec4a19734d30421de7f7b2cf35354772ce4798ee4"
         gas_value: 800000000000000
-      - object_id: "0x41a277b964fba182f4d97e860db44b7a22869218944c15fc1b88b701076b6547"
+      - object_id: "0x1cf8f1c9b2d5a66e97dbe5054453a132a41e952d465be6f65e3049429d70bbbc"
         gas_value: 800000000000000
-      - object_id: "0x23f2033ed2e4bd4f1c23c0390f5ea41d5973f080f8ae6e26ab4d63a2d06738e4"
+      - object_id: "0xe0a4d6ad24d830b43c836016fa082b90c52ccce5f1d5710d49c9e1503ac53ac4"
         gas_value: 800000000000000
-      - object_id: "0xcf17da2cef5c03ce778d679fc9accb2fd3e40a631ea8a610f7a0d99851fd5065"
+      - object_id: "0x1b0346aec50717e88f36fc9ad7a5a5fd6c039ffd5b297f4848ce1ebca92224ff"
         gas_value: 800000000000000
-      - object_id: "0x68a3b9f0600942602fb575863470100bd83817ff2c720cbff8647e66591750d4"
+      - object_id: "0x6d8b7d8674aa2a6a45d59d023b048a2080dde6bc7d5c4a6ed6dc3c6e9cb680ad"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: 833284cfd2961f0fd2e278c7eabaf800255606f3cc701b8cbbd389fcb0988cee
+    gas_objects:
+      - object_id: "0x86de1b2abed697eb8ea881c5c37ec09c926d0553ed892a25125909d838c7051a"
+        gas_value: 800000000000000
+      - object_id: "0xcf46e20ded99e7eadef34f476bd969d2fe4e3659e3d6c2a7e68cb31a5a66955d"
+        gas_value: 800000000000000
+      - object_id: "0x16d220a02f159098887fec5dd5d7a888c0ab91a3abf010478b3d36f083a2ff2a"
+        gas_value: 800000000000000
+      - object_id: "0x5aaa11cb22468392b96475a2a2701900f1b45c9b30551ce8978ca356d2347d96"
+        gas_value: 800000000000000
+      - object_id: "0xb66a3867ae0413237c9a2938fb1bd3d73ba446317307bfead8a585d1455d1874"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: 85fde00a43bcb47fd1beeb0ef29460fa1faaaa3a026829d026fc1d43526b3897
+    gas_objects:
+      - object_id: "0x4dd95dbba300fcd0b2727bee2efcc42a124a034d57cfb76c690d14d24a81963d"
+        gas_value: 800000000000000
+      - object_id: "0x9787c956e8b7ba259f00db75c45a4bad37b02a48e6cb5bcf84b14f9d8e58bb91"
+        gas_value: 800000000000000
+      - object_id: "0xff0a5d9cec7bf8ef7d5e634217f14bd3181c1dd69a70913210479e0613a110ba"
+        gas_value: 800000000000000
+      - object_id: "0x07c8e3b117a516747986926f233431d376f01697ae17fdd830a10e2cb010f0dc"
+        gas_value: 800000000000000
+      - object_id: "0x700e1a4f429d7040b48c0b08dc2fe7db1299371821107fd87834f7426507ca85"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: 92697d72aa7783af215640b17c6bfff2dc82bb038ec0438befa40e72b7445b90
+    gas_objects:
+      - object_id: "0xa58eb12d1b29be6d402f0a67eb4dfda02a8d0a23624073747be0a4428c916eba"
+        gas_value: 800000000000000
+      - object_id: "0xf6602957d82500e11d03d4ada7f076b0ba29764245d0be6051a8fbdafc5f1915"
+        gas_value: 800000000000000
+      - object_id: "0xf06c2f6a74636ad4f064f7be398d4a1d2f2e5d34577334ea082f5cf96179d777"
+        gas_value: 800000000000000
+      - object_id: "0x500f418db25a8f0798e0a280e9580c87bf5fc427b0d44be7bdffef807ba78dee"
+        gas_value: 800000000000000
+      - object_id: "0xca1c0e46c5a9b96ba92da56a8e6e79bab1d69947875fd8fb88f1e80c8c822e85"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: 9fd8211ce4da73c1e994f12cd1ba29eb31cd9ddc0b0fc78fdff05926b322844e
+    gas_objects:
+      - object_id: "0x17259c6a4191e9156db84e4d2d340edaa301f7ce9dc5e505f40f17f775f29a69"
+        gas_value: 800000000000000
+      - object_id: "0x8d6636c785f28aa03ea50fd1ea261dddc0c0c601f47d3c661b65b9ab7a673543"
+        gas_value: 800000000000000
+      - object_id: "0x4b00e7e3e55387b6dac39f9ca0dc890125428838b71baa4b334ffc0a4f44349f"
+        gas_value: 800000000000000
+      - object_id: "0x97586fa06190c5cf380caacfc1ff28c7255c4ec0abb232bd79f8db43bfb1b03e"
+        gas_value: 800000000000000
+      - object_id: "0x697b6e7aa97fd7a0e8bffb7b477a480a773d4fd2bdf67283c92d5a988d341cd5"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: abef973524241493a83a031e4270dd5db71cf032e2c1647a138ab769014dbfc0
+    gas_objects:
+      - object_id: "0x212c82b2db5f0e566244ffc7cc22800ff139a91ab2d335a7fb5b40196885f837"
+        gas_value: 800000000000000
+      - object_id: "0xbb707fa4cf1c76a0b30fd9c7caf74edab6f213c5fb2a7828aa898baadffc98be"
+        gas_value: 800000000000000
+      - object_id: "0x42b6e89e3c6569f81e54402501f1fe0ecb86e90d58f80d556ca9262d5744f86a"
+        gas_value: 800000000000000
+      - object_id: "0xa7b2ef27f3ee598ffb4ed68db02c4d26aecb85558b9debd80f0d992508b21704"
+        gas_value: 800000000000000
+      - object_id: "0x9245884985c564c4fb6578c96150fe53102f0264bd25100860e747c1eafb14ab"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: b00c7bf33e031910147c2190ae1243d09b508ffb5d862c9e268f88d044423bbb
+    gas_objects:
+      - object_id: "0x068fd2f0988f5deb062ffca7f7722ebe206189159be38e122555d2e1731c4696"
+        gas_value: 800000000000000
+      - object_id: "0xedebb4aaded359364b6d9b9161106ef82fe47638a164842d84157965b1fb6dfc"
+        gas_value: 800000000000000
+      - object_id: "0x14fcea57cfef3f9e971531698d2e293e0dcbb07e5c820c59afe48c7c970bf6c0"
+        gas_value: 800000000000000
+      - object_id: "0xff656617b1660724d3f13f5af2a4ba8c0bf44e8f2429981b5cc92ecd86c37c93"
+        gas_value: 800000000000000
+      - object_id: "0xae24ebf43410d4d5c42817060965c3ed2c91eddcd7117975afbbd339594fcee5"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: bc6eead8a754bbc06762d3bd250398b24e5152bb77e7179f906eb86631e3dde1
+    gas_objects:
+      - object_id: "0x3a4f36018c7de870ac5872a644db966b3cd8031537908ab4777027041e8e0dfd"
+        gas_value: 800000000000000
+      - object_id: "0xac3218d7fa9f0e0ea320fe05d6d09bb02f9d03da8885834fb9b06b70b1e01fc4"
+        gas_value: 800000000000000
+      - object_id: "0xe23c693e88d6205f6d60c6f8842df39abe022191f68fbc5c6082b4bf17b1a872"
+        gas_value: 800000000000000
+      - object_id: "0xf92d39820c30ee1f33dcf8f29627e4b7a2d55bb5ff743efe15c6a38366d2803b"
+        gas_value: 800000000000000
+      - object_id: "0xed64cca21e72c81143d194819f7512fd5d060cb4e9d60ea200961d2fde00c16c"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: bcf3cce559c40e199b6f7186e8f79a20c25d2fcb25a4c098e2991584b0557450
+    gas_objects:
+      - object_id: "0xbf2f7a9ab4bf8a1f65a1066eb53ff9ede8a192f4c69a945fe65399c3947947d3"
+        gas_value: 800000000000000
+      - object_id: "0x30abbf106ebccfd5c0d0f526f188a0d32fedf3f0ad489b1a2ab2ac153dd82935"
+        gas_value: 800000000000000
+      - object_id: "0xf4cdf1b5cd99ab5b7a6ea6321fb00ffdfa782a1946da58a9fa954e0f4a759c0d"
+        gas_value: 800000000000000
+      - object_id: "0xb62897fd37d4936c743225e298fbf7f7d1bab1d8181811b1ba9f8fbc79d5511b"
+        gas_value: 800000000000000
+      - object_id: "0x81f1ceaa7a465002dc244bba2d714d9f0bf1b406973fa7950a43ea9aff32cfcb"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: ee0a4135c6844de05aa3ce8485fc4df8b08872e58248c2aef2a967039edf24a9
+    gas_objects:
+      - object_id: "0x742953ac6f5000b24f9661a54b7e2d2bc4a88005476756a695dd01bb547a9a1f"
+        gas_value: 800000000000000
+      - object_id: "0x7dd03b37a02d476b142f33fc080892d7a92463e7fd17c8e5418f8f510fb31c88"
+        gas_value: 800000000000000
+      - object_id: "0x6dfebb0115e05f6f6c40fae191def056574807e5a271b2212d0d29ba866cb915"
+        gas_value: 800000000000000
+      - object_id: "0x8dfc1f9308c6a8effa9d79a51211bcd63efaa8149e3c8f7cbf5d5bac89947302"
+        gas_value: 800000000000000
+      - object_id: "0xd2e9a9a22b697794e7c280286d725e30e1462b315eecb90a7efbb96a21b9039a"
+        gas_value: 800000000000000
+    gas_object_ranges: []
+  - address: f81d9c4cda4333a78297609e41d6f9625ba12c7dd411250883acaf75c8b07dd8
+    gas_objects:
+      - object_id: "0xfb5739a36d178e6b32a7a37df80ad6e2761edd2c91d9e269ca994e038da61df0"
+        gas_value: 800000000000000
+      - object_id: "0x5596a501fe27e0e877051eeda650fdf9126a9b30ceec3cee2e3f6523591b7cb2"
+        gas_value: 800000000000000
+      - object_id: "0x54237cb30959f563b2d3068bf2f4b196760abba608357e7382e8b041ac3d7b42"
+        gas_value: 800000000000000
+      - object_id: "0xbf694aa17b1d3b06e6f35a7c0bf0ebff9b59ff6afcb971a9a2b197f1a5f01783"
+        gas_value: 800000000000000
+      - object_id: "0x477ffa98bddc1dd27f8eadf8ffa5779bdd9672893c9a6c9c6c70d4c8d10901be"
         gas_value: 800000000000000
     gas_object_ranges: []

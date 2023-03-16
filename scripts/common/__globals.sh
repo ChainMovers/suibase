@@ -90,13 +90,20 @@ WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
 # Now load all the $CFG_ variables from the sui-base.yaml files.
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
 update_sui_base_yaml() {
-  # Load defaults.
+  # Load defaults twice.
+  #
+  # First with CFG_ prefix, the second with CFGDEFAULT_
+  #
+  # This allow to detect if there was an override or not (e.g. to re-assure
+  # the user in a message that an override was applied).
+  #
   YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval $(parse_yaml "$YAML_FILE" "CFG_")
+    eval $(parse_yaml "$YAML_FILE" "CFGDEFAULT_")
   fi
 
-  # Load overrides from workdir.
+  # Load overrides from workdir with CFG_ prefix.
   YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval $(parse_yaml "$YAML_FILE" "CFG_")
@@ -173,6 +180,46 @@ build_sui_repo_branch() {
 }
 
 export -f build_sui_repo_branch
+
+exit_if_sui_binary_does_not_exist() {
+  # This is a common "operator" error (not doing command in right order).
+  if [ "$WORKDIR" = "cargobin" ]; then
+    if [ ! -f "$HOME/.cargo/bin/sui" ]; then
+      echo "The $HOME/.cargo/bin/sui was not found."
+      echo "Follow Mysten Lab procedure to install it:"
+      echo " https://docs.sui.io/build/install#install-sui-binaries"
+      exit 1
+    fi
+  else
+    if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+      echo
+      echo "The sui binary for $WORKDIR was not found."
+      echo
+      echo " Do one of the following to build it:"
+      echo "    $WORKDIR start"
+      echo "    $WORKDIR update"
+      echo
+      exit 1
+    fi
+  fi
+
+  # Sometimes the binary are ok, but not the config (may happen when the
+  # localnet config directory is safely wipe out on set-sui-repo transitions).
+  if [ "$WORKDIR" = "localnet" ]; then
+    if  [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
+      echo
+      echo "The localnet need to be regenerated."
+      echo
+      echo " Do one of the following:"
+      echo "    $WORKDIR update"
+      echo "    $WORKDIR regen"
+      echo
+      exit 1
+    fi
+  fi
+
+}
+export -f exit_if_sui_binary_does_not_exist
 
 check_workdir_ok() {
   # Sanity check the workdir looks operational.
@@ -454,14 +501,7 @@ start_sui_process() {
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already started.
 
-  # Detect an installation problem (took a while to debug when it did happen)
-  if [ ! -f "$NETWORK_CONFIG" ]; then
-    setup_error "$NETWORK_CONFIG missing. Please re-run '$WORKDIR update' to fix."
-  fi
-
-  if [ ! -f "$CLIENT_CONFIG" ]; then
-    setup_error "$CLIENT_CONFIG missing. Please re-run '$WORKDIR update' to fix."
-  fi
+  exit_if_sui_binary_does_not_exist;
 
   update_SUI_PROCESS_PID_var;
   if [ -z "$SUI_PROCESS_PID" ]; then
@@ -471,7 +511,8 @@ start_sui_process() {
 
     # Loop until "sui client" confirms to be working, or exit if that takes
     # more than 30 seconds.
-    end=$((SECONDS+30))
+    end=$((SECONDS+60))
+    let _mid_message=30
     ALIVE=false
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
@@ -483,6 +524,12 @@ start_sui_process() {
         echo -n "."
         sleep 1
         AT_LEAST_ONE_SECOND=true
+      fi
+      if [ $_mid_message -ge 1 ]; then
+        if [ $_mid_message -eq 1 ]; then
+          echo -n "(may take some time on slower system)"
+        fi
+        let --_mid_message
       fi
     done
 
@@ -530,7 +577,7 @@ ensure_client_OK() {
 
     # Make localnet the active envs (should already be done, just in case, do it again here).
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
-    $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR > /dev/null
+    $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR >& /dev/null
   #fi
 }
 export -f ensure_client_OK
@@ -714,7 +761,7 @@ set_sui_repo_dir() {
 
   # User errors?
   if [ ! -d "$OPTIONAL_PATH" ]; then
-    setup_error "Path [$OPTIONAL_PATH] not found"
+    setup_error "Path [ $OPTIONAL_PATH ] not found"
   fi
 
   # The -n is important because target is a directory and without it
@@ -724,12 +771,12 @@ set_sui_repo_dir() {
 
   # Verify success.
   if is_sui_repo_dir_default; then
-    echo "$WORKDIR using default local sui repo [$OPTIONAL_PATH]"
+    echo "$WORKDIR using default local sui repo [ $OPTIONAL_PATH ]"
   else
     if is_sui_repo_dir_override; then
-      echo "$WORKDIR set-sui-repo is now [$OPTIONAL_PATH]"
+      echo "$WORKDIR set-sui-repo is now [ $OPTIONAL_PATH ]"
     else
-      setup_error "$WORKDIR set-sui-repo failed [$OPTIONAL_PATH]";
+      setup_error "$WORKDIR set-sui-repo failed [ $OPTIONAL_PATH ]";
     fi
   fi
 }

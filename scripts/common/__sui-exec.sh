@@ -12,9 +12,6 @@ sui_exec() {
     DISPLAY_SUI_BASE_HELP=true
   fi
 
-  # Quick sanity check that sui-base was properly installed.
-  check_workdir_ok;
-
   # Identify the binary to execute
   if [ "$WORKDIR" = "cargobin" ]; then
     # Special case for cargobin workdir
@@ -23,6 +20,8 @@ sui_exec() {
     # All other workdir use the binary from their repo.
     SUI_BIN="$SUI_BIN_DIR/sui"
   fi
+
+  exit_if_sui_binary_does_not_exist;
 
   SUI_SUBCOMMAND=$1
 
@@ -33,7 +32,7 @@ sui_exec() {
 
   if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
     shift 1
-    $SUI_BIN $SUI_SUBCOMMAND --client.config "$CLIENT_CONFIG" "$@"
+    $SUI_BIN "$SUI_SUBCOMMAND" --client.config "$CLIENT_CONFIG" "$@"
 
     if [ "$WORKDIR" = "localnet" ]; then
       # Print a friendly warning if localnet sui process found not running.
@@ -53,7 +52,7 @@ sui_exec() {
 
   if [[ $SUI_SUBCOMMAND == "network" ]]; then
     shift 1
-    $SUI_BIN $SUI_SUBCOMMAND --network.config "$NETWORK_CONFIG" "$@"
+    $SUI_BIN "$SUI_SUBCOMMAND" --network.config "$NETWORK_CONFIG" "$@"
     exit
   fi
 
@@ -84,7 +83,7 @@ sui_exec() {
   #
   if [[ $SUI_SUBCOMMAND == "keytool" ]]; then
     shift 1
-    $SUI_BIN $SUI_SUBCOMMAND --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+    $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
     exit
   fi
 

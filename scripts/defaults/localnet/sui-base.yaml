@@ -11,11 +11,15 @@
 #
 network_type: local
 
-# This control the *default* git repo being used and updated to latest
-# when building the client to communicate with the network.
+# For localnet only, when a sui.keystore is created, each address
+# are funded with that much Mist.
+initial_fund_per_address: 800000000000000
+
+# This control the *default* sui git repo being fetch to latest.
+# This is the repo for building the sui client.
 #
-# Take note that these variables are ignored when there is
-# a 'set-sui-repo' forcing the use of a repo.
+# These variables are ignored when a 'set-sui-repo' is forcing
+# the use of a repo (e.g. 'localnet set-sui-repo --path ~/my-repo' )
 #
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"

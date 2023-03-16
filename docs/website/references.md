@@ -58,5 +58,3 @@ TODO next:
 ## Sui Client Concurrency Limitation
 Explain architecture limitation related to active-address, active-env, switch and such...
 
-## Workdir Configuration
-Changing the remote github repo, branch, remote RPC, ports etc... is done using the sui-base.yaml found in each workdir [:octicons-arrow-right-24: More info...](how-to/configure-sui-base-yaml.md)

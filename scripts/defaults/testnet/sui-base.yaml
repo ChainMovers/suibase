@@ -1,5 +1,5 @@
 # See scripts/defaults/localnet/sui-base.yaml for documentation.
 network_type: remote
-
+# initial_fund_per_address: ~
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "testnet"

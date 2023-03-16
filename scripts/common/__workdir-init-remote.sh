@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Code that does the client.yaml and sui.keystore initialization for
 # remote networks (devnet/testnet).
 
@@ -27,7 +29,7 @@ workdir_init_remote() {
 
     # Check to replace the placeholder from the template file.
     SEARCH_STRING="<PUT_WORKING_DIR_PATH_HERE>"
-    STR_FOUND=$(cat "$CLIENT_CONFIG" | grep "$SEARCH_STRING")
+    STR_FOUND=$(grep "$SEARCH_STRING" "$CLIENT_CONFIG")
     if [ -n "$STR_FOUND" ]; then
       # Replace a string in client.yaml to end up with an absolute path to the keystore.
       # Notice sed uses '+'' for seperator instead of '/' to avoid clash
@@ -48,7 +50,7 @@ workdir_init_remote() {
       $SUI_EXEC client new-address secp256k1
     fi
 
-    STR_FOUND=$(cat "$CLIENT_CONFIG" | grep "active_address:" | grep "~")
+    STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
     if [ -n "$STR_FOUND" ]; then
       # The following trick will update the client.yaml active address field if not set!
       # (a client call switch to an address, using output of another client call picking a default).

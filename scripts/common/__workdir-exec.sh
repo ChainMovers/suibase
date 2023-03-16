@@ -48,8 +48,6 @@ usage_local() {
   echo "            local repo instead of the default latest from github."
   echo "            Just omit '--path' to return to default."
   echo
-
-
 }
 
 usage_remote() {
@@ -173,7 +171,7 @@ workdir_exec() {
     if [ "$CMD_PUBLISH_REQ" = true ] || [ "$CMD_SET_SUI_REPO_REQ" = true ]; then
       # Validate if the path exists.
       if [ ! -d "$OPTIONAL_PATH" ]; then
-        echo "Path [$OPTIONAL_PATH] not found"
+        echo "Path [ $OPTIONAL_PATH ] not found"
         exit
       fi
     else
@@ -198,6 +196,7 @@ workdir_exec() {
 
   if [ "$CMD_STATUS_REQ" = true ]; then
     if is_workdir_initialized; then
+
       if $is_local; then
         if [ -z "$SUI_PROCESS_PID" ]; then
           echo -e "localnet \033[1;31mSTOPPED\033[0m"
@@ -205,6 +204,8 @@ workdir_exec() {
           echo -e "localnet \033[1;32mRUNNING\033[0m (process pid $SUI_PROCESS_PID)"
         fi
       fi
+
+      exit_if_sui_binary_does_not_exist;
 
       update_SUI_VERSION_var;
       echo "$SUI_VERSION"
@@ -228,7 +229,7 @@ workdir_exec() {
       fi
 
       if is_sui_repo_dir_override; then
-        echo "set-sui-repo: [$RESOLVED_SUI_REPO_DIR]"
+        echo "set-sui-repo: [ $RESOLVED_SUI_REPO_DIR ]"
       fi
     else
       echo_help_on_not_initialized;

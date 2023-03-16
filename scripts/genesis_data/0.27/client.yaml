@@ -5,8 +5,5 @@ envs:
   - alias: localnet
     rpc: "http://0.0.0.0:9000"
     ws: ~
-  - alias: devnet
-    rpc: "https://fullnode.devnet.sui.io:443"
-    ws: ~
 active_env: localnet
-active_address: "0xc7148f0c0086adf172eb4c2076c7d888337789a7"
+active_address: "0xf77814eed99568fd56d62719f2ba3ce41c8a5114"
