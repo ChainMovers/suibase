@@ -722,56 +722,81 @@ publish_localnet() {
 
   #  TODO Investigate problem with exit status here...
 
-  # Grab the first packageId line after the "events:" and "publish:" string have been met (in order).
-  # Will be a problem if can publish multiple package at same time, json format change etc.
-  # Certainly not perfect, but good enough for today...
-  #
-  # Details on cryptic sed line (it is multiple steps, each seperated by a ';')
-  #   Remove everything until '"events":'', everything until '"publish":'', all quotes and all commas.
-  #   Then tr remove whitespace (keeps newlines) and grep the first packageId line met (head -1)
-  #
-  ID_LINE=$(cat $INSTALL_DIR/publish-output.json | sed '1,/\"events\":/d; 1,/\"publish\":/d; s/\"//g; s/,//g' | tr -d "[:blank:]" | grep packageId | head -1)
+  # Create the created_objects.json file.
+  echo -n "[" > "$INSTALL_DIR/created-objects.json";
+  local _first_object_created=true
+  # Get all the objectid
+  awk '/"created":/,/],/' "$INSTALL_DIR/publish-output.json" |
+  grep objectId | sed 's/\"//g; s/,//g' | tr -d "[:blank:]" |
+  while read -r line ; do
+    # Extract first hexadecimal literal found.
+    # Define the seperator (IFS) as the JSON ':'
+    local _ID=""
+    IFS=":"
+    for _i in $line
+    do
+      if beginswith 0x "$_i"; then
+        _ID=$_i
+        break;
+      fi
+    done
+    # Best-practice to revert IFS to default.
+    unset IFS
+    echo "$_ID"
+    if [ -n "$_ID" ]; then
+      # Get the type of the object
+      object_type=$($SUI_EXEC client object "$_ID" --json | grep "type" | sed 's/,//g' | tr -d "[:blank:]" | head -n 1)
+      if [ -z "$object_type" ]; then
+        # To be removed eventually. Version 0.27 devnet was working differently.
+        object_type=$($SUI_EXEC client object "$_ID" --json | grep "dataType" | grep "package")
+        if [ -n "$object_type" ]; then
+          _found_id=true
+        fi
+      else
+        if $_first_object_created; then
+          _first_object_created=false
+        else
+          echo "," >> "$INSTALL_DIR/created-objects.json";
+        fi
 
-  # echo "id_line=[$ID_LINE]"
+        echo -n "{\"objectid\":\"$_ID\",$object_type}" >> "$INSTALL_DIR/created-objects.json";
+        #echo "ot=[$object_type]"
+        if [ "$object_type" = "\"type\":\"package\"" ]; then
+          _found_id=true
+        fi
+      fi
 
-  if [ -z "$ID_LINE" ]; then
-    cat "$INSTALL_DIR/publish-output.json"
-    setup_error "Could not find the package id from $SCRIPT_OUTPUT"
-  fi
+      if $_found_id; then
+        JSON_STR="[\"$_ID\"]"
+        echo "$JSON_STR" > "$INSTALL_DIR/package-id.json"
+        _found_id=false
+      fi
 
-  # Extract first hexadecimal literal found.
-  # Define the seperator (IFS) as the JSON ':'
-  ID=""
-  IFS=":"
-  for i in $ID_LINE
-  do
-    if beginswith 0x $i; then
-      ID=$i
-      break;
     fi
   done
+  echo "]" >> "$INSTALL_DIR/created-objects.json";
 
-  # Best-practice to revert IFS to default.
-  unset IFS
+  # Load back the package-id.json from the file for validation
+  _ID_PACKAGE=$(cat "$INSTALL_DIR/package-id.json" | sed 's/\[//g; s/\]//g; s/"//g;')
 
-  echo "ID=[$ID]"
+  echo "Package ID=[$_ID_PACKAGE]"
 
-  if [ -z "$ID" ]; then
+  if [ -z "$_ID_PACKAGE" ]; then
     cat "$INSTALL_DIR/publish-output.json"
     setup_error "Could not find Package id in $SCRIPT_OUTPUT"
   fi
 
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
-  script_cmd "lsui client object $ID"
+  script_cmd "lsui client object $_ID_PACKAGE"
   echo Verifying client can access new package on network...
-  validation=$(lsui client object $ID | grep -i "package")
+  validation=$(lsui client object $_ID_PACKAGE | grep -i "package")
   if [ -z "$validation" ]; then
     cat "$INSTALL_DIR/publish-output.json"
     setup_error "Unexpected object type (Not a package)"
   fi
-  JSON_STR="[\"$ID\"]"
-  echo $JSON_STR > "$INSTALL_DIR/package-id.json"
+  JSON_STR="[\"$_ID_PACKAGE\"]"
+  echo "$JSON_STR" > "$INSTALL_DIR/package-id.json"
 
   echo "Package ID is $JSON_STR"
   echo "Also written in [$INSTALL_DIR/package-id.json]"

@@ -6,3 +6,6 @@
 #
 # (if website is down, check under sui-base/docs/website/how-to)
 
+# Examples:
+# initial_fund_per_address: 9999999999999999999
+# default_repo_branch: "main"
