@@ -21,7 +21,7 @@ sui_exec() {
     SUI_BIN="$SUI_BIN_DIR/sui"
   fi
 
-  exit_if_sui_binary_does_not_exist;
+  exit_if_sui_binary_not_ok;
 
   SUI_SUBCOMMAND=$1
 

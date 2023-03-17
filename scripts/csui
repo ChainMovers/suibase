@@ -18,6 +18,8 @@ WORKDIR="cargobin"
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 source "$HOME/sui-base/scripts/common/__sui-exec.sh"
 
+exit_if_not_installed;
+
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "sui-base-script-name" ]]; then
   # This also test if the sourced "globals" works.

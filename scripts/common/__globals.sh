@@ -19,23 +19,18 @@ WORKDIR="$2"
 # Initialize variables driven by $WORKDIR
 case $WORKDIR in
   localnet)
-    SUI_REPO_BRANCH="devnet"
     SUI_SCRIPT="lsui"
     ;;
   devnet)
-    SUI_REPO_BRANCH="devnet"
     SUI_SCRIPT="dsui"
     ;;
   testnet)
-    SUI_REPO_BRANCH="testnet"
     SUI_SCRIPT="tsui"
     ;;
   active)
-    SUI_REPO_BRANCH="NULL"
     SUI_SCRIPT="asui"
     ;;
   cargobin)
-    SUI_REPO_BRANCH="NULL"
     SUI_SCRIPT="csui"
     ;;
   *)
@@ -138,9 +133,15 @@ build_sui_repo_branch() {
       fi
     fi
   else
+
+    if [ "$CFG_default_repo_url" != "$CFGDEFAULT_default_repo_url" ] ||
+       [ "$CFG_default_repo_branch" != "$CFGDEFAULT_default_repo_branch" ]; then
+      echo "sui-base.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
+    fi
+
     # If not already done, initialize the default repo.
     if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]; then
-      git clone -b devnet https://github.com/MystenLabs/sui.git "$SUI_REPO_DIR_DEFAULT"  || setup_error "Failed getting Sui $SUI_REPO_BRANCH branch from github";
+      git clone -b "$CFG_default_repo_branch" "$CFG_default_repo_url" "$SUI_REPO_DIR_DEFAULT"  || setup_error "Failed cloning branch [$CFG_default_repo_branch] from [$CFG_default_repo_url]";
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
     fi
 
@@ -150,6 +151,7 @@ build_sui_repo_branch() {
     fi
 
     # Update sui devnet local repo (if needed)
+    (cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
     (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
     V1=$(cd "$SUI_REPO_DIR"; git rev-parse HEAD)
     V2=$(cd "$SUI_REPO_DIR"; git rev-parse '@{u}')
@@ -157,13 +159,12 @@ build_sui_repo_branch() {
     then
       # Does a bit more than needed, but should allow to recover
       # from most operator error...
-      echo Updating sui $WORKDIR in sui-base...
-      (cd "$SUI_REPO_DIR" && git switch $SUI_REPO_BRANCH > /dev/null)
+      echo Updating sui "$WORKDIR" in sui-base...
       (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
-      (cd "$SUI_REPO_DIR" && git reset --hard origin/$SUI_REPO_BRANCH > /dev/null)
+      (cd "$SUI_REPO_DIR" && git reset --hard origin/$CFG_default_repo_branch > /dev/null)
       (cd "$SUI_REPO_DIR" && git merge '@{u}')
     fi
-    echo "Building $WORKDIR using latest Sui $SUI_REPO_BRANCH branch..."
+    echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
   (cd "$SUI_REPO_DIR"; cargo build)
@@ -181,7 +182,55 @@ build_sui_repo_branch() {
 
 export -f build_sui_repo_branch
 
-exit_if_sui_binary_does_not_exist() {
+exit_if_not_installed() {
+  # Help the user that did not even do the installation of the symlinks
+  # and is trying instead to call directly from "~/sui-base/scripts"
+  # (which will cause some trouble with some script).
+  case "$SCRIPT_NAME" in
+  "lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"workdirs")
+    if [ ! -L "$LOCAL_BIN/$SCRIPT_NAME" ]; then
+      echo
+      echo "Some sui-base files are missing. The installation was"
+      echo "either not done or failed."
+      echo
+      echo "Run ~/sui-base/install again to fix this."
+      echo
+      exit 1
+    fi
+    ;;
+  *) ;;
+  esac
+
+  # TODO Test sui-base on $PATH is fine.
+}
+export -f exit_if_not_installed
+
+exit_if_workdir_not_ok() {
+  # This is a common "operator" error (not doing command in right order).
+  if ! is_workdir_ok; then
+    echo "$WORKDIR workdir not initialized"
+    echo
+    echo "Do one of the following:"
+    if [ ! -d "$WORKDIRS/WORKDIR" ]; then
+      echo "        $WORKDIR create  (recommended)"
+      echo "        $WORKDIR update"
+    else
+      if [ "$CFG_network_type" = "local" ]; then
+        echo "        $WORKDIR regen  (recommended)"
+        echo "        $WORKDIR update"
+      else
+        echo "        $WORKDIR update  (recommended)"
+      fi
+    fi
+    echo "        $WORKDIR start"
+    echo
+    echo "Check \"$WORKDIR --help\" for more options"
+    exit 1
+  fi
+}
+export -f exit_if_workdir_not_ok
+
+exit_if_sui_binary_not_ok() {
   # This is a common "operator" error (not doing command in right order).
   if [ "$WORKDIR" = "cargobin" ]; then
     if [ ! -f "$HOME/.cargo/bin/sui" ]; then
@@ -205,21 +254,42 @@ exit_if_sui_binary_does_not_exist() {
 
   # Sometimes the binary are ok, but not the config (may happen when the
   # localnet config directory is safely wipe out on set-sui-repo transitions).
-  if [ "$WORKDIR" = "localnet" ]; then
+  if [ "$CFG_network_type" = "local" ]; then
     if  [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
       echo
       echo "The localnet need to be regenerated."
       echo
       echo " Do one of the following:"
-      echo "    $WORKDIR update"
       echo "    $WORKDIR regen"
+      echo "    $WORKDIR update"
       echo
       exit 1
     fi
   fi
-
 }
-export -f exit_if_sui_binary_does_not_exist
+export -f exit_if_sui_binary_not_ok
+
+is_sui_binary_ok() {
+  # Keep this one match the logic of exit_if_sui_binary_not_ok()
+  if [ "$WORKDIR" = "cargobin" ]; then
+    if [ ! -f "$HOME/.cargo/bin/sui" ]; then
+      false; return
+    fi
+  else
+    if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+      false; return
+    fi
+  fi
+
+  if [ "$CFG_network_type" = "local" ]; then
+    if  [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
+      false; return
+    fi
+  fi
+
+  true; return
+}
+export -f is_sui_binary_ok
 
 check_workdir_ok() {
   # Sanity check the workdir looks operational.
@@ -273,14 +343,11 @@ check_workdir_ok() {
 }
 export -f check_workdir_ok
 
-is_workdir_initialized() {
+is_workdir_ok() {
   # Just check if enough present on the filesystem to allow configuration, not
   # if there is enough for running the sui client.
   #
   # In other word, detect if at least the "create" command was performed.
-  #
-  # This function is different than check_workdir_ok which is more exhaustive
-  # and requires healthy client binaries.
   if [ ! -d "$WORKDIRS" ]; then
     false; return;
   fi
@@ -289,7 +356,9 @@ is_workdir_initialized() {
     false; return;
   fi
 
-  if [ ! -f "$WORKDIRS/$WORKDIR/sui-base.yaml" ]; then
+  if [ ! -f "$WORKDIRS/$WORKDIR/sui-base.yaml" ] ||
+     [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ] ||
+     [ ! -f "$WORKDIRS/$WORKDIR/workdir-exec" ]; then
     false; return;
   fi
 
@@ -299,7 +368,7 @@ is_workdir_initialized() {
 
   true; return
 }
-export -f is_workdir_initialized
+export -f is_workdir_ok
 
 update_exec_shim() {
   WORKDIR_PARAM="$1"
@@ -501,7 +570,7 @@ start_sui_process() {
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already started.
 
-  exit_if_sui_binary_does_not_exist;
+  exit_if_sui_binary_not_ok;
 
   update_SUI_PROCESS_PID_var;
   if [ -z "$SUI_PROCESS_PID" ]; then

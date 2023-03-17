@@ -113,6 +113,8 @@ echo_help_on_not_initialized() {
 
 workdir_exec() {
 
+  exit_if_not_installed;
+
   case "$1" in
     start) CMD_START_REQ=true ;;
     stop) CMD_STOP_REQ=true ;;
@@ -195,51 +197,48 @@ workdir_exec() {
   update_ACTIVE_WORKDIR_var;
 
   if [ "$CMD_STATUS_REQ" = true ]; then
-    if is_workdir_initialized; then
+    exit_if_workdir_not_ok;
 
-      if $is_local; then
-        if [ -z "$SUI_PROCESS_PID" ]; then
-          echo -e "localnet \033[1;31mSTOPPED\033[0m"
-        else
-          echo -e "localnet \033[1;32mRUNNING\033[0m (process pid $SUI_PROCESS_PID)"
-        fi
-      fi
-
-      exit_if_sui_binary_does_not_exist;
-
-      update_SUI_VERSION_var;
-      echo "$SUI_VERSION"
-      #update_SUI_REPO_INFO_var;
-      #echo "$SUI_VERSION ($SUI_REPO_INFO)"
-      DISPLAY_AS_WARNING=true
-      DISPLAY_FIELD="$ACTIVE_WORKDIR"
-      if [ "$ACTIVE_WORKDIR" = "$WORKDIR" ]; then
-        DISPLAY_AS_WARNING=false
-      fi
-
-      if [ -z "$DISPLAY_FIELD" ]; then
-        DISPLAY_FIELD="<none>"
-        DISPLAY_AS_WARNING=true
-      fi
-
-      if [ "$DISPLAY_AS_WARNING" = true ]; then
-        echo -e "asui selection: \033[1;33m$DISPLAY_FIELD\033[0m"
+    if $is_local; then
+      if [ -z "$SUI_PROCESS_PID" ]; then
+        echo -e "localnet \033[1;31mSTOPPED\033[0m"
       else
-        echo -e "asui selection: $DISPLAY_FIELD"
+        echo -e "localnet \033[1;32mRUNNING\033[0m (process pid $SUI_PROCESS_PID)"
       fi
+    fi
 
-      if is_sui_repo_dir_override; then
-        echo "set-sui-repo: [ $RESOLVED_SUI_REPO_DIR ]"
-      fi
+    exit_if_sui_binary_not_ok;
+
+    update_SUI_VERSION_var;
+    echo "$SUI_VERSION"
+    #update_SUI_REPO_INFO_var;
+    #echo "$SUI_VERSION ($SUI_REPO_INFO)"
+    DISPLAY_AS_WARNING=true
+    DISPLAY_FIELD="$ACTIVE_WORKDIR"
+    if [ "$ACTIVE_WORKDIR" = "$WORKDIR" ]; then
+      DISPLAY_AS_WARNING=false
+    fi
+
+    if [ -z "$DISPLAY_FIELD" ]; then
+      DISPLAY_FIELD="<none>"
+      DISPLAY_AS_WARNING=true
+    fi
+
+    if [ "$DISPLAY_AS_WARNING" = true ]; then
+      echo -e "asui selection: \033[1;33m$DISPLAY_FIELD\033[0m"
     else
-      echo_help_on_not_initialized;
+      echo -e "asui selection: $DISPLAY_FIELD"
+    fi
+
+    if is_sui_repo_dir_override; then
+      echo "set-sui-repo: [ $RESOLVED_SUI_REPO_DIR ]"
     fi
     exit
   fi
 
   # Second, take care of the case that just stop/start the localnet.
   if [ "$CMD_START_REQ" = true ]; then
-    if is_workdir_initialized; then
+    if is_workdir_ok && is_sui_binary_ok; then
       if $is_local; then
         if [ "$SUI_PROCESS_PID" ]; then
           echo "localnet already running (process pid $SUI_PROCESS_PID)"
@@ -248,12 +247,13 @@ workdir_exec() {
         else
           start_sui_process;
         fi
+        exit
       else
-        echo "$WORKDIR installed (no process needed to be further started)"
+        echo "$WORKDIR installed (no process needed to be started)"
+        exit
       fi
-      exit
     fi
-    # Note: If workdir not installed, keep going to install it.
+    # Note: If workdir not OK, keep going to install/repair it.
   fi
 
   if [ "$CMD_STOP_REQ" = true ]; then
@@ -262,22 +262,21 @@ workdir_exec() {
       exit
     fi
 
-    if is_workdir_initialized; then
+    exit_if_workdir_not_ok;
+
+    if [ "$SUI_PROCESS_PID" ]; then
+      stop_sui_process;
+      # Confirm result (although stop_sui_process may have handled error already)
+      update_SUI_PROCESS_PID_var;
       if [ "$SUI_PROCESS_PID" ]; then
-        stop_sui_process;
-        # Confirm result (although stop_sui_process may have handled error already)
-        update_SUI_PROCESS_PID_var;
-        if [ "$SUI_PROCESS_PID" ]; then
-          setup_error "Failed to stop localnet"
-        else
-          echo "localnet now stopped"
-        fi
+        setup_error "Failed to stop localnet"
       else
-        echo "localnet already stopped"
+        echo "localnet now stopped"
       fi
     else
-      echo_help_on_not_initialized;
+      echo "localnet already stopped"
     fi
+
     exit
   fi
 
@@ -298,37 +297,35 @@ workdir_exec() {
       echo "\"$WORKDIR publish\" must have Move.toml in current directory or --path specified"
     fi
 
-    if is_workdir_initialized; then
-      # publication requires localnet to run.
-      # If stopped, then try (once) to start it.
-      update_SUI_PROCESS_PID_var;
+    exit_if_workdir_not_ok;
+
+    # publication requires localnet to run.
+    # If stopped, then try (once) to start it.
+    update_SUI_PROCESS_PID_var;
+    if [ "$SUI_PROCESS_PID" ]; then
+      publish_localnet $PASSTHRU_OPTIONS;
+    else
+      start_sui_process;
       if [ "$SUI_PROCESS_PID" ]; then
         publish_localnet $PASSTHRU_OPTIONS;
       else
-        start_sui_process;
-        if [ "$SUI_PROCESS_PID" ]; then
-          publish_localnet $PASSTHRU_OPTIONS;
-        else
-          echo "Unable to start localnet"
-        fi
+        echo "Unable to start localnet"
       fi
-    else
-      echo_help_on_not_initialized;
     fi
+
     exit
   fi
 
   if [ "$CMD_SET_ACTIVE_REQ" = true ]; then
-    if is_workdir_initialized; then
-      if [ "$ACTIVE_WORKDIR" = "$WORKDIR" ]; then
-        echo "$WORKDIR is already active"
-      else
-        echo "Making $WORKDIR active"
-        set_active_symlink_force "$WORKDIR";
-      fi
+    exit_if_workdir_not_ok;
+
+    if [ "$ACTIVE_WORKDIR" = "$WORKDIR" ]; then
+      echo "$WORKDIR is already active"
     else
-      echo_help_on_not_initialized;
+      echo "Making $WORKDIR active"
+      set_active_symlink_force "$WORKDIR";
     fi
+
     exit
   fi
 
@@ -341,7 +338,7 @@ workdir_exec() {
 
   if [ "$CMD_CREATE_REQ" = true ]; then
     # Check for what is minimally needed for configuration.
-    if is_workdir_initialized; then
+    if is_workdir_ok; then
       setup_error "$WORKDIR already created."
     fi
   fi
