@@ -1,0 +1,9 @@
+---
+keystore:
+  File: <PUT_FAUCET_PATH_HERE>/sui.keystore
+envs:
+  - alias: localnet
+    rpc: "http://0.0.0.0:9000"
+    ws: ~
+active_env: localnet
+active_address: "0xa77814eed99568fd56d62719f2ba3ce41c8a5114"

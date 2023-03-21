@@ -12,11 +12,55 @@ MIN_RUST_VERSION="rustc 1.65.0"
 # Mandatory command line:
 #    $1 : Should be the "$0" of the caller script.
 #    $2 : Should be the workdir string (e.g. "active", "localnet"... )
-SCRIPT_PATH="$(dirname $1)"
-SCRIPT_NAME="$(basename $1)"
+SCRIPT_PATH="$(dirname "$1")"
+SCRIPT_NAME="$(basename "$1")"
 WORKDIR="$2"
 
-# Initialize variables driven by $WORKDIR
+# Utility functions.
+setup_error() { echo "$*" 1>&2 ; exit 1; }
+export -f setup_error
+
+version_greater_equal()
+{
+  local _arg1 _arg2
+  # Remove everything until first digit
+  # Remove trailing "-build number" if specified.
+  # Keep only major/minor, ignore minor if specified.
+  # shellcheck disable=SC2001
+  _arg1=$(echo "$1" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
+  # shellcheck disable=SC2001
+  _arg2=$(echo "$2" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
+  printf '%s\n%s\n' "$_arg2" "$_arg1" | sort --check=quiet --version-sort;
+}
+export -f version_greater_equal
+
+version_less_than()
+{
+  if version_greater_equal "$1" "$2"; then
+    false; return
+  fi
+  true; return
+}
+export -f version_less_than
+
+script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
+export -f script_cmd
+beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
+export -f beginswith
+
+# Two key directories location.
+SUI_BASE_DIR="$HOME/sui-base"
+WORKDIRS="$SUI_BASE_DIR/workdirs"
+
+# Some other commonly used locations.
+LOCAL_BIN="$HOME/.local/bin"
+SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
+SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
+CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
+PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
+FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
+SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+
 case $WORKDIR in
   localnet)
     SUI_SCRIPT="lsui"
@@ -32,33 +76,12 @@ case $WORKDIR in
     ;;
   cargobin)
     SUI_SCRIPT="csui"
+    SUI_BIN_DIR="$HOME/.cargo/bin"
     ;;
   *)
-    echo "globals: not supported workdir [$WORKDIR]"
+    SUI_SCRIPT="sui-exec"
     ;;
 esac
-
-# Utility functions.
-setup_error() { echo "$*" 1>&2 ; exit 1; }
-export -f setup_error
-version_greater_equal() { printf '%s\n%s\n' "$2" "$1" | sort --check=quiet --version-sort; }
-export -f version_greater_equal
-script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
-export -f script_cmd
-beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
-export -f beginswith
-
-# Two key directories location.
-SUI_BASE_DIR="$HOME/sui-base"
-WORKDIRS="$SUI_BASE_DIR/workdirs"
-
-# Some other commonly used locations.
-LOCAL_BIN="$HOME/.local/bin"
-SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
-SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
-SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
-CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
-PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
 
 # Configuration files (often needed for sui CLI calls)
 NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
@@ -83,6 +106,7 @@ SUI_EXEC="$WORKDIRS/$WORKDIR/sui-exec"
 WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
 
 # Now load all the $CFG_ variables from the sui-base.yaml files.
+# shellcheck source=SCRIPTDIR/__parse-yaml.sh
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
 update_sui_base_yaml() {
   # Load defaults twice.
@@ -231,16 +255,25 @@ exit_if_workdir_not_ok() {
 export -f exit_if_workdir_not_ok
 
 exit_if_sui_binary_not_ok() {
-  # This is a common "operator" error (not doing command in right order).
-  if [ "$WORKDIR" = "cargobin" ]; then
-    if [ ! -f "$HOME/.cargo/bin/sui" ]; then
+  # This is for common "operator" error (not doing command in right order).
+  local _BIN_NOT_FOUND=false
+  if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+    _BIN_NOT_FOUND=true
+  fi
+
+  update_SUI_VERSION_var;
+  if version_greater_equal "$SUI_VERSION" "0.28"; then
+    if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
+      _BIN_NOT_FOUND=true
+    fi
+  fi
+
+  if [ "$_BIN_NOT_FOUND" = "true" ]; then
+    if [ "$WORKDIR" = "cargobin" ]; then
       echo "The $HOME/.cargo/bin/sui was not found."
       echo "Follow Mysten Lab procedure to install it:"
       echo " https://docs.sui.io/build/install#install-sui-binaries"
-      exit 1
-    fi
-  else
-    if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+    else
       echo
       echo "The sui binary for $WORKDIR was not found."
       echo
@@ -248,8 +281,8 @@ exit_if_sui_binary_not_ok() {
       echo "    $WORKDIR start"
       echo "    $WORKDIR update"
       echo
-      exit 1
     fi
+    exit 1
   fi
 
   # Sometimes the binary are ok, but not the config (may happen when the
@@ -271,12 +304,23 @@ export -f exit_if_sui_binary_not_ok
 
 is_sui_binary_ok() {
   # Keep this one match the logic of exit_if_sui_binary_not_ok()
-  if [ "$WORKDIR" = "cargobin" ]; then
-    if [ ! -f "$HOME/.cargo/bin/sui" ]; then
-      false; return
-    fi
-  else
-    if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+  # The difference is this function should NEVER exit because it
+  # is used to detect problems and have the caller try to repair the
+  # binary.
+  if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+    false; return
+  fi
+
+  # Get the version, but in a way that would not exit on failure.
+  local _SUI_VERSION_ATTEMPT
+  _SUI_VERSION_ATTEMPT=$("$SUI_BIN_DIR/sui" --version)
+  # TODO test here what would really happen on corrupted binary...
+  if [ -z "$_SUI_VERSION_ATTEMPT" ]; then
+    false; return
+  fi
+
+  if version_greater_equal "$_SUI_VERSION_ATTEMPT" "0.28"; then
+    if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
       false; return
     fi
   fi
@@ -500,8 +544,12 @@ update_ACTIVE_WORKDIR_var() {
 }
 export -f update_ACTIVE_WORKDIR_var
 
-update_SUI_PROCESS_PID_var() {
-  # Useful to check if the sui process is running (this is the parent for the "localnet")
+get_process_pid() {
+  local _PROC="$1"
+  local _ARGS="$2"
+  local _PID
+  # Given a process "string" return the pid as a string.
+  # Return NULL if not found.
   #
   # Details on the cryptic parsing:
   #   Get ps with "sui start" in its command line, grep exclude itself from the list, head takes the first process (should
@@ -509,9 +557,29 @@ update_SUI_PROCESS_PID_var() {
   #   word on the first/head line.
   #
   if [[ $(uname) == "Darwin" ]]; then
-    SUI_PROCESS_PID=$(ps x -o pid,comm | grep "sui" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+    _PID=$(ps x -o pid,comm | grep "$_PROC" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   else
-    SUI_PROCESS_PID=$(ps x -o pid,cmd | grep "sui start" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+    _PID=$(ps x -o pid,cmd | grep "$_PROC $_ARGS" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+  fi
+
+  if [ -n "$_PID" ]; then
+    echo "$_PID"
+  else
+    echo "NULL"
+  fi
+}
+export -f get_process_pid
+
+update_SUI_PROCESS_PID_var() {
+  # Useful to check if the sui process is running (this is the parent for the "localnet")
+  local _PID
+
+  _PID=$(get_process_pid "sui" "start")
+
+  if [ "$_PID" = "NULL" ]; then
+    unset SUI_PROCESS_PID
+  else
+    SUI_PROCESS_PID=$_PID
   fi
 }
 export -f update_SUI_PROCESS_PID_var
@@ -520,7 +588,7 @@ update_SUI_VERSION_var() {
   # Take note that $SUI_BIN_DIR here is used to properly consider if the
   # context of the script is localnet, devnet, testnet, mainet... (they
   # are not the same binaries and versions).
-  SUI_VERSION=$($SUI_BIN_DIR/sui --version)
+  SUI_VERSION=$("$SUI_BIN_DIR/sui" --version)
   if [ -z "$SUI_VERSION" ]; then
     setup_error "$SUI_BIN_DIR/sui --version not running as expected"
   fi
@@ -541,7 +609,6 @@ stop_sui_process() {
 
     # Make sure it is dead.
     end=$((SECONDS+15))
-    DEAD=false
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
       update_SUI_PROCESS_PID_var;
@@ -559,7 +626,7 @@ stop_sui_process() {
       echo
     fi
 
-    if [ ! -z "$SUI_PROCESS_PID" ]; then
+    if [ -n "$SUI_PROCESS_PID" ]; then
       setup_error "Sui process pid=$SUI_PROCESS_PID still running. Try again, or stop (kill) the sui process yourself before proceeding."
     fi
   fi
@@ -576,7 +643,7 @@ start_sui_process() {
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
     $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
-    NEW_SUI_PID=$!
+    NEW_PID=$!
 
     # Loop until "sui client" confirms to be working, or exit if that takes
     # more than 30 seconds.
@@ -905,3 +972,59 @@ create_cargobin_as_needed() {
   fi
 }
 export -f create_cargobin_as_needed
+
+
+set_key_value() {
+  local _KEY=$1
+  local _VALUE=$2
+  # A key-value persisted in the workdir.
+  # The value can't be the string "NULL"
+  #
+  # About unusual '>|' :
+  #   https://stackoverflow.com/questions/4676459/write-to-file-but-overwrite-it-if-it-exists
+  if [ -z "$_VALUE" ]; then
+    setup_error "Can't write an empty value for [$_KEY]"
+  fi
+  if [ -z "$_KEY" ]; then
+    setup_error "Can't use an empty key for value [$_VALUE]"
+  fi
+  mkdir -p "$WORKDIRS/$WORKDIR/.state"
+  echo "$_VALUE" >| "$WORKDIRS/$WORKDIR/.state/$_KEY"
+}
+export -f set_key_value
+
+get_key_value() {
+  local _KEY=$1
+  # A key-value persisted in the workdir.
+  # Return the string NULL on error or missing.
+  if [ -z "$_KEY" ]; then
+    setup_error "Can't retreive empty key"
+  fi
+  if [ ! -f "$WORKDIRS/$WORKDIR/.state/$_KEY" ]; then
+    echo "NULL"; return
+  fi
+
+  local _VALUE
+  _VALUE=$(cat "$WORKDIRS/$WORKDIR/.state/$_KEY")
+
+  if [ -z "$_VALUE" ]; then
+      echo "NULL"; return
+  fi
+
+  # Error
+  echo "$_VALUE"
+}
+export -f get_key_value
+
+exit_if_not_valid_sui_address() {
+  local _ADDR="$1"
+  local _SUI_ERR
+  # Use the client itself to verify the string is a valid sui address.
+  # Inefficient... but 100% sure the check will be compatible with *this* binary.
+  _SUI_ERR=$("$SUI_BIN_DIR/sui" client gas "$1" --json 2>&1 | grep -iE "error|invalid|help" )
+  if [ -n "$_SUI_ERR" ]; then
+    echo "Invalid hexadecimal Sui Address [$1]."
+    exit 1
+  fi
+}
+export -f exit_if_not_valid_sui_address

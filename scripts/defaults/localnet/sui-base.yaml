@@ -11,9 +11,19 @@
 #
 network_type: local
 
-# For localnet only, when a sui.keystore is created, each address
+# For local only. When a sui.keystore is created, each address
 # are funded with that much Mist.
-initial_fund_per_address: 800000000000000
+initial_fund_per_address: 20000000000
+# Control the sui-faucet process.
+sui_faucet_enabled: true
+sui_faucet_genesis_funding: 800000000000
+sui_faucet_host_ip: "0.0.0.0"
+sui_faucet_port: 9123
+sui_faucet_max_request_per_second: 100
+sui_faucet_num_coins: 5
+sui_faucet_coin_value: 200000000
+sui_faucet_request_buffer_size: 200
+sui_faucet_client_timeout_secs: 10
 
 # This control the *default* sui git repo being fetch to latest.
 # This is the repo for building the sui client.

@@ -100,7 +100,7 @@ main() {
   script_list=("localnet" "devnet" "lsui" "dsui" "csui" "asui")
 
   for script_name in ${script_list[@]}; do
-    update_bin_path $script_name
+    update_bin_path "$script_name"
   done
 
   # Final test that the scripts are "callable" by the user without
@@ -133,8 +133,6 @@ main() {
   echo "For more info type \"localnet\"."
   echo
   echo "sui-base installation successful for user [$username]"
-
-  exit 0
 }
 
 main;

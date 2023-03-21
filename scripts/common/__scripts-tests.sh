@@ -16,12 +16,13 @@ while [[ "$#" -gt 0 ]]; do
         # -f|--flag) flag=1 ;; That's an example flag
         --github) GITHUB_OPTION=true ;;
         *)
-        echo "Unknown parameter passed: $1"; exit 1
+        echo "Unknown parameter passed: $1";
         exit 1 ;;
     esac
     shift
 done
 
+# shellcheck source=SCRIPTDIR/../../../sui-base/install
 source ~/sui-base/install
 install_ret_code=$?
 
