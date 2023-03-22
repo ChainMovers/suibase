@@ -334,27 +334,12 @@ workdir_exec() {
       exit
     fi
 
-    exit_if_workdir_not_ok;
-
-    set_key_value "user_request" "stop";
-
-    if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
-      echo "localnet already stopped"
-    else
-      # Stop the process in reverse order.
-      if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
-        stop_sui_faucet_process;
-      fi
-      if [ -n "$SUI_PROCESS_PID" ]; then
-        stop_sui_process;
-      fi
-      # Check if successful.
-      if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
-        echo "localnet now stopped"
-      else
-        setup_error "Failed to stop everything. Try again. Use \"localnet status\" to see what is still running."
-      fi
+    stop_all_services;
+    _RES=$?
+    if [ "$_RES" -eq 1 ]; then
+      echo "$WORKDIR already stopped"
     fi
+
     exit
   fi
 
@@ -468,8 +453,8 @@ workdir_exec() {
       setup_error "Change current directory location and try again."
     fi
 
-    # Stop localnet (noop if not running)
-    stop_sui_process;
+    # Stop all processes (noop if not running)
+    stop_all_services;
 
     # Clean-up previous localnet (if exists)
     RM_DIR="$CONFIG_DATA_DIR_DEFAULT"
@@ -487,10 +472,9 @@ workdir_exec() {
 
   if [ "$CMD_SET_SUI_REPO_REQ" = true ]; then
     if $is_local; then
-      update_SUI_PROCESS_PID_var;
-      if [ "$SUI_PROCESS_PID" ]; then
-        # Force to stop. Otherwise the running process and config will be out-of-sync.
-        setup_error "Can't change config while $WORKDIR running. Do \"$WORKDIR stop\"."
+      # That should not be true at this point... but still... do a sanity check here.
+      if is_at_least_one_service_running; then
+        setup_error "Can't change repo while $WORKDIR running. Do \"$WORKDIR stop\"."
       fi
     fi
 
@@ -535,8 +519,8 @@ workdir_exec() {
   fi
 
   if $is_local; then
-    # Start the new localnet normally.
-    start_sui_process;
+    # Start the local processes normally.
+    start_all_services;
     echo "========"
   fi
 
@@ -566,7 +550,60 @@ workdir_exec() {
   echo "  Use \"$SUI_SCRIPT\" to access your $WORKDIR"
   echo
   echo "Success. Try it by typing \"$SUI_SCRIPT client gas\""
+
+  # Warn the user if the sui-base.yaml default branch was overriden and the
+  # actual branch is not the same. Recommend to do an update in that case.
+  if is_sui_repo_dir_default; then
+    if [ -d "$SUI_REPO_DIR_DEFAULT" ] && [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
+       # Check for mismatch.
+       local _BRANCH_NAME
+       _BRANCH_NAME=$(cd "$SUI_REPO_DIR_DEFAULT"; git branch --show-current)
+       if [ "$_BRANCH_NAME" != "$CFG_default_repo_branch" ]; then
+         warn_user "sui-base.yaml is requesting for branch [$CFG_default_repo_branch] but the sui-repo is on [$_BRANCH_NAME]. Do '$WORKDIR update' to fix this."
+      fi
+    fi
+  fi
 }
+
+stop_all_services() {
+  #
+  # Exit if fails to get ALL the process stopped.
+  #
+  # Returns:
+  #   0: Success (all process needed to be stopped were stopped)
+  #   1: Everything already stopped. Call was NOOP (except for user_request writing)
+
+  # Note: Try hard to keep the dependency here low on $WORKDIR.
+  #       We want to try to stop the processes even if most of
+  #       the workdir content is in a bad state.
+  if [ -d "$WORKDIRS/$WORKDIR" ]; then
+    set_key_value "user_request" "stop";
+  fi
+
+  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
+    return 1
+  fi
+
+  # Stop the processes in reverse order.
+  if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
+    stop_sui_faucet_process;
+  fi
+
+  if [ -n "$SUI_PROCESS_PID" ]; then
+    stop_sui_process;
+  fi
+
+  # Check if successful.
+  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
+    echo "$WORKDIR now stopped"
+  else
+    setup_error "Failed to stop everything. Try again. Use \"$WORKDIR status\" to see what is still running."
+  fi
+
+  # Success. All process that needed to be stopped were stopped.
+  return 0
+}
+export -f stop_all_services
 
 start_all_services() {
   #
@@ -574,7 +611,7 @@ start_all_services() {
   #
   # Returns:
   #   0: Success (all process needed to be started were started)
-  #   1: Everything needed was running already. Call was NOOP.
+  #   1: Everything was already running. Call was NOOP (except for user_request writing)
   set_key_value "user_request" "start";
 
   # Verify if the faucet is supported for this version.
@@ -618,3 +655,14 @@ start_all_services() {
   # Success. All process that needed to be started were started.
   return 0
 }
+
+is_at_least_one_service_running() {
+  # Keep this function cohesive with start/stop
+  update_SUI_FAUCET_PROCESS_PID_var;
+  update_SUI_PROCESS_PID_var;
+  if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then
+    true; return
+  fi
+  false; return
+}
+export -f is_at_least_one_service_running

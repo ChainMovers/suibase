@@ -16,9 +16,61 @@ SCRIPT_PATH="$(dirname "$1")"
 SCRIPT_NAME="$(basename "$1")"
 WORKDIR="$2"
 
+# Add color
+function __echo_color() {
+	if [[ "${CFG_terminal_color:?}" == 'false' ]]; then
+		echo -e -n "$2"
+	else
+		echo -e -n "\033[1;$1$2\033[0m"
+	fi
+}
+
+function echo_black() {
+	__echo_color "30m" "$1"
+}
+export -f echo_black
+
+function echo_red() {
+	__echo_color "31m" "$1"
+}
+export -f echo_red
+
+function echo_green() {
+	__echo_color "32m" "$1"
+}
+export -f echo_green
+
+function echo_yellow() {
+	__echo_color "33m" "$1"
+}
+export -f echo_yellow
+
+function echo_blue() {
+	__echo_color "34m" "$1"
+}
+export -f echo_blue
+
+function echo_magenta() {
+	__echo_color "35m" "$1"
+}
+export -f echo_magenta
+
+function echo_cyan() {
+	__echo_color "36m" "$1"
+}
+export -f echo_cyan
+
+function echo_white() {
+	__echo_color "37m" "$1"
+}
+export -f echo_white
+
 # Utility functions.
-setup_error() { echo "$*" 1>&2 ; exit 1; }
+setup_error() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
 export -f setup_error
+
+warn_user() { { echo_yellow "Warning: "; echo "$*"; } 1>&2; }
+export -f warn_user
 
 version_greater_equal()
 {
@@ -427,7 +479,7 @@ update_exec_shim() {
     # not take long and this is only part of relatively "heavy" operation, such
     # as update/regen of a workdir.
     # If worried, then replace with md5sum one day?
-    $(cmp --silent "$SCRIPTS_DIR/templates/$FILENAME" "$WORKDIRS/$WORKDIR_PARAM/$FILENAME" ) || {
+    cmp --silent "$SCRIPTS_DIR/templates/$FILENAME" "$WORKDIRS/$WORKDIR_PARAM/$FILENAME" || {
       cp -f "$SCRIPTS_DIR/templates/$FILENAME" "$WORKDIRS/$WORKDIR_PARAM/$FILENAME"
     }
   fi
@@ -538,8 +590,8 @@ update_ACTIVE_WORKDIR_var() {
   if [ ! -L "$WORKDIRS/active" ]; then
     unset ACTIVE_WORKDIR
   else
-    RESOLVED_PATH="$(readlink -f $WORKDIRS/active)"
-    ACTIVE_WORKDIR="$(basename $RESOLVED_PATH)"
+    RESOLVED_PATH="$(readlink -f "$WORKDIRS/active")"
+    ACTIVE_WORKDIR="$(basename "$RESOLVED_PATH")"
   fi
 }
 export -f update_ACTIVE_WORKDIR_var
@@ -602,9 +654,9 @@ stop_sui_process() {
   if [ ! -z "$SUI_PROCESS_PID" ]; then
     echo "Stopping $WORKDIR (process pid $SUI_PROCESS_PID)"
     if [[ $(uname) == "Darwin" ]]; then
-      kill -9 $SUI_PROCESS_PID
+      kill -9 "$SUI_PROCESS_PID"
     else
-      skill -9 $SUI_PROCESS_PID
+      skill -9 "$SUI_PROCESS_PID"
     fi
 
     # Make sure it is dead.
@@ -642,17 +694,17 @@ start_sui_process() {
   update_SUI_PROCESS_PID_var;
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
-    $SUI_BIN_DIR/sui start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
+    "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
     NEW_PID=$!
 
     # Loop until "sui client" confirms to be working, or exit if that takes
     # more than 30 seconds.
     end=$((SECONDS+60))
-    let _mid_message=30
+    (( _mid_message=30 ))
     ALIVE=false
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
-      CHECK_ALIVE=$($SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
+      CHECK_ALIVE=$("$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
       if [ ! -z "$CHECK_ALIVE" ]; then
         ALIVE=true
         break
@@ -665,7 +717,7 @@ start_sui_process() {
         if [ $_mid_message -eq 1 ]; then
           echo -n "(may take some time on slower system)"
         fi
-        let --_mid_message
+        (( --_mid_message ))
       fi
     done
 
@@ -690,12 +742,12 @@ export -f start_sui_process
 
 update_SUI_REPO_INFO_var() {
   # This is intended for display to user (human).
-  BRANCH_NAME = $(cd $SUI_REPO_DIR; git branch --show-current)
+  BRANCH_NAME=$(cd "$SUI_REPO_DIR"; git branch --show-current)
   if is_sui_repo_dir_default; then
     SUI_REPO_INFO="git branch is [$BRANCH_NAME]"
   else
-    RESOLVED_SUI_REPO=$(readlink $SUI_REPO_DIR)
-    RESOLVED_SUI_REPO_BASENAME=$(basename "$RESOLVE_SUI_REPO")
+    RESOLVED_SUI_REPO=$(readlink "$SUI_REPO_DIR")
+    RESOLVED_SUI_REPO_BASENAME=$(basename "$RESOLVED_SUI_REPO")
     SUI_REPO_INFO="git branch is [$BRANCH_NAME], sui-repo set to [$RESOLVED_SUI_REPO_BASENAME]"
   fi
 }
@@ -709,18 +761,18 @@ ensure_client_OK() {
   #if [ "$CFG_network_type" = "local" ]; then
     # Make sure localnet exists in sui envs (ignore errors because likely already exists)
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
-    $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000 >& /dev/null
+    "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc http://0.0.0.0:9000 >& /dev/null
 
     # Make localnet the active envs (should already be done, just in case, do it again here).
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
-    $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR >& /dev/null
+    "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" switch --env "$WORKDIR" >& /dev/null
   #fi
 }
 export -f ensure_client_OK
 
 publish_clear_output() {
   if [ -n "$MOVE_TOML_PACKAGE_NAME" ]; then
-    rm -rf "$PUBLISH_DATA_DIR/$MOVE_TOML_PACKAGE_NAME/package_id.txt"
+    rm -rf "$PUBLISHED_DATA_DIR/$MOVE_TOML_PACKAGE_NAME/package_id.txt"
   fi
   # Following files created only on confirmed success of publication.
   #rm -rf "$PUBLISH_DATA_DIR/client_addresses.txt"
@@ -739,10 +791,10 @@ update_MOVE_TOML_DIR_var() {
   unset MOVE_TOML_DIR
   unset MOVE_TOML_PACKAGE_NAME
 
-  if [ -f $1/Move.toml ]; then
+  if [ -f "$1/Move.toml" ]; then
     MOVE_TOML_DIR=$1
   else
-    if [ -f $1/move/Move.toml ]; then
+    if [ -f "$1/move/Move.toml" ]; then
       MOVE_TOML_DIR=$1/move
     fi
   fi
@@ -774,7 +826,7 @@ publish_localnet() {
 
   # Set the output for the "script_cmd"
   SCRIPT_OUTPUT="$INSTALL_DIR/publish-output.txt"
-  rm -rf $SCRIPT_OUTPUT
+  rm -rf "$SCRIPT_OUTPUT"
 
   # Run unit tests.
   #script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""

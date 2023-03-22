@@ -11,9 +11,13 @@
 #
 network_type: local
 
+# Enable ANSI color codes on command line response.
+terminal_color: true
+
 # For local only. When a sui.keystore is created, each address
 # are funded with that much Mist.
 initial_fund_per_address: 20000000000
+
 # Control the sui-faucet process.
 sui_faucet_enabled: true
 sui_faucet_genesis_funding: 800000000000
