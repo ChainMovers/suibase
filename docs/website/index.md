@@ -10,14 +10,16 @@ sui-base makes it easy to create "workdirs", each clearly defining a development
   ![Workdirs](assets/images/workdirs-intro.png)
 </figure>
 
-Other features include:
+Other features like:
 
-  * Simple "$ localnet star/stop/status" command.
-  * Deterministic "$ localnet regen" with always the same client addresses and customizable gas refill.
-  * "$ localnet publish" for quick edit/debug cycle.
-  * lsui/dsui/tsui scripts shortcut to call the **proper** sui client binary in respectively the localnet/devnet/testnet workdirs.
-  * Stay tune for more...
+  * **$ localnet star/stop/status**
+  * **$ localnet regen** to quickly reset the network with consistent tests addresses (all pre-funded with Sui).
+  * **$ localnet publish** for quick edit/debug cycle.
+  * **$ lsui/dsui/tsui** shortcut to call the **proper** sui client binary+config combination for localnet/devnet/testnet respectively.
+  * **$ localnet faucet <address\>**... etc ... you get the picture...
 
 Easy to [install](how-to/install.md) and not intrusive on your system.
 
-Sui-base is community driven, please join us on [Discord :octicons-link-external-16:](https://discord.com/invite/Erb6SwsVbH) to share your Sui development need!
+Sui-base is community driven and welcome any Sui dev tool discussion on [Discord :octicons-link-external-16:](https://discord.com/invite/Erb6SwsVbH)
+
+<h2>Stay tune... more coming for dApps debugging and test automation !!!<h2\>
