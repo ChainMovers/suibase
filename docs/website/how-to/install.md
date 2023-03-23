@@ -12,18 +12,18 @@ hide:
 
 **Prerequisites**
 
-Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites). 
+Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites).
 
 You can skip the section about installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config to exist).
 
 ??? question "How will sui-base get the Sui binaries?"
     sui-base automatically download the code and builds a sui client for each workdir. One binary to target each network. This is better than a manual procedure installing a single binary per user and "switch network"... which does not work well if the binary happens to not be compatible with one of the network.
-    
+
     Your app can also refer to the same local Sui Rust SDK crates downloaded by sui-base, and further minimize compatibility issues.
 
 **Sui-Base Installation**
 ``` console
-$ cd ~ 
+$ cd ~
 $ git clone https://github.com/sui-base/sui-base.git
 $ cd sui-base
 $ ./install
@@ -43,3 +43,15 @@ $ localnet start
 The first time will take minutes because of downloading and building the source code.
 
 Type "localnet" for help.
+
+**Repair**
+
+To reset localnet or if the local sui-repo seems broken/outdated, then try first a 'regen' or 'update' (e.g. 'localnet update').
+
+You can safely call again ~/sui-base/install at any time (only re-install what could be missing).
+
+If all else fails, then you can delete ~/sui-base/workdirs. This will bring your setup back to when you first installed sui-base.
+
+**Uninstall**
+
+To remove sui-base completely, do ~/sui-base/uninstall and delete ~/sui-base.
