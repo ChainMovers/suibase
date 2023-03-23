@@ -521,6 +521,26 @@ create_config_symlink_as_needed() {
 }
 export -f create_config_symlink_as_needed
 
+create_state_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  # Create/repair
+  if [ ! -d "$WORKDIRS/$WORKDIR_PARAM/.state" ]; then
+    mkdir -p "$WORKDIRS/$WORKDIR_PARAM/.state"
+  fi
+
+  if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/user_request" ]; then
+    set_key_value "user_request" "stop"
+  fi
+
+  if [ "$WORKDIR_PARAM" != "active" ]; then
+    if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/name" ]; then
+      set_key_value "name" "$WORKDIR_PARAM"
+    fi
+  fi
+}
+export -f create_state_as_needed
+
 create_workdir_as_needed() {
   WORKDIR_PARAM="$1"
 
@@ -543,12 +563,11 @@ create_workdir_as_needed() {
   fi
 
   create_exec_shims_as_needed "$WORKDIR_PARAM";
+  create_state_as_needed "$WORKDIR_PARAM";
 
   if [ "$WORKDIR_PARAM" = "cargobin" ]; then
     create_config_symlink_as_needed "$WORKDIR_PARAM" "$HOME/.sui/sui_config"
-  fi
-
-  if [ "$WORKDIR_PARAM" = "devnet" ] || [ "$WORKDIR_PARAM" = "localnet" ]; then
+  else
     create_config_symlink_as_needed "$WORKDIR_PARAM" "$WORKDIRS/$WORKDIR_PARAM/config-default"
   fi
 
@@ -651,7 +670,7 @@ stop_sui_process() {
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already stopped.
   update_SUI_PROCESS_PID_var;
-  if [ ! -z "$SUI_PROCESS_PID" ]; then
+  if [ -n "$SUI_PROCESS_PID" ]; then
     echo "Stopping $WORKDIR (process pid $SUI_PROCESS_PID)"
     if [[ $(uname) == "Darwin" ]]; then
       kill -9 "$SUI_PROCESS_PID"
