@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Script to create and control a Sui local network.
+
+# Source '__globals.sh'.
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="testnet"
+source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
+exit_if_not_installed;
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "sui-base-script-name" ]]; then
+  # This also test if the sourced "globals" works ($SCRIPT_NAME should be "localnet")
+  echo "$SCRIPT_NAME"
+  exit
+fi
+
+source "$HOME/sui-base/scripts/common/__workdir-exec.sh"
+workdir_exec "$@"

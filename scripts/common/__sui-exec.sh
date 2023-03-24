@@ -6,6 +6,8 @@
 
 sui_exec() {
 
+  exit_if_workdir_not_ok;
+
   # Display some sui-base related info if called without any parameters.
   DISPLAY_SUI_BASE_HELP=false
   if [ $# -eq 0 ]; then

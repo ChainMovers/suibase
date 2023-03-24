@@ -97,7 +97,7 @@ main() {
 
   echo "Starting installation of sui-base..."
 
-  script_list=("localnet" "devnet" "lsui" "dsui" "csui" "asui")
+  script_list=("localnet" "devnet" "testnet" "lsui" "dsui" "csui" "asui" "tsui")
 
   for script_name in ${script_list[@]}; do
     update_bin_path "$script_name"

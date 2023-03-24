@@ -226,18 +226,29 @@ build_sui_repo_branch() {
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
     fi
 
+    # Force git reset  if this is the very first time cloning (cover for
+    # some scenario where the user Ctrl-C in middle of initial git object
+    # fetching).
+    local _FORCE_GIT_RESET=false
+    if [ ! -d "$SUI_REPO_DIR/target" ]; then
+      _FORCE_GIT_RESET=true
+    fi
+
     # Update sui devnet local repo (if needed)
     (cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
     (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
     V1=$(cd "$SUI_REPO_DIR"; git rev-parse HEAD)
     V2=$(cd "$SUI_REPO_DIR"; git rev-parse '@{u}')
-    if [ "$V1" != "$V2" ]
-    then
+    if [ "$V1" != "$V2" ]; then
+      _FORCE_GIT_RESET
+    fi
+
+    if $_FORCE_GIT_RESET; then
       # Does a bit more than needed, but should allow to recover
       # from most operator error...
       echo Updating sui "$WORKDIR" in sui-base...
       (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
-      (cd "$SUI_REPO_DIR" && git reset --hard origin/$CFG_default_repo_branch > /dev/null)
+      (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" > /dev/null)
       (cd "$SUI_REPO_DIR" && git merge '@{u}')
     fi
     echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
@@ -263,7 +274,7 @@ exit_if_not_installed() {
   # and is trying instead to call directly from "~/sui-base/scripts"
   # (which will cause some trouble with some script).
   case "$SCRIPT_NAME" in
-  "lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"workdirs")
+  "asui"|"lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"workdirs")
     if [ ! -L "$LOCAL_BIN/$SCRIPT_NAME" ]; then
       echo
       echo "Some sui-base files are missing. The installation was"
@@ -284,23 +295,34 @@ export -f exit_if_not_installed
 exit_if_workdir_not_ok() {
   # This is a common "operator" error (not doing command in right order).
   if ! is_workdir_ok; then
-    echo "$WORKDIR workdir not initialized"
-    echo
-    echo "Do one of the following:"
-    if [ ! -d "$WORKDIRS/WORKDIR" ]; then
-      echo "        $WORKDIR create  (recommended)"
-      echo "        $WORKDIR update"
+    if [ "$WORKDIR" = "cargobin" ]; then
+      exit_if_sui_binary_not_ok; # Point to a higher problem (as needed).
+      echo "cargobin workdir not initialized"
+      echo
+      echo "Please run ~/sui-base/.install again to detect"
+      echo "the ~/.cargo/bin/sui and create the cargobin workdir."
+      echo
+      echo "It is safe to re-run ~/sui-base/.install when sui-base"
+      echo "is already installed (it just installs what is missing)."
     else
-      if [ "$CFG_network_type" = "local" ]; then
-        echo "        $WORKDIR regen  (recommended)"
-        echo "        $WORKDIR update"
+      echo "$WORKDIR workdir not initialized"
+      echo
+      echo "Do one of the following:"
+      if [ ! -d "$WORKDIRS/WORKDIR" ]; then
+        echo "        $WORKDIR start (recommended)"
+        echo "        $WORKDIR create"
       else
-        echo "        $WORKDIR update  (recommended)"
+        if [ "$CFG_network_type" = "local" ]; then
+          echo "        $WORKDIR regen  (recommended)"
+          echo "        $WORKDIR update"
+        else
+          echo "        $WORKDIR update  (recommended)"
+        fi
+        echo "        $WORKDIR start"
       fi
+      echo
+      echo "Type \"$WORKDIR --help\" for more options"
     fi
-    echo "        $WORKDIR start"
-    echo
-    echo "Check \"$WORKDIR --help\" for more options"
     exit 1
   fi
 }
@@ -311,12 +333,12 @@ exit_if_sui_binary_not_ok() {
   local _BIN_NOT_FOUND=false
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
     _BIN_NOT_FOUND=true
-  fi
-
-  update_SUI_VERSION_var;
-  if version_greater_equal "$SUI_VERSION" "0.27"; then
-    if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
-      _BIN_NOT_FOUND=true
+  else
+    update_SUI_VERSION_var; # Note: Requires $SUI_BIN_DIR/sui
+    if version_greater_equal "$SUI_VERSION" "0.27"; then
+      if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
+        _BIN_NOT_FOUND=true
+      fi
     fi
   fi
 

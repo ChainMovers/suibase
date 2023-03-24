@@ -46,11 +46,8 @@ Type "localnet" for help.
 
 **Repair**
 
-To reset localnet or if the local sui-repo seems broken/outdated, then try first a 'regen' or 'update' (e.g. 'localnet update').
+"localnet regen" quickly brings back the network to its initial state (with all funds back). Very useful for just wiping out the network after testing.
 
-You can safely call again ~/sui-base/install at any time (only re-install what could be missing).
-
-If all else fails, then you can delete ~/sui-base/workdirs. This will bring your setup back to when you first installed sui-base.
 
 **Uninstall**
 
