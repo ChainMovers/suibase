@@ -224,7 +224,7 @@ workdir_exec() {
 
       # Verify if the faucet is supported for this version.
       local _SUPPORT_FAUCET
-      if version_less_than "$SUI_VERSION" "sui 0.28" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
+      if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
         _SUPPORT_FAUCET=false
       else
         _SUPPORT_FAUCET=true
@@ -348,7 +348,7 @@ workdir_exec() {
     exit_if_sui_binary_not_ok;
 
     # Verify that the faucet is supported for this version.
-    if version_less_than "$SUI_VERSION" "sui 0.28"; then
+    if version_less_than "$SUI_VERSION" "sui 0.27"; then
       setup_error "faucet not supported for this older sui version"
     fi
 
@@ -616,7 +616,7 @@ start_all_services() {
 
   # Verify if the faucet is supported for this version.
   local _SUPPORT_FAUCET
-  if version_less_than "$SUI_VERSION" "sui 0.28" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
+  if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
     _SUPPORT_FAUCET=false
   else
     _SUPPORT_FAUCET=true

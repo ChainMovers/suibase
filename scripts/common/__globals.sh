@@ -314,7 +314,7 @@ exit_if_sui_binary_not_ok() {
   fi
 
   update_SUI_VERSION_var;
-  if version_greater_equal "$SUI_VERSION" "0.28"; then
+  if version_greater_equal "$SUI_VERSION" "0.27"; then
     if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
       _BIN_NOT_FOUND=true
     fi
@@ -371,7 +371,7 @@ is_sui_binary_ok() {
     false; return
   fi
 
-  if version_greater_equal "$_SUI_VERSION_ATTEMPT" "0.28"; then
+  if version_greater_equal "$_SUI_VERSION_ATTEMPT" "0.27"; then
     if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
       false; return
     fi
@@ -1092,7 +1092,7 @@ exit_if_not_valid_sui_address() {
   local _SUI_ERR
   # Use the client itself to verify the string is a valid sui address.
   # Inefficient... but 100% sure the check will be compatible with *this* binary.
-  _SUI_ERR=$("$SUI_BIN_DIR/sui" client gas "$1" --json 2>&1 | grep -iE "error|invalid|help" )
+  _SUI_ERR=$("$SUI_EXEC" client gas "$1" --json 2>&1 | grep -iE "error|invalid|help" )
   if [ -n "$_SUI_ERR" ]; then
     echo "Invalid hexadecimal Sui Address [$1]."
     exit 1

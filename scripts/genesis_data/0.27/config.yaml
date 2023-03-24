@@ -98,6 +98,18 @@ accounts:
       - object_id: "0x9ef319ef0c4e482d5ef932a3c5f13ecab1eae4d1"
         gas_value: 800000000000000
     gas_object_ranges: []
+  - address: 87cb7ab7789e76ce15f0ef29b6aa8f61d8f0b8dd
+    gas_objects:
+      - object_id: "0x3e2ca465fcc2b59f0499c16df242d10218b080b3"
+        gas_value: 800000000000
+      - object_id: "0xb6f4f23007f3c6c47d57913c8ad867b9851f4abe"
+        gas_value: 800000000000
+      - object_id: "0x3435b064da9fe229656a73bfc7108f0431ff5e6f"
+        gas_value: 800000000000
+      - object_id: "0xece141ec8af4c81ab2312fb0d04dca2a5d06f8b7"
+        gas_value: 800000000000
+      - object_id: "0x25c669a37eafe7e0fb44bbf6338953c988abf762"
+        gas_value: 800000000000
   - address: 8a4f2a9e71efbadf0fe4aa4fd718727f85b81f97
     gas_objects:
       - object_id: "0x14f192e499d79de9c36b6ccff8959380d130d0d8"

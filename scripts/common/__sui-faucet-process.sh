@@ -196,7 +196,7 @@ faucet_command() {
     --header "Content-Type: application/json" \
     --data-raw "{ \"FixedAmountRequest\": {\"recipient\": \"$_addr\"}}")
 
-    _RESP_CLEAN=$(echo "$_RESP" | tr '[:upper:]' '[:lower:]' | tr -d '[:blank:]')
+    _RESP_CLEAN=$(echo "$_RESP" | tr '[:upper:]' '[:lower:]' | tr -d '[:blank:]' | tr -d '_')
     # Check for 3 confirmations of success.
     local _ERROR_ID
     (( _ERROR_ID=0 ))
