@@ -1,0 +1,3 @@
+#!/bin/bash
+
+python -m src.demo1.sysinfo

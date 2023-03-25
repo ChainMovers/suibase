@@ -15,6 +15,7 @@
 # -*- coding: utf-8 -*-
 
 """Demonstrate fetching general system information."""
+
 from datetime import datetime
 from src.common.low_level_utils import sui_base_config
 from pysui.sui.sui_config import SuiConfig
@@ -50,7 +51,12 @@ def _stats_027(client: SuiClient):
 
 def main(client: SuiClient):
     """Entry point for demo."""
-    print(f"\nSui client RPC version{client.rpc_version}\n")
+    print(f"\nSui client RPC version{client.rpc_version}")
+    # Information not related to some version
+    addy_keypair = client.config.keypair_for_address(
+        client.config.active_address)
+    print(
+        f"Active address: {client.config.active_address} public-key: {addy_keypair.public_key}")
     match client.rpc_version:
         case "0.27.1":
             _stats_027(client)
@@ -60,5 +66,7 @@ def main(client: SuiClient):
 
 if __name__ == "__main__":
     base_config = sui_base_config()
+    # tcfg = json.loads(base_config.read_bytes())
+    # print(tcfg)
     if base_config:
         main(SuiClient(SuiConfig.from_config_file(base_config)))
