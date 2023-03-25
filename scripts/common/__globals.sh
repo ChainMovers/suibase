@@ -263,7 +263,13 @@ build_sui_repo_branch() {
     fi
 
     # Update sui devnet local repo (if needed)
-    (cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
+    #(cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
+
+    local _BRANCH
+    _BRANCH=$(cd "$SUI_REPO_DIR" && git branch --show-current)
+    if [ "$_BRANCH" != "$CFG_default_repo_branch" ]; then
+      (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >& /dev/null)
+    fi
     (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
     V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
     V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
