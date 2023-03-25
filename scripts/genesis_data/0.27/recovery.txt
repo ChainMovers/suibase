@@ -1,0 +1,75 @@
+Created new keypair for address with scheme ED25519: [0x2d7f8124865769779acc92b497bd8a311262e00a]
+Secret Recovery Phrase : [hotel prison lawn hybrid clutch insane thank army install coil physical return wide gravity energy gaze step mimic swing mountain junk public cactus idle]
+============================
+
+
+Created new keypair for address with scheme Secp256k1: [0x8352d6947f348022cd9c8a58da8d9a30eda9978d]
+Secret Recovery Phrase : [until feed bread element idea loud hedgehog magic fiscal jungle donate monster agent pool pluck fan pond high flavor anchor since actual near dose]
+============================
+
+
+Created new keypair for address with scheme Secp256r1: [0x038fddd909e46fd8853a518a3c7518c67e51bc5a]
+Secret Recovery Phrase : [theory exchange fatal salmon attitude sort gift step stick repeat million alcohol twenty chuckle attitude license possible bag sand order corn problem clutch leg]
+============================
+
+
+Created new keypair for address with scheme ED25519: [0x2c3feb9d53b3507377c81f2b5de87ea8ea6385d2]
+Secret Recovery Phrase : [key joy scout thank want file energy point tuna foam sing farm cradle enrich indoor witness decide fiscal code brush kingdom squeeze twin speak]
+============================
+
+
+Created new keypair for address with scheme Secp256k1: [0x464e289e078ef5560ffa3d6ea0e61795780d9826]
+Secret Recovery Phrase : [addict toy job silk grid like smart toy clip emotion circle churn quality tennis youth journey erosion idle trash frozen glass diet woman creek]
+============================
+
+
+Created new keypair for address with scheme Secp256r1: [0x51dd15ecec6691b95c20a6658e43762b641cc66e]
+Secret Recovery Phrase : [metal jacket layer obscure burst size sample vague noble friend crowd teach drift gesture whale adult between magic tomato woman way trigger bronze give]
+============================
+
+
+Created new keypair for address with scheme ED25519: [0xfa51d742a62e447a79e61da2b394781baf53ab54]
+Secret Recovery Phrase : [conduct swap column ramp artefact bargain depart sick since grid wink symbol wait pride stereo rug female notable absurd blanket velvet crop fault loop]
+============================
+
+
+Created new keypair for address with scheme Secp256k1: [0x130e3a131cd0c5249114e3d0cc4ba78ff61dd482]
+Secret Recovery Phrase : [hurry wrestle local steak tray smoke champion suffer strategy shield grain give river fame discover attitude always model maple analyst cherry west quality soon]
+============================
+
+
+Created new keypair for address with scheme Secp256r1: [0x53c6423efca35d6433b8b0d2f3d2f9a84038341e]
+Secret Recovery Phrase : [history tool input tilt cliff edge horse across camp member piano wrong property advice already air dice volume alcohol enjoy member pudding donkey foot]
+============================
+
+
+Created new keypair for address with scheme ED25519: [0x81dfaf66991f70fdef64fc76c9e0372faeeaef10]
+Secret Recovery Phrase : [isolate metal sister ahead photo tent bid chase sudden again weapon unlock modify march nation arm gain merit napkin mention mimic shine range regret]
+============================
+
+
+Created new keypair for address with scheme Secp256k1: [0x5edbae01b5a962849be759bc5331b3702c1645de]
+Secret Recovery Phrase : [credit ozone label effort vintage sunset reward select embark marriage arctic sadness gaze grunt sight distance process runway tobacco divide arctic head spy liberty]
+============================
+
+
+Created new keypair for address with scheme Secp256r1: [0xe96154adfcdaa34f8f091fd2e2530dd9726b9b27]
+Secret Recovery Phrase : [brand step runway pink sign axis photo lemon month truth wedding soul wise escape boss chaos cram balance satisfy renew movie sponsor floor switch]
+============================
+
+
+Created new keypair for address with scheme ED25519: [0xe0044e5fd6db845e7d90c934ca16531b39695173]
+Secret Recovery Phrase : [someone eight slogan model spray fetch weapon adult gauge click post want tilt involve digital slim typical provide advance similar april utility alter same]
+============================
+
+
+Created new keypair for address with scheme Secp256k1: [0x92f23d8a5a48dd0e2d4052f0a9e757fcb39fc85b]
+Secret Recovery Phrase : [feel can output seat old sand torch evil add suit output this all magic update receive relief hazard inside aim arctic glad feature young]
+============================
+
+
+Created new keypair for address with scheme Secp256r1: [0xddc71c355ec88960649a04dfd8064110f13468f3]
+Secret Recovery Phrase : [figure shrug rose report toward zoo kiwi limit nominee witness phone leader cradle impulse taste gas once crazy media shuffle credit essence member stable]
+============================
+
+

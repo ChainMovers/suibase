@@ -6,4 +6,4 @@ envs:
     rpc: "http://0.0.0.0:9000"
     ws: ~
 active_env: localnet
-active_address: "0xf435b9b271a392cdda5920d58d739974ef670768e63190fc372f31a5ba107e1b"
+active_address: "0xf7ae71f84fabc58662bd4209a8893f462c60f247095bb35b19ff659ad0081462"

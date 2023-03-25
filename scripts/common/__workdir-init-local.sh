@@ -66,17 +66,31 @@ adjust_default_keystore() {
   # Add a few more addresses to the default sui.keystore
   local _SUI_BINARY=$1
   local _CLIENT_FILE=$2
+  local _WORDS_FILE=$3
 
-  for _ in {1..5}; do
-  #  _SUI_BINARY client --client.config $_CLIENT_FILE new-address ed25519 >& /dev/null
-    $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256k1 >& /dev/null
-    $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256r1 >& /dev/null
-  done
+  {
+    for _ in {1..5}; do
+      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address ed25519;
+      echo ============================; echo; echo;
+      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256k1;
+      echo ============================; echo; echo;
+      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256r1;
+      echo ============================; echo; echo;
+    done
+  } >> "$_WORDS_FILE";
 
   # Set highest address as active. Best-effort... no major issue if fail (I assume).
   local _HIGH_ADDR
   _HIGH_ADDR=$($_SUI_BINARY client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
    $_SUI_BINARY client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
+}
+
+clear_keystore() {
+  local _DIR=$1
+  # Wipe out the keystore and the default in the client.yaml
+  rm -rf "$_DIR/sui.keystore"
+  echo "[" > "$_DIR/sui.keystore"
+  echo "]" >> "$_DIR/sui.keystore"
 }
 
 create_faucet_keystore() {
@@ -94,7 +108,8 @@ create_faucet_keystore() {
   # client.yaml as template).
 
   # Create a sui.keystore with a single keypair
-  ( cd "$_DEST_DIR"; $_SUI_BINARY keytool generate ed25519 >& /dev/null )
+  (cd "$_DEST_DIR" && $_SUI_BINARY keytool generate ed25519 >& /dev/null)
+
   _PUBKEY_PATHNAME=$(ls "$_DEST_DIR"/*.key)
   _PUBKEY=$(basename "$_PUBKEY_PATHNAME" | sed 's/.key//g')
   if [ -z "$_PUBKEY" ]; then
@@ -155,6 +170,7 @@ workdir_init_local() {
       yes | cp -rf "$_STATIC_SOURCE_DIR/sui.keystore" "$_GENDATA_DIR"
       yes | cp -rf "$_STATIC_SOURCE_DIR/client.yaml" "$_GENDATA_DIR"
       yes | cp -rf "$_STATIC_SOURCE_DIR/config.yaml" "$_GENDATA_DIR"
+      yes | cp -rf "$_STATIC_SOURCE_DIR/recovery.txt" "$_GENDATA_DIR"
 
       mkdir -p "$_GENDATA_DIR/faucet"
       yes | cp -rf "$_STATIC_SOURCE_DIR/faucet_sui.keystore" "$_GENDATA_DIR/faucet/sui.keystore"
@@ -167,7 +183,8 @@ workdir_init_local() {
         mkdir -p "$_GENDATA_DIR"
         # Generate the genesis data for the very first time.
         "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >& /dev/null
-        adjust_default_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml"
+        clear_keystore "$_GENDATA_DIR"
+        adjust_default_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
         create_faucet_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR" "$_GENDATA_DIR/faucet"
 
         # Temporarly "merge" the keystores for generating the config.yaml
@@ -216,6 +233,8 @@ workdir_init_local() {
 
     apply_sui_base_yaml_to_config_yaml "$_GENDATA_DIR";
 
+   # Important NO OTHER files allowed in $_GENDATA_DIR prior to the genesis call, otherwise
+   # it will fail!
     yes | cp -rf "$_GENDATA_DIR/sui.keystore" "$CONFIG_DATA_DIR_DEFAULT"
     yes | cp -rf "$_GENDATA_DIR/client.yaml" "$CONFIG_DATA_DIR_DEFAULT"
 
@@ -231,6 +250,9 @@ workdir_init_local() {
     else
       "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT" >& /dev/null
     fi
+
+    # Now is a safe time to add more files to $_GENDATA_DIR
+    yes | cp -rf "$_GENDATA_DIR/recovery.txt" "$CONFIG_DATA_DIR_DEFAULT"
 
     # Install the faucet config.
     rm -rf "$WORKDIRS/$WORKDIR/faucet"
