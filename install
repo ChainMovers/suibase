@@ -5,6 +5,8 @@
 # Using a common one, often already added to .bashrc or .profile,
 # but likely will need to revisit/fix this a few time...
 OS_DIR_ON_PATH="$HOME/.local/bin"
+
+# shellcheck disable=SC2088
 OS_DIR_ON_PATH_ALT="~/.local/bin"
 
 SUI_BASE_DIR="$HOME/sui-base"
@@ -99,13 +101,13 @@ main() {
 
   script_list=("localnet" "devnet" "testnet" "lsui" "dsui" "csui" "asui" "tsui")
 
-  for script_name in ${script_list[@]}; do
+  for script_name in "${script_list[@]}"; do
     update_bin_path "$script_name"
   done
 
   # Final test that the scripts are "callable" by the user without
   # specifying a path.
-  for script_name in ${script_list[@]}; do
+  for script_name in "${script_list[@]}"; do
     # Call into each script which should return a string echoing... its own name.
     test=$($script_name sui-base-script-name)
     if [ "$test" != "$script_name" ]; then
@@ -119,6 +121,7 @@ main() {
   # do more advanced default workdir creation.
   SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
   WORKDIR="active"
+  # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
   source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
   create_cargobin_as_needed;

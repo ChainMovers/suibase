@@ -17,37 +17,40 @@ CMD_SET_SUI_REPO_REQ=false
 CMD_FAUCET_REQ=false
 
 usage_local() {
-  echo "Usage: $WORKDIR [COMMAND] <Options>"
+  echo_low_green "$WORKDIR"; echo "  sui-base $SUI_BASE_VERSION"
   echo
-  echo "  Simulate a sui network running fully on this machine"
+  echo "  Workdir to simulate a Sui network running fully on this machine"
   echo "  Accessible from http://0.0.0.0:9000"
   echo
-  echo "COMMAND:"
+  echo_low_yellow "USAGE: "; echo;
+  echo "      $WORKDIR <SUBCOMMAND> <Options>"
   echo
-  echo "   start:   start $WORKDIR (sui process will run in background)"
-  echo "   stop:    stop $WORKDIR (sui process will exit)"
-  echo "   status:  indicate if running or not"
+  echo_low_yellow "SUBCOMMANDS:"; echo;
   echo
-  echo "   create:  Create workdir only. This can be useful for changing"
+  echo_low_green "   start"; echo "    start $WORKDIR processes (will run in background)"
+  echo_low_green "   stop"; echo "     stop $WORKDIR processes (will all exit)"
+  echo_low_green "   status"; echo "   indicate if running or not"
+  echo
+  echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
   echo "            the configuration before doing the first start."
   echo
-  echo "   update:  Update local sui repo and regen $WORKDIR."
+  echo_low_green "   update"; echo "   Update local sui repo and regen $WORKDIR."
   echo "            Note: Will not do any git operations if your own"
   echo "                  repo is configured with set-sui-repo."
   echo
-  echo "   regen:   Only regenerate $WORKDIR. Useful for gas refueling."
+  echo_low_green "   regen"; echo "    Only regenerate $WORKDIR. Useful for gas refueling."
   echo
-  echo "   publish: Publish the module specified in the Move.toml found"
+  echo_low_green "   publish"; echo "  Publish the module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
   echo
-  echo "   faucet:  Get new coins toward any address."
+  echo_low_green "   faucet"; echo "   Get new coins toward any address."
   echo "            Do \"$WORKDIR faucet\" for more info"
   echo
-  echo "   set-active:"
+  echo_low_green "   set-active"; echo;
   echo "            Makes $WORKDIR the active context for many"
   echo "            development tools and the 'asui' script."
   echo
-  echo "   set-sui-repo:"
+  echo_low_green "   set-sui-repo"; echo;
   echo "            Allows to specify a '--path <path>' to use your own"
   echo "            local repo instead of the default latest from github."
   echo "            Just omit '--path' to return to default."
@@ -55,31 +58,34 @@ usage_local() {
 }
 
 usage_remote() {
-  echo "Usage: $WORKDIR [COMMAND] <Options>"
+  echo_low_green "$WORKDIR"; echo "  sui-base $SUI_BASE_VERSION"
   echo
-  echo "  Sui-base $WORKDIR workdir to interact with a remote Sui network"
+  echo "  Workdir to interact with a remote Sui network"
   echo
-  echo "COMMAND:"
+  echo_low_yellow "USAGE: "; echo;
+  echo "      $WORKDIR <SUBCOMMAND> <Options>"
   echo
-  echo "   start:   start $WORKDIR sui-base services (runs in background)"
-  echo "   stop:    stop all $WORKDIR sui-base services"
-  echo "   status:  indicate if services running and network accessible."
+  echo_low_yellow "SUBCOMMANDS:"; echo;
   echo
-  echo "   create:  Create workdir only. This can be useful for changing"
+  echo_low_green "   start"; echo "    start $WORKDIR processes (will run in background)"
+  echo_low_green "   stop"; echo "     stop $WORKDIR processes (will all exit)"
+  echo_low_green "   status"; echo "   indicate if running or not"
+  echo
+  echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
   echo "            the configuration before doing the first start."
   echo
-  echo "   update:  Update local sui repo and build client binary."
+  echo_low_green "   update"; echo "   Update local sui repo and regen $WORKDIR."
   echo "            Note: Will not do any git operations if your own"
   echo "                  repo is configured with set-sui-repo."
   echo
-  echo "   publish: Publish module specified in the Move.toml found"
+  echo_low_green "   publish"; echo "  Publish the module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
   echo
-  echo "   set-active:"
+  echo_low_green "   set-active"; echo;
   echo "            Makes $WORKDIR the active context for many"
   echo "            development tools and the 'asui' script."
   echo
-  echo "   set-sui-repo:"
+  echo_low_green "   set-sui-repo"; echo;
   echo "            Allows to specify a '--path <path>' to use your own"
   echo "            local repo instead of the default latest from github."
   echo "            Just omit '--path' to return to default."
@@ -231,19 +237,21 @@ workdir_exec() {
       fi
 
       # Overall status: STOPPED or OK/DEGRADED/DOWN
+      echo -n "localnet "
       if [ "$_USER_REQUEST" = "stop" ]; then
-        echo -e "localnet \033[1;31mSTOPPED\033[0m"
+        echo_red "STOPPED"
       else
         if [ -z "$SUI_PROCESS_PID" ]; then
-            echo -e "localnet \033[1;31mDOWN\033[0m"
+            echo_red "DOWN"
         else
           if $_SUPPORT_FAUCET && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-            echo -e "localnet \033[1;31mDEGRADED\033[0m"
+            echo_yellow "DEGRADED"
           else
-            echo -e "localnet \033[1;32mOK\033[0m"
+            echo_green "OK"
           fi
         fi
       fi
+      echo
 
       # Individual process status
       if [ "$_USER_REQUEST" = "stop" ]; then
@@ -259,25 +267,29 @@ workdir_exec() {
         fi
       else
         echo "---"
+        echo -n "localnet process : "
         if [ -z "$SUI_PROCESS_PID" ]; then
-          echo "localnet process : DEAD"
+          echo_red "DEAD"; echo;
         else
-          echo "localnet process : OK  (pid $SUI_PROCESS_PID)"
+          echo_blue "OK"; echo -n " ( pid "; echo_blue "$SUI_PROCESS_PID"; echo " )";
         fi
+
+        echo -n "faucet process   : "
         if ! $_SUPPORT_FAUCET; then
-          echo "faucet process   : DISABLED"
+          echo_blue "DISABLED";
         else
           if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-            echo "faucet process   : DEAD"
+            echo_red "DEAD"; echo;
           else
-            echo "faucet process   : OK  (pid $SUI_FAUCET_PROCESS_PID)"
+            echo_blue "OK"; echo -n " ( pid "; echo_blue "$SUI_FAUCET_PROCESS_PID"; echo " )";
           fi
         fi
         echo "---"
       fi
     fi
 
-    echo "client version: $SUI_VERSION"
+    echo -n "client version: "; echo_blue "$SUI_VERSION"; echo;
+
     #update_SUI_REPO_INFO_var;
     #echo "$SUI_VERSION ($SUI_REPO_INFO)"
     DISPLAY_AS_WARNING=true
@@ -291,11 +303,13 @@ workdir_exec() {
       DISPLAY_AS_WARNING=true
     fi
 
+    echo -n "asui selection: [ ";
     if [ "$DISPLAY_AS_WARNING" = true ]; then
-      echo -e "asui selection: [ \033[1;33m$DISPLAY_FIELD\033[0m ]"
+      echo_yellow "$DISPLAY_FIELD";
     else
-      echo -e "asui selection: [ $DISPLAY_FIELD ]"
+      echo_blue "$DISPLAY_FIELD";
     fi
+    echo " ]";
 
     if is_sui_repo_dir_override; then
       echo "set-sui-repo  : $RESOLVED_SUI_REPO_DIR"
@@ -416,14 +430,14 @@ workdir_exec() {
   # Detect user action that should be NOOP.
   if [ "$CMD_SET_SUI_REPO_REQ" = true ] && [ -z "$OPTIONAL_PATH" ]; then
     if is_sui_repo_dir_default; then
-      setup_error "$WORKDIR already using default repo. no change."
+      info_exit "$WORKDIR already using default repo. no change."
     fi
   fi
 
   if [ "$CMD_CREATE_REQ" = true ]; then
     # Check for what is minimally needed for configuration.
     if is_workdir_ok; then
-      setup_error "$WORKDIR already created."
+      info_exit "$WORKDIR already created."
     fi
   fi
 
@@ -557,7 +571,7 @@ workdir_exec() {
     if [ -d "$SUI_REPO_DIR_DEFAULT" ] && [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
        # Check for mismatch.
        local _BRANCH_NAME
-       _BRANCH_NAME=$(cd "$SUI_REPO_DIR_DEFAULT"; git branch --show-current)
+       _BRANCH_NAME=$(if cd "$SUI_REPO_DIR_DEFAULT"; then git branch --show-current; else echo "unknown"; fi)
        if [ "$_BRANCH_NAME" != "$CFG_default_repo_branch" ]; then
          warn_user "sui-base.yaml is requesting for branch [$CFG_default_repo_branch] but the sui-repo is on [$_BRANCH_NAME]. Do '$WORKDIR update' to fix this."
       fi

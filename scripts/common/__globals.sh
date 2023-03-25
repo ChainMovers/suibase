@@ -5,6 +5,8 @@
 # It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
 
+SUI_BASE_VERSION="0.0.1"
+
 # Sui-base does not work with version below these.
 MIN_SUI_VERSION="sui 0.27.0"
 MIN_RUST_VERSION="rustc 1.65.0"
@@ -21,51 +23,64 @@ function __echo_color() {
 	if [[ "${CFG_terminal_color:?}" == 'false' ]]; then
 		echo -e -n "$2"
 	else
-		echo -e -n "\033[1;$1$2\033[0m"
+		echo -e -n "\033[$1;$2$3\033[0m"
 	fi
 }
 
+# Bold colors, mostly used for status.
 function echo_black() {
-	__echo_color "30m" "$1"
+	__echo_color "1" "30m" "$1"
 }
 export -f echo_black
 
 function echo_red() {
-	__echo_color "31m" "$1"
+	__echo_color "1" "31m" "$1"
 }
 export -f echo_red
 
 function echo_green() {
-	__echo_color "32m" "$1"
+	__echo_color "1" "32m" "$1"
 }
 export -f echo_green
 
 function echo_yellow() {
-	__echo_color "33m" "$1"
+	__echo_color "1" "33m" "$1"
 }
 export -f echo_yellow
 
 function echo_blue() {
-	__echo_color "34m" "$1"
+	__echo_color "1" "34m" "$1"
 }
 export -f echo_blue
 
 function echo_magenta() {
-	__echo_color "35m" "$1"
+	__echo_color "1" "35m" "$1"
 }
 export -f echo_magenta
 
 function echo_cyan() {
-	__echo_color "36m" "$1"
+	__echo_color "1" "36m" "$1"
 }
 export -f echo_cyan
 
 function echo_white() {
-	__echo_color "37m" "$1"
+	__echo_color "1" "37m" "$1"
 }
 export -f echo_white
 
+# Low colors, used mostly in --help.
+function echo_low_green() {
+  __echo_color "0" "32m" "$1"
+}
+
+function echo_low_yellow() {
+  __echo_color "0" "33m" "$1"
+}
+
 # Utility functions.
+info_exit() { echo "$*" 1>&2; exit 1; }
+export -f info_exit
+
 setup_error() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
 export -f setup_error
 
@@ -170,19 +185,32 @@ update_sui_base_yaml() {
   #
   YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
   if [ -f "$YAML_FILE" ]; then
-    eval $(parse_yaml "$YAML_FILE" "CFG_")
-    eval $(parse_yaml "$YAML_FILE" "CFGDEFAULT_")
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
+    eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
   fi
 
   # Load overrides from workdir with CFG_ prefix.
   YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
   if [ -f "$YAML_FILE" ]; then
-    eval $(parse_yaml "$YAML_FILE" "CFG_")
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
   fi
 }
 export -f update_sui_base_yaml
 
 update_sui_base_yaml;
+
+update_sui_base_version() {
+  # Best effort to add the build number to the version.
+  # If no success, just use the hard coded major.minor.patch info.
+  local _BUILD
+  _BUILD=$(if cd "$SCRIPTS_DIR"; then git rev-parse --short HEAD; else echo "-"; fi)
+  if [ -n "$_BUILD" ] && [ "$_BUILD" != "-" ]; then
+    SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
+  fi
+}
+export -f update_sui_base_version
+
+update_sui_base_version;
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
@@ -210,8 +238,8 @@ build_sui_repo_branch() {
     fi
   else
 
-    if [ "$CFG_default_repo_url" != "$CFGDEFAULT_default_repo_url" ] ||
-       [ "$CFG_default_repo_branch" != "$CFGDEFAULT_default_repo_branch" ]; then
+    if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ] ||
+       [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
       echo "sui-base.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
     fi
 
@@ -221,7 +249,7 @@ build_sui_repo_branch() {
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
     fi
 
-    # Add back the default sui-repo link in case its was deleted.
+    # Add back the default sui-repo link in case it was deleted.
     if [ ! -L "$SUI_REPO_DIR" ]; then
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
     fi
@@ -237,8 +265,8 @@ build_sui_repo_branch() {
     # Update sui devnet local repo (if needed)
     (cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
     (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
-    V1=$(cd "$SUI_REPO_DIR"; git rev-parse HEAD)
-    V2=$(cd "$SUI_REPO_DIR"; git rev-parse '@{u}')
+    V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
     if [ "$V1" != "$V2" ]; then
       _FORCE_GIT_RESET
     fi
@@ -254,7 +282,7 @@ build_sui_repo_branch() {
     echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
-  (cd "$SUI_REPO_DIR"; cargo build)
+  (if cd "$SUI_REPO_DIR"; then cargo build; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
 
   # Sanity test that the sui binary works
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
@@ -736,7 +764,7 @@ start_sui_process() {
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
     "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
-    NEW_PID=$!
+    #NEW_PID=$!
 
     # Loop until "sui client" confirms to be working, or exit if that takes
     # more than 30 seconds.
@@ -746,7 +774,7 @@ start_sui_process() {
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
       CHECK_ALIVE=$("$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
-      if [ ! -z "$CHECK_ALIVE" ]; then
+      if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
         break
       else
@@ -780,19 +808,6 @@ start_sui_process() {
   fi
 }
 export -f start_sui_process
-
-update_SUI_REPO_INFO_var() {
-  # This is intended for display to user (human).
-  BRANCH_NAME=$(cd "$SUI_REPO_DIR"; git branch --show-current)
-  if is_sui_repo_dir_default; then
-    SUI_REPO_INFO="git branch is [$BRANCH_NAME]"
-  else
-    RESOLVED_SUI_REPO=$(readlink "$SUI_REPO_DIR")
-    RESOLVED_SUI_REPO_BASENAME=$(basename "$RESOLVED_SUI_REPO")
-    SUI_REPO_INFO="git branch is [$BRANCH_NAME], sui-repo set to [$RESOLVED_SUI_REPO_BASENAME]"
-  fi
-}
-export -f update_SUI_REPO_INFO_var
 
 ensure_client_OK() {
   # This is just in case the user switch the envs on the clients instead of simply using
@@ -937,7 +952,7 @@ publish_localnet() {
   echo "]" >> "$INSTALL_DIR/created-objects.json";
 
   # Load back the package-id.json from the file for validation
-  _ID_PACKAGE=$(cat "$INSTALL_DIR/package-id.json" | sed 's/\[//g; s/\]//g; s/"//g;')
+  _ID_PACKAGE=$(sed 's/\[//g; s/\]//g; s/"//g;' "$INSTALL_DIR/package-id.json")
 
   echo "Package ID=[$_ID_PACKAGE]"
 
@@ -950,7 +965,7 @@ publish_localnet() {
   # using that parsed package id.
   script_cmd "lsui client object $_ID_PACKAGE"
   echo Verifying client can access new package on network...
-  validation=$(lsui client object $_ID_PACKAGE | grep -i "package")
+  validation=$(lsui client object "$_ID_PACKAGE" | grep -i "package")
   if [ -z "$validation" ]; then
     cat "$INSTALL_DIR/publish-output.json"
     setup_error "Unexpected object type (Not a package)"
@@ -972,7 +987,7 @@ export -f publish_localnet
 is_sui_repo_dir_override() {
   # Verify if symlink resolves and is NOT toward the default.
   if [ -L "$SUI_REPO_DIR" ]; then
-    RESOLVED_SUI_REPO_DIR=$(readlink $SUI_REPO_DIR)
+    RESOLVED_SUI_REPO_DIR=$(readlink "$SUI_REPO_DIR")
     if [ "$RESOLVED_SUI_REPO_DIR" != "$SUI_REPO_DIR_DEFAULT" ]; then
       true; return;
     fi
@@ -1004,7 +1019,7 @@ set_sui_repo_dir_default() {
   else
     # No default directory.
     # Still a success as long the symlink is gone.
-    echo "$WORKDIR using default local sui repo"
+    echo "$WORKDIR using default sui repo"
   fi
 }
 export -f set_sui_repo_dir_default
@@ -1025,7 +1040,7 @@ set_sui_repo_dir() {
 
   # Verify success.
   if is_sui_repo_dir_default; then
-    echo "$WORKDIR using default local sui repo [ $OPTIONAL_PATH ]"
+    echo "$WORKDIR using default sui repo [ $OPTIONAL_PATH ]"
   else
     if is_sui_repo_dir_override; then
       echo "$WORKDIR set-sui-repo is now [ $OPTIONAL_PATH ]"

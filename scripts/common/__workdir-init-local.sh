@@ -33,7 +33,7 @@ apply_sui_base_yaml_to_config_yaml() {
   echo "$_MSG"
 
   # if enabled, do the same for the faucet funds (best effort)
-  if [ "$CFG_sui_faucet_enabled" = true ];  then
+  if [ "${CFG_sui_faucet_enabled:?}" = true ];  then
     if [ -z "$CFG_sui_faucet_genesis_funding" ] || [ -z "$CFGDEFAULT_sui_faucet_genesis_funding" ]; then
       echo "Warning: Bad sui-base.yaml sui_faucet_genesis_funding [$CFG_sui_faucet_genesis_funding] [$CFGDEFAULT_sui_faucet_genesis_funding]"
       return

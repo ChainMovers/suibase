@@ -5,6 +5,7 @@
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="testnet"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 exit_if_not_installed;
@@ -16,5 +17,6 @@ if [[ "$1" == "sui-base-script-name" ]]; then
   exit
 fi
 
+# shellcheck source=SCRIPTDIR/common/__globals.sh
 source "$HOME/sui-base/scripts/common/__workdir-exec.sh"
 workdir_exec "$@"

@@ -94,9 +94,9 @@ sui_exec() {
 
   if [ "$DISPLAY_SUI_BASE_HELP" = true ]; then
     update_ACTIVE_WORKDIR_var;
-    if [ -n "$ACTIVE_WORKDIR" ]; then
+    if [ -n "$ACTIVE_WORKDIR" ] && [ "$WORKDIR" = "$ACTIVE_WORKDIR" ]; then
       echo
-      echo "$ACTIVE_WORKDIR is set-active for asui"
+      echo -n "asui selection: [ "; echo_blue "$ACTIVE_WORKDIR"; echo " ]";
     fi
   fi
 }
