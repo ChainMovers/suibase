@@ -14,10 +14,9 @@
 
 # -*- coding: utf-8 -*-
 
-"""Common utilities shared across demo apps."""
+"""Common low level utilities shared across demo apps."""
 
 import os
-import argparse
 from pathlib import Path
 
 _SUI_BASE_ACTIVE: str = "~/sui-base/workdirs/active/config"

@@ -10,7 +10,7 @@ require `pysui` Python SUI Client SDK to run.
 
 ## Pre Setup
 
-You should first setup `sui-base` by following steps found [Here](../how-to/install.md)
+You should first setup `sui-base` by following steps found [Here](https://sui-base.io/how-to/install/)
 
 ## Setup
 
@@ -25,6 +25,12 @@ You should first setup `sui-base` by following steps found [Here](../how-to/inst
     ```
 
 ## Demo's
+
+The examples for python search the `sui-base` workdirs to figure out which configuration
+to use. If looks for the `active` symlink and reads the `client.yaml` from that link.
+
+However; if you are running a localnet you will, of course, have to `localnet start` before
+running the python demos.
 
 For convenience, shell scripts have been added to `sui-base/python/bin`. It is expected
 that when you want to run a script you are in the python folder and you've activated the
