@@ -153,6 +153,7 @@ faucet_command() {
   done
 
   if [ $_OPT_ALL = false ] && [ ${#_ALL_ADDRS[@]} -eq 0 ]; then
+    cd_sui_log_dir;
     echo "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}"
     local _FAUCET_ADDR
     _FAUCET_ADDR=$("$SUI_BIN_DIR/sui" client --client.config "$WORKDIRS/$WORKDIR/faucet/client.yaml" active-address)

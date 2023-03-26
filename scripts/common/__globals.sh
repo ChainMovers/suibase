@@ -5,6 +5,8 @@
 # It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
 
+USER_CWD=$(pwd -P)
+
 SUI_BASE_VERSION="0.0.1"
 
 # Sui-base does not work with version below these.
@@ -17,6 +19,116 @@ MIN_RUST_VERSION="rustc 1.65.0"
 SCRIPT_PATH="$(dirname "$1")"
 SCRIPT_NAME="$(basename "$1")"
 WORKDIR="$2"
+
+# Two key directories location.
+SUI_BASE_DIR="$HOME/sui-base"
+WORKDIRS="$SUI_BASE_DIR/workdirs"
+
+# Some other commonly used locations.
+LOCAL_BIN="$HOME/.local/bin"
+SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
+SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
+CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
+PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
+FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
+SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+
+case $WORKDIR in
+  localnet)
+    SUI_SCRIPT="lsui"
+    ;;
+  devnet)
+    SUI_SCRIPT="dsui"
+    ;;
+  testnet)
+    SUI_SCRIPT="tsui"
+    ;;
+  active)
+    SUI_SCRIPT="asui"
+    ;;
+  cargobin)
+    SUI_SCRIPT="csui"
+    SUI_BIN_DIR="$HOME/.cargo/bin"
+    ;;
+  *)
+    SUI_SCRIPT="sui-exec"
+    ;;
+esac
+
+# Configuration files (often needed for sui CLI calls)
+NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
+CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
+
+# This is the default repo for localnet/devnet/testnet scripts.
+# Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
+SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
+
+# This is the default config for localnet/devnet/testnet scripts.
+# Normally $CONFIG_DATA_DIR will symlink to CONFIG_DATA_DIR_DEFAULT
+CONFIG_DATA_DIR_DEFAULT="$WORKDIRS/$WORKDIR/config-default"
+
+# Location for genesis data for "default" repo.
+DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
+
+# Location for generated genesis data (on first start after set-sui-repo)
+GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$WORKDIR/genesis-data"
+
+# The two shims find in each $WORKDIR
+SUI_EXEC="$WORKDIRS/$WORKDIR/sui-exec"
+WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
+
+# Where all the sui.log of the sui client go to die.
+SUI_CLIENT_LOG_DIR="$WORKDIRS/$WORKDIR/logs/sui.log"
+
+# Now load all the $CFG_ variables from the sui-base.yaml files.
+# shellcheck source=SCRIPTDIR/__parse-yaml.sh
+source "$SCRIPTS_DIR/common/__parse-yaml.sh"
+update_sui_base_yaml() {
+  # Load defaults twice.
+  #
+  # First with CFG_ prefix, the second with CFGDEFAULT_
+  #
+  # This allow to detect if there was an override or not (e.g. to re-assure
+  # the user in a message that an override was applied).
+  #
+  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
+    eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
+  fi
+
+  # Load overrides from workdir with CFG_ prefix.
+  YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
+  fi
+}
+export -f update_sui_base_yaml
+
+update_sui_base_yaml;
+
+update_sui_base_version() {
+  # Best effort to add the build number to the version.
+  # If no success, just use the hard coded major.minor.patch info.
+  local _BUILD
+  _BUILD=$(if cd "$SCRIPTS_DIR"; then git rev-parse --short HEAD; else echo "-"; fi)
+  if [ -n "$_BUILD" ] && [ "$_BUILD" != "-" ]; then
+    SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
+  fi
+}
+export -f update_sui_base_version
+
+update_sui_base_version;
+
+cd_sui_log_dir() {
+  if [ -d "$WORKDIRS/$WORKDIR" ]; then
+    mkdir -p "$SUI_CLIENT_LOG_DIR"
+    cd "$SUI_CLIENT_LOG_DIR" || setup_error "could not access [ $SUI_CLIENT_LOG_DIR ]"
+  fi
+}
+export -f cd_sui_log_dir
+
+cd_sui_log_dir;
 
 # Add color
 function __echo_color() {
@@ -114,103 +226,6 @@ script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
 export -f script_cmd
 beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
 export -f beginswith
-
-# Two key directories location.
-SUI_BASE_DIR="$HOME/sui-base"
-WORKDIRS="$SUI_BASE_DIR/workdirs"
-
-# Some other commonly used locations.
-LOCAL_BIN="$HOME/.local/bin"
-SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
-SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
-CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
-PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
-FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
-SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
-
-case $WORKDIR in
-  localnet)
-    SUI_SCRIPT="lsui"
-    ;;
-  devnet)
-    SUI_SCRIPT="dsui"
-    ;;
-  testnet)
-    SUI_SCRIPT="tsui"
-    ;;
-  active)
-    SUI_SCRIPT="asui"
-    ;;
-  cargobin)
-    SUI_SCRIPT="csui"
-    SUI_BIN_DIR="$HOME/.cargo/bin"
-    ;;
-  *)
-    SUI_SCRIPT="sui-exec"
-    ;;
-esac
-
-# Configuration files (often needed for sui CLI calls)
-NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
-CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
-
-# This is the default repo for localnet/devnet/testnet scripts.
-# Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
-SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
-
-# This is the default config for localnet/devnet/testnet scripts.
-# Normally $CONFIG_DATA_DIR will symlink to CONFIG_DATA_DIR_DEFAULT
-CONFIG_DATA_DIR_DEFAULT="$WORKDIRS/$WORKDIR/config-default"
-
-# Location for genesis data for "default" repo.
-DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
-
-# Location for generated genesis data (on first start after set-sui-repo)
-GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$WORKDIR/genesis-data"
-
-# The two shims find in each $WORKDIR
-SUI_EXEC="$WORKDIRS/$WORKDIR/sui-exec"
-WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
-
-# Now load all the $CFG_ variables from the sui-base.yaml files.
-# shellcheck source=SCRIPTDIR/__parse-yaml.sh
-source "$SCRIPTS_DIR/common/__parse-yaml.sh"
-update_sui_base_yaml() {
-  # Load defaults twice.
-  #
-  # First with CFG_ prefix, the second with CFGDEFAULT_
-  #
-  # This allow to detect if there was an override or not (e.g. to re-assure
-  # the user in a message that an override was applied).
-  #
-  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
-  if [ -f "$YAML_FILE" ]; then
-    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
-    eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
-  fi
-
-  # Load overrides from workdir with CFG_ prefix.
-  YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
-  if [ -f "$YAML_FILE" ]; then
-    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
-  fi
-}
-export -f update_sui_base_yaml
-
-update_sui_base_yaml;
-
-update_sui_base_version() {
-  # Best effort to add the build number to the version.
-  # If no success, just use the hard coded major.minor.patch info.
-  local _BUILD
-  _BUILD=$(if cd "$SCRIPTS_DIR"; then git rev-parse --short HEAD; else echo "-"; fi)
-  if [ -n "$_BUILD" ] && [ "$_BUILD" != "-" ]; then
-    SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
-  fi
-}
-export -f update_sui_base_version
-
-update_sui_base_version;
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
@@ -420,6 +435,7 @@ is_sui_binary_ok() {
   fi
 
   # Get the version, but in a way that would not exit on failure.
+  cd_sui_log_dir;
   local _SUI_VERSION_ATTEMPT
   _SUI_VERSION_ATTEMPT=$("$SUI_BIN_DIR/sui" --version)
   # TODO test here what would really happen on corrupted binary...
@@ -627,6 +643,7 @@ create_workdir_as_needed() {
     create_config_symlink_as_needed "$WORKDIR_PARAM" "$WORKDIRS/$WORKDIR_PARAM/config-default"
   fi
 
+  cd_sui_log_dir; # Create the sui.log directory as needed and make it the current one.
 }
 export -f create_workdir_as_needed
 
@@ -713,8 +730,9 @@ export -f update_SUI_PROCESS_PID_var
 
 update_SUI_VERSION_var() {
   # Take note that $SUI_BIN_DIR here is used to properly consider if the
-  # context of the script is localnet, devnet, testnet, mainet... (they
+  # context of the script is localnet, devnet, testnet, mainnet... (they
   # are not the same binaries and versions).
+  cd_sui_log_dir;
   SUI_VERSION=$("$SUI_BIN_DIR/sui" --version)
   if [ -z "$SUI_VERSION" ]; then
     setup_error "$SUI_BIN_DIR/sui --version not running as expected"
@@ -765,7 +783,7 @@ start_sui_process() {
   # noop if the process is already started.
 
   exit_if_sui_binary_not_ok;
-
+  cd_sui_log_dir;
   update_SUI_PROCESS_PID_var;
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
@@ -818,7 +836,7 @@ export -f start_sui_process
 ensure_client_OK() {
   # This is just in case the user switch the envs on the clients instead of simply using
   # the scripts... we have then to fix things up here. Not an error unless the fix fails.
-
+  cd_sui_log_dir;
   # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
   #if [ "$CFG_network_type" = "local" ]; then
     # Make sure localnet exists in sui envs (ignore errors because likely already exists)

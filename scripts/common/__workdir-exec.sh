@@ -456,13 +456,12 @@ workdir_exec() {
   # lead to some confusion for the user.
 
   if $is_local; then
-    CWD=$(pwd -P)
-    if [[ "$CWD" = "$CONFIG_DATA_DIR_DEFAULT"* ]]; then
+    if [[ "$USER_CWD" = "$CONFIG_DATA_DIR_DEFAULT"* ]]; then
       echo "This script should not be called from a location that could be deleted [$CONFIG_DATA_DIR]."
       setup_error "Change current directory location and try again."
     fi
 
-    if [[ "$CWD" = "$PUBLISHED_DATA_DIR"* ]]; then
+    if [[ "$USER_CWD" = "$PUBLISHED_DATA_DIR"* ]]; then
       echo "This script should not be called from a location that could be deleted [$PUBLISHED_DATA_DIR]."
       setup_error "Change current directory location and try again."
     fi

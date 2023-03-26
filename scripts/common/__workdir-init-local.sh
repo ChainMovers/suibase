@@ -154,6 +154,7 @@ workdir_init_local() {
     #
 
     mkdir -p "$CONFIG_DATA_DIR_DEFAULT"
+    cd_sui_log_dir;
 
     if is_sui_repo_dir_default; then
       local _GENDATA_DIR="$GENERATED_GENESIS_DATA_DIR/default"

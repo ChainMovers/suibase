@@ -26,8 +26,10 @@ fail() {
     ((i++))
   done
 
-  echo "Last stdout/stderr written to disk (may not relate to error):"
-  echo "$OUT"
+  if [ -f "$OUT" ]; then
+    echo "Last stdout/stderr written to disk (may not relate to error):"
+    echo "$OUT"
+  fi
 
   exit 1
 }
@@ -68,7 +70,6 @@ test_no_workdirs() {
 
   (localnet create >& "$OUT") || fail "create"
   assert_workdir_ok "localnet"
-
 }
 
 main() {
@@ -85,12 +86,21 @@ main() {
     shift
   done
 
+  # Clean-up from potential previous execution.
+  rm -rf "$OUT"
+
+  # This script should not be called from under workdirs since it will be deleted.
+  local _USER_CWD
+  _USER_CWD=$(pwd -P)
+  if [[ "$_USER_CWD" = *"sui-base/workdirs"* ]]; then
+   fail "Should not call this test from a directory that will get deleted [sui-base/workdirs]"
+  fi
+
   # shellcheck source=SCRIPTDIR/../../../sui-base/install
   (source ~/sui-base/install >& "$OUT") || fail "install exit status=[#?]"
 
   # Add here tests done on github.
   test_no_workdirs;
-
 
   if [ "$GITHUB_OPTION" = true ]; then
     # Success on github if reaching here.

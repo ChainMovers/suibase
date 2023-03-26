@@ -25,6 +25,8 @@ sui_exec() {
 
   exit_if_sui_binary_not_ok;
 
+  cd_sui_log_dir;
+
   SUI_SUBCOMMAND=$1
 
   LAST_ARG="${@: -1}"
