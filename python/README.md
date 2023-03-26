@@ -36,6 +36,7 @@ For convenience, shell scripts have been added to `sui-base/python/bin`. It is e
 that when you want to run a script you are in the python folder and you've activated the
 virtual environment (`. env/bin/activate`).
 
-| Demo    | What it does                           | Invoke        |
-| ------- | -------------------------------------- | ------------- |
-| sysinfo | displays general sui chain information | `bin/sysinfo` |
+| Demo    | What it does                                  | Invoke        | source    |
+| ------- | --------------------------------------------- | ------------- | --------- |
+| sysinfo | displays general sui chain information        | `bin/sysinfo` | src/demo1 |
+| coinage | displays information about coins and balanced | `bin/coinage` | src/demo2 |

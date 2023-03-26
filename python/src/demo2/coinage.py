@@ -1,0 +1,74 @@
+# Copyright Frank Castellucci
+
+# Licensed under the Apache License, Version 2.0 (the "License")
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http: // www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# -*- coding: utf-8 -*-
+
+"""Demonstrate coin and balance information."""
+
+import json
+from src.common.demo_utils import handle_result
+from src.common.low_level_utils import sui_base_config
+from pysui.sui.sui_config import SuiConfig
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_builders.get_builders import GetAllCoins
+from pysui.sui.sui_txresults.single_tx import SuiCoinObjects
+
+
+def _coin_0271(client: SuiClient) -> None:
+    """Summarize, by address by coin type, count of coin and balance
+
+    It organizes the information in a dict structure:
+    {
+        address : {
+            coin_type A: [count, total_balance] # Coin type value is a list
+            coin_type B: [count, total_balance]
+        }
+    }
+
+    Args:
+        client (SuiClient): The interface to the Sui RPC API.
+    """
+    summary = {}
+    for address in client.config.addresses:
+        coin_type_list: SuiCoinObjects = handle_result(
+            client.execute(GetAllCoins(owner=address)))
+        coin_collection = {}
+        for coinage in coin_type_list.data:
+            if coinage.coin_type in coin_collection:
+                inner_list = coin_collection[coinage.coin_type]
+                inner_list[0] = inner_list[0] + 1
+                inner_list[1] = inner_list[1] + coinage.balance
+            else:
+                coin_collection[coinage.coin_type] = [1, coinage.balance]
+        summary[address] = coin_collection
+    print(json.dumps(summary, indent=2))
+
+
+def main(client: SuiClient):
+    """Entry point for demo."""
+    addy_keypair = client.config.keypair_for_address(
+        client.config.active_address)
+    print(
+        f"Active address: {client.config.active_address} public-key: {addy_keypair.public_key}")
+    match client.rpc_version:
+        case "0.27.1":
+            _coin_0271(client)
+        case _:
+            print(f"{client.rpc_version} not handled")
+
+
+if __name__ == "__main__":
+    base_config = sui_base_config()
+    if base_config:
+        main(SuiClient(SuiConfig.from_config_file(base_config)))

@@ -20,7 +20,6 @@ from datetime import datetime
 from src.common.demo_utils import handle_result
 from src.common.low_level_utils import sui_base_config
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.common import SuiRpcResult
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_builders.get_builders import GetSuiSystemState, GetValidators
 from pysui.sui.sui_txresults.single_tx import SuiSystemState
