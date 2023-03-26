@@ -4,31 +4,102 @@
 #
 # This is not intended to be called directly by the user.
 #
-# Use --github when called from a "github action" to limit what
-# can be tested in practice on a free tier.
+# When something is wrong ideally do:
+#       fail "any string"
+#
+#          or
+#
+#      "exit" with non-zero.
+#
+# Check $GITHUB_OPTION to limit what can be tested on github.
 #
 
-# Parse command-line
-GITHUB_OPTION=false
-while [[ "$#" -gt 0 ]]; do
+WORKDIRS="$HOME/sui-base/workdirs"
+OUT="$HOME/sui-base/scripts/out"
+
+fail() {
+  echo Failed ["$1"]
+  # Print stacktrace
+  local i=1 line file func
+  while read -r line func file < <(caller $i); do
+    echo >&2 "[$i] $file:$line $func(): $(sed -n ${line}p $file)"
+    ((i++))
+  done
+
+  echo "Last stdout/stderr written to disk (may not relate to error):"
+  echo "$OUT"
+
+  exit 1
+}
+
+assert_workdir_ok() {
+  _DIR="$WORKDIRS/$1"
+
+  # Verify minimal integrity of workdirs/_DIR.
+  [ -d "$WORKDIRS" ] || fail "workdirs missing"
+  [ -L "$WORKDIRS/active" ] || fail "workdirs/active missing"
+  [ -d "$_DIR" ] || fail "workdirs/localnet missing"
+
+  [ -f "$_DIR/sui-exec" ] || fail "workdirs/sui-exec missing"
+  [ -x "$_DIR/sui-exec" ] || fail "workdirs/sui-exec not exec"
+
+  [ -f "$_DIR/workdir-exec" ] || fail "workdirs/workdir-exec missing"
+  [ -x "$_DIR/workdir-exec" ] || fail "workdirs/workdir-exec not exec"
+
+  [ -f "$_DIR/sui-base.yaml" ] || fail "workdirs/sui-base.yaml missing"
+
+  # First word out of "workdir-exec" should be the workdir name
+  local _HELP
+  _HELP=$("$_DIR/workdir-exec")
+  _RESULT="$?"
+  if [ ! "$_RESULT" -eq 0 ]; then
+    fail "workdir-exec usage should not be an error"
+  fi
+  _FIRST_WORD=$(echo "$_HELP" | head -n1 | awk '{print $1;}')
+  # Note: Must use contain because of the ANSI color escape code.
+  [[ "$_FIRST_WORD" == *"$1"* ]] || fail "usage first word [$_FIRST_WORD] not [$1]"
+
+  # Usage should have the sui-base version, so sanity verify for "sui-base"
+  [[ "$_HELP" == *"sui-base"* ]] || fail "usage does not mention sui-base [$_HELP]"
+}
+
+test_no_workdirs() {
+  rm -rf ~/sui-base/workdirs
+
+  (localnet create >& "$OUT") || fail "create"
+  assert_workdir_ok "localnet"
+
+}
+
+main() {
+  # Parse command-line
+  GITHUB_OPTION=false
+  while [[ "$#" -gt 0 ]]; do
     case $1 in
         # -t|--target) target="$2"; shift ;; That's an example with a parameter
         # -f|--flag) flag=1 ;; That's an example flag
         --github) GITHUB_OPTION=true ;;
         *)
-        echo "Unknown parameter passed: $1";
-        exit 1 ;;
+        fail "Unknown parameter passed: $1";
     esac
     shift
-done
+  done
 
-# shellcheck source=SCRIPTDIR/../../../sui-base/install
-source ~/sui-base/install
-install_ret_code=$?
+  # shellcheck source=SCRIPTDIR/../../../sui-base/install
+  (source ~/sui-base/install >& "$OUT") || fail "install exit status=[#?]"
 
-if [ "$GITHUB_OPTION" = true ]; then
-  echo "Installation status code = [$install_ret_code]"
-  exit $install_ret_code
-fi
+  # Add here tests done on github.
+  test_no_workdirs;
 
-# Eventually add more tests here...
+
+  if [ "$GITHUB_OPTION" = true ]; then
+    # Success on github if reaching here.
+    echo "Test Completed (github early exit)"
+    exit 0
+  fi
+
+  # Add here tests not run on github.
+  echo "Test Completed"
+}
+
+main "$@";
