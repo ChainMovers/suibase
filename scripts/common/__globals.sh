@@ -29,7 +29,7 @@ LOCAL_BIN="$HOME/.local/bin"
 SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
 SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
 CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
-PUBLISHED_DATA_DIR="$CONFIG_DATA_DIR/published-data"
+PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
 FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 
@@ -80,55 +80,13 @@ WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
 # Where all the sui.log of the sui client go to die.
 SUI_CLIENT_LOG_DIR="$WORKDIRS/$WORKDIR/logs/sui.log"
 
-# Now load all the $CFG_ variables from the sui-base.yaml files.
-# shellcheck source=SCRIPTDIR/__parse-yaml.sh
-source "$SCRIPTS_DIR/common/__parse-yaml.sh"
-update_sui_base_yaml() {
-  # Load defaults twice.
-  #
-  # First with CFG_ prefix, the second with CFGDEFAULT_
-  #
-  # This allow to detect if there was an override or not (e.g. to re-assure
-  # the user in a message that an override was applied).
-  #
-  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
-  if [ -f "$YAML_FILE" ]; then
-    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
-    eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
-  fi
-
-  # Load overrides from workdir with CFG_ prefix.
-  YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
-  if [ -f "$YAML_FILE" ]; then
-    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
-  fi
-}
-export -f update_sui_base_yaml
-
-update_sui_base_yaml;
-
-update_sui_base_version() {
-  # Best effort to add the build number to the version.
-  # If no success, just use the hard coded major.minor.patch info.
-  local _BUILD
-  _BUILD=$(if cd "$SCRIPTS_DIR"; then git rev-parse --short HEAD; else echo "-"; fi)
-  if [ -n "$_BUILD" ] && [ "$_BUILD" != "-" ]; then
-    SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
-  fi
-}
-export -f update_sui_base_version
-
-update_sui_base_version;
-
-cd_sui_log_dir() {
-  if [ -d "$WORKDIRS/$WORKDIR" ]; then
-    mkdir -p "$SUI_CLIENT_LOG_DIR"
-    cd "$SUI_CLIENT_LOG_DIR" || setup_error "could not access [ $SUI_CLIENT_LOG_DIR ]"
-  fi
-}
-export -f cd_sui_log_dir
-
-cd_sui_log_dir;
+# Control if network execution, interaction and
+# publication are to be mock.
+#
+# Intended for limited CI tests (github action).
+SUI_BASE_NET_MOCK=false
+SUI_BASE_NET_MOCK_VER="sui 0.99.99-abcdef"
+SUI_BASE_NET_MOCK_PID="999999"
 
 # Add color
 function __echo_color() {
@@ -226,6 +184,135 @@ script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
 export -f script_cmd
 beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
 export -f beginswith
+
+set_key_value() {
+  local _KEY=$1
+  local _VALUE=$2
+  # A key-value persisted in the workdir.
+  # The value can't be the string "NULL"
+  #
+  # About unusual '>|' :
+  #   https://stackoverflow.com/questions/4676459/write-to-file-but-overwrite-it-if-it-exists
+  if [ -z "$_VALUE" ]; then
+    setup_error "Can't write an empty value for [$_KEY]"
+  fi
+  if [ -z "$_KEY" ]; then
+    setup_error "Can't use an empty key for value [$_VALUE]"
+  fi
+  mkdir -p "$WORKDIRS/$WORKDIR/.state"
+  echo "$_VALUE" >| "$WORKDIRS/$WORKDIR/.state/$_KEY"
+}
+export -f set_key_value
+
+get_key_value() {
+  local _KEY=$1
+  # A key-value persisted in the workdir.
+  # Return the string NULL on error or missing.
+  if [ -z "$_KEY" ]; then
+    setup_error "Can't retreive empty key"
+  fi
+  if [ ! -f "$WORKDIRS/$WORKDIR/.state/$_KEY" ]; then
+    echo "NULL"; return
+  fi
+
+  local _VALUE
+  _VALUE=$(cat "$WORKDIRS/$WORKDIR/.state/$_KEY")
+
+  if [ -z "$_VALUE" ]; then
+      echo "NULL"; return
+  fi
+
+  # Error
+  echo "$_VALUE"
+}
+export -f get_key_value
+
+# Now load all the $CFG_ variables from the sui-base.yaml files.
+# shellcheck source=SCRIPTDIR/__parse-yaml.sh
+source "$SCRIPTS_DIR/common/__parse-yaml.sh"
+update_sui_base_yaml() {
+  # Load defaults twice.
+  #
+  # First with CFG_ prefix, the second with CFGDEFAULT_
+  #
+  # This allow to detect if there was an override or not (e.g. to re-assure
+  # the user in a message that an override was applied).
+  #
+  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
+    eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
+  fi
+
+  # Load overrides from workdir with CFG_ prefix.
+  YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
+  fi
+}
+export -f update_sui_base_yaml
+
+update_sui_base_yaml;
+
+update_sui_base_version() {
+  # Best effort to add the build number to the version.
+  # If no success, just use the hard coded major.minor.patch info.
+  local _BUILD
+  _BUILD=$(if cd "$SCRIPTS_DIR"; then git rev-parse --short HEAD; else echo "-"; fi)
+  if [ -n "$_BUILD" ] && [ "$_BUILD" != "-" ]; then
+    SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
+  fi
+}
+export -f update_sui_base_version
+
+update_sui_base_version;
+
+cd_sui_log_dir() {
+  if [ -d "$WORKDIRS/$WORKDIR" ]; then
+    mkdir -p "$SUI_CLIENT_LOG_DIR"
+    cd "$SUI_CLIENT_LOG_DIR" || setup_error "could not access [ $SUI_CLIENT_LOG_DIR ]"
+  fi
+}
+export -f cd_sui_log_dir
+
+cd_sui_log_dir;
+
+# SUI_BASE_MOCK is a global boolean always defined.
+update_SUI_BASE_NET_MOCK_var() {
+  # OS_RUNNER is defined when running in github actions.
+ if [ -n "$OS_RUNNER" ]; then
+   SUI_BASE_NET_MOCK=true
+   if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
+     # This is really really bad and would be an accidental commit of a dev
+     # test setup. Fix ASAP. It means github found the default configuration
+     # is set to mock the network!!!
+     #
+     # The following exit non-zero (should break the CI)
+     setup_error "Bad commit to github. Contact https://sui-base.io devs ASAP to fix the release."
+   fi
+ fi
+
+ # Mocking can be control with sui-base.yaml.
+ #
+ # This is undocummented, for sui-base devs only.
+ if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
+   SUI_BASE_NET_MOCK=true
+ fi
+
+ # If mocking AND state is started, then simulate
+ # that the process are already running.
+ if $SUI_BASE_NET_MOCK; then
+    local _USER_REQUEST
+    _USER_REQUEST=$(get_key_value "user_request");
+    if [ "$_USER_REQUEST" = "start" ]; then
+      export SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
+      export SUI_FAUCET_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
+    fi
+  fi
+}
+export -f update_SUI_BASE_NET_MOCK_var
+
+update_SUI_BASE_NET_MOCK_var;
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
@@ -715,11 +802,11 @@ get_process_pid() {
 export -f get_process_pid
 
 update_SUI_PROCESS_PID_var() {
+  if $SUI_BASE_NET_MOCK; then return; fi
+
   # Useful to check if the sui process is running (this is the parent for the "localnet")
   local _PID
-
   _PID=$(get_process_pid "sui" "start")
-
   if [ "$_PID" = "NULL" ]; then
     unset SUI_PROCESS_PID
   else
@@ -733,6 +820,12 @@ update_SUI_VERSION_var() {
   # context of the script is localnet, devnet, testnet, mainnet... (they
   # are not the same binaries and versions).
   cd_sui_log_dir;
+
+  if $SUI_BASE_NET_MOCK; then
+    SUI_VERSION=$SUI_BASE_NET_MOCK_VER
+    return
+  fi
+
   SUI_VERSION=$("$SUI_BIN_DIR/sui" --version)
   if [ -z "$SUI_VERSION" ]; then
     setup_error "$SUI_BIN_DIR/sui --version not running as expected"
@@ -746,10 +839,14 @@ stop_sui_process() {
   update_SUI_PROCESS_PID_var;
   if [ -n "$SUI_PROCESS_PID" ]; then
     echo "Stopping $WORKDIR (process pid $SUI_PROCESS_PID)"
-    if [[ $(uname) == "Darwin" ]]; then
-      kill -9 "$SUI_PROCESS_PID"
+    if $SUI_BASE_NET_MOCK; then
+      unset SUI_PROCESS_PID
     else
-      skill -9 "$SUI_PROCESS_PID"
+      if [[ $(uname) == "Darwin" ]]; then
+        kill -9 "$SUI_PROCESS_PID"
+      else
+        skill -9 "$SUI_PROCESS_PID"
+      fi
     fi
 
     # Make sure it is dead.
@@ -787,7 +884,11 @@ start_sui_process() {
   update_SUI_PROCESS_PID_var;
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
-    "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
+    if $SUI_BASE_NET_MOCK; then
+      SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
+    else
+      "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
+    fi
     #NEW_PID=$!
 
     # Loop until "sui client" confirms to be working, or exit if that takes
@@ -797,7 +898,11 @@ start_sui_process() {
     ALIVE=false
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
-      CHECK_ALIVE=$("$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
+      if $SUI_BASE_NET_MOCK; then
+        CHECK_ALIVE="some output"
+      else
+        CHECK_ALIVE=$("$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
+      fi
       if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
         break
@@ -851,11 +956,12 @@ ensure_client_OK() {
 export -f ensure_client_OK
 
 publish_clear_output() {
-  if [ -n "$MOVE_TOML_PACKAGE_NAME" ]; then
-    rm -rf "$PUBLISHED_DATA_DIR/$MOVE_TOML_PACKAGE_NAME/package_id.txt"
-  fi
-  # Following files created only on confirmed success of publication.
-  #rm -rf "$PUBLISH_DATA_DIR/client_addresses.txt"
+  local _DIR=$1
+  # Only clear potential last publication.
+  rm -f "$_DIR/publish-output.txt"
+  rm -f "$_DIR/publish-output.json"
+  rm -f "$_DIR/created-objects.json"
+  rm -f "$_DIR/package-id.json"
 }
 export -f publish_clear_output
 
@@ -906,7 +1012,7 @@ publish_localnet() {
 
   # Set the output for the "script_cmd"
   SCRIPT_OUTPUT="$INSTALL_DIR/publish-output.txt"
-  rm -rf "$SCRIPT_OUTPUT"
+  publish_clear_output "$INSTALL_DIR";
 
   # Run unit tests.
   #script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
@@ -941,7 +1047,7 @@ publish_localnet() {
     done
     # Best-practice to revert IFS to default.
     unset IFS
-    echo "$_ID"
+    #echo "$_ID"
     if [ -n "$_ID" ]; then
       # Get the type of the object
       object_type=$($SUI_EXEC client object "$_ID" --json | grep "type" | sed 's/,//g' | tr -d "[:blank:]" | head -n 1)
@@ -1104,49 +1210,6 @@ create_cargobin_as_needed() {
   fi
 }
 export -f create_cargobin_as_needed
-
-
-set_key_value() {
-  local _KEY=$1
-  local _VALUE=$2
-  # A key-value persisted in the workdir.
-  # The value can't be the string "NULL"
-  #
-  # About unusual '>|' :
-  #   https://stackoverflow.com/questions/4676459/write-to-file-but-overwrite-it-if-it-exists
-  if [ -z "$_VALUE" ]; then
-    setup_error "Can't write an empty value for [$_KEY]"
-  fi
-  if [ -z "$_KEY" ]; then
-    setup_error "Can't use an empty key for value [$_VALUE]"
-  fi
-  mkdir -p "$WORKDIRS/$WORKDIR/.state"
-  echo "$_VALUE" >| "$WORKDIRS/$WORKDIR/.state/$_KEY"
-}
-export -f set_key_value
-
-get_key_value() {
-  local _KEY=$1
-  # A key-value persisted in the workdir.
-  # Return the string NULL on error or missing.
-  if [ -z "$_KEY" ]; then
-    setup_error "Can't retreive empty key"
-  fi
-  if [ ! -f "$WORKDIRS/$WORKDIR/.state/$_KEY" ]; then
-    echo "NULL"; return
-  fi
-
-  local _VALUE
-  _VALUE=$(cat "$WORKDIRS/$WORKDIR/.state/$_KEY")
-
-  if [ -z "$_VALUE" ]; then
-      echo "NULL"; return
-  fi
-
-  # Error
-  echo "$_VALUE"
-}
-export -f get_key_value
 
 exit_if_not_valid_sui_address() {
   local _ADDR="$1"

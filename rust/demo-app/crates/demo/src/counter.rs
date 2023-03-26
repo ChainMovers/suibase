@@ -55,7 +55,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
 
     // Use the client known to be always valid with sui-base localnet.
     // TODO Get it from sui-base instead ...
-    let client_address = SuiAddress::from_str("0xc7148f0c0086adf172eb4c2076c7d888337789a7")?;
+    let client_address = SuiAddress::from_str("0xfa51d742a62e447a79e61da2b394781baf53ab54")?;
 
     // Get the keystore using the location given by sui-base.
     let keystore_pathname = suibase.get_keystore_pathname()?;

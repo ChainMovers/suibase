@@ -28,7 +28,7 @@ fail() {
 
   if [ -f "$OUT" ]; then
     echo "Last stdout/stderr written to disk (may not relate to error):"
-    echo "$OUT"
+    cat "$OUT"
   fi
 
   exit 1
@@ -65,11 +65,29 @@ assert_workdir_ok() {
   [[ "$_HELP" == *"sui-base"* ]] || fail "usage does not mention sui-base [$_HELP]"
 }
 
-test_no_workdirs() {
-  rm -rf ~/sui-base/workdirs
+assert_build_ok() {
+  local _SUI_BIN="$WORKDIRS/$1/sui-repo/target/debug/sui"
+  # Verify that the sui-repo and the binary are OK.
+  local _VERSION _FIRST_WORD
+  _VERSION=$($_SUI_BIN --version)
+  _FIRST_WORD=$(echo "$_VERSION" | head -n1 | awk '{print $1;}')
+  [ "$_FIRST_WORD" = "sui" ] || fail "sui --version did not work [$_VERSION]"
+}
 
+test_no_workdirs() {
+  echo "Testing when starting with no workdirs"
+  echo "======================================"
+
+  rm -rf ~/sui-base/workdirs
+  echo "localnet create"
   (localnet create >& "$OUT") || fail "create"
   assert_workdir_ok "localnet"
+
+  rm -rf ~/sui-base/workdirs
+  echo "localnet update"
+  (localnet update >& "$OUT") || fail "update"
+  assert_workdir_ok "localnet"
+  assert_build_ok "localnet"
 }
 
 main() {

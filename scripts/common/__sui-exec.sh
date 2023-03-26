@@ -34,6 +34,12 @@ sui_exec() {
     DISPLAY_SUI_BASE_HELP=true
   fi
 
+  if [ "$DISPLAY_SUI_BASE_HELP" = false ] && [ "$SUI_BASE_NET_MOCK" = true ] &&
+  [ "$SUI_SUBCOMMAND" != "-V" ] && [ "$SUI_SUBCOMMAND" != "--version" ] ; then
+    echo "<sui client mock response for test>"
+    exit 0
+  fi
+
   if [[ $SUI_SUBCOMMAND == "client" || $SUI_SUBCOMMAND == "console" ]]; then
     shift 1
     $SUI_BIN "$SUI_SUBCOMMAND" --client.config "$CLIENT_CONFIG" "$@"

@@ -387,7 +387,7 @@ workdir_exec() {
     if [ -n "$OPTIONAL_PATH" ]; then
       update_MOVE_TOML_DIR_var "$OPTIONAL_PATH";
     else
-      update_MOVE_TOML_DIR_var "$PWD";
+      update_MOVE_TOML_DIR_var "$USER_CWD";
     fi
 
     if [ -z "$MOVE_TOML_DIR" ]; then
@@ -451,18 +451,22 @@ workdir_exec() {
     exit
   fi
 
-  # The script should not be called from a location that could get deleted.
-  # It would work (on Linux) because of reference counting, but it could
-  # lead to some confusion for the user.
 
   if $is_local; then
+    # The script should not be called from a location that could get deleted.
+    # It would work (on Linux) because of reference counting, but it could
+    # lead to some confusion for the user.
+    local _DIR_CAN_GET_DELETED
     if [[ "$USER_CWD" = "$CONFIG_DATA_DIR_DEFAULT"* ]]; then
-      echo "This script should not be called from a location that could be deleted [$CONFIG_DATA_DIR]."
-      setup_error "Change current directory location and try again."
+      _DIR_CAN_GET_DELETED=$CONFIG_DATA_DIR_DEFAULT
     fi
 
     if [[ "$USER_CWD" = "$PUBLISHED_DATA_DIR"* ]]; then
-      echo "This script should not be called from a location that could be deleted [$PUBLISHED_DATA_DIR]."
+      _DIR_CAN_GET_DELETED=$PUBLISHED_DATA_DIR
+    fi
+
+    if [ -n "$_DIR_CAN_GET_DELETED" ]; then
+      echo "This script should not be called from a location that could be deleted [$_DIR_CAN_GET_DELETED]."
       setup_error "Change current directory location and try again."
     fi
 
@@ -477,7 +481,7 @@ workdir_exec() {
     fi
 
     # Delete localnet publish directory (if exists) to force re-publication.
-    RM_DIR="$PUBLISH_DATA_DIR"
+    RM_DIR="$PUBLISHED_DATA_DIR"
     if [ -d "$RM_DIR" ]; then
       rm -rf "$RM_DIR"
     fi
@@ -489,6 +493,15 @@ workdir_exec() {
       if is_at_least_one_service_running; then
         setup_error "Can't change repo while $WORKDIR running. Do \"$WORKDIR stop\"."
       fi
+    fi
+
+    local _DIR_CAN_GET_DELETED
+    if [[ "$USER_CWD" = "$GENERATED_GENESIS_DATA_DIR"* ]]; then
+      _DIR_CAN_GET_DELETED=$GENERATED_GENESIS_DATA_DIR
+    fi
+    if [ -n "$_DIR_CAN_GET_DELETED" ]; then
+      echo "This script should not be called from a location that could be deleted [$_DIR_CAN_GET_DELETED]."
+      setup_error "Change current directory location and try again."
     fi
 
     if [ -z "$OPTIONAL_PATH" ]; then

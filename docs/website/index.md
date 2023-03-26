@@ -14,7 +14,7 @@ sui-base makes it easy to create "workdirs", each clearly defining a development
 Other features like:
 
   * **$ localnet star/stop/status**
-  * **$ localnet regen** to quickly reset the network with consistent tests addresses (all pre-funded with Sui).
+  * **$ localnet regen** to quickly reset the network with consistent tests addresses (all pre-funded with an abundance of Sui).
   * **$ localnet publish** for quick edit/debug cycle.
   * **$ lsui/dsui/tsui** shortcut to call the **proper** sui client binary+config combination for localnet/devnet/testnet respectively.
   * **$ localnet faucet <address\>**... etc ... you get the picture...

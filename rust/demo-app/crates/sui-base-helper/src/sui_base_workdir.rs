@@ -241,7 +241,6 @@ impl SuiBaseWorkdir {
 
         // Check if the publication of package was done.
         let mut path_buf = PathBuf::from(workdir_path);
-        path_buf.push("config");
         path_buf.push("published-data");
         path_buf.push(package_name);
 

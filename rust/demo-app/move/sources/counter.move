@@ -9,7 +9,7 @@ module demo::Counter {
     use sui::tx_context::{Self,TxContext};
     use sui::event;
     use sui::transfer;
-    
+
     // Allow unit test module to use this object friend functions.
     #[test_only]
     friend demo::test_counter;
@@ -27,12 +27,12 @@ module demo::Counter {
     }
 
     // The initialization function called at the moment of publication.
-    fun init(ctx: &mut TxContext) { 
+    fun init(ctx: &mut TxContext) {
       let new_counter = demo::Counter::new(ctx);
       transfer::share_object( new_counter );
     }
 
-    // Notice that for this example, the new() is not called from 
+    // Notice that for this example, the new() is not called from
     // a transaction.
     //
     // Only init() calls new to guarantee one instance per package.
@@ -57,7 +57,7 @@ module demo::Counter {
     {
         self.count = self.count + 1;
 
-        let sender = tx_context::sender(ctx);  
+        let sender = tx_context::sender(ctx);
         event::emit( CounterChanged { count: self.count, by_address: sender } );
     }
 
@@ -86,7 +86,7 @@ module demo::test_counter {
         test_scenario::next_tx(scenario, creator);
         {
             let ctx = test_scenario::ctx(scenario);
-            
+
             let the_counter = Counter::new(ctx);
             assert!(Counter::count(&the_counter) == 0, 1);
 
