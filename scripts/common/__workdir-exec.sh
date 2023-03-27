@@ -478,6 +478,7 @@ workdir_exec() {
     if [ -d "$RM_DIR" ]; then
       echo "Clearing existing localnet data"
       rm -rf "$RM_DIR"
+      rm -rf "$WORKDIRS/$WORKDIR/.state/dns"
     fi
 
     # Delete localnet publish directory (if exists) to force re-publication.
@@ -543,6 +544,11 @@ workdir_exec() {
     source "$HOME/sui-base/scripts/common/__workdir-init-remote.sh"
     workdir_init_remote;
   fi
+
+  # This is the second pass with create_workdir_as_needed. This is
+  # done after regen to produce the .state/dns and whatever else
+  # went missing.
+  create_workdir_as_needed "$WORKDIR";   # Create/repair as needed
 
   if $is_local; then
     # Start the local processes normally.

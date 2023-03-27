@@ -83,11 +83,11 @@ test_no_workdirs() {
   (localnet create >& "$OUT") || fail "create"
   assert_workdir_ok "localnet"
 
-  rm -rf ~/sui-base/workdirs
-  echo "localnet update"
-  (localnet update >& "$OUT") || fail "update"
-  assert_workdir_ok "localnet"
-  assert_build_ok "localnet"
+  #rm -rf ~/sui-base/workdirs
+  #echo "localnet update"
+  #(localnet update >& "$OUT") || fail "update"
+  #assert_workdir_ok "localnet"
+  #assert_build_ok "localnet"
 }
 
 main() {

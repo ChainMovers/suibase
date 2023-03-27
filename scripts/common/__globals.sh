@@ -680,6 +680,46 @@ create_config_symlink_as_needed() {
 }
 export -f create_config_symlink_as_needed
 
+create_dns_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  if [ "$WORKDIR_PARAM" = "cargobin" ]; then
+    return
+  fi
+
+  # Create/repair (if possible)
+  if [ ! -d "$WORKDIRS/$WORKDIR_PARAM/.state" ]; then
+    mkdir -p "$WORKDIRS/$WORKDIR_PARAM/.state"
+  fi
+
+  if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/dns" ]; then
+    # Just transform the human friendly recovery.txt into
+    # a JSON file and generate names along the way.
+    local _SRC="$WORKDIRS/$WORKDIR_PARAM/config/recovery.txt"
+    if [ -f "$_SRC" ]; then
+      {
+
+        echo "{ \"known\": {"
+        local _KEY_SCHEME_LIST=("ed25519" "secp256k1" "secp256r1")
+        local _FIRST_LINE=true
+        for scheme in "${_KEY_SCHEME_LIST[@]}"; do
+          local _LINES
+          _LINES=$(grep -i "$scheme" "$_SRC" | sort | sed 's/.*\[\(.*\)\]/\1/')
+          (( i=1 ))
+          while IFS= read -r line; do
+            if ! $_FIRST_LINE; then echo ","; else _FIRST_LINE=false; fi
+            echo -n "\"sb-$i-$scheme\": { \"address\": \"$line\" }"
+            (( i++ ))
+          done < <(printf '%s\n' "$_LINES")
+        done
+        echo
+        echo "}}"
+      } >> "$WORKDIRS/$WORKDIR_PARAM/.state/dns"
+    fi
+  fi
+}
+export -f create_dns_as_needed
+
 create_state_as_needed() {
   WORKDIR_PARAM="$1"
 
@@ -697,6 +737,8 @@ create_state_as_needed() {
       set_key_value "name" "$WORKDIR_PARAM"
     fi
   fi
+
+  create_dns_as_needed "$WORKDIR_PARAM";
 }
 export -f create_state_as_needed
 
