@@ -1,0 +1,29 @@
+#!/bin/bash
+
+cd ~/sui-base || { echo "sui-base not found. Please install it first."; exit 1; }
+
+# Check if there are local changes. If any, protect the user
+# from doing further git operations.
+if [ ! "$(git status --porcelain | wc -l)" -eq "0" ]; then
+  echo "local changes detected."
+  echo
+  echo "Please commit or stash them before upgrading sui-base."
+  echo
+  echo "Do 'git status' to see the changes."
+  exit 1
+fi
+
+# Check if there is actually a new version
+git remote update >& /dev/null
+V1=$(git rev-parse HEAD)
+V2=$(git rev-parse '@{u}')
+if [ "$V1" != "$V2" ]; then
+  # Does more than needed, but should recover from most operator errors...
+  (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
+  (cd "$SUI_REPO_DIR" && git reset --hard origin/main > /dev/null)
+  (cd "$SUI_REPO_DIR" && git merge '@{u}')
+  echo "sui-base updated successfully"
+else
+  echo "sui-base is already up to date"
+fi
+

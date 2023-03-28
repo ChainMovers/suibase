@@ -21,6 +21,7 @@ You can skip the section about installing the Sui binaries (unless you have an a
 
     For extra convenience your Rust app can also refer to the same Sui Rust SDK crates used by sui-base.
 
+<br>
 **Sui-Base Installation**
 ``` console
 $ cd ~
@@ -36,6 +37,7 @@ Sui-base is not intrusive on your system. The installation is per user:
 ??? question "Why does sui-base need to be cloned in the user home (~) directory?"
     Sui-base workdir is an "open standard" and benefit from being easily found by many apps and sdks. The user home directory is the convenient solution.
 
+<br>
 **Starting Localnet**
 ``` console
 $ localnet start
@@ -44,11 +46,24 @@ The first time will take minutes because of downloading and building the source 
 
 Type "localnet" for help.
 
-**Repair**
+<br>
+**Localnet Regeneration**
+```
+$ localnet regen
+```
+Quickly brings back the network to its initial state (with same addresses and all funds back). Useful for wiping out the network after testing.
 
-"localnet regen" quickly brings back the network to its initial state (with all funds back). Very useful for just wiping out the network after testing.
+<br>
+**Sui-Base Upgrade**
+```
+$ ~/sui-base/upgrade
+```
+Will pull latest from github and apply changes to all workdirs (as needed).
 
-
-**Uninstall**
-
-To remove sui-base completely, do ~/sui-base/uninstall and delete ~/sui-base.
+<br>
+**Sui-Base Uninstall**
+```
+$ ~/sui-base/uninstall
+$ rm -r ~/sui-base
+```
+Will remove sui-base completely.
