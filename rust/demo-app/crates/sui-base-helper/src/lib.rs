@@ -7,7 +7,7 @@
 mod sui_base_root;
 mod sui_base_workdir;
 
-use sui_sdk::types::base_types::ObjectID;
+use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
 use anyhow::{bail, Result};
 
@@ -63,7 +63,7 @@ impl SuiBaseHelper {
     // call, have no effect on this app selection.
     //
     // The name of the selected workdir is returned.
-    pub fn select_asui_workdir(self: &mut SuiBaseHelper) -> Result<String, anyhow::Error> {
+    pub fn select_active_workdir(self: &mut SuiBaseHelper) -> Result<String, anyhow::Error> {
         //let new_wd = SuiBaseWorkdir::new();
         //self.workdir = Some(new_wd.init_from_asui(self.root)?);
         bail!("sui-base: function not implemented. software error.");
@@ -123,6 +123,27 @@ impl SuiBaseHelper {
     ) -> Result<Vec<ObjectID>, anyhow::Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_published_new_objects(&mut self.root, object_type)?),
+            None => bail!("sui-base: workdir not selected."),
+        }
+    }
+
+    // Get an address by name.
+    //
+    // Sui-base localnet/devnet/testnet workdir are created with a set of pre-defined client addresses.
+    //
+    // These addresses are useful for testing. In particular, with localnet they are prefunded.
+    //
+    // Their names are:
+    //   sb-[1-5]-[ed25519|scp256k1|scp256r1]
+    //
+    // Example of valid names: "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
+    //
+    pub fn get_client_address(
+        self: &mut SuiBaseHelper,
+        address_name: &str,
+    ) -> Result<SuiAddress, anyhow::Error> {
+        match &self.workdir {
+            Some(wd) => Ok(wd.get_client_address(&mut self.root, address_name)?),
             None => bail!("sui-base: workdir not selected."),
         }
     }

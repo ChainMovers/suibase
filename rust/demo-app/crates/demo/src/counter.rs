@@ -6,10 +6,8 @@
 // type 'cargo run events' in another terminal to see the event.
 //
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_sdk::types::base_types::SuiAddress;
 use sui_sdk::SuiClientBuilder;
 
 use sui_sdk::json::SuiJsonValue;
@@ -53,9 +51,8 @@ pub async fn count() -> Result<(), anyhow::Error> {
     );
     let counter_id = object_ids[0];
 
-    // Use the client known to be always valid with sui-base localnet.
-    // TODO Get it from sui-base instead ...
-    let client_address = SuiAddress::from_str("0xfa51d742a62e447a79e61da2b394781baf53ab54")?;
+    // Use a client address known to be always created by sui-base for localnet/devnet/tesnet.
+    let client_address = suibase.get_client_address("sb-1-ed25519")?;
 
     // Get the keystore using the location given by sui-base.
     let keystore_pathname = suibase.get_keystore_pathname()?;

@@ -3,14 +3,15 @@ use std::path::{Path, PathBuf};
 
 use std::fs::File;
 use std::io::BufReader;
+use std::str::FromStr;
 
 use serde_json::Value;
 
-use sui_sdk::types::base_types::ObjectID;
+use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
 use crate::sui_base_root::SuiBaseRoot;
 
-use anyhow::{ensure, Context};
+use anyhow::{bail, ensure, Context};
 
 pub(crate) struct SuiBaseWorkdir {
     workdir_name: Option<String>,
@@ -206,6 +207,37 @@ impl SuiBaseWorkdir {
 
         Ok(objects)
     }
+
+    pub(crate) fn get_client_address(
+        &self,
+        root: &mut SuiBaseRoot,
+        address_name: &str,
+    ) -> Result<SuiAddress, anyhow::Error> {
+        // Validate the parameters.
+        ensure!(
+            !address_name.is_empty(),
+            "sui-base: invalid client_name parameter"
+        );
+
+        let pathname = self.get_pathname_state(root, "dns")?;
+
+        // Load the dns file, which is a JSON file.
+        let file = File::open(pathname)?;
+        let reader = BufReader::new(file);
+        let top: HashMap<String, Value> = serde_json::from_reader(reader)?;
+
+        if let Some(known) = top.get("known") {
+            if let Some(known_item) = known.get(address_name) {
+                if let Some(address_v) = known_item.get("address") {
+                    if let Some(address_str) = address_v.as_str() {
+                        return SuiAddress::from_str(address_str);
+                    }
+                }
+            }
+        }
+
+        bail!("sui-base: not finding client address [{}]", address_name);
+    }
 }
 
 impl SuiBaseWorkdir {
@@ -262,6 +294,51 @@ impl SuiBaseWorkdir {
         path_buf.push(file_name);
         path_buf.set_extension(extension);
 
+        Ok(path_buf.to_string_lossy().to_string())
+    }
+
+    fn get_pathname_state(
+        &self,
+        root: &mut SuiBaseRoot,
+        state_name: &str,
+    ) -> Result<String, anyhow::Error> {
+        // Build pathname and do some error detections.
+        ensure!(
+            root.is_sui_base_installed(),
+            "sui-base: not installed. Need to run ./install"
+        );
+
+        ensure!(
+            !state_name.is_empty(),
+            "sui-base: internal error invalid state_filename"
+        );
+
+        ensure!(
+            self.workdir_name.is_some(),
+            "sui-base: workdir name not set"
+        );
+        let workdir_name = self.workdir_name.as_ref().unwrap().to_string();
+
+        ensure!(self.workdir_path.is_some(), "sui-base: workdir not set");
+        let workdir_path = self.workdir_path.as_ref().unwrap().to_string();
+
+        // Check if the state exists. If not, could be that the workdir need to be initialized.
+        let mut path_buf = PathBuf::from(workdir_path);
+        path_buf.push(".state");
+
+        // Do an intermediate check for potential setup problem and provide an action to the user.
+        let state_path = path_buf.to_string_lossy().to_string();
+        let path_exists = if state_path.is_empty() {
+            false
+        } else {
+            Path::new(&state_path).exists()
+        };
+        ensure!(
+            path_exists,
+            "sui-base: missing information from {}. You may need to initialize it first (e.g. do an update and/or start)",
+            workdir_name
+        );
+        path_buf.push(state_name);
         Ok(path_buf.to_string_lossy().to_string())
     }
 }
