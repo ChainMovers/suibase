@@ -6,8 +6,7 @@
 //
 use colored::Colorize;
 use futures::StreamExt;
-use sui_json_rpc_types::SuiEvent;
-use sui_sdk::rpc_types::SuiEventFilter;
+use sui_json_rpc_types::EventFilter;
 use sui_sdk::SuiClientBuilder;
 
 // Subscribe for all events with the Sui network.
@@ -24,7 +23,7 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
 
     let mut subscribe_all = sui
         .event_api()
-        .subscribe_event(SuiEventFilter::All(vec![]))
+        .subscribe_event(EventFilter::All(vec![]))
         .await?;
 
     let ready_message = "subscribe_event() success. Listening for all events...";
@@ -39,6 +38,8 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
 
         // TODO Make this a bit more "nice, colorful, entertaining"
         if let Ok(env) = nxt.unwrap() {
+            println!("Event {:#?}", env);
+            /*
             match env.event {
                 SuiEvent::Publish { package_id, .. } => {
                     println!("Event new package 0x{} published", package_id.to_hex())
@@ -61,7 +62,7 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
                 }
 
                 _ => {}
-            }
+            }*/
         }
     }
 }

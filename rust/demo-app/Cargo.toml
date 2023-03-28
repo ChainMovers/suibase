@@ -10,7 +10,7 @@ version = "0.0.1"
 edition = "2021"
 
 [workspace.dependencies]
-# Built is done using the same workdir made active 
+# Built is done using the same workdir made active
 # with sui-base 'asui'.
 #
 # This help keeping your selected network, app and SDKs and whatnot
@@ -24,6 +24,7 @@ sui-json-rpc-types = { path = "../../workdirs/active/sui-repo/crates/sui-json-rp
 sui-keys = { path = "../../workdirs/active/sui-repo/crates/sui-keys/" }
 sui-types = { path = "../../workdirs/active/sui-repo/crates/sui-types/" }
 sui-adapter = { path = "../../workdirs/active/sui-repo/crates/sui-adapter/" }
+shared-crypto = { path = "../../workdirs/active/sui-repo/crates/shared-crypto/" }
 
 # Comment these "git" dependencies if using the above "path" dependencies.
 #sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
@@ -43,7 +44,7 @@ thiserror = "1.0.37"
 # No upgrade to v4 until color are back.
 clap = { version = "3.2.22", features = [
     "derive",
-] } 
+] }
 
 colored = { version = "2.0.0" }
 
@@ -51,7 +52,7 @@ colored = { version = "2.0.0" }
 # Intended to be used as [dev-dependencies] only.
 #
 # Attribute macros to control how test can run sequentially/parallel.
-#    https://tevps.net/blog/serial_test/ 
+#    https://tevps.net/blog/serial_test/
 #
 # Imagine a RWLock, the attributes do the following:
 #   [serial]     : Equivalent to a writer lock on the "RWLock".
@@ -59,7 +60,7 @@ colored = { version = "2.0.0" }
 #   No Attribute : Can run at anytime, ignores the RWLock.
 #
 # Why is that here?
-# Sui "simple transaction" must be single threaded for owned objects and 
-# if you test with a single local wallet (which is often the case), then 
+# Sui "simple transaction" must be single threaded for owned objects and
+# if you test with a single local wallet (which is often the case), then
 # you have to be careful of doing the test serial.
 version = "=0.9.0" # Force a version known to be OK.

@@ -26,6 +26,15 @@ impl Default for SuiBaseHelper {
 }
 
 impl SuiBaseHelper {
+    // Steps to get started with the API:
+    //
+    //  (1) Check if is_sui_base_installed()
+    //
+    //  (2) Call select_workdir()
+    //
+    //  (3) You can now call any other API functions (in any order).
+    //      Most calls will relate to the selected workdir.
+
     pub fn new() -> SuiBaseHelper {
         SuiBaseHelper {
             root: SuiBaseRoot::new(),
@@ -34,7 +43,7 @@ impl SuiBaseHelper {
     }
 
     // Check first if sui-base is installed, otherwise
-    // most of the other call will fail in some ways.
+    // most of the other calls will fail in some ways.
     pub fn is_sui_base_installed(self: &mut SuiBaseHelper) -> Result<bool, anyhow::Error> {
         Ok(self.root.is_sui_base_installed())
     }
@@ -42,8 +51,13 @@ impl SuiBaseHelper {
     // Select an existing workdir by name.
     //
     // Possible values are:
-    //   "cargobin", "localnet", "devnet", "testnet", "mainnet" and
+    //   "active", "cargobin", "localnet", "devnet", "testnet", "mainnet" and
     //    other custom names might be supported in future.
+    //
+    // Note: "active" is special. It will resolve the active workdir at the moment of the
+    //       call. Example: if "localnet" is the active, then this call is equivalent to
+    //       to be done for "localnet". The selection does not change even if the user
+    //       externally change the active later.
     //
     pub fn select_workdir(
         self: &mut SuiBaseHelper,
@@ -55,20 +69,6 @@ impl SuiBaseHelper {
         Ok(())
     }
 
-    // Use the same workdir as the one currently active for asui.
-    //
-    // The selection is done for this app at the time of this call.
-    //
-    // Further "external" changes to asui by the user, after this
-    // call, have no effect on this app selection.
-    //
-    // The name of the selected workdir is returned.
-    pub fn select_active_workdir(self: &mut SuiBaseHelper) -> Result<String, anyhow::Error> {
-        //let new_wd = SuiBaseWorkdir::new();
-        //self.workdir = Some(new_wd.init_from_asui(self.root)?);
-        bail!("sui-base: function not implemented. software error.");
-    }
-
     // Get the name of the selected workdir.
     pub fn get_workdir_name(&self) -> Result<String, anyhow::Error> {
         match &self.workdir {
@@ -77,7 +77,9 @@ impl SuiBaseHelper {
         }
     }
 
-    // Get the pathname of a file keystore (when available).
+    // Get the pathname of the file keystore (when available).
+    //
+    // Context: Selected Workdir by this API.
     pub fn get_keystore_pathname(&mut self) -> Result<String, anyhow::Error> {
         // TODO Implement this better with sui-base.yaml and/or ENV variables.
         //      See https://github.com/sui-base/sui-base/issues/6
@@ -91,6 +93,7 @@ impl SuiBaseHelper {
     //
     // package_name is the "name" field specified in the "Move.toml".
     //
+    // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn get_package_id(
         self: &mut SuiBaseHelper,
         package_name: &str,
@@ -117,6 +120,8 @@ impl SuiBaseHelper {
     //    }
     //
     // The object_type is "acme::Tools::Anvil"
+    //
+    // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn get_published_new_objects(
         self: &mut SuiBaseHelper,
         object_type: &str,

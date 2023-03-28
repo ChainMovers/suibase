@@ -7,12 +7,13 @@
 //
 use std::path::PathBuf;
 
+use shared_crypto::intent::Intent;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
 
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::types::messages::Transaction;
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 use sui_base_helper::SuiBaseHelper;
@@ -29,7 +30,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // network targeted for the demo:
     //    - Path to the keystore.
     //    - URLs to reach the network.
-    //    - A client with enough gas.
+    //    - A client address
 
     // Initialize the sui-base helper.
     let mut suibase = SuiBaseHelper::new();
@@ -85,8 +86,9 @@ pub async fn count() -> Result<(), anyhow::Error> {
 
     let _response = sui_client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             Transaction::from_data(move_call, Intent::default(), vec![signature]).verify()?,
+            SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

@@ -157,46 +157,28 @@ impl SuiBaseWorkdir {
         ensure!(names.len() == 3, "sui-base: invalid object_type parameter");
 
         let pathname =
-            self.get_pathname_published_file(root, names[0], "publish-output", "json")?;
+            self.get_pathname_published_file(root, names[0], "created-objects", "json")?;
 
-        // Load the publish-output.json file.
+        // Load the created-objects.json file.
         let file = File::open(pathname)?;
         let reader = BufReader::new(file);
-        let top: HashMap<String, Value> = serde_json::from_reader(reader)?;
+        let top: Value = serde_json::from_reader(reader)?;
 
-        // TODO Consider caching optimization...
-
-        // TODO Actually validate the object_type... but revisit this after release 0.28
-        // because they are changing how TransactionEffects work. Might need to query
-        // every object to check the type.
-
-        // Path into the JSON file:
-        //
-        //  (1) "top" is Map "certificate", "effects"...
-        //  (2) "effects" is Map "status", "executedEpoch", ..., "created, ...
-        //  (3) "created" is Array of Map { "owner", "reference" }
-        // This is the array that we want to iterate.
-        // For each element we want to extract the "objectId" in the "reference" Map.
-        //
-        // Finally, we care only for Shared object (because they are hard to keep track of).
         let mut objects = vec![];
 
-        // Works, looks terrible...
-        if let Some(effects) = top.get("effects") {
-            if let Some(created) = effects.get("created") {
-                if let Some(created_array) = created.as_array() {
-                    // Iterate the created objects.
-                    for object_created in created_array {
-                        if let Some(reference) = object_created.get("reference") {
-                            if let Some(owner) = object_created.get("owner") {
-                                if owner.is_string() {
-                                    // That means it is an "Immutable". Ignore it, it is the package.
-                                    continue;
-                                }
-                                if let Some(objectid_v) = reference.get("objectId") {
-                                    if let Some(objectid_str) = objectid_v.as_str() {
-                                        objects.push(ObjectID::from_hex_literal(objectid_str)?);
-                                    }
+        if let Some(top_array) = top.as_array() {
+            for created_object in top_array {
+                if let Some(type_field) = created_object.get("type") {
+                    if let Some(type_str) = type_field.as_str() {
+                        let substrings: Vec<&str> = type_str.split("::").collect();
+                        // TODO Check package id and name. substrings[0] != names[0] ||
+                        if substrings.len() == 3
+                            && substrings[1] == names[1]
+                            && substrings[2] == names[2]
+                        {
+                            if let Some(objectid_field) = created_object.get("objectid") {
+                                if let Some(objectid_str) = objectid_field.as_str() {
+                                    objects.push(ObjectID::from_hex_literal(objectid_str)?);
                                 }
                             }
                         }
