@@ -376,7 +376,7 @@ build_sui_repo_branch() {
     V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
     V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
     if [ "$V1" != "$V2" ]; then
-      _FORCE_GIT_RESET
+      _FORCE_GIT_RESET=true
     fi
 
     if $_FORCE_GIT_RESET; then
