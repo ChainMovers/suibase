@@ -21,8 +21,6 @@ from src.common.demo_utils import handle_result
 from src.common.low_level_utils import sui_base_config
 from pysui.sui.sui_config import SuiConfig
 from pysui.sui.sui_clients.sync_client import SuiClient
-from pysui.sui.sui_builders.get_builders import GetSuiSystemState, GetValidators
-from pysui.sui.sui_txresults.single_tx import SuiSystemState
 
 
 def _stats_0271(client: SuiClient):
@@ -31,6 +29,9 @@ def _stats_0271(client: SuiClient):
     Args:
         client (SuiClient): The interface to the Sui RPC API.
     """
+    from pysui.sui.sui_builders.get_builders import GetSuiSystemState, GetValidators
+    from pysui.sui.sui_txresults.single_tx import SuiSystemState
+
     # Get system information
     sysinfo: SuiSystemState = handle_result(
         client.execute(GetSuiSystemState()))
@@ -51,13 +52,26 @@ def _stats_0271(client: SuiClient):
         print(f"[{vmd.name}] address:  {vmd.sui_address}")
 
 
-def _stats_0281(client: SuiClient):
+def _stats_0291(client: SuiClient):
     """Show system info for 0.28.1
 
     Args:
         client (SuiClient): The interface to the Sui RPC API
     """
-    print(f"{client.rpc_version} not handled yet")
+    from pysui.sui.sui_builders.get_builders import GetLatestSuiSystemState
+    from pysui.sui.sui_txresults.single_tx import SuiLatestSystemState
+    sysinfo: SuiLatestSystemState = handle_result(
+        client.execute(GetLatestSuiSystemState()))
+    dtime = datetime.utcfromtimestamp(
+        sysinfo.epoch_start_timestamp_ms/1000)
+    print(
+        f"Current Epoch: {sysinfo.epoch}, running since UTC: {dtime.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f'Reference gas price: {sysinfo.reference_gas_price} mist')
+    print(
+        f"Active Validators: {len(sysinfo.active_validators)}")
+    for vmd in sysinfo.active_validators:
+        print(
+            f"[{vmd.name}] address:  {vmd.sui_address} staking balance: {vmd.staking_pool_sui_balance}")
 
 
 def main(client: SuiClient):
@@ -71,8 +85,8 @@ def main(client: SuiClient):
     match client.rpc_version:
         case "0.27.1":
             _stats_0271(client)
-        case "0.28.1":
-            _stats_0281(client)
+        case "0.29.1":
+            _stats_0291(client)
         case _:
             print(f"{client.rpc_version} not handled")
 

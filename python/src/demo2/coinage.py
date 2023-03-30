@@ -25,7 +25,7 @@ from pysui.sui.sui_builders.get_builders import GetAllCoins
 from pysui.sui.sui_txresults.single_tx import SuiCoinObjects
 
 
-def _coin_0271(client: SuiClient) -> None:
+def coin(client: SuiClient) -> None:
     """Summarize, by address by coin type, count of coin and balance
 
     It organizes the information in a dict structure:
@@ -61,11 +61,7 @@ def main(client: SuiClient):
         client.config.active_address)
     print(
         f"Active address: {client.config.active_address} public-key: {addy_keypair.public_key}")
-    match client.rpc_version:
-        case "0.27.1":
-            _coin_0271(client)
-        case _:
-            print(f"{client.rpc_version} not handled")
+    coin(client)
 
 
 if __name__ == "__main__":
