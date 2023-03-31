@@ -11,6 +11,8 @@ OS_DIR_ON_PATH_ALT="~/.local/bin"
 
 SUI_BASE_DIR="$HOME/sui-base"
 
+EXIT_TERMINAL_INSTRUCTION=false
+
 # Utility functions.
 setup_error() { echo "$*" 1>&2 ; exit 1; }
 is_user_root () { [ "${EUID:-$(id -u)}" -eq 0 ]; }
@@ -53,6 +55,19 @@ setup_local_bin_as_needed() {
 
   if is_local_bin_on_path; then
     return
+  fi
+
+  # Some .profile have code to add $HOME/.local/bin to $PATH
+  # Source it to see if it fixes it. If yes, then will need to inform
+  # the user at the end of the installation to close and re-open
+  # the terminal.
+  if [ -f "$HOME/.profile" ]; then
+    # shellcheck source=SCRIPTDIR/../.profile
+    source "$HOME/.profile"
+    if is_local_bin_on_path; then
+      EXIT_TERMINAL_INSTRUCTION=true
+      return
+    fi
   fi
 
 ##### That may work, but affraid to enable it without testing
@@ -115,8 +130,6 @@ main() {
     fi
   done
 
-  echo Scripts installed and verified.
-
   # Load sui-base common functions/globals to potentially
   # do more advanced default workdir creation.
   SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
@@ -128,14 +141,21 @@ main() {
 
   username=$(whoami)
   echo
-  echo "You can now start your localnet with:"
-  echo "  \$ localnet start"
+  echo "Sui-base is installed now for user [$username]. Great!"
   echo
-  echo "The first localnet download and build may take minutes."
+  echo "You can start your localnet with:"
+  echo "  \$ localnet start"
   echo
   echo "For more info type \"localnet\"."
   echo
-  echo "sui-base installation successful for user [$username]"
+  if $EXIT_TERMINAL_INSTRUCTION; then
+    echo "To get started you may need to restart your current shell."
+    echo "This would reload your PATH environment variable to include"
+    echo "sui-base's bin directory (\$HOME/.local/bin)."
+    echo
+    echo "To configure your current shell, run:"
+    echo "source \"\$HOME/.profile\""
+  fi
 }
 
 main;
