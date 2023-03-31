@@ -37,3 +37,8 @@ sui_faucet_client_timeout_secs: 10
 #
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
+
+links:
+  - alias: "localnet"
+    rpc: "http://0.0.0.0:9000"
+    ws: "ws://0.0.0.0:9000"

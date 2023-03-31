@@ -34,7 +34,8 @@ pub async fn count() -> Result<(), anyhow::Error> {
 
     // Initialize the sui-base helper.
     let mut suibase = SuiBaseHelper::new();
-    suibase.select_workdir("localnet")?;
+    suibase.select_workdir("active")?;
+    println!("Using sui-base workdir [{:?}]", suibase.get_workdir_name());
 
     // Get information from the last publication.
     let package_id = suibase.get_package_id("demo")?;
@@ -60,10 +61,10 @@ pub async fn count() -> Result<(), anyhow::Error> {
     let keystore_pathbuf = PathBuf::from(keystore_pathname);
     let keystore = Keystore::File(FileBasedKeystore::new(&keystore_pathbuf)?);
 
-    // TODO Get URL from sui-base ( https://github.com/sui-base/sui-base/issues/6 )
-    let sui_client = SuiClientBuilder::default()
-        .build("http://0.0.0.0:9000")
-        .await?;
+    // Create a Sui client.
+    let rpc_url = suibase.get_rpc_url()?;
+    println!("Connecting to Sui network at [{}]", rpc_url);
+    let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
 
     // Send the transaction.
     let call_args = vec![SuiJsonValue::from_object_id(counter_id)];

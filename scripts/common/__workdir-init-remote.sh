@@ -10,6 +10,7 @@
 workdir_init_remote() {
 
     mkdir -p "$CONFIG_DATA_DIR_DEFAULT"
+    cd_sui_log_dir;
 
     # The config-default/client.yaml should already be here from the templates, but
     # do the following logic to "repair" in case someone setup is mess up (they can
@@ -43,11 +44,7 @@ workdir_init_remote() {
 
     # TODO put some sui-base.yaml customization here! and some error handling!
     if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then
-      $SUI_EXEC client new-address secp256k1
-      $SUI_EXEC client new-address secp256k1
-      $SUI_EXEC client new-address secp256k1
-      $SUI_EXEC client new-address secp256k1
-      $SUI_EXEC client new-address secp256k1
+      add_test_addresses "$SUI_BIN_DIR/sui" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" "$CONFIG_DATA_DIR_DEFAULT/recovery.txt"
     fi
 
     STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")

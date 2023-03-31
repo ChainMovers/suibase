@@ -20,7 +20,7 @@ usage_local() {
   echo_low_green "$WORKDIR"; echo "  sui-base $SUI_BASE_VERSION"
   echo
   echo "  Workdir to simulate a Sui network running fully on this machine"
-  echo "  Accessible from http://0.0.0.0:9000"
+  echo "  Accessible from $CFG_links_1_rpc"
   echo
   echo_low_yellow "USAGE: "; echo;
   echo "      $WORKDIR <SUBCOMMAND> <Options>"
@@ -321,6 +321,10 @@ workdir_exec() {
   if [ "$CMD_START_REQ" = true ]; then
     if is_workdir_ok && is_sui_binary_ok; then
 
+      # A good time to check if the user did mess up with the
+      # workdir and fix potentially missing files.
+      repair_workdir_as_needed "$WORKDIR";
+
       # Note: nobody should have tried to run the sui binary yet.
       # So this is why the update_SUI_VERSION_var need to be done here.
       update_SUI_VERSION_var;
@@ -379,11 +383,6 @@ workdir_exec() {
 
   if [ "$CMD_PUBLISH_REQ" = true ]; then
 
-    if ! $is_local; then
-      echo "Not implement yet for $WORKDIR (work in progress)"
-      exit
-    fi
-
     if [ -n "$OPTIONAL_PATH" ]; then
       update_MOVE_TOML_DIR_var "$OPTIONAL_PATH";
     else
@@ -397,20 +396,26 @@ workdir_exec() {
     exit_if_workdir_not_ok;
     exit_if_sui_binary_not_ok;
 
-    # publication requires localnet to run.
-    # If stopped, then try (once) to start it.
-    update_SUI_PROCESS_PID_var;
-    if [ "$SUI_PROCESS_PID" ]; then
-      publish_localnet "$PASSTHRU_OPTIONS";
-    else
-      start_all_services;
-      if [ "$SUI_PROCESS_PID" ]; then
-        publish_localnet "$PASSTHRU_OPTIONS";
-      else
-        echo "Unable to start localnet"
-      fi
-    fi
+    # shellcheck source=SCRIPTDIR/__publish.sh
+    source "$HOME/sui-base/scripts/common/__publish.sh"
 
+    if $is_local; then
+      # publication requires localnet to run.
+      # If stopped, then try (once) to start it.
+      update_SUI_PROCESS_PID_var;
+      if [ "$SUI_PROCESS_PID" ]; then
+        publish_local "$PASSTHRU_OPTIONS";
+      else
+        start_all_services;
+        if [ "$SUI_PROCESS_PID" ]; then
+          publish_local "$PASSTHRU_OPTIONS";
+        else
+          echo "Unable to start $WORKDIR"
+        fi
+      fi
+    else
+      publish_local "$PASSTHRU_OPTIONS";
+    fi
     exit
   fi
 
@@ -443,7 +448,7 @@ workdir_exec() {
 
   # Finally, take care of the more complicated cases that involves
   # git, workdir/config creation and genesis.
-  create_workdir_as_needed "$WORKDIR"; # Create/repair $WORKDIR
+  repair_workdir_as_needed "$WORKDIR"; # Create/repair $WORKDIR
 
   if [ "$CMD_CREATE_REQ" = true ]; then
     # No further action when "create" command.
@@ -545,10 +550,10 @@ workdir_exec() {
     workdir_init_remote;
   fi
 
-  # This is the second pass with create_workdir_as_needed. This is
+  # This is the second pass with repair_workdir_as_needed. This is
   # done after regen to produce the .state/dns and whatever else
   # went missing.
-  create_workdir_as_needed "$WORKDIR";   # Create/repair as needed
+  repair_workdir_as_needed "$WORKDIR";   # Create/repair as needed
 
   if $is_local; then
     # Start the local processes normally.

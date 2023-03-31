@@ -62,29 +62,6 @@ apply_sui_base_yaml_to_config_yaml() {
   fi
 }
 
-adjust_default_keystore() {
-  # Add a few more addresses to the default sui.keystore
-  local _SUI_BINARY=$1
-  local _CLIENT_FILE=$2
-  local _WORDS_FILE=$3
-
-  {
-    for _ in {1..5}; do
-      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address ed25519;
-      echo ============================; echo; echo;
-      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256k1;
-      echo ============================; echo; echo;
-      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256r1;
-      echo ============================; echo; echo;
-    done
-  } >> "$_WORDS_FILE";
-
-  # Set highest address as active. Best-effort... no major issue if fail (I assume).
-  local _HIGH_ADDR
-  _HIGH_ADDR=$($_SUI_BINARY client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
-   $_SUI_BINARY client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
-}
-
 clear_keystore() {
   local _DIR=$1
   # Wipe out the keystore and the default in the client.yaml
@@ -185,7 +162,7 @@ workdir_init_local() {
         # Generate the genesis data for the very first time.
         "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >& /dev/null
         clear_keystore "$_GENDATA_DIR"
-        adjust_default_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
+        add_test_addresses "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
         create_faucet_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR" "$_GENDATA_DIR/faucet"
 
         # Temporarly "merge" the keystores for generating the config.yaml

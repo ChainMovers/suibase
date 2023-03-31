@@ -33,7 +33,7 @@ impl SuiBaseWorkdir {
     ) -> Result<(), anyhow::Error> {
         ensure!(
             root.is_sui_base_installed(),
-            "sui-base: not installed. Need to run ./install"
+            "sui-base: not installed. Need to run ~/sui-base/install"
         );
 
         ensure!(
@@ -44,17 +44,33 @@ impl SuiBaseWorkdir {
         // Check that the workdir do exists.
         let mut path_buf = PathBuf::from(root.workdirs_path());
         path_buf.push(workdir_name);
-        let workdir_path = path_buf.to_string_lossy().to_string();
+        path_buf = std::fs::canonicalize(path_buf).with_context(|| {
+            format!("sui-base: path could not be access. Check sui-base is selecting a valid active workdir")})?;
 
+        let workdir_path = path_buf.to_string_lossy().to_string();
         let path_exists = if workdir_path.is_empty() {
             false
         } else {
             Path::new(&workdir_path).exists()
         };
 
-        ensure!(path_exists, "sui-base: path [{}] not found", workdir_path);
+        ensure!(path_exists, "sui-base: path [{}] not found.", workdir_path);
 
-        self.workdir_name = Some(workdir_name.to_string());
+        // Get the actual workdir name from the .state/name
+        //
+        // It resolved the workdir name when "active", but also, it generally provides
+        // a sanity check that the workdir was created and is read accessible by this app.
+        path_buf.push(".state");
+        path_buf.push("name");
+        let mut in_str = std::fs::read_to_string(&path_buf)
+            .with_context(|| format!("sui-base: active workdir read of .state/name failed."))?;
+        in_str = in_str.trim().to_string();
+        ensure!(
+            !in_str.is_empty(),
+            "sui-base: active workdir .state/name not set. Try to 'update' the workdir"
+        );
+
+        self.workdir_name = Some(in_str);
         self.workdir_path = Some(workdir_path);
         Ok(())
     }
@@ -79,18 +95,9 @@ impl SuiBaseWorkdir {
 
         let mut in_str = std::fs::read_to_string(&pathname)
             .with_context(|| format!("sui-base: could not open published data [{}].", pathname))?;
+        in_str = in_str.trim().to_string();
 
         // Simple parsing for a generated file expected to be: ["<hex string>"]
-
-        // Trim new line.
-        if in_str.ends_with('\n') {
-            in_str.pop();
-            if in_str.ends_with('\r') {
-                in_str.pop();
-            }
-        }
-
-        // Parse and remove the expected brackets and quotes.
         ensure!(
             in_str.starts_with("[\"") && in_str.ends_with("\"]"),
             "sui-base: invalid package-id.json format"
@@ -106,11 +113,9 @@ impl SuiBaseWorkdir {
         &self,
         root: &mut SuiBaseRoot,
     ) -> Result<String, anyhow::Error> {
-        // TODO Implement this better with sui-base.yaml and/or ENV variables.
-        //      See https://github.com/sui-base/sui-base/issues/6
         ensure!(
             root.is_sui_base_installed(),
-            "sui-base: not installed. Need to run ./install"
+            "sui-base: not installed. Need to run ~/sui-base/install"
         );
 
         ensure!(self.workdir_path.is_some(), "sui-base: workdir not set");
@@ -220,6 +225,14 @@ impl SuiBaseWorkdir {
 
         bail!("sui-base: not finding client address [{}]", address_name);
     }
+
+    pub(crate) fn get_rpc_url(&self, root: &mut SuiBaseRoot) -> Result<String, anyhow::Error> {
+        self.get_url_from_state(root, "rpc")
+    }
+
+    pub(crate) fn get_ws_url(&self, root: &mut SuiBaseRoot) -> Result<String, anyhow::Error> {
+        self.get_url_from_state(root, "ws")
+    }
 }
 
 impl SuiBaseWorkdir {
@@ -236,7 +249,7 @@ impl SuiBaseWorkdir {
         // Build pathname and do some error detections.
         ensure!(
             root.is_sui_base_installed(),
-            "sui-base: not installed. Need to run ./install"
+            "sui-base: not installed. Need to run ~/sui-base/install"
         );
 
         ensure!(
@@ -287,7 +300,7 @@ impl SuiBaseWorkdir {
         // Build pathname and do some error detections.
         ensure!(
             root.is_sui_base_installed(),
-            "sui-base: not installed. Need to run ./install"
+            "sui-base: not installed. Need to run ~/sui-base/install"
         );
 
         ensure!(
@@ -322,5 +335,87 @@ impl SuiBaseWorkdir {
         );
         path_buf.push(state_name);
         Ok(path_buf.to_string_lossy().to_string())
+    }
+
+    fn get_url_from_state(
+        &self,
+        root: &mut SuiBaseRoot,
+        url_field_name: &str,
+    ) -> Result<String, anyhow::Error> {
+        let pathname = self.get_pathname_state(root, "links")?;
+
+        ensure!(
+            self.workdir_name.is_some(),
+            "sui-base: workdir name not set"
+        );
+        let workdir_name = self.workdir_name.as_ref().unwrap().to_string();
+
+        // Load the link file, which is a JSON file.
+        let file = File::open(pathname).with_context(|| {
+            format!(
+                "sui-base: workdir not fully initialized. Do '{0} start' or '{0} update'",
+                workdir_name
+            )
+        })?;
+        let reader = BufReader::new(file);
+        let top: HashMap<String, Value> = serde_json::from_reader(reader)?;
+
+        // Simply use the sui-base selected primary.
+        let mut link_id: u64 = 0;
+        if let Some(selection) = top.get("selection") {
+            if let Some(primary_id) = selection.get("primary") {
+                if let Some(primary_id_u64) = primary_id.as_u64() {
+                    link_id = primary_id_u64; // id should be unique and always set.
+                }
+            }
+        }
+
+        if link_id == 0 {
+            // This is unexpected, but do not fail. Just pick the first link in the config.
+            //
+            // Could be a transient problem, so do not prevent a RPC selection to be done.
+            //
+            // The user should be warn in some alternative ways (e.g. sui-base
+            // health monitoring process).
+            if let Some(links) = top.get("links") {
+                if let Some(links_array) = links.as_array() {
+                    if links_array.is_empty() {
+                        bail!("sui-base: missing first link definition. Check sui-base.yaml links section.");
+                    }
+                    if let Some(first_link) = links_array.first() {
+                        if let Some(rpc_v) = first_link.get(url_field_name) {
+                            if let Some(rpc_str) = rpc_v.as_str() {
+                                return Ok(rpc_str.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            bail!("sui-base: missing {} link field. May be a problem with the sui-base.yaml link section (1).", url_field_name );
+        }
+
+        // Get the information for that link.
+        if let Some(links) = top.get("links") {
+            if let Some(links_array) = links.as_array() {
+                if links_array.is_empty() {
+                    bail!("sui-base: missing at least one link definition. Check sui-base.yaml links section.");
+                }
+                for link in links_array {
+                    if let Some(link_id_v) = link.get("id") {
+                        if let Some(link_id_u64) = link_id_v.as_u64() {
+                            if link_id_u64 == link_id {
+                                if let Some(rpc_v) = link.get(url_field_name) {
+                                    if let Some(rpc_str) = rpc_v.as_str() {
+                                        return Ok(rpc_str.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        bail!("sui-base: missing {} link field. May be a problem with the sui-base.yaml link section (2).", url_field_name );
     }
 }

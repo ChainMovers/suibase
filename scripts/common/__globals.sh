@@ -185,6 +185,24 @@ export -f script_cmd
 beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
 export -f beginswith
 
+file_newer_than() {
+  # Check if file $1 is newer than file $2
+  # Return true on any error (assuming need attention).
+  if [ ! -f "$1" ] || [ ! -f "$2" ]; then
+    true; return
+  fi
+  local _date1 _date2
+  _date1=$(date -r "$1" +%s)
+  _date2=$(date -r "$2" +%s)
+
+  if [[ "$_date1" > "$_date2" ]]; then
+    true; return
+  fi
+
+  false; return
+}
+export -f file_newer_than
+
 set_key_value() {
   local _KEY=$1
   local _VALUE=$2
@@ -313,6 +331,23 @@ update_SUI_BASE_NET_MOCK_var() {
 export -f update_SUI_BASE_NET_MOCK_var
 
 update_SUI_BASE_NET_MOCK_var;
+
+check_yaml_parsed()
+{
+  local _var_name="CFG_$1"
+  # Will fail if either not set or empty string. Both
+  # wrong in all cases when calling this function.
+  if [ -z "${!_var_name}" ]; then
+    setup_error "Missing [ $_var_name ] in sui-base.yaml."
+  fi
+
+  _var_name="CFGDEFAULT_$1"
+  if [ -z "${!_var_name}" ]; then
+    setup_error "Missing [ $_var_name ] in *default* sui-base.yaml"
+  fi
+
+}
+export -f check_yaml_parsed
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
@@ -680,7 +715,7 @@ create_config_symlink_as_needed() {
 }
 export -f create_config_symlink_as_needed
 
-create_dns_as_needed() {
+create_state_dns_as_needed() {
   WORKDIR_PARAM="$1"
 
   if [ "$WORKDIR_PARAM" = "cargobin" ]; then
@@ -698,7 +733,6 @@ create_dns_as_needed() {
     local _SRC="$WORKDIRS/$WORKDIR_PARAM/config/recovery.txt"
     if [ -f "$_SRC" ]; then
       {
-
         echo "{ \"known\": {"
         local _KEY_SCHEME_LIST=("ed25519" "secp256k1" "secp256r1")
         local _FIRST_LINE=true
@@ -718,7 +752,88 @@ create_dns_as_needed() {
     fi
   fi
 }
-export -f create_dns_as_needed
+export -f create_state_dns_as_needed
+
+create_state_links_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  if [ "$WORKDIR_PARAM" = "cargobin" ]; then
+    return
+  fi
+
+  # Create/repair (if possible)
+  if [ ! -d "$WORKDIRS/$WORKDIR_PARAM/.state" ]; then
+    mkdir -p "$WORKDIRS/$WORKDIR_PARAM/.state"
+  fi
+
+  # Take the user sui-base.yaml and create the .state/links
+  #
+  # Eventually the state will be updated through health
+  # monitoring of the links, not just this "mindless"
+  # initialization.
+  #
+  # Note: .state/links changes will be implemented with "atomic filesystem mv",
+  #       not as a file/inode modification.
+  #
+
+  # Find how many links, and create the primary and secondary id
+  # references.
+  if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/links" ] || file_newer_than "$WORKDIRS/$WORKDIR_PARAM/sui-base.yaml" "$WORKDIRS/$WORKDIR_PARAM/.state/links"; then
+    # parse_yaml ~/sui-base/scripts/defaults/testnet/sui-base.yaml;
+    check_yaml_parsed links_;
+
+    (( _n_links=0 ))
+    for _links in ${CFG_links_:?} ; do
+      (( _n_links++))
+    done
+
+    if [ $_n_links -eq 0 ]; then
+      setup_error "No links found in $WORKDIRS/$WORKDIR_PARAM/config/sui-base.yaml"
+    fi
+
+    rm -rf "$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp"
+    {
+      echo "{"
+      echo -n "\"selection\": { \"primary\": 0, "
+
+      echo -n "\"secondary\": "
+      if [ $_n_links -ge 2 ]; then
+        echo -n "1"
+      else
+        echo -n "0"
+      fi
+      echo -n ", "
+
+      echo "\"n_links\": $_n_links }, "
+
+      echo "\"links\": ["
+      _FIRST_LINE=true
+      (( _i=0 ))
+      for _links in ${CFG_links_:?} ; do
+        if ! $_FIRST_LINE; then echo ","; else _FIRST_LINE=false; fi
+        echo "    {"
+        echo "      \"id\": $_i, "
+        # shellcheck disable=SC2001
+        _alias=$(echo "${!_links}" | sed 's/.*alias.*:\(.*\)/\1/' | tr -d '[:space:]')
+        echo "      \"alias\": \"$_alias\", "
+
+        _rpc="${_links}_rpc"
+        echo "      \"rpc\": \"${!_rpc}\", "
+
+        _ws="${_links}_ws"
+        echo "      \"ws\": \"${!_ws}\""
+        (( _i++ ))
+        echo -n "    }"; # close link
+      done
+      echo
+      echo "  ]"; # close links
+      echo "}";
+    } > "$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp"
+    # Atomic mv assuming Linux ext4 (good enough for now)
+    mv -f "$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp" "$WORKDIRS/$WORKDIR_PARAM/.state/links"
+  fi
+}
+export -f create_state_links_as_needed
 
 create_state_as_needed() {
   WORKDIR_PARAM="$1"
@@ -738,11 +853,12 @@ create_state_as_needed() {
     fi
   fi
 
-  create_dns_as_needed "$WORKDIR_PARAM";
+  create_state_dns_as_needed "$WORKDIR_PARAM";
+  create_state_links_as_needed "$WORKDIR_PARAM";
 }
 export -f create_state_as_needed
 
-create_workdir_as_needed() {
+repair_workdir_as_needed() {
   WORKDIR_PARAM="$1"
 
   mkdir -p "$WORKDIRS"
@@ -774,7 +890,7 @@ create_workdir_as_needed() {
 
   cd_sui_log_dir; # Create the sui.log directory as needed and make it the current one.
 }
-export -f create_workdir_as_needed
+export -f repair_workdir_as_needed
 
 set_active_symlink_force() {
   WORKDIR_PARAM="$1"
@@ -988,7 +1104,7 @@ ensure_client_OK() {
   #if [ "$CFG_network_type" = "local" ]; then
     # Make sure localnet exists in sui envs (ignore errors because likely already exists)
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
-    "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc http://0.0.0.0:9000 >& /dev/null
+    "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc "$CFG_links_1_rpc" >& /dev/null
 
     # Make localnet the active envs (should already be done, just in case, do it again here).
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
@@ -1035,121 +1151,6 @@ update_MOVE_TOML_DIR_var() {
 }
 export -f update_MOVE_TOML_DIR_var
 
-publish_localnet() {
-
-  PASSTHRU_OPTIONS="$@"
-
-  ensure_client_OK;
-
-  if [ -z "$MOVE_TOML_PACKAGE_NAME" ]; then
-    echo "Package name could not be found"
-    exit
-  fi
-
-  INSTALL_DIR="$PUBLISHED_DATA_DIR/$MOVE_TOML_PACKAGE_NAME"
-
-  echo "Package name=[$MOVE_TOML_PACKAGE_NAME]"
-  #echo "Build location=[$INSTALL_DIR]"
-  mkdir -p "$INSTALL_DIR"
-
-  # Set the output for the "script_cmd"
-  SCRIPT_OUTPUT="$INSTALL_DIR/publish-output.txt"
-  publish_clear_output "$INSTALL_DIR";
-
-  # Run unit tests.
-  #script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
-
-  # Build the Move package for publication.
-  #echo Now publishing on network
-  CMD="lsui client publish --gas-budget 30000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $PASSTHRU_OPTIONS --json 2>&1 1>$INSTALL_DIR/publish-output.json"
-
-  echo $CMD
-  echo Publishing...
-  script_cmd $CMD;
-
-  #  TODO Investigate problem with exit status here...
-
-  # Create the created_objects.json file.
-  echo -n "[" > "$INSTALL_DIR/created-objects.json";
-  local _first_object_created=true
-  # Get all the objectid
-  awk '/"created":/,/],/' "$INSTALL_DIR/publish-output.json" |
-  grep objectId | sed 's/\"//g; s/,//g' | tr -d "[:blank:]" |
-  while read -r line ; do
-    # Extract first hexadecimal literal found.
-    # Define the seperator (IFS) as the JSON ':'
-    local _ID=""
-    IFS=":"
-    for _i in $line
-    do
-      if beginswith 0x "$_i"; then
-        _ID=$_i
-        break;
-      fi
-    done
-    # Best-practice to revert IFS to default.
-    unset IFS
-    #echo "$_ID"
-    if [ -n "$_ID" ]; then
-      # Get the type of the object
-      object_type=$($SUI_EXEC client object "$_ID" --json | grep "type" | sed 's/,//g' | tr -d "[:blank:]" | head -n 1)
-      if [ -z "$object_type" ]; then
-        # To be removed eventually. Version 0.27 devnet was working differently.
-        object_type=$($SUI_EXEC client object "$_ID" --json | grep "dataType" | grep "package")
-        if [ -n "$object_type" ]; then
-          _found_id=true
-        fi
-      else
-        if $_first_object_created; then
-          _first_object_created=false
-        else
-          echo "," >> "$INSTALL_DIR/created-objects.json";
-        fi
-
-        echo -n "{\"objectid\":\"$_ID\",$object_type}" >> "$INSTALL_DIR/created-objects.json";
-        #echo "ot=[$object_type]"
-        if [ "$object_type" = "\"type\":\"package\"" ]; then
-          _found_id=true
-        fi
-      fi
-
-      if $_found_id; then
-        JSON_STR="[\"$_ID\"]"
-        echo "$JSON_STR" > "$INSTALL_DIR/package-id.json"
-        _found_id=false
-      fi
-
-    fi
-  done
-  echo "]" >> "$INSTALL_DIR/created-objects.json";
-
-  # Load back the package-id.json from the file for validation
-  _ID_PACKAGE=$(sed 's/\[//g; s/\]//g; s/"//g;' "$INSTALL_DIR/package-id.json")
-
-  echo "Package ID=[$_ID_PACKAGE]"
-
-  if [ -z "$_ID_PACKAGE" ]; then
-    cat "$INSTALL_DIR/publish-output.json"
-    setup_error "Could not find Package id in $SCRIPT_OUTPUT"
-  fi
-
-  # Test the publication by retreiving object information from the network
-  # using that parsed package id.
-  script_cmd "lsui client object $_ID_PACKAGE"
-  echo Verifying client can access new package on network...
-  validation=$(lsui client object "$_ID_PACKAGE" | grep -i "package")
-  if [ -z "$validation" ]; then
-    cat "$INSTALL_DIR/publish-output.json"
-    setup_error "Unexpected object type (Not a package)"
-  fi
-  JSON_STR="[\"$_ID_PACKAGE\"]"
-  echo "$JSON_STR" > "$INSTALL_DIR/package-id.json"
-
-  echo "Package ID is $JSON_STR"
-  echo "Also written in [$INSTALL_DIR/package-id.json]"
-  echo Publication Successful
-}
-export -f publish_localnet
 
 # Verify if $SUI_REPO_DIR symlink is toward a user repo (not default).
 #
@@ -1241,7 +1242,7 @@ create_cargobin_as_needed() {
   fi
 
   # Always called, because can do both create/repair.
-  create_workdir_as_needed "cargobin"
+  repair_workdir_as_needed "cargobin"
 
   if [ "$workdir_was_missing" = true ]; then
     if [ -d "$WORKDIRS/cargobin" ]; then
@@ -1265,3 +1266,28 @@ exit_if_not_valid_sui_address() {
   fi
 }
 export -f exit_if_not_valid_sui_address
+
+add_test_addresses() {
+  # Add 15 addresses to the specified client.yaml (sui.keystore)
+  # The _WORDS_FILE is what is normally appended in "recovery.txt"
+  local _SUI_BINARY=$1
+  local _CLIENT_FILE=$2
+  local _WORDS_FILE=$3
+
+  {
+    for _ in {1..5}; do
+      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address ed25519;
+      echo ============================; echo; echo;
+      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256k1;
+      echo ============================; echo; echo;
+      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256r1;
+      echo ============================; echo; echo;
+    done
+  } >> "$_WORDS_FILE";
+
+  # Set highest address as active. Best-effort... no major issue if fail (I assume).
+  local _HIGH_ADDR
+  _HIGH_ADDR=$($_SUI_BINARY client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
+   $_SUI_BINARY client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
+}
+export -f add_test_addresses

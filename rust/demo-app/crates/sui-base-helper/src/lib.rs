@@ -57,7 +57,7 @@ impl SuiBaseHelper {
     // Note: "active" is special. It will resolve the active workdir at the moment of the
     //       call. Example: if "localnet" is the active, then this call is equivalent to
     //       to be done for "localnet". The selection does not change even if the user
-    //       externally change the active later.
+    //       externally change the active after this call.
     //
     pub fn select_workdir(
         self: &mut SuiBaseHelper,
@@ -149,6 +149,22 @@ impl SuiBaseHelper {
     ) -> Result<SuiAddress, anyhow::Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_client_address(&mut self.root, address_name)?),
+            None => bail!("sui-base: workdir not selected."),
+        }
+    }
+
+    // Get a RPC URL for the selected workdir.
+    pub fn get_rpc_url(&mut self) -> Result<String, anyhow::Error> {
+        match &self.workdir {
+            Some(wd) => Ok(wd.get_rpc_url(&mut self.root)?),
+            None => bail!("sui-base: workdir not selected."),
+        }
+    }
+
+    // Get a Websocket URL for the selected workdir.
+    pub fn get_ws_url(&mut self) -> Result<String, anyhow::Error> {
+        match &self.workdir {
+            Some(wd) => Ok(wd.get_ws_url(&mut self.root)?),
             None => bail!("sui-base: workdir not selected."),
         }
     }

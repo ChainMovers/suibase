@@ -6,6 +6,7 @@
 //
 use colored::Colorize;
 use futures::StreamExt;
+use sui_base_helper::SuiBaseHelper;
 use sui_json_rpc_types::EventFilter;
 use sui_sdk::SuiClientBuilder;
 
@@ -14,11 +15,18 @@ use sui_sdk::SuiClientBuilder;
 // This function loop until Ctrl-C or error.
 //
 pub async fn display_events_loop() -> Result<(), anyhow::Error> {
-    // TODO Get URLs from sui-base ( https://github.com/sui-base/sui-base/issues/6 )
+    let mut suibase = SuiBaseHelper::new();
+    suibase.select_workdir("active")?;
+
+    let rpc_url = suibase.get_rpc_url()?;
+    let ws_url = suibase.get_ws_url()?;
+
+    println!("Using sui-base workdir [{:?}]", suibase.get_workdir_name());
+    println!("Connecting to Sui network at [{}]", ws_url);
 
     let sui = SuiClientBuilder::default()
-        .ws_url("ws://0.0.0.0:9000")
-        .build("http://0.0.0.0:9000")
+        .ws_url(ws_url)
+        .build(rpc_url)
         .await?;
 
     let mut subscribe_all = sui
@@ -39,30 +47,6 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
         // TODO Make this a bit more "nice, colorful, entertaining"
         if let Ok(env) = nxt.unwrap() {
             println!("Event {:#?}", env);
-            /*
-            match env.event {
-                SuiEvent::Publish { package_id, .. } => {
-                    println!("Event new package 0x{} published", package_id.to_hex())
-                }
-
-                SuiEvent::MoveEvent { package_id, .. } => {
-                    println!("Event emited from package 0x{}", package_id.to_hex())
-                }
-
-                SuiEvent::NewObject {
-                    package_id,
-                    object_id,
-                    ..
-                } => {
-                    println!(
-                        "Event new object 0x{} created for package 0x{}",
-                        object_id.to_hex(),
-                        package_id.to_hex()
-                    )
-                }
-
-                _ => {}
-            }*/
         }
     }
 }

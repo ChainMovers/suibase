@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # This script simply call the proper sui binary and config combination to interact
-# with remote devnet Sui network (operated by Mysten Lab).
+# with remote testnet Sui network (operated by Mysten Lab).
 #
-# Your devnet workdir should have been created when you did 'devnet start' or 'devnet update'.
+# Your testnet workdir should have been created when you did 'testnet start' or 'testnet update'.
 #
-# You use 'dsui' in the same way you would use 'sui' from Mysten. Example:
-#    'dsui client gas'
+# You use 'tsui' in the same way you would use 'sui' from Mysten. Example:
+#    'tsui client gas'
 #
 # One convenience is you do not have to specify the --client.config,
 # , --network.config and --keystore-path options on the command line.
@@ -15,7 +15,9 @@
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="testnet"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+# shellcheck source=SCRIPTDIR/common/__sui-exec.sh
 source "$HOME/sui-base/scripts/common/__sui-exec.sh"
 
 exit_if_not_installed;

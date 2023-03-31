@@ -2,6 +2,7 @@ use home::home_dir;
 use std::path::Path;
 
 pub(crate) struct SuiBaseRoot {
+    // Parent to all internal variables, except for the per workdir ones (see sui_base_workdir.rs)
     is_sui_base_installed: bool, // false on OS access failure.
 
     // Absolute path to sui-base installation.

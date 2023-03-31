@@ -16,9 +16,11 @@
 #   The WORKDIR variable is the directory name of *this* script location.
 #   (e.g. localnet, devnet, cargobin etc...)
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="$(basename $(dirname "$SCRIPT_COMMON_CALLER"))"
+WORKDIR="$(basename "$(dirname "$SCRIPT_COMMON_CALLER")")"
+# shellcheck source=SCRIPTDIR/../common/__globals.sh
 source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Call the common code that can handle all the possible context.
+# shellcheck source=SCRIPTDIR/../common/__workdir-exec.sh
 source "$HOME/sui-base/scripts/common/__workdir-exec.sh"
 workdir_exec "$@"
