@@ -9,12 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.1.0] 2023-03-31
+
+### Added
+
 - Scripts: localnet and faucet process start/stop/status
 - Scripts: localnet/devnet/testnet, lsui/dsui/tsui shortcuts
 - Scripts: asui for user selectable active workdir (look for 'set-active' option).
 - Scripts: csui for "cargobin" workdir created when ./cargo/bin/sui exists.
-- Python: 'sysinfo' and 'coinage' demo
-- Rust: 'demo-app'
+- Rust: demo-app
 - Python: demo app(s) added: `sysinfo` and `coinage`
 
 ### Fixed
