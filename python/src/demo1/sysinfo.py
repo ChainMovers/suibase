@@ -23,37 +23,8 @@ from pysui.sui.sui_config import SuiConfig
 from pysui.sui.sui_clients.sync_client import SuiClient
 
 
-def _stats_0271(client: SuiClient):
-    """Show system info for 0.27.1
-
-    Args:
-        client (SuiClient): The interface to the Sui RPC API.
-    """
-    from pysui.sui.sui_builders.get_builders import GetSuiSystemState, GetValidators
-    from pysui.sui.sui_txresults.single_tx import SuiSystemState
-
-    # Get system information
-    sysinfo: SuiSystemState = handle_result(
-        client.execute(GetSuiSystemState()))
-    dtime = datetime.utcfromtimestamp(
-        sysinfo.epoch_start_timestamp_ms/1000)
-    print(
-        f"Current Epoch: {sysinfo.epoch}, running since UTC: {dtime.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f'Reference gas price: {sysinfo.reference_gas_price} mist')
-    # Validator information
-    print(
-        f"Validators stake {sysinfo.validators.validator_stake} mist"
-    )
-    validators = handle_result(client.execute(
-        GetValidators())).validator_metadata
-    print(
-        f"Active Validators: {len(validators)}")
-    for vmd in validators:
-        print(f"[{vmd.name}] address:  {vmd.sui_address}")
-
-
 def _stats_0291(client: SuiClient):
-    """Show system info for 0.28.1
+    """Show system info for 0.28.x +
 
     Args:
         client (SuiClient): The interface to the Sui RPC API
@@ -82,13 +53,7 @@ def main(client: SuiClient):
         client.config.active_address)
     print(
         f"Active address: {client.config.active_address} public-key: {addy_keypair.public_key}")
-    match client.rpc_version:
-        case "0.27.1":
-            _stats_0271(client)
-        case "0.29.1":
-            _stats_0291(client)
-        case _:
-            print(f"{client.rpc_version} not handled")
+    _stats_0291(client)
 
 
 if __name__ == "__main__":
