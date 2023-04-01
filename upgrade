@@ -21,7 +21,7 @@ if [ "$V1" != "$V2" ]; then
   # Does more than needed, but should recover from most operator errors...
   (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
   (cd "$SUI_REPO_DIR" && git reset --hard origin/main > /dev/null)
-  (cd "$SUI_REPO_DIR" && git merge '@{u}')
+  (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
   echo "sui-base updated successfully"
 else
   echo "sui-base is already up to date"

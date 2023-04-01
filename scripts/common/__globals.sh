@@ -7,7 +7,7 @@
 
 USER_CWD=$(pwd -P)
 
-SUI_BASE_VERSION="0.1.0"
+SUI_BASE_VERSION="0.1.1"
 
 # Sui-base does not work with version below these.
 MIN_SUI_VERSION="sui 0.27.0"
@@ -420,7 +420,7 @@ build_sui_repo_branch() {
       echo Updating sui "$WORKDIR" in sui-base...
       (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
       (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" > /dev/null)
-      (cd "$SUI_REPO_DIR" && git merge '@{u}')
+      (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
     fi
     echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi

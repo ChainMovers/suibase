@@ -19,6 +19,6 @@ default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
 
 links:
-  - alias: "localnet"
-    rpc: "http://0.0.0.0:9000"
-    ws: "ws://0.0.0.0:9000"
+  - alias: "devnet"
+    rpc: "https://fullnode.devnet.sui.io:443"
+    ws: "wss://fullnode.devnet.sui.io:443"
