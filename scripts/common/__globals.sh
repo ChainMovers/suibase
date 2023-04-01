@@ -501,19 +501,7 @@ export -f exit_if_workdir_not_ok
 
 exit_if_sui_binary_not_ok() {
   # This is for common "operator" error (not doing command in right order).
-  local _BIN_NOT_FOUND=false
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
-    _BIN_NOT_FOUND=true
-  else
-    update_SUI_VERSION_var; # Note: Requires $SUI_BIN_DIR/sui
-    if version_greater_equal "$SUI_VERSION" "0.27"; then
-      if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
-        _BIN_NOT_FOUND=true
-      fi
-    fi
-  fi
-
-  if [ "$_BIN_NOT_FOUND" = "true" ]; then
     if [ "$WORKDIR" = "cargobin" ]; then
       echo "The $HOME/.cargo/bin/sui was not found."
       echo "Follow Mysten Lab procedure to install it:"
@@ -538,10 +526,24 @@ exit_if_sui_binary_not_ok() {
       echo "The localnet need to be regenerated."
       echo
       echo " Do one of the following:"
-      echo "    $WORKDIR regen"
+      echo "    $WORKDIR regen (recommended)"
       echo "    $WORKDIR update"
       echo
       exit 1
+    fi
+
+    update_SUI_VERSION_var; # Requires $SUI_BIN_DIR/sui (was verified above)
+    if version_greater_equal "$SUI_VERSION" "0.27"; then
+      if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
+      echo
+      echo "The sui-faucet binary for $WORKDIR was not found."
+      echo
+      echo " Do one of the following to build it:"
+      echo "    $WORKDIR start"
+      echo "    $WORKDIR update"
+      echo
+      exit 1
+      fi
     fi
   fi
 }
