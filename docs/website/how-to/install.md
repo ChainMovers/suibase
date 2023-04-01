@@ -54,11 +54,11 @@ $ localnet regen
 Quickly brings back the network to its initial state (with same addresses and all funds back). Useful for wiping out the network after testing.
 
 <br>
-**Sui-Base Upgrade**
+**Sui-Base update**
 ```
-$ ~/sui-base/upgrade
+$ ~/sui-base/update
 ```
-Will pull latest from github and apply changes to all workdirs (as needed).
+Will check for latest from github and update sui-base as needed.
 
 <br>
 **Sui-Base Uninstall**
