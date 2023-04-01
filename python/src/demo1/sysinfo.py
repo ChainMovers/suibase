@@ -47,7 +47,7 @@ def _stats_0291(client: SuiClient):
 
 def main(client: SuiClient):
     """Entry point for demo."""
-    print(f"\nSui client RPC version{client.rpc_version}")
+    print(f"\nSui client RPC version {client.rpc_version}")
     # Information not related to some version
     addy_keypair = client.config.keypair_for_address(
         client.config.active_address)
