@@ -5,19 +5,20 @@ hide:
 # Sui-Base is Community Driven
 
 ## Where is the Sui developer community?
+For Sui-Base (+any 3rd party dev tool welcome to join):
+
+  * [Sui-Base Discord :octicons-link-external-16:](https://discord.com/invite/Erb6SwsVbH)
+
 For Sui specific discussions:
 
   * [Sui Official Discord :octicons-link-external-16:](https://discord.gg/sui)
 
   * [Sui Official Forum :octicons-link-external-16:](https://forums.sui.io/)
 
-For Sui-Base (+any 3rd party dev tool welcome to join):
-
-  * [Sui-Base Discord :octicons-link-external-16:](https://discord.com/invite/Erb6SwsVbH) 
 
 ## How to be a writer for the Cookbook?
 
-Anyone can participate. 
+Anyone can participate.
 
 The website is built from markdown files (.md) and served directly from [github :octicons-link-external-16:](https://github.com/sui-base/sui-base/tree/main/docs/website). You submit changes with a pull request.
 
