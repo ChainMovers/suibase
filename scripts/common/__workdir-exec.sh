@@ -224,8 +224,9 @@ workdir_exec() {
     local _USER_REQUEST
     _USER_REQUEST=$(get_key_value "user_request");
 
+    update_SUI_VERSION_var;
+
     if $is_local; then
-      update_SUI_VERSION_var;
       update_SUI_FAUCET_VERSION_var;
 
       # Verify if the faucet is supported for this version.
@@ -410,7 +411,7 @@ workdir_exec() {
         if [ "$SUI_PROCESS_PID" ]; then
           publish_local "$PASSTHRU_OPTIONS";
         else
-          echo "Unable to start $WORKDIR"
+          error_exit "Unable to start $WORKDIR"
         fi
       fi
     else
@@ -423,13 +424,11 @@ workdir_exec() {
     exit_if_workdir_not_ok;
 
     if [ "$ACTIVE_WORKDIR" = "$WORKDIR" ]; then
-      echo "$WORKDIR is already active"
+      info_exit "$WORKDIR is already active"
     else
-      echo "Making $WORKDIR active"
       set_active_symlink_force "$WORKDIR";
+      info_exit "$WORKDIR is now active"
     fi
-
-    exit
   fi
 
   # Detect user action that should be NOOP.
@@ -439,11 +438,11 @@ workdir_exec() {
     fi
   fi
 
-  if [ "$CMD_CREATE_REQ" = true ]; then
-    # Check for what is minimally needed for configuration.
-    if is_workdir_ok; then
-      info_exit "$WORKDIR already created."
-    fi
+  local _WORKDIR_WAS_OK;
+  if is_workdir_ok; then
+    _WORKDIR_WAS_OK=true
+  else
+    _WORKDIR_WAS_OK=false
   fi
 
   # Finally, take care of the more complicated cases that involves
@@ -452,10 +451,13 @@ workdir_exec() {
 
   if [ "$CMD_CREATE_REQ" = true ]; then
     # No further action when "create" command.
-    echo "$WORKDIR created"
-    exit
+    if $_WORKDIR_WAS_OK; then
+      # Note: did check for repair even if already created (just in case).
+      info_exit "$WORKDIR already created"
+    else
+      info_exit "$WORKDIR created"
+    fi
   fi
-
 
   if $is_local; then
     # The script should not be called from a location that could get deleted.

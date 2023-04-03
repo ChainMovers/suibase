@@ -151,6 +151,9 @@ function echo_low_yellow() {
 info_exit() { echo "$*" 1>&2; exit 1; }
 export -f info_exit
 
+error_exit() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
+export -f error_exit
+
 setup_error() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
 export -f setup_error
 
