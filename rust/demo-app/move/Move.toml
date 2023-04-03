@@ -3,7 +3,7 @@ name = "demo"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../../workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
+Sui = { local = "../../../../sui-base/workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
 
 [addresses]
 demo =  "0x0"

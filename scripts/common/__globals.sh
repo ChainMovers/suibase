@@ -148,7 +148,7 @@ function echo_low_yellow() {
 }
 
 # Utility functions.
-info_exit() { echo "$*" 1>&2; exit 1; }
+info_exit() { echo "$*" 1>&2; exit 0; }
 export -f info_exit
 
 error_exit() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
