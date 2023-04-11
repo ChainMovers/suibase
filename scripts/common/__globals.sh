@@ -7,7 +7,7 @@
 
 USER_CWD=$(pwd -P)
 
-SUI_BASE_VERSION="0.1.1"
+SUI_BASE_VERSION="0.1.2"
 
 # Sui-base does not work with version below these.
 MIN_SUI_VERSION="sui 0.27.0"
@@ -524,7 +524,7 @@ exit_if_sui_binary_not_ok() {
   # Sometimes the binary are ok, but not the config (may happen when the
   # localnet config directory is safely wipe out on set-sui-repo transitions).
   if [ "$CFG_network_type" = "local" ]; then
-    if  [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
+    if  [ ! -f "$CLIENT_CONFIG" ]; then
       echo
       echo "The localnet need to be regenerated."
       echo

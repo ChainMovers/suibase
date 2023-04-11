@@ -140,10 +140,14 @@ workdir_init_local() {
 
       # Find which static genesis_data version should be used.
       # Only two so far >=0.28 and everything else below.
-      if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.28"; then
-        _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.28"
+      if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.31"; then
+        _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.31"
       else
-        _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
+        if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.28"; then
+          _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.28"
+        else
+          _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
+        fi
       fi
       yes | cp -rf "$_STATIC_SOURCE_DIR/sui.keystore" "$_GENDATA_DIR"
       yes | cp -rf "$_STATIC_SOURCE_DIR/client.yaml" "$_GENDATA_DIR"

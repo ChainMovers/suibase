@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 
+## [0.1.2] 2023-04-10
+
+### Fixed
+
+- Scripts: (#25) Fix for Sui 0.31 support (change to config.yaml)
+
 ## [0.1.1] 2023-04-01
 
 ### Fixed
