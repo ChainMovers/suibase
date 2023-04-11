@@ -1,0 +1,28 @@
+// place your custom styles here
+button.sidebar-heading {
+  font-size: 1em;
+  padding-inline-start: 1rem;
+}
+
+#main-title {
+  -webkit-text-fill-color: #6fbcf0;
+}
+
+a:has(polygon) {
+  color: #6fbcf0;
+}
+
+.hint-container.details {
+  padding-top: 1rem;
+  margin-block-start: 0em;
+  padding-bottom: 0.5rem;
+}
+
+.hint-container.details summary {
+  padding-top: 0.5rem;
+  padding-bottom: 0rem;
+}
+
+//#main-content.page {
+//  padding-inline-start: calc(var(--sidebar-space) + 0.5rem);
+//}
