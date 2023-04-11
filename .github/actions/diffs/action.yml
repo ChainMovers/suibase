@@ -31,6 +31,7 @@ runs:
             - 'mkdocs.yml'
             - '*.md'
             - '.github/workflows/deploy.yml'
+            - '.github/workflows/deploy-docs.yml'
           isMove:
             - 'move/sources/**'
             - 'Move.toml'
@@ -38,4 +39,5 @@ runs:
             - 'scripts/**'
             - 'install'
             - 'uninstall'
+            - 'update'
             - '.github/workflows/scripts-tests.yml'
