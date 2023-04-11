@@ -428,7 +428,7 @@ build_sui_repo_branch() {
     echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
-  (if cd "$SUI_REPO_DIR"; then cargo build; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
 
   # Sanity test that the sui binary works
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
