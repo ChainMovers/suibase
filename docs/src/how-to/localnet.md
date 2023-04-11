@@ -1,8 +1,8 @@
 ---
-title: Using Localnet
+title: "Using Localnet"
 order: 2
 ---
-**Starting Localnet**
+## Starting
 ```shell
 $ localnet start
 ```
@@ -15,25 +15,27 @@ $ lsui client active-address
 0xf7ae71f84fabc58662bd4209a8893f462c60f247095bb35b19ff659ad0081462
 ```
 
-```lsui``` is a *small* frontend to the Mysten Lab sui client, but what it brings in convenience is *huge*.<br>
+```lsui``` is a *small* frontend to the Mysten Labs sui client, but its convenience is *huge*.<br>
 
-You no longer have to "switch env". You can assume ```lsui``` always transparently call the proper ```sui``` binary and client keystore for this localnet (in same way, devnet/testnet have their own dsui/tsui trick).
+You no longer have to "switch env". You can assume ```lsui``` always transparently execute with the proper ```sui``` client and keystore for this localnet (in same way, use ```dsui``` for devnet, and ```tsui``` for testnet).
 
 Type ```localnet``` for help.
 <br>
 
-**Localnet Status / Stopping**<br>
+## Status / Stopping
 You can monitor the client version and process health with ```localnet status```:<br>
 <img :src="$withBase('/assets/localnet-status.png')" alt="Localnet Status"><br>
 To stop the process, do ```localnet stop```:<br>
 <img :src="$withBase('/assets/localnet-stop.png')" alt="Localnet Stop"><br>
 
-**Upgrading Sui Client / Repo**<br>
+## Upgrading Sui Client
 Do ```localnet update``` to download/rebuild/restart the localnet with the latest.
+
+This also update the local repo that can provide the matching Rust SDK and Move dependencies to your app.
 
 By default, the latest 'devnet' branch from Mysten Labs is used, you can choose a different branch or repo by editing the sui-base.yaml ([More Info]( ./configure-sui-base-yaml.md#change-default-repo-and-branch )).
 
-**Localnet Regeneration**
+## Regeneration
 ```shell
 $ localnet regen
 ```
@@ -42,7 +44,7 @@ Quickly brings back the network to its initial state (with same addresses and al
 The network is **always** initialized with 15 pre-funded addresses. 5 for each key type (ed25519, secp256k, secp256r1). Your Rust/Python apps can further access these addresses "by-name" for automated test setup.
 <br>
 
-**Localnet Faucet**<br>
+## Faucet
 Get funds to either a single address or all addresses at once on your localnet.
 
 The following demo should be self-explanatory:<br>

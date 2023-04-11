@@ -32,7 +32,8 @@ export default hopeTheme({
       sidebar: enSidebar,
 
       footer:
-        '<a href="https://github.com/sui-base/sui-base">Sui-Base on Github</a>',
+        '<a href="https://github.com/sui-base/sui-base">Sui-Base on Github</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://discord.com/invite/Erb6SwsVbH">Sui-Base on Discord</a>',
+
       copyright: "Apache 2.0 Open-Source License",
 
       displayFooter: true,

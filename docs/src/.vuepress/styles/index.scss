@@ -23,6 +23,38 @@ a:has(polygon) {
   padding-bottom: 0rem;
 }
 
+.hint-container.note summary {
+  padding-top: 0.5rem;
+  padding-bottom: 0rem;
+}
+
+.hint-container-title {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.hint-container p {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.footer a {
+  color: #6fbcf0;
+  font-weight: unset;
+}
+.footer-wrapper .footer {
+  font-size: 12px;
+}
+
+.footer-wrapper .copyright {
+  font-size: 12px;
+}
+
+.footer-wrapper {
+  padding-top: unset;
+  padding-bottom: unset;
+}
+
 //#main-content.page {
 //  padding-inline-start: calc(var(--sidebar-space) + 0.5rem);
 //}

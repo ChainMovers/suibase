@@ -1,7 +1,7 @@
 ---
 title: "How to become a Cookbook editor?"
 order: 2
-sidebarDepth: 0
+headerDepth: 0
 ---
 
 Anyone can participate.

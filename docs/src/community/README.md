@@ -1,7 +1,7 @@
 ---
 title: "Community"
 order: 1
-sidebarDepth: 0
+headerDepth: 0
 ---
 
 

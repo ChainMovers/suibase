@@ -1,0 +1,66 @@
+name: Deploy Website (vuepress)
+
+on:
+  push:
+    branches: [main]
+  pull-request:
+    branches: [main]
+
+  workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isDoc: ${{ steps.diff.outputs.isDoc }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  deploy-gh-pages:
+    needs: diff
+    if: ${{ (needs.diff.outputs.isDoc == 'true') || (github.event_name == 'workflow_dispatch') }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          # if your docs needs submodules, uncomment the following line
+          # submodules: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: true
+
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: pnpm
+
+
+      - name: Build Docs
+        env:
+          NODE_OPTIONS: --max_old_space_size=8192
+        run: |-
+          cd docs
+          pnpm run docs:build
+          > docs/src/.vuepress/dist/.nojekyll
+
+      - name: Deploy Docs
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          # This is the branch where the docs are deployed to
+          branch: gh-pages
+          folder: docs/src/.vuepress/dist

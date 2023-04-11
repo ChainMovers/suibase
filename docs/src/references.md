@@ -1,7 +1,3 @@
----
-hide:
-  - toc
----
 # References
 
 Sui-Base define a few conventions to coordinate among SDKs, apps and user.

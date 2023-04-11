@@ -2,8 +2,8 @@
 title: Installation
 order: 1
 ---
-# Install Sui-Base
 
+## Requirements
 **Supported operating systems**
   * Linux
   * macOS
@@ -14,14 +14,14 @@ order: 1
 
 Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites).
 
-Skip installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config).
+Skip installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config).<br>
 
 ::: details How will sui-base get the Sui binaries?
 Sui-base automatically download the code and builds a sui client for each workdir. One binary to properly match each network.<br><br>
-For faster build your Rust app can also have its dependencies set to the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
+For faster build your Rust app can also later change its dependencies to the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
 :::
 
-**Sui-Base Installation**
+## Installation Steps
 ```shell
 $ cd ~
 $ git clone https://github.com/sui-base/sui-base.git
@@ -37,7 +37,7 @@ Sui-base is not intrusive on your system. The installation is per user:
 Sui-base files are an "open standard" and benefit from being easily found by many apps and sdks. The user home is the convenient solution.
 :::
 
-**Sui-Base update**
+## Update
 ```shell
 $ ~/sui-base/update
 ```
@@ -45,7 +45,7 @@ Will pull latest from github to only update sui-base itself.
 To update sui clients and local repos, use instead the workdir scripts (e.g. ```localnet update```)
 <br>
 
-**Sui-Base Uninstall**
+## Uninstall
 ```shell
 $ ~/sui-base/uninstall
 $ rm -r ~/sui-base
