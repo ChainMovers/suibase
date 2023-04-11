@@ -1,15 +1,15 @@
-name: Deploy Website (vuepress)
+name: Deploy Vuepress
 
 on:
   push:
     branches: [main]
-  pull-request:
+  pull_request:
     branches: [main]
 
   workflow_dispatch:
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
   diff:
@@ -42,13 +42,11 @@ jobs:
           version: 8
           run_install: true
 
-
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
           cache: pnpm
-
 
       - name: Build Docs
         env:
