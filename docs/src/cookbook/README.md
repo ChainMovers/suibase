@@ -1,4 +1,8 @@
-# What is the Sui Cookbook?
+---
+title: What is the Sui Cookbook?
+contributors: true
+editLink: true
+---
 
 It is work in progress :smile:
 

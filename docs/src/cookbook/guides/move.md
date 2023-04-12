@@ -1,4 +1,9 @@
-# Move Language
+---
+title: Sui Move
+order: 2
+contributors: true
+editLink: true
+---
 
 This is an easy mini-project for first time contributor.
 

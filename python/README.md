@@ -6,7 +6,7 @@ Contains python program examples for interacting with Sui blockchain. The demo a
 require `pysui` Python SUI Client SDK to run.
 
 ## Pre Setup
-If not already done, you should first [install sui-base](../how-to/install.md)
+If not already done, you should first [install sui-base](../../how-to/install.md)
 
 ## Setup
 ```shell

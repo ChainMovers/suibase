@@ -16,12 +16,15 @@ export default hopeTheme({
 
   repo: "sui-base/sui-base",
 
+  contributors: false,
   editLink: false,
   pageInfo: false,
   breadcrumb: false,
   toc: false,
 
-  docsDir: "/src", // Might not be needed when editLink false?
+  docsDir: "docs/src/", // Might not be needed when editLink false?
+
+  hotReload: true,
 
   locales: {
     "/": {
@@ -70,6 +73,7 @@ export default hopeTheme({
       // @ts-expect-error: You should generate and use your own comment service
       provider: "Waline",
     },*/
+    git: true,
 
     // all features are enabled for demo, only preserve features you need here
     mdEnhance: {

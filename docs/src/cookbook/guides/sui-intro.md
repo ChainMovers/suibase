@@ -1,6 +1,10 @@
 ---
 title: Sui Basic Concepts
 order: 1
+contributors: true
+editLink: true
+---
+
 ---
 This is an easy mini-project for first time contributor.
 
