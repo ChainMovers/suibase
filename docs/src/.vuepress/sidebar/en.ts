@@ -62,8 +62,8 @@ export const enSidebar = sidebar({
           prefix: "python/",
           children: [
             {
-              text: "Overview",
-              link: "README.md",
+              text: "Demos",
+              link: "demos/README.md",
             },
           ],
         },

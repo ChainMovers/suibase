@@ -1,1 +1,3 @@
-../../../python/README.md
+---
+index: false
+---
