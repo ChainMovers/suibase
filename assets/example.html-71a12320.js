@@ -1,1 +1,0 @@
-import{_ as a,W as t,X as c,Y as e,Z as s}from"./framework-5e49288e.js";const o={},n=e("h1",{id:"example-code-snippet",tabindex:"-1"},[e("a",{class:"header-anchor",href:"#example-code-snippet","aria-hidden":"true"},"#"),s(" Example code snippet")],-1),r=[n];function d(_,l){return t(),c("div",null,r)}const i=a(o,[["render",d],["__file","example.html.vue"]]);export{i as default};
