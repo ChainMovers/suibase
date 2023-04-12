@@ -30,7 +30,7 @@ publish_local() {
 
   # Build the Move package for publication.
   #echo Now publishing on network
-  CMD="$SUI_EXEC client publish --gas-budget 400000000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS --json 2>&1 1>$INSTALL_DIR/publish-output.json"
+  CMD="$SUI_EXEC client publish --gas-budget 20000000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS --json 2>&1 1>$INSTALL_DIR/publish-output.json"
 
   echo $CMD
   echo "sui-base: Publishing..."

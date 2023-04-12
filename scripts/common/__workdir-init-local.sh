@@ -138,20 +138,35 @@ workdir_init_local() {
       rm -rf "$_GENDATA_DIR"
       mkdir -p "$_GENDATA_DIR"
 
+      # Generate the templates to be used for building our own config.yaml
+      mkdir -p "$_GENDATA_DIR/template"
+      "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" >& /dev/null
+      "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" --write-config "$_GENDATA_DIR/template/config.yaml" >& /dev/null
+      # Get everything before the accounts section.
+      sed '/accounts:/q' "$_GENDATA_DIR/template/config.yaml" > "$_GENDATA_DIR/config.yaml.template_head"
+      # Check in case there is trailing stuff after the accounts section (for now it is empty).
+      sed -n '/accounts:/,$p' "$_GENDATA_DIR/template/config.yaml" | sed '/^accounts/d' | sed -n '/^[a-z]/,$p' > "$_GENDATA_DIR/config.yaml.template_tail"
+      rm -rf "$_GENDATA_DIR/template"
       # Find which static genesis_data version should be used.
-      # Only two so far >=0.28 and everything else below.
       if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.31"; then
         _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.31"
+        # Use the templates to build the config.yaml.
+        {
+          cat "$_GENDATA_DIR/config.yaml.template_head"
+          cat "$_STATIC_SOURCE_DIR/address.yaml.template"
+          cat "$_GENDATA_DIR/config.yaml.template_tail"
+        } > "$_GENDATA_DIR/config.yaml"
       else
         if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.28"; then
           _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.28"
         else
           _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
         fi
+        yes | cp -rf "$_STATIC_SOURCE_DIR/config.yaml" "$_GENDATA_DIR"
       fi
+
       yes | cp -rf "$_STATIC_SOURCE_DIR/sui.keystore" "$_GENDATA_DIR"
       yes | cp -rf "$_STATIC_SOURCE_DIR/client.yaml" "$_GENDATA_DIR"
-      yes | cp -rf "$_STATIC_SOURCE_DIR/config.yaml" "$_GENDATA_DIR"
       yes | cp -rf "$_STATIC_SOURCE_DIR/recovery.txt" "$_GENDATA_DIR"
 
       mkdir -p "$_GENDATA_DIR/faucet"

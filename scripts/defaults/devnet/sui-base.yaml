@@ -10,7 +10,7 @@ sui_faucet_genesis_funding: ~
 sui_faucet_host_ip: "0.0.0.0"
 sui_faucet_port: 9124
 sui_faucet_max_request_per_second: 100
-sui_faucet_num_coins: 5
+sui_faucet_num_coins: 1
 sui_faucet_coin_value: 200000000
 sui_faucet_request_buffer_size: 200
 sui_faucet_client_timeout_secs: 10
