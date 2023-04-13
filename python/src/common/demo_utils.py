@@ -18,6 +18,9 @@
 import sys
 from typing import Any
 from pysui.sui.sui_clients.common import SuiRpcResult
+from pysui.abstracts import SignatureScheme, KeyPair
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_types.address import SuiAddress
 
 
 def default_handler(result: SuiRpcResult) -> Any:
@@ -45,3 +48,23 @@ def handle_result(from_cmd: SuiRpcResult, handler=default_handler) -> Any:
     assert callable(handler), "Invalid 'handler' argument"
     assert isinstance(from_cmd, SuiRpcResult), "Invalid 'from_command' return"
     return handler(from_cmd)
+
+
+def first_address_for_keytype(client: SuiClient, keytype: SignatureScheme) -> tuple[SuiAddress, KeyPair]:
+    """Get a SuiAddress and KeyPair tuple for specific keytype.
+
+    Args:
+        client (SuiClient): Use the configuration from a specific SuiClient provider
+        keytype (SignatureScheme): Indicate the key type to filter on
+
+    Raises:
+        ValueError: No match found
+
+    Returns:
+        tuple[SuiAddress, KeyPair]: A matching address and keypair of first found tuple
+    """
+    filtered: tuple[SuiAddress, KeyPair] = [(k, v) for (k, v) in client.config.addresses_and_keys.items()
+                                            if v.scheme == keytype]
+    if filtered:
+        return filtered[0]
+    raise ValueError(f"No keypair type of {keytype.as_str()}")
