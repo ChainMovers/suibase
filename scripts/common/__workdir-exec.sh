@@ -9,6 +9,7 @@ CMD_START_REQ=false
 CMD_STOP_REQ=false
 CMD_STATUS_REQ=false
 CMD_CREATE_REQ=false
+CMD_DELETE_REQ=false
 CMD_UPDATE_REQ=false
 CMD_REGEN_REQ=false
 CMD_PUBLISH_REQ=false
@@ -35,7 +36,7 @@ usage_local() {
   echo "            the configuration before doing the first start."
   echo
   echo_low_green "   delete"; echo "   Delete workdir completely. Can free up a lot of"
-  echo "                   disk space for when the localnet is not needed."
+  echo "            disk space for when the localnet is not needed."
   echo
   echo_low_green "   update"; echo "   Update local sui repo and regen $WORKDIR."
   echo "            Note: Will not do any git operations if your own"
