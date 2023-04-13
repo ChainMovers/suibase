@@ -428,6 +428,19 @@ build_sui_repo_branch() {
     echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
+  # TODO do an 'integrity/version check' of the repo here...
+  if [ ! -d "$SUI_REPO_DIR" ]; then
+      # Help user doing things out-of-order (like trying to regen something not yet initialized?)
+      echo
+      echo "The Sui repo is not initialized."
+      echo
+      echo " Do one of the following:"
+      echo "    $WORKDIR start (recommended)"
+      echo "    $WORKDIR update"
+      echo
+      exit 1
+  fi
+
   (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
 
   # Sanity test that the sui binary works

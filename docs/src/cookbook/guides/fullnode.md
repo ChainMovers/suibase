@@ -1,4 +1,9 @@
-# Fullnode
+---
+title: Fullnode
+order: 2
+contributors: true
+editLink: true
+---
 
 TODO:
 

@@ -2,16 +2,23 @@
 
 cd ~/sui-base || { echo "sui-base not found. Please install it first."; exit 1; }
 
+_CUR_VER=$(~/sui-base/scripts/localnet | head -n 1 | sed 's/.*sui-base \(.*\)/\1/g')
+
 # Check if there are local changes. If any, protect the user
 # from doing further git operations.
 if [ ! "$(git status --porcelain | wc -l)" -eq "0" ]; then
+  if [ -n "$_CUR_VER" ]; then
+    echo "Current version $_CUR_VER"
+    echo
+  fi
   echo "local changes detected."
   echo
-  echo "Please commit or stash them before upgrading sui-base."
+  echo "Please commit or stash them before updating sui-base."
   echo
   echo "Do 'git status' to see the changes."
   exit 1
 fi
+
 
 # Check if there is actually a new version
 git remote update >& /dev/null
@@ -22,8 +29,20 @@ if [ "$V1" != "$V2" ]; then
   (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
   (cd "$SUI_REPO_DIR" && git reset --hard origin/main > /dev/null)
   (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
+  _NEW_VER=$(~/sui-base/scripts/localnet | head -n 1 | sed 's/.*sui-base \(.*\)/\1/g')
+
+  if [ -n "$_CUR_VER" ]; then
+    echo "Old version $_CUR_VER"
+  fi
+  if [ -n "$_NEW_VER" ]; then
+    echo "New version $_NEW_VER"
+  fi
+  echo
   echo "sui-base updated successfully"
 else
+  if [ -n "$_CUR_VER" ]; then
+    echo "Current version $_CUR_VER"
+  fi
+  echo
   echo "sui-base is already up to date"
 fi
-
