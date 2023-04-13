@@ -34,6 +34,9 @@ usage_local() {
   echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
   echo "            the configuration before doing the first start."
   echo
+  echo_low_green "   delete"; echo "   Delete workdir completely. Can free up a lot of"
+  echo "                   disk space for when the localnet is not needed."
+  echo
   echo_low_green "   update"; echo "   Update local sui repo and regen $WORKDIR."
   echo "            Note: Will not do any git operations if your own"
   echo "                  repo is configured with set-sui-repo."
@@ -119,6 +122,7 @@ workdir_exec() {
     stop) CMD_STOP_REQ=true ;;
     status) CMD_STATUS_REQ=true ;;
     create) CMD_CREATE_REQ=true ;;
+    delete) CMD_DELETE_REQ=true ;;
     update) CMD_UPDATE_REQ=true ;;
     regen) CMD_REGEN_REQ=true ;;
     publish) CMD_PUBLISH_REQ=true ;;
@@ -429,6 +433,23 @@ workdir_exec() {
       set_active_symlink_force "$WORKDIR";
       info_exit "$WORKDIR is now active"
     fi
+  fi
+
+  # For now we support delete of localnet only.
+  # Need to be more careful for testnet/devnet to preserve key.
+  if [ "$CMD_DELETE_REQ" = true ]; then
+    if ! $is_local; then
+      info_exit "Not supported yet for $WORKDIR"
+    fi
+
+    if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
+      info_exit "$WORKDIR is already deleted"
+    fi
+
+    echo "Deleting $WORKDIR"
+    # shellcheck disable=SC2115
+    rm -rf "$WORKDIRS/$WORKDIR"
+    info_exit "$WORKDIR now deleted"
   fi
 
   # Detect user action that should be NOOP.
