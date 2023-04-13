@@ -28,9 +28,7 @@ runs:
             - '.github/workflows/rust.yml'
           isDoc:
             - 'docs/**'
-            - 'mkdocs.yml'
             - '*.md'
-            - '.github/workflows/deploy.yml'
             - '.github/workflows/deploy-docs.yml'
           isMove:
             - 'move/sources/**'
