@@ -35,7 +35,7 @@ shared-crypto = { path = "../../../sui-base/workdirs/active/sui-repo/crates/shar
 
 futures = "0.3.25"
 
-tokio = { version = "1.24.1", features = ["full"] }
+tokio = { version = "1.27", features = ["full"] }
 telemetry-subscribers = { version = "0.2.0" }
 
 anyhow = { version = "1.0.65", features = ["backtrace"] }
@@ -47,6 +47,8 @@ clap = { version = "3.2.22", features = [
 ] }
 
 colored = { version = "2.0.0" }
+
+
 
 [workspace.dependencies.serial_test]
 # Intended to be used as [dev-dependencies] only.

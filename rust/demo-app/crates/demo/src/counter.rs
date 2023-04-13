@@ -83,12 +83,13 @@ pub async fn count() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let signature = keystore.sign_secure(&client_address, &move_call, Intent::default())?;
+    let signature = keystore.sign_secure(&client_address, &move_call, Intent::sui_transaction())?;
 
     let _response = sui_client
         .quorum_driver()
         .execute_transaction_block(
-            Transaction::from_data(move_call, Intent::default(), vec![signature]).verify()?,
+            Transaction::from_data(move_call, Intent::sui_transaction(), vec![signature])
+                .verify()?,
             SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
