@@ -48,7 +48,7 @@ def coin(client: SuiClient) -> None:
             if coinage.coin_type in coin_collection:
                 inner_list = coin_collection[coinage.coin_type]
                 inner_list[0] = inner_list[0] + 1
-                inner_list[1] = inner_list[1] + coinage.balance
+                inner_list[1] = inner_list[1] + f" {coinage.balance} "
             else:
                 coin_collection[coinage.coin_type] = [1, coinage.balance]
         summary[address] = coin_collection

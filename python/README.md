@@ -6,9 +6,11 @@ Contains python program examples for interacting with Sui blockchain. The demo a
 require `pysui` Python SUI Client SDK to run.
 
 ## Pre Setup
+
 If not already done, you should first [install sui-base](../../how-to/install.md)
 
 ## Setup
+
 ```shell
 $ cd sui-base
 $ . env/bin/activate
@@ -32,3 +34,4 @@ virtual environment (`. env/bin/activate`).
 | ------- | --------------------------------------------- | ------------- | --------- |
 | sysinfo | displays general sui chain information        | `bin/sysinfo` | src/demo1 |
 | coinage | displays information about coins and balanced | `bin/coinage` | src/demo2 |
+| pkgtxn  | demonstrate programmable transaction          | `bin/prgtxn`  | src/demo3 |
