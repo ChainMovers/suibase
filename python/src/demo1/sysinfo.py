@@ -34,7 +34,7 @@ def _stats_0291(client: SuiClient):
     sysinfo: SuiLatestSystemState = handle_result(
         client.execute(GetLatestSuiSystemState()))
     dtime = datetime.utcfromtimestamp(
-        sysinfo.epoch_start_timestamp_ms/1000)
+        int(sysinfo.epoch_start_timestamp_ms)/1000)
     print(
         f"Current Epoch: {sysinfo.epoch}, running since UTC: {dtime.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f'Reference gas price: {sysinfo.reference_gas_price} mist')
