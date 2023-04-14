@@ -19,11 +19,18 @@ If you care only for the client, then do not build the whole thing.
 Do ```cargo build -p sui``` instead of ```cargo build```
 
 ## Parallel Linker
-Sui build time is notoriously long. If you observe the "CPUs" with ```top``` on Linux (by pressing <kbd>1</kbd>), you will see why... some steps (the link of sui, rocksdb) are hopelessly done on a single core.<br>
+Some build steps are not optimized for parallelism. Notably, you can see this with ```top``` on Linux (by pressing <kbd>1</kbd>) and you will see only one core busy while the linker is running.
 
 One trick that *may* help is the parallel linker [Mold](https://github.com/rui314/mold).
 
-How much it helps varies widely, you have to try for yourself. Do not expect 10x faster... it accelerates only the link phase. Furthermore, the performance gap versus more recent GNU/LLVM linker release is closing.
+After installation, you can enable for Rust by creating a ```config.toml```. The following was verified to work for Sui built on Ubuntu:
+```
+$ cat ~/.cargo/config.toml
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+```
+
+The performance gain varies widely, you have to try for yourself. Do not expect 10x faster... it accelerates only the link phase. Furthermore, the performance gap versus more recent GNU/LLVM linker release is closing.
 
 ## How does my build time compare?
 See some profiling below.
