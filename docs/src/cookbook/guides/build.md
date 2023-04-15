@@ -82,7 +82,7 @@ GCC 12.2 / Mold 1.11
 
 **M1 MAX macosx**<br>
 
-````text
+```text
 Low : Finished dev [unoptimized + debuginfo] target(s) in 4m 23
 High: Finished dev [unoptimized + debuginfo] target(s) in 4m 24s
 
@@ -91,8 +91,10 @@ macOS Ventura 13.3.1 (22E261), Sui 0.31.2
 Sui-Base 0.1.2
 Apple clang version 14.0.3
 rustc 1.68.2
+```
 
 **Old Server (~2013) Windows 10 WSL2**<br>
+
 ```text
 Low : Finished dev [unoptimized + debuginfo] target(s) in 8m 06s
 High: Finished dev [unoptimized + debuginfo] target(s) in 8m 20s
@@ -102,4 +104,4 @@ WSL2 config: 32 VCore, 48 GB
 Ubuntu 22.04, Sui 0.31.2
 Sui-Base 0.1.2
 GCC 11.3 / Mold 1.11
-````
+```
