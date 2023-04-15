@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/demo",
-    "crates/sui-base-helper", # Access info about your localnet and more.
 ]
 
 [workspace.package]
@@ -10,6 +9,7 @@ version = "0.0.1"
 edition = "2021"
 
 [workspace.dependencies]
+
 # Built is done using the same workdir made active
 # with sui-base 'asui'.
 #
@@ -40,6 +40,8 @@ telemetry-subscribers = { version = "0.2.0" }
 
 anyhow = { version = "1.0.65", features = ["backtrace"] }
 thiserror = "1.0.37"
+
+
 
 # No upgrade to v4 until color are back.
 clap = { version = "3.2.22", features = [

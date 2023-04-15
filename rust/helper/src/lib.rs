@@ -14,6 +14,12 @@ use anyhow::{bail, Result};
 use crate::sui_base_root::SuiBaseRoot;
 use crate::sui_base_workdir::SuiBaseWorkdir;
 
+uniffi::include_scaffolding!("suibase");
+
+pub fn add(a: u32, b: u32) -> u32 {
+    a + b
+}
+
 pub struct SuiBaseHelper {
     root: SuiBaseRoot,               // for most features related to ~/sui-base
     workdir: Option<SuiBaseWorkdir>, // for *one* selected workdir under ~/sui-base/workdirs

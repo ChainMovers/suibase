@@ -17,4 +17,4 @@ clap.workspace = true
 futures.workspace = true
 colored.workspace = true
 
-sui-base-helper = { path = "../sui-base-helper/" }
+sui-base-helper = { path = "../../../../../sui-base/rust/helper" }
