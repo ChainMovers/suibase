@@ -4,21 +4,17 @@
 //
 // Your app can select to interact with any of the workdir installed with sui-base.
 //
+mod error;
 mod sui_base_root;
 mod sui_base_workdir;
 
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
-use anyhow::{bail, Result};
-
+use crate::error::SuiBaseError;
 use crate::sui_base_root::SuiBaseRoot;
 use crate::sui_base_workdir::SuiBaseWorkdir;
 
 uniffi::include_scaffolding!("suibase");
-
-pub fn add(a: u32, b: u32) -> u32 {
-    a + b
-}
 
 pub struct SuiBaseHelper {
     root: SuiBaseRoot,               // for most features related to ~/sui-base
@@ -50,7 +46,7 @@ impl SuiBaseHelper {
 
     // Check first if sui-base is installed, otherwise
     // most of the other calls will fail in some ways.
-    pub fn is_sui_base_installed(self: &mut SuiBaseHelper) -> Result<bool, anyhow::Error> {
+    pub fn is_sui_base_installed(self: &mut SuiBaseHelper) -> Result<bool, SuiBaseError> {
         Ok(self.root.is_sui_base_installed())
     }
 
@@ -68,7 +64,7 @@ impl SuiBaseHelper {
     pub fn select_workdir(
         self: &mut SuiBaseHelper,
         workdir_name: &str,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), SuiBaseError> {
         let mut new_wd = SuiBaseWorkdir::new();
         new_wd.init_from_existing(&mut self.root, workdir_name)?;
         self.workdir = Some(new_wd);
@@ -76,22 +72,22 @@ impl SuiBaseHelper {
     }
 
     // Get the name of the selected workdir.
-    pub fn get_workdir_name(&self) -> Result<String, anyhow::Error> {
+    pub fn get_workdir_name(&self) -> Result<String, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_name()?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
     // Get the pathname of the file keystore (when available).
     //
     // Context: Selected Workdir by this API.
-    pub fn get_keystore_pathname(&mut self) -> Result<String, anyhow::Error> {
+    pub fn get_keystore_pathname(&mut self) -> Result<String, SuiBaseError> {
         // TODO Implement this better with sui-base.yaml and/or ENV variables.
         //      See https://github.com/sui-base/sui-base/issues/6
         match &self.workdir {
             Some(wd) => Ok(wd.get_keystore_pathname(&mut self.root)?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
@@ -103,10 +99,10 @@ impl SuiBaseHelper {
     pub fn get_package_id(
         self: &mut SuiBaseHelper,
         package_name: &str,
-    ) -> Result<ObjectID, anyhow::Error> {
+    ) -> Result<ObjectID, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_package_id(&mut self.root, package_name)?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
@@ -131,10 +127,10 @@ impl SuiBaseHelper {
     pub fn get_published_new_objects(
         self: &mut SuiBaseHelper,
         object_type: &str,
-    ) -> Result<Vec<ObjectID>, anyhow::Error> {
+    ) -> Result<Vec<ObjectID>, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_published_new_objects(&mut self.root, object_type)?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
@@ -152,26 +148,26 @@ impl SuiBaseHelper {
     pub fn get_client_address(
         self: &mut SuiBaseHelper,
         address_name: &str,
-    ) -> Result<SuiAddress, anyhow::Error> {
+    ) -> Result<SuiAddress, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_client_address(&mut self.root, address_name)?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
     // Get a RPC URL for the selected workdir.
-    pub fn get_rpc_url(&mut self) -> Result<String, anyhow::Error> {
+    pub fn get_rpc_url(&mut self) -> Result<String, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_rpc_url(&mut self.root)?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
     // Get a Websocket URL for the selected workdir.
-    pub fn get_ws_url(&mut self) -> Result<String, anyhow::Error> {
+    pub fn get_ws_url(&mut self) -> Result<String, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_ws_url(&mut self.root)?),
-            None => bail!("sui-base: workdir not selected."),
+            None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 }

@@ -1,3 +1,18 @@
-namespace suibase {
-    u32 add(u32 a, u32 b);
+namespace suibase {};
+
+interface SuiBaseHelper {
+  constructor();
 };
+
+/* Probably not needed to be exposed... look into custom Handle.
+    dictionary SuiBaseRoot {
+        boolean is_sui_base_installed;
+        string sui_base_path;
+        string workdirs_path;
+    };
+
+    dictionary SuiBaseWorkdir {
+        string? workdir_name;
+        string? workdir_path;
+    };
+*/
