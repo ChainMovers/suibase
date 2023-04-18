@@ -3,3 +3,9 @@ node_modules/
 src/.vuepress/.cache/
 src/.vuepress/.temp/
 src/.vuepress/dist/
+
+# PNPM is used by sui-base Github Action for website deployment.
+# package.json and pnpm-lock.yaml are needed to be commited.
+# Other package "lock" should not be pushed.
+package-lock.json
+yarn.lock
