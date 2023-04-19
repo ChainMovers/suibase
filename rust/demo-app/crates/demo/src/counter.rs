@@ -32,7 +32,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     //    - A client address
 
     // Initialize the sui-base helper.
-    let mut suibase = SuiBaseHelper::new();
+    let suibase = SuiBaseHelper::new();
     suibase.select_workdir("active")?;
     println!("Using sui-base workdir [{:?}]", suibase.get_workdir_name());
 
@@ -51,9 +51,10 @@ pub async fn count() -> Result<(), anyhow::Error> {
         )
     );
     let counter_id = object_ids[0];
+    // println!("demo::Counter ObjectID is: {}", counter_id);
 
-    // Use a client address known to be always created by sui-base for localnet/devnet/tesnet.
-    let client_address = suibase.get_client_address("sb-1-ed25519")?;
+    // Use the active client address (check the docs for useful alternatives for tests).
+    let client_address = suibase.get_client_address("active")?;
 
     // Get the keystore using the location given by sui-base.
     let keystore_pathname = suibase.get_keystore_pathname()?;
@@ -84,7 +85,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
 
     let signature = keystore.sign_secure(&client_address, &move_call, Intent::sui_transaction())?;
 
-    let _response = sui_client
+    let response = sui_client
         .quorum_driver()
         .execute_transaction_block(
             Transaction::from_data(move_call, Intent::sui_transaction(), vec![signature])
@@ -94,8 +95,16 @@ pub async fn count() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    println!("Success. Transaction sent.");
-    println!("The Counter::increment function should run on the network and emit an");
-    println!("event from package {}", package_id);
+    if response.errors.is_empty() {
+        println!("Success. Transaction sent Digest {}", response.digest);
+        println!("The Counter::increment function should run on the network and emit an");
+        println!("event from package {}", package_id);
+    } else {
+        println!("Transaction failed. Errors:");
+        for error in response.errors {
+            println!("  {}", error);
+        }
+    }
+
     Ok(())
 }

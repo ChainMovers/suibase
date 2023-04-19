@@ -29,14 +29,23 @@ pub enum SuiBaseError {
         workdir: String,
     },
 
-    #[error("sui-base: missing link definition. Check sui-base.yaml links section.")]
+    #[error("sui-base: Missing link definition. Check sui-base.yaml links section.")]
     MissingLinkDefinition,
 
-    #[error("sui-base: missing at least one link definition. Check sui-base.yaml links section.")]
+    #[error("sui-base: Missing at least one link definition. Check sui-base.yaml links section.")]
     MissingAtLeastOneLinkDefinition,
 
-    #[error("sui-base: missing `{url_field:?}` link field. May be a problem with the sui-base.yaml link section (1).")]
+    #[error("sui-base: Missing `{url_field:?}` link field. May be a problem with the sui-base.yaml link section (1).")]
     MissingLinkField { url_field: String },
+
+    #[error("sui-base: Missing config.yaml. Did you do '{workdir:?} start'?")]
+    ConfigAccessError { workdir: String },
+
+    #[error("sui-base: Access problem with config.yaml. Did you do '{workdir:?} start' or run the sui client once?")]
+    ConfigReadError { workdir: String },
+
+    #[error("sui-base: Unknown active address. Did you run the sui client at least once?")]
+    ConfigActiveAddressParseError { address: String },
 
     /*****************************/
     // API bad parameter errors.
@@ -56,7 +65,7 @@ pub enum SuiBaseError {
     #[error("sui-base: Invalid object_type parameter")]
     ObjectTypeInvalidFormat,
 
-    #[error("sui-base: not finding address name'{address_name:?}'")]
+    #[error("sui-base: Not finding address name'{address_name:?}'")]
     AddressNameNotFound { address_name: String },
 
     /*****************************/
@@ -87,7 +96,7 @@ pub enum SuiBaseError {
     PublishedNewObjectParseError { path: String, id: String },
 
     #[error(
-        "sui-base: workdir not fully initialized. Do '{workdir:?} start' or '{workdir:?} update'"
+        "sui-base: Workdir not fully initialized. Do '{workdir:?} start' or '{workdir:?} update'"
     )]
     WorkdirInitializationIncomplete { workdir: String },
 

@@ -6,6 +6,7 @@ use std::io::BufReader;
 use std::str::FromStr;
 
 use serde_json::Value;
+use serde_yaml::Value as YamlValue;
 
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
@@ -223,6 +224,11 @@ impl SuiBaseWorkdir {
         // Validate the parameters.
         if address_name.is_empty() {
             return Err(SuiBaseError::AddressNameEmpty);
+        }
+
+        if address_name == "active" {
+            // Different logic equivalent to "sui client active-address"
+            return self.get_client_active_address(root);
         }
 
         let pathname: &str = &self.get_pathname_state(root, "dns")?;
@@ -459,5 +465,61 @@ impl SuiBaseWorkdir {
         Err(SuiBaseError::MissingLinkField {
             url_field: url_field_name.to_string(),
         })
+    }
+
+    fn get_client_active_address(
+        &self,
+        root: &mut SuiBaseRoot,
+    ) -> Result<SuiAddress, SuiBaseError> {
+        // Directly access and parse the client.yaml.
+        if !root.is_sui_base_installed() {
+            return Err(SuiBaseError::NotInstalled);
+        }
+
+        if self.workdir_name.is_none() {
+            return Err(SuiBaseError::WorkdirNameNotSet);
+        }
+        let workdir_name: &str = &self.workdir_name.as_ref().unwrap().to_string();
+
+        if self.workdir_path.is_none() {
+            return Err(SuiBaseError::WorkdirPathNotSet);
+        }
+        let workdir_path = self.workdir_path.as_ref().unwrap().to_string();
+
+        // Check if the config directory is available (and resolve symlinks)
+        let mut path_buf = PathBuf::from(workdir_path);
+        path_buf.push("config");
+        path_buf.push("client");
+        path_buf.set_extension("yaml");
+        path_buf =
+            std::fs::canonicalize(path_buf).map_err(|_| SuiBaseError::ConfigAccessError {
+                workdir: workdir_name.to_string(),
+            })?;
+        let pathname = path_buf.to_string_lossy().to_string();
+
+        // Try to open the file.
+        let file = File::open(pathname).map_err(|_| SuiBaseError::ConfigAccessError {
+            workdir: workdir_name.to_string(),
+        })?;
+        let reader = BufReader::new(file);
+        let data: YamlValue =
+            serde_yaml::from_reader(reader).map_err(|_| SuiBaseError::ConfigReadError {
+                workdir: workdir_name.to_string(),
+            })?;
+
+        // Try to parse the "active_address" YAML field
+        let active_addr: &str = &data["active_address"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or(SuiBaseError::ConfigActiveAddressParseError {
+                address: "<missing>".to_string(),
+            })?;
+        let sui_address = SuiAddress::from_str(active_addr).map_err(|_| {
+            SuiBaseError::ConfigActiveAddressParseError {
+                address: active_addr.to_string(),
+            }
+        })?;
+
+        Ok(sui_address) // Success!
     }
 }

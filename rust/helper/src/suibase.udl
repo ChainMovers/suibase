@@ -1,18 +1,71 @@
 namespace suibase {};
 
-interface SuiBaseHelper {
-  constructor();
+[Error]
+enum SuiBaseError {
+  "NotInstalled",
+  "WorkdirNotSelected",
+  "WorkdirAccessError",
+  "WorkdirNotExists",
+  "SuiBaseKeystoreNotExists",
+  "PublishedDataNotFound",
+  "MissingLinkDefinition",
+  "MissingAtLeastOneLinkDefinition",
+  "MissingLinkField",
+  "ConfigAccessError",
+  "ConfigReadError",
+  "ConfigActiveAddressParseError",
+  "WorkdirNameEmpty",
+  "PackageNameEmpty",
+  "AddressNameEmpty",
+  "ObjectTypeMissingField",
+  "ObjectTypeInvalidFormat",
+  "AddressNameNotFound",
+  "WorkdirStateNameAccessFailed",
+  "WorkdirStateDNSAccessFailed",
+  "WorkdirStateNameNotSet",
+  "PackageIdJsonInvalidFormat",
+  "PackageIdInvalidHex",
+  "PublishedNewObjectReadError",
+  "PublishedNewObjectParseError",
+  "WorkdirInitializationIncomplete",
+  "WorkdirStateDNSReadError",
+  "WorkdirStateDNSParseError",
+  "PublishedDataAccessError",
+  "PublishedNewObjectAccessError",
+  "WorkdirStateLinkReadError",
+  "WorkdirNameNotSet",
+  "WorkdirPathNotSet",
+  "FileNameEmpty",
+  "StateNameEmpty",
 };
 
-/* Probably not needed to be exposed... look into custom Handle.
-    dictionary SuiBaseRoot {
-        boolean is_sui_base_installed;
-        string sui_base_path;
-        string workdirs_path;
-    };
+interface SuiBaseHelper {
+  constructor();
 
-    dictionary SuiBaseWorkdir {
-        string? workdir_name;
-        string? workdir_path;
-    };
-*/
+  [Throws=SuiBaseError]
+  boolean is_sui_base_installed();
+
+  [Throws=SuiBaseError]
+  void select_workdir([ByRef]string workdir_name);
+
+  [Throws=SuiBaseError]
+  string get_workdir_name();
+
+  [Throws=SuiBaseError]
+  string get_keystore_pathname();
+
+  [Throws=SuiBaseError]
+  string get_package_id_string([ByRef]string package_name);
+
+  [Throws=SuiBaseError]
+  sequence<string> get_published_new_objects_string([ByRef]string object_type);
+
+  [Throws=SuiBaseError]
+  string get_client_address_string([ByRef]string address_name);
+
+  [Throws=SuiBaseError]
+  string get_rpc_url();
+
+  [Throws=SuiBaseError]
+  string get_ws_url();
+};

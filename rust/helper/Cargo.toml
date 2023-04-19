@@ -20,15 +20,16 @@ shared-crypto = { path = "../../../sui-base/workdirs/active/sui-repo/crates/shar
 
 home = "0.5.4"
 #serde = { version = "1.0.144", features = ["derive"] }
-serde_json = "1.0.88"
+serde_json = "1.0"
+serde_yaml = "0.9"
 
 futures = "0.3.25"
 
 tokio = { version = "1.27", features = ["full"] }
-telemetry-subscribers = { version = "0.2.0" }
+# telemetry-subscribers = { version = "0.2.0" }
 
-anyhow = { version = "1.0.65", features = ["backtrace"] }
-thiserror = "1.0.37"
+# anyhow = { version = "1.0.65", features = ["backtrace"] }
+thiserror = "1.0"
 
 # No upgrade to v4 until color are back.
 clap = { version = "3.2.22", features = [

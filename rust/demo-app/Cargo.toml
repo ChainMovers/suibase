@@ -9,7 +9,6 @@ version = "0.0.1"
 edition = "2021"
 
 [workspace.dependencies]
-
 # Built is done using the same workdir made active
 # with sui-base 'asui'.
 #
@@ -39,9 +38,7 @@ tokio = { version = "1.27", features = ["full"] }
 telemetry-subscribers = { version = "0.2.0" }
 
 anyhow = { version = "1.0.65", features = ["backtrace"] }
-thiserror = "1.0.37"
-
-
+thiserror = "1.0"
 
 # No upgrade to v4 until color are back.
 clap = { version = "3.2.22", features = [

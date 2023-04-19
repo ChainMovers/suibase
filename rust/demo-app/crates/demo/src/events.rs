@@ -15,13 +15,13 @@ use sui_sdk::SuiClientBuilder;
 // This function loop until Ctrl-C or error.
 //
 pub async fn display_events_loop() -> Result<(), anyhow::Error> {
-    let mut suibase = SuiBaseHelper::new();
+    let suibase = SuiBaseHelper::new();
     suibase.select_workdir("active")?;
 
     let rpc_url = suibase.get_rpc_url()?;
     let ws_url = suibase.get_ws_url()?;
 
-    println!("Using sui-base workdir [{:?}]", suibase.get_workdir_name());
+    println!("Using sui-base workdir [{}]", suibase.get_workdir_name()?);
     println!("Connecting to Sui network at [{}]", ws_url);
 
     let sui = SuiClientBuilder::default()

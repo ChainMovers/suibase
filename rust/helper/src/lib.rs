@@ -1,25 +1,27 @@
-// sui-base-helper library
+// sui-base helper library
 //
 // Help automate localnet/devnet/testnet operations in a sui-base environment.
 //
 // Your app can select to interact with any of the workdir installed with sui-base.
 //
+// This API is multi-thread safe.
+//
+// UniFFI bindings compatible (Sync+Send)
+
 mod error;
+mod sui_base_helper_impl;
 mod sui_base_root;
 mod sui_base_workdir;
 
-use sui_sdk::types::base_types::{ObjectID, SuiAddress};
-
 use crate::error::SuiBaseError;
-use crate::sui_base_root::SuiBaseRoot;
-use crate::sui_base_workdir::SuiBaseWorkdir;
+use crate::sui_base_helper_impl::SuiBaseHelperImpl;
+
+use std::sync::{Arc, Mutex};
+use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
 uniffi::include_scaffolding!("suibase");
 
-pub struct SuiBaseHelper {
-    root: SuiBaseRoot,               // for most features related to ~/sui-base
-    workdir: Option<SuiBaseWorkdir>, // for *one* selected workdir under ~/sui-base/workdirs
-}
+pub struct SuiBaseHelper(Arc<Mutex<SuiBaseHelperImpl>>);
 
 impl Default for SuiBaseHelper {
     fn default() -> Self {
@@ -36,18 +38,14 @@ impl SuiBaseHelper {
     //
     //  (3) You can now call any other API functions (in any order).
     //      Most calls will relate to the selected workdir.
-
-    pub fn new() -> SuiBaseHelper {
-        SuiBaseHelper {
-            root: SuiBaseRoot::new(),
-            workdir: None,
-        }
+    pub fn new() -> Self {
+        SuiBaseHelper(Arc::new(Mutex::new(SuiBaseHelperImpl::new())))
     }
 
     // Check first if sui-base is installed, otherwise
     // most of the other calls will fail in some ways.
-    pub fn is_sui_base_installed(self: &mut SuiBaseHelper) -> Result<bool, SuiBaseError> {
-        Ok(self.root.is_sui_base_installed())
+    pub fn is_sui_base_installed(&self) -> Result<bool, SuiBaseError> {
+        self.0.lock().unwrap().is_sui_base_installed()
     }
 
     // Select an existing workdir by name.
@@ -61,34 +59,20 @@ impl SuiBaseHelper {
     //       to be done for "localnet". The selection does not change even if the user
     //       externally change the active after this call.
     //
-    pub fn select_workdir(
-        self: &mut SuiBaseHelper,
-        workdir_name: &str,
-    ) -> Result<(), SuiBaseError> {
-        let mut new_wd = SuiBaseWorkdir::new();
-        new_wd.init_from_existing(&mut self.root, workdir_name)?;
-        self.workdir = Some(new_wd);
-        Ok(())
+    pub fn select_workdir(&self, workdir_name: &str) -> Result<(), SuiBaseError> {
+        self.0.lock().unwrap().select_workdir(workdir_name)
     }
 
     // Get the name of the selected workdir.
     pub fn get_workdir_name(&self) -> Result<String, SuiBaseError> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_name()?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+        self.0.lock().unwrap().get_workdir_name()
     }
 
     // Get the pathname of the file keystore (when available).
     //
     // Context: Selected Workdir by this API.
-    pub fn get_keystore_pathname(&mut self) -> Result<String, SuiBaseError> {
-        // TODO Implement this better with sui-base.yaml and/or ENV variables.
-        //      See https://github.com/sui-base/sui-base/issues/6
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_keystore_pathname(&mut self.root)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+    pub fn get_keystore_pathname(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().get_keystore_pathname()
     }
 
     // Get the ObjectID of the last successfully published "package_name".
@@ -96,14 +80,14 @@ impl SuiBaseHelper {
     // package_name is the "name" field specified in the "Move.toml".
     //
     // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn get_package_id(
-        self: &mut SuiBaseHelper,
-        package_name: &str,
-    ) -> Result<ObjectID, SuiBaseError> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_package_id(&mut self.root, package_name)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+    pub fn get_package_id(&self, package_name: &str) -> Result<ObjectID, SuiBaseError> {
+        self.0.lock().unwrap().get_package_id(package_name)
+    }
+
+    // Alternative for string-based API.
+    pub fn get_package_id_string(&self, package_name: &str) -> Result<String, SuiBaseError> {
+        let id = self.get_package_id(package_name)?;
+        Ok(id.to_string())
     }
 
     // Get the ObjectID of the objects that were created when the package was published.
@@ -125,13 +109,22 @@ impl SuiBaseHelper {
     //
     // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn get_published_new_objects(
-        self: &mut SuiBaseHelper,
+        &self,
         object_type: &str,
     ) -> Result<Vec<ObjectID>, SuiBaseError> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_published_new_objects(&mut self.root, object_type)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+        self.0
+            .lock()
+            .unwrap()
+            .get_published_new_objects(object_type)
+    }
+
+    // Alternative for string-based API.
+    pub fn get_published_new_objects_string(
+        &self,
+        object_type: &str,
+    ) -> Result<Vec<String>, SuiBaseError> {
+        let res = self.get_published_new_objects(object_type)?;
+        Ok(res.iter().map(|c| c.to_string()).collect())
     }
 
     // Get an address by name.
@@ -140,34 +133,29 @@ impl SuiBaseHelper {
     //
     // These addresses are useful for testing. In particular, with localnet they are prefunded.
     //
-    // Their names are:
-    //   sb-[1-5]-[ed25519|scp256k1|scp256r1]
+    // Names can be:  active | sb-[1-5]-[ed25519|scp256k1|scp256r1]
     //
-    // Example of valid names: "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
+    // Examples: "active", "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
     //
-    pub fn get_client_address(
-        self: &mut SuiBaseHelper,
-        address_name: &str,
-    ) -> Result<SuiAddress, SuiBaseError> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_client_address(&mut self.root, address_name)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+    // "active" is same as doing "sui client active-address" for the selected workdir.
+    //
+    pub fn get_client_address(&self, address_name: &str) -> Result<SuiAddress, SuiBaseError> {
+        self.0.lock().unwrap().get_client_address(address_name)
+    }
+
+    // Alternative for string-based API.
+    pub fn get_client_address_string(&self, address_name: &str) -> Result<String, SuiBaseError> {
+        let addr = self.get_client_address(address_name)?;
+        Ok(addr.to_string())
     }
 
     // Get a RPC URL for the selected workdir.
-    pub fn get_rpc_url(&mut self) -> Result<String, SuiBaseError> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_rpc_url(&mut self.root)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+    pub fn get_rpc_url(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().get_rpc_url()
     }
 
     // Get a Websocket URL for the selected workdir.
-    pub fn get_ws_url(&mut self) -> Result<String, SuiBaseError> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.get_ws_url(&mut self.root)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
-        }
+    pub fn get_ws_url(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().get_ws_url()
     }
 }
