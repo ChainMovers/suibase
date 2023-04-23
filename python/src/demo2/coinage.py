@@ -18,7 +18,6 @@
 
 import json
 from src.common.demo_utils import handle_result
-from src.common.low_level_utils import sui_base_config
 from pysui.sui.sui_config import SuiConfig
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_builders.get_builders import GetAllCoins
@@ -65,6 +64,4 @@ def main(client: SuiClient):
 
 
 if __name__ == "__main__":
-    base_config = sui_base_config()
-    if base_config:
-        main(SuiClient(SuiConfig.from_config_file(base_config)))
+    main(SuiClient(SuiConfig.sui_base_config()))

@@ -22,10 +22,10 @@ from pysui.sui.sui_config import SuiConfig
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_clients.transaction import SuiTransaction
 from pysui.sui.sui_txresults.single_tx import SuiCoinObject
+from pysui.sui.sui_clients.common import handle_result
 
 
-from src.common.demo_utils import handle_result, first_address_for_keytype
-from src.common.low_level_utils import sui_base_config
+from src.common.demo_utils import first_address_for_keytype
 
 
 def main(client: SuiClient):
@@ -43,20 +43,26 @@ def main(client: SuiClient):
     to_address, _ = first_address_for_keytype(client,
                                               SignatureScheme.SECP256K1)
 
-    # Setup the Transaction Builder using the from_address as
-    # signer and source of gas. When you initiate the SuiTransaction
-    # it prefetches any Sui coins that address may have.
-    tx_builder = SuiTransaction(client, from_address)
+    # Setup the Transaction Builder using the client
+    # By default, the 'sender' is set to client.config.active-address
+    tx_builder = SuiTransaction(client)
+    # We reset sender to the 'from_address'
+    from_address = SuiAddress(from_address)
+    tx_builder.signer_block.sender = from_address
 
-    # Get one of the coins available to the transaction
-    a_coin: SuiCoinObject = tx_builder.gasses[0]
+    # Get the first coin that the 'from_address' has
+    gasses: list[SuiCoinObject] = handle_result(
+        client.get_gas(from_address)).data
+    a_coin: SuiCoinObject = gasses[0]
+    # Get it's balance and convert to int
+    a_coin_balance = int(a_coin.balance)
 
     print(
         f"Transferring 50% of coin: {a_coin.coin_object_id} from address: {from_address} to address: {to_address}")
     # Construct a split coin for 50% of a_coin
     # We want the result as input into the subsequent transfer
     split_coin = tx_builder.split_coin(coin=a_coin.coin_object_id,
-                                       amount=int(int(a_coin.balance)/2))
+                                       amounts=int(a_coin_balance/2))
     # Construct a transfer to send the result of splitting out the coin
     # to the recipient
     tx_builder.transfer_objects(
@@ -65,7 +71,7 @@ def main(client: SuiClient):
     # An alternative is to combine:
     # tx_builder.transfer_objects(transfers=tx_builder.split_coin(
     #     coin=a_coin.coin_object_id,
-    #     amount=int(int(a_coin.balance)/2)), recipient=SuiAddress(to_address))
+    #     amounts=int(a_coin_balance/2), recipient=SuiAddress(to_address))
 
     # Lets see the transaction structural representation as JSON
     # UNCOMMENT TO SEE
@@ -75,14 +81,12 @@ def main(client: SuiClient):
     # print(tx_builder.inspect_all().to_json(indent=2))
 
     # Lets execute it and check results
-    # UNCOMMENT TO SEE
     # Signer and gas object will be satisfied by the builder
-    result = tx_builder.execute(signer=None, gas=None, gas_budget="2000000")
+    # COMMENT THESE LINES IF YOU UNCOMMENT THE OPTIONS ABOVE
+    result = tx_builder.execute(gas_budget="2000000")
     if result.is_ok():
         print(result.result_data.to_json(indent=2))
 
 
 if __name__ == "__main__":
-    base_config = sui_base_config()
-    if base_config:
-        main(SuiClient(SuiConfig.from_config_file(base_config)))
+    main(SuiClient(SuiConfig.sui_base_config()))

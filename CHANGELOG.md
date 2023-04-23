@@ -21,7 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Upgraded Python demos to use newest version of `pysui` 0.17.0
+- Python demo3 (prgtxn.py) updated for changes in 0.17.0
+
 ### Removed
+
+- Python demo common utility `low_level_utils.py` as SuiConfig now has `sui_base_config()` class method.
 
 ## [0.1.2] 2023-04-10
 
