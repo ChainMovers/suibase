@@ -18,10 +18,10 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
     let suibase = SuiBaseHelper::new();
     suibase.select_workdir("active")?;
 
-    let rpc_url = suibase.get_rpc_url()?;
-    let ws_url = suibase.get_ws_url()?;
+    let rpc_url = suibase.rpc_url()?;
+    let ws_url = suibase.ws_url()?;
 
-    println!("Using sui-base workdir [{}]", suibase.get_workdir_name()?);
+    println!("Using sui-base workdir [{}]", suibase.workdir()?);
     println!("Connecting to Sui network at [{}]", ws_url);
 
     let sui = SuiClientBuilder::default()

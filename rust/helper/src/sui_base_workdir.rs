@@ -8,7 +8,7 @@ use std::str::FromStr;
 use serde_json::Value;
 use serde_yaml::Value as YamlValue;
 
-use sui_sdk::types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::error::SuiBaseError;
 use crate::sui_base_root::SuiBaseRoot;
@@ -85,7 +85,7 @@ impl SuiBaseWorkdir {
         Ok(self.workdir_name.as_ref().unwrap().to_string())
     }
 
-    pub(crate) fn get_package_id(
+    pub(crate) fn package_object_id(
         &self,
         root: &mut SuiBaseRoot,
         package_name: &str,
@@ -114,10 +114,7 @@ impl SuiBaseWorkdir {
         Ok(package_id)
     }
 
-    pub(crate) fn get_keystore_pathname(
-        &self,
-        root: &mut SuiBaseRoot,
-    ) -> Result<String, SuiBaseError> {
+    pub(crate) fn keystore_pathname(&self, root: &mut SuiBaseRoot) -> Result<String, SuiBaseError> {
         if !root.is_installed() {
             return Err(SuiBaseError::NotInstalled);
         }
@@ -149,7 +146,7 @@ impl SuiBaseWorkdir {
         Ok(keystore_file)
     }
 
-    pub(crate) fn get_published_new_objects(
+    pub(crate) fn published_new_object_ids(
         &self,
         root: &mut SuiBaseRoot,
         object_type: &str,
@@ -216,7 +213,7 @@ impl SuiBaseWorkdir {
         Ok(objects)
     }
 
-    pub(crate) fn get_client_address(
+    pub(crate) fn client_sui_address(
         &self,
         root: &mut SuiBaseRoot,
         address_name: &str,
@@ -264,11 +261,11 @@ impl SuiBaseWorkdir {
         })
     }
 
-    pub(crate) fn get_rpc_url(&self, root: &mut SuiBaseRoot) -> Result<String, SuiBaseError> {
+    pub(crate) fn rpc_url(&self, root: &mut SuiBaseRoot) -> Result<String, SuiBaseError> {
         self.get_url_from_state(root, "rpc")
     }
 
-    pub(crate) fn get_ws_url(&self, root: &mut SuiBaseRoot) -> Result<String, SuiBaseError> {
+    pub(crate) fn ws_url(&self, root: &mut SuiBaseRoot) -> Result<String, SuiBaseError> {
         self.get_url_from_state(root, "ws")
     }
 }

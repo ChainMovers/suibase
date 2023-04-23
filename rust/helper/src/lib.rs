@@ -17,10 +17,10 @@ use crate::error::SuiBaseError;
 use crate::sui_base_helper_impl::SuiBaseHelperImpl;
 
 use std::sync::{Arc, Mutex};
-use sui_sdk::types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 
+#[cfg(feature = "build-with-uniffi")]
 uniffi::include_scaffolding!("suibase");
-
 pub struct SuiBaseHelper(Arc<Mutex<SuiBaseHelperImpl>>);
 
 impl Default for SuiBaseHelper {
@@ -64,15 +64,15 @@ impl SuiBaseHelper {
     }
 
     // Get the name of the selected workdir.
-    pub fn get_workdir_name(&self) -> Result<String, SuiBaseError> {
-        self.0.lock().unwrap().get_workdir_name()
+    pub fn workdir(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().workdir()
     }
 
     // Get the pathname of the file keystore (when available).
     //
     // Context: Selected Workdir by this API.
-    pub fn get_keystore_pathname(&self) -> Result<String, SuiBaseError> {
-        self.0.lock().unwrap().get_keystore_pathname()
+    pub fn keystore_pathname(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().keystore_pathname()
     }
 
     // Get the ObjectID of the last successfully published "package_name".
@@ -80,13 +80,13 @@ impl SuiBaseHelper {
     // package_name is the "name" field specified in the "Move.toml".
     //
     // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn get_package_id(&self, package_name: &str) -> Result<ObjectID, SuiBaseError> {
-        self.0.lock().unwrap().get_package_id(package_name)
+    pub fn package_object_id(&self, package_name: &str) -> Result<ObjectID, SuiBaseError> {
+        self.0.lock().unwrap().package_object_id(package_name)
     }
 
     // Alternative for string-based API.
-    pub fn get_package_id_string(&self, package_name: &str) -> Result<String, SuiBaseError> {
-        let id = self.get_package_id(package_name)?;
+    pub fn package_id(&self, package_name: &str) -> Result<String, SuiBaseError> {
+        let id = self.package_object_id(package_name)?;
         Ok(id.to_string())
     }
 
@@ -108,22 +108,16 @@ impl SuiBaseHelper {
     // The object_type is "acme::Tools::Anvil"
     //
     // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn get_published_new_objects(
+    pub fn published_new_object_ids(
         &self,
         object_type: &str,
     ) -> Result<Vec<ObjectID>, SuiBaseError> {
-        self.0
-            .lock()
-            .unwrap()
-            .get_published_new_objects(object_type)
+        self.0.lock().unwrap().published_new_object_ids(object_type)
     }
 
     // Alternative for string-based API.
-    pub fn get_published_new_objects_string(
-        &self,
-        object_type: &str,
-    ) -> Result<Vec<String>, SuiBaseError> {
-        let res = self.get_published_new_objects(object_type)?;
+    pub fn published_new_objects(&self, object_type: &str) -> Result<Vec<String>, SuiBaseError> {
+        let res = self.published_new_object_ids(object_type)?;
         Ok(res.iter().map(|c| c.to_string()).collect())
     }
 
@@ -139,23 +133,23 @@ impl SuiBaseHelper {
     //
     // "active" is same as doing "sui client active-address" for the selected workdir.
     //
-    pub fn get_client_address(&self, address_name: &str) -> Result<SuiAddress, SuiBaseError> {
-        self.0.lock().unwrap().get_client_address(address_name)
+    pub fn client_sui_address(&self, address_name: &str) -> Result<SuiAddress, SuiBaseError> {
+        self.0.lock().unwrap().client_sui_address(address_name)
     }
 
     // Alternative for string-based API.
-    pub fn get_client_address_string(&self, address_name: &str) -> Result<String, SuiBaseError> {
-        let addr = self.get_client_address(address_name)?;
+    pub fn client_address(&self, address_name: &str) -> Result<String, SuiBaseError> {
+        let addr = self.client_sui_address(address_name)?;
         Ok(addr.to_string())
     }
 
     // Get a RPC URL for the selected workdir.
-    pub fn get_rpc_url(&self) -> Result<String, SuiBaseError> {
-        self.0.lock().unwrap().get_rpc_url()
+    pub fn rpc_url(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().rpc_url()
     }
 
     // Get a Websocket URL for the selected workdir.
-    pub fn get_ws_url(&self) -> Result<String, SuiBaseError> {
-        self.0.lock().unwrap().get_ws_url()
+    pub fn ws_url(&self) -> Result<String, SuiBaseError> {
+        self.0.lock().unwrap().ws_url()
     }
 }

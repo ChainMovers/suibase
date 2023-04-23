@@ -39,13 +39,6 @@ enum SuiBaseError {
   "StateNameEmpty",
 };
 
-/*
-interface SuiBaseHelper2 {
-  constructor();
-  u32 get_count();
-  void inc_count();
-};*/
-
 interface SuiBaseHelper {
   constructor();
 
@@ -56,23 +49,23 @@ interface SuiBaseHelper {
   void select_workdir([ByRef]string workdir_name);
 
   [Throws=SuiBaseError]
-  string get_workdir_name();
+  string workdir();
 
   [Throws=SuiBaseError]
-  string get_keystore_pathname();
+  string keystore_pathname();
 
   [Throws=SuiBaseError]
-  string get_package_id_string([ByRef]string package_name);
+  string package_id([ByRef]string package_name);
 
   [Throws=SuiBaseError]
-  sequence<string> get_published_new_objects_string([ByRef]string object_type);
+  sequence<string> published_new_objects([ByRef]string object_type);
 
   [Throws=SuiBaseError]
-  string get_client_address_string([ByRef]string address_name);
+  string client_address([ByRef]string address_name);
 
   [Throws=SuiBaseError]
-  string get_rpc_url();
+  string rpc_url();
 
   [Throws=SuiBaseError]
-  string get_ws_url();
+  string ws_url();
 };

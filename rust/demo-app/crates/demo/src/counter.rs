@@ -34,15 +34,15 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // Initialize the sui-base helper.
     let suibase = SuiBaseHelper::new();
     suibase.select_workdir("active")?;
-    println!("Using sui-base workdir [{:?}]", suibase.get_workdir_name());
+    println!("Using sui-base workdir [{:?}]", suibase.workdir());
 
     // Get information from the last publication.
-    let package_id = suibase.get_package_id("demo")?;
+    let package_id = suibase.package_object_id("demo")?;
 
     // Get the single Counter object that was created when the "demo" package was published.
     //
     // "demo::Counter::Counter" is for "package::Module::Type" defined in 'counter.move'.
-    let object_ids = suibase.get_published_new_objects("demo::Counter::Counter")?;
+    let object_ids = suibase.published_new_object_ids("demo::Counter::Counter")?;
     ensure!(
         object_ids.len() == 1,
         format!(
@@ -54,15 +54,15 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // println!("demo::Counter ObjectID is: {}", counter_id);
 
     // Use the active client address (check the docs for useful alternatives for tests).
-    let client_address = suibase.get_client_address("active")?;
+    let client_address = suibase.client_sui_address("active")?;
 
     // Get the keystore using the location given by sui-base.
-    let keystore_pathname = suibase.get_keystore_pathname()?;
+    let keystore_pathname = suibase.keystore_pathname()?;
     let keystore_pathbuf = PathBuf::from(keystore_pathname);
     let keystore = Keystore::File(FileBasedKeystore::new(&keystore_pathbuf)?);
 
     // Create a Sui client.
-    let rpc_url = suibase.get_rpc_url()?;
+    let rpc_url = suibase.rpc_url()?;
     println!("Connecting to Sui network at [{}]", rpc_url);
     let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
 

@@ -2,7 +2,7 @@
 //
 // This is the implementation. See lib.rs for the public API and documentation.
 
-use sui_sdk::types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::error::SuiBaseError;
 use crate::sui_base_root::SuiBaseRoot;
@@ -64,7 +64,7 @@ impl SuiBaseHelperImpl {
     }
 
     // Get the name of the selected workdir.
-    pub fn get_workdir_name(&self) -> Result<String, SuiBaseError> {
+    pub fn workdir(&self) -> Result<String, SuiBaseError> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_name()?),
             None => Err(SuiBaseError::WorkdirNotSelected),
@@ -74,11 +74,11 @@ impl SuiBaseHelperImpl {
     // Get the pathname of the file keystore (when available).
     //
     // Context: Selected Workdir by this API.
-    pub fn get_keystore_pathname(&mut self) -> Result<String, SuiBaseError> {
+    pub fn keystore_pathname(&mut self) -> Result<String, SuiBaseError> {
         // TODO Implement this better with sui-base.yaml and/or ENV variables.
         //      See https://github.com/sui-base/sui-base/issues/6
         match &self.workdir {
-            Some(wd) => Ok(wd.get_keystore_pathname(&mut self.root)?),
+            Some(wd) => Ok(wd.keystore_pathname(&mut self.root)?),
             None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
@@ -88,12 +88,12 @@ impl SuiBaseHelperImpl {
     // package_name is the "name" field specified in the "Move.toml".
     //
     // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn get_package_id(
+    pub fn package_object_id(
         self: &mut SuiBaseHelperImpl,
         package_name: &str,
     ) -> Result<ObjectID, SuiBaseError> {
         match &self.workdir {
-            Some(wd) => Ok(wd.get_package_id(&mut self.root, package_name)?),
+            Some(wd) => Ok(wd.package_object_id(&mut self.root, package_name)?),
             None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
@@ -116,12 +116,12 @@ impl SuiBaseHelperImpl {
     // The object_type is "acme::Tools::Anvil"
     //
     // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn get_published_new_objects(
+    pub fn published_new_object_ids(
         self: &mut SuiBaseHelperImpl,
         object_type: &str,
     ) -> Result<Vec<ObjectID>, SuiBaseError> {
         match &self.workdir {
-            Some(wd) => Ok(wd.get_published_new_objects(&mut self.root, object_type)?),
+            Some(wd) => Ok(wd.published_new_object_ids(&mut self.root, object_type)?),
             None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
@@ -137,28 +137,28 @@ impl SuiBaseHelperImpl {
     //
     // Example of valid names: "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
     //
-    pub fn get_client_address(
+    pub fn client_sui_address(
         self: &mut SuiBaseHelperImpl,
         address_name: &str,
     ) -> Result<SuiAddress, SuiBaseError> {
         match &self.workdir {
-            Some(wd) => Ok(wd.get_client_address(&mut self.root, address_name)?),
+            Some(wd) => Ok(wd.client_sui_address(&mut self.root, address_name)?),
             None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
     // Get a RPC URL for the selected workdir.
-    pub fn get_rpc_url(&mut self) -> Result<String, SuiBaseError> {
+    pub fn rpc_url(&mut self) -> Result<String, SuiBaseError> {
         match &self.workdir {
-            Some(wd) => Ok(wd.get_rpc_url(&mut self.root)?),
+            Some(wd) => Ok(wd.rpc_url(&mut self.root)?),
             None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
 
     // Get a Websocket URL for the selected workdir.
-    pub fn get_ws_url(&mut self) -> Result<String, SuiBaseError> {
+    pub fn ws_url(&mut self) -> Result<String, SuiBaseError> {
         match &self.workdir {
-            Some(wd) => Ok(wd.get_ws_url(&mut self.root)?),
+            Some(wd) => Ok(wd.ws_url(&mut self.root)?),
             None => Err(SuiBaseError::WorkdirNotSelected),
         }
     }
