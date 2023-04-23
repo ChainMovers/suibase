@@ -86,6 +86,17 @@ __pycache__/
 *$py.class
 .pytest_cache
 
+# Pyenv
+.python-version
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+pip-selfcheck.json
+
+# C object files
+*.so
+
 # Node.js
 node_modules
 .tsbuildinfo

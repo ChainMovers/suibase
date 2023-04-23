@@ -31,7 +31,7 @@ impl SuiBaseWorkdir {
         root: &mut SuiBaseRoot,
         workdir_name: &str,
     ) -> Result<(), SuiBaseError> {
-        if !root.is_sui_base_installed() {
+        if !root.is_installed() {
             return Err(SuiBaseError::NotInstalled);
         }
 
@@ -118,7 +118,7 @@ impl SuiBaseWorkdir {
         &self,
         root: &mut SuiBaseRoot,
     ) -> Result<String, SuiBaseError> {
-        if !root.is_sui_base_installed() {
+        if !root.is_installed() {
             return Err(SuiBaseError::NotInstalled);
         }
 
@@ -286,7 +286,7 @@ impl SuiBaseWorkdir {
     ) -> Result<String, SuiBaseError> {
         // Build pathname and do some error detections.
 
-        if !root.is_sui_base_installed() {
+        if !root.is_installed() {
             return Err(SuiBaseError::NotInstalled);
         }
 
@@ -341,7 +341,7 @@ impl SuiBaseWorkdir {
         state_name: &str,
     ) -> Result<String, SuiBaseError> {
         // Build pathname and do some error detections.
-        if !root.is_sui_base_installed() {
+        if !root.is_installed() {
             return Err(SuiBaseError::NotInstalled);
         }
 
@@ -472,7 +472,7 @@ impl SuiBaseWorkdir {
         root: &mut SuiBaseRoot,
     ) -> Result<SuiAddress, SuiBaseError> {
         // Directly access and parse the client.yaml.
-        if !root.is_sui_base_installed() {
+        if !root.is_installed() {
             return Err(SuiBaseError::NotInstalled);
         }
 

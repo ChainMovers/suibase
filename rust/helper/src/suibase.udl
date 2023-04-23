@@ -39,11 +39,18 @@ enum SuiBaseError {
   "StateNameEmpty",
 };
 
+/*
+interface SuiBaseHelper2 {
+  constructor();
+  u32 get_count();
+  void inc_count();
+};*/
+
 interface SuiBaseHelper {
   constructor();
 
   [Throws=SuiBaseError]
-  boolean is_sui_base_installed();
+  boolean is_installed();
 
   [Throws=SuiBaseError]
   void select_workdir([ByRef]string workdir_name);

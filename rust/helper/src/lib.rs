@@ -32,7 +32,7 @@ impl Default for SuiBaseHelper {
 impl SuiBaseHelper {
     // Steps to get started with the API:
     //
-    //  (1) Check if is_sui_base_installed()
+    //  (1) Check if is_installed()
     //
     //  (2) Call select_workdir()
     //
@@ -44,8 +44,8 @@ impl SuiBaseHelper {
 
     // Check first if sui-base is installed, otherwise
     // most of the other calls will fail in some ways.
-    pub fn is_sui_base_installed(&self) -> Result<bool, SuiBaseError> {
-        self.0.lock().unwrap().is_sui_base_installed()
+    pub fn is_installed(&self) -> Result<bool, SuiBaseError> {
+        self.0.lock().unwrap().is_installed()
     }
 
     // Select an existing workdir by name.

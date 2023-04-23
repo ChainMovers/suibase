@@ -3,7 +3,7 @@ use std::path::Path;
 
 pub(crate) struct SuiBaseRoot {
     // Parent to all internal variables, except for the per workdir ones (see sui_base_workdir.rs)
-    is_sui_base_installed: bool, // false on OS access failure.
+    is_installed: bool, // false on OS access failure.
 
     // Absolute path to sui-base installation.
     // (e.g. /home/johndoe/sui-base )
@@ -18,7 +18,7 @@ impl SuiBaseRoot {
     pub fn new() -> SuiBaseRoot {
         // Create with default init state + refresh_state().
         let mut new_obj = SuiBaseRoot {
-            is_sui_base_installed: false,
+            is_installed: false,
             sui_base_path: String::new(),
             workdirs_path: String::new(),
         };
@@ -26,9 +26,9 @@ impl SuiBaseRoot {
         new_obj
     }
 
-    pub fn is_sui_base_installed(self: &mut SuiBaseRoot) -> bool {
+    pub fn is_installed(self: &mut SuiBaseRoot) -> bool {
         self.refresh_state();
-        self.is_sui_base_installed
+        self.is_installed
     }
 
     #[allow(dead_code)]
@@ -61,6 +61,6 @@ impl SuiBaseRoot {
             Path::new(&self.workdirs_path).exists()
         };
 
-        self.is_sui_base_installed = base_path_ok && workdirs_path_ok;
+        self.is_installed = base_path_ok && workdirs_path_ok;
     }
 }
