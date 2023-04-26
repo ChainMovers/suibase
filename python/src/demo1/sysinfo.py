@@ -17,7 +17,7 @@
 """Demonstrate fetching general system information."""
 
 from datetime import datetime
-from src.common.demo_utils import handle_result
+from pysui.sui.sui_clients.common import handle_result
 from pysui.sui.sui_config import SuiConfig
 from pysui.sui.sui_clients.sync_client import SuiClient
 

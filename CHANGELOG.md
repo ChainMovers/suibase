@@ -16,12 +16,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Python example of Programmable Transaction
+- Language nuetral cookbook guide introducing Programmable Transactions
 
 ### Fixed
 
 - Display from `coinage` Python demo
 
 ### Changed
+
 - Breaking changes: Renaming of project from sui-base to suibase. Affects paths, URL links, API.
   Change will facilitate multi-plaftorm consistency by using a namespace without dash.
 - Upgraded Python demos to use newest version of `pysui` 0.17.0
