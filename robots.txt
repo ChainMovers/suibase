@@ -2,4 +2,4 @@
 User-agent:*
 Disallow:
 
-Sitemap: https://sui-base.io/sitemap.xml
+Sitemap: https://suibase.io/sitemap.xml
