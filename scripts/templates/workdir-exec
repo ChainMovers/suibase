@@ -2,11 +2,11 @@
 
 # This script control this "workdir".
 #
-# You use 'workdir-exec' in the same way you would use 'localnet', 'devnet' sui-base scripts...
+# You use 'workdir-exec' in the same way you would use 'localnet', 'devnet' suibase scripts...
 #
 # Example:
 #    'localnet start' is equivalent to
-#    '~/sui-base/workdirs/localnet/workdir-exec start'
+#    '~/suibase/workdirs/localnet/workdir-exec start'
 #
 # Never move this script outside of its workdir. It must stay here to run
 # within its intended context.
@@ -18,9 +18,9 @@
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="$(basename "$(dirname "$SCRIPT_COMMON_CALLER")")"
 # shellcheck source=SCRIPTDIR/../common/__globals.sh
-source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/suibase/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Call the common code that can handle all the possible context.
 # shellcheck source=SCRIPTDIR/../common/__workdir-exec.sh
-source "$HOME/sui-base/scripts/common/__workdir-exec.sh"
+source "$HOME/suibase/scripts/common/__workdir-exec.sh"
 workdir_exec "$@"

@@ -8,7 +8,7 @@ export const enSidebar = sidebar({
       link: "intro.md",
       children: [
         {
-          text: "What is Sui-Base?",
+          text: "What is Suibase?",
           link: "intro.md",
         },
         {
@@ -26,7 +26,7 @@ export const enSidebar = sidebar({
       ],
     },
     {
-      text: "Sui-Base Docs",
+      text: "Suibase Docs",
       link: "how-to/scripts.md",
       children: [
         {
@@ -38,12 +38,12 @@ export const enSidebar = sidebar({
           link: "references.md",
         },
         {
-          text: "Sui-Base Helpers",
+          text: "Suibase Helpers",
           link: "helpers.md",
         },
         {
           text: "Workdir Config",
-          link: "how-to/configure-sui-base-yaml.md",
+          link: "how-to/configure-suibase-yaml.md",
         },
         {
           text: "Rust",

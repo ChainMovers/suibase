@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Function to remove sui-base scripts symlinks in ~/.local/bin
+# Function to remove suibase scripts symlinks in ~/.local/bin
 # Has no effect if symlink does not exists.
 remove_bin_path() {
   UBP_SRC_DIR="$HOME/.local/bin"
@@ -28,7 +28,7 @@ main() {
   remove_bin_path "asui"
   remove_bin_path "csui"
   echo
-  echo "sui-base scripts uninstalled successfully for user [$username]"
+  echo "suibase scripts uninstalled successfully for user [$username]"
   echo
 }
 

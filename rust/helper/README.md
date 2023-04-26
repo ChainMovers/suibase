@@ -1,3 +1,3 @@
 ---
-title: "Sui-Base Helper"
+title: "Suibase Helper"
 ---

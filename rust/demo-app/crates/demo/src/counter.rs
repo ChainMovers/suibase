@@ -8,10 +8,10 @@
 use std::path::PathBuf;
 
 use shared_crypto::intent::Intent;
-use sui_base_helper::SuiBaseHelper;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
+use suibase::SuiBaseHelper;
 
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::types::messages::Transaction;
@@ -20,21 +20,21 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use anyhow::ensure;
 
 pub async fn count() -> Result<(), anyhow::Error> {
-    // Use sui-base to get information from the last published
+    // Use suibase to get information from the last published
     // packaged from this development machine. That includes:
     //    - the ObjectID of the Demo::Counter package published.
     //    - the ObjectID of the Counter object instantiated at publication.
     //
-    // Also use sui-base to help get what is needed to interact with the
+    // Also use suibase to help get what is needed to interact with the
     // network targeted for the demo:
     //    - Path to the keystore.
     //    - URLs to reach the network.
     //    - A client address
 
-    // Initialize the sui-base helper.
+    // Initialize the suibase helper.
     let suibase = SuiBaseHelper::new();
     suibase.select_workdir("active")?;
-    println!("Using sui-base workdir [{:?}]", suibase.workdir());
+    println!("Using suibase workdir [{:?}]", suibase.workdir());
 
     // Get information from the last publication.
     let package_id = suibase.package_object_id("demo")?;
@@ -56,7 +56,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // Use the active client address (check the docs for useful alternatives for tests).
     let client_address = suibase.client_sui_address("active")?;
 
-    // Get the keystore using the location given by sui-base.
+    // Get the keystore using the location given by suibase.
     let keystore_pathname = suibase.keystore_pathname()?;
     let keystore_pathbuf = PathBuf::from(keystore_pathname);
     let keystore = Keystore::File(FileBasedKeystore::new(&keystore_pathbuf)?);
@@ -86,7 +86,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     let signature = keystore.sign_secure(&client_address, &move_call, Intent::sui_transaction())?;
 
     let response = sui_client
-        .quorum_driver()
+        .quorum_driver_api()
         .execute_transaction_block(
             Transaction::from_data(move_call, Intent::sui_transaction(), vec![signature])
                 .verify()?,

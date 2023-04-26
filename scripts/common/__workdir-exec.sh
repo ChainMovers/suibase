@@ -18,7 +18,7 @@ CMD_SET_SUI_REPO_REQ=false
 CMD_FAUCET_REQ=false
 
 usage_local() {
-  echo_low_green "$WORKDIR"; echo "  sui-base $SUI_BASE_VERSION"
+  echo_low_green "$WORKDIR"; echo "  suibase $SUI_BASE_VERSION"
   echo
   echo "  Workdir to simulate a Sui network running fully on this machine"
   echo "  Accessible from $CFG_links_1_rpc"
@@ -62,7 +62,7 @@ usage_local() {
 }
 
 usage_remote() {
-  echo_low_green "$WORKDIR"; echo "  sui-base $SUI_BASE_VERSION"
+  echo_low_green "$WORKDIR"; echo "  suibase $SUI_BASE_VERSION"
   echo
   echo "  Workdir to interact with a remote Sui network"
   echo
@@ -104,8 +104,8 @@ usage() {
   fi
 
   # Quick check if installed, then help the user about the location.
-  if [ -d "$HOME/sui-base/workdirs" ]; then
-    echo "All sui-base outputs are in ~/sui-base/workdirs/$WORKDIR"
+  if [ -d "$SUIBASE_DIR/workdirs" ]; then
+    echo "All suibase outputs are in ~/suibase/workdirs/$WORKDIR"
   fi
 
   exit
@@ -168,8 +168,8 @@ workdir_exec() {
           -p|--path)
              OPTIONAL_PATH="${2%/}"; shift
              if [ -z "$OPTIONAL_PATH" ]; then echo "--path <path> must be specified"; exit 1; fi ;;
-          --json) echo "--json option superfluous. JSON always generated on publish by sui-base. See publish-output.json." ;;
-          --install-dir) echo "Do no specify --install-dir when publishing with sui-base. Output is always in published-data location instead." ;;
+          --json) echo "--json option superfluous. JSON always generated on publish by suibase. See publish-output.json." ;;
+          --install-dir) echo "Do no specify --install-dir when publishing with suibase. Output is always in published-data location instead." ;;
           *) PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1" ;;
         esac
         shift
@@ -198,6 +198,17 @@ workdir_exec() {
 
   ###################################################################
   #
+  #  Detect if a repair is needed related to the suibase renaming
+  #  (this should be removed pass mid-2024 or so...)
+  #
+  ####################################################################
+  if [ -f "$WORKDIRS/$WORKDIR/sui-base.yaml" ]; then
+    # shellcheck source=SCRIPTDIR/../../repair
+    source "$SUIBASE_DIR"/repair
+  fi
+
+  ###################################################################
+  #
   #  Most command line validation done (PASSTHRU_OPTIONS remaining)
   #
   #  Source more files and do actual work from this point.
@@ -212,7 +223,7 @@ workdir_exec() {
 
   if $is_local; then
     # shellcheck source=SCRIPTDIR/__sui-faucet-process.sh
-    source "$HOME/sui-base/scripts/common/__sui-faucet-process.sh"
+    source "$SUIBASE_DIR/scripts/common/__sui-faucet-process.sh"
     update_SUI_FAUCET_PROCESS_PID_var;
 
     update_SUI_PROCESS_PID_var;
@@ -378,7 +389,7 @@ workdir_exec() {
 
     # Verify that the faucet is enabled and running.
     if [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
-      setup_error "faucet feature disabled (see sui-base.yaml )"
+      setup_error "faucet feature disabled (see suibase.yaml )"
     fi
 
     start_all_services; # Start the faucet as needed (and exit if fails).
@@ -403,7 +414,7 @@ workdir_exec() {
     exit_if_sui_binary_not_ok;
 
     # shellcheck source=SCRIPTDIR/__publish.sh
-    source "$HOME/sui-base/scripts/common/__publish.sh"
+    source "$SUIBASE_DIR/scripts/common/__publish.sh"
 
     if $is_local; then
       # publication requires localnet to run.
@@ -566,11 +577,11 @@ workdir_exec() {
 
   if $is_local; then
     # shellcheck source=SCRIPTDIR/__workdir-init-local.sh
-    source "$HOME/sui-base/scripts/common/__workdir-init-local.sh"
+    source "$SUIBASE_DIR/scripts/common/__workdir-init-local.sh"
     workdir_init_local;
   else
     # shellcheck source=SCRIPTDIR/__workdir-init-remote.sh
-    source "$HOME/sui-base/scripts/common/__workdir-init-remote.sh"
+    source "$SUIBASE_DIR/scripts/common/__workdir-init-remote.sh"
     workdir_init_remote;
   fi
 
@@ -612,7 +623,7 @@ workdir_exec() {
   echo
   echo "Success. Try it by typing \"$SUI_SCRIPT client gas\""
 
-  # Warn the user if the sui-base.yaml default branch was overriden and the
+  # Warn the user if the suibase.yaml default branch was overriden and the
   # actual branch is not the same. Recommend to do an update in that case.
   if is_sui_repo_dir_default; then
     if [ -d "$SUI_REPO_DIR_DEFAULT" ] && [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
@@ -620,7 +631,7 @@ workdir_exec() {
        local _BRANCH_NAME
        _BRANCH_NAME=$(if cd "$SUI_REPO_DIR_DEFAULT"; then git branch --show-current; else echo "unknown"; fi)
        if [ "$_BRANCH_NAME" != "$CFG_default_repo_branch" ]; then
-         warn_user "sui-base.yaml is requesting for branch [$CFG_default_repo_branch] but the sui-repo is on [$_BRANCH_NAME]. Do '$WORKDIR update' to fix this."
+         warn_user "suibase.yaml is requesting for branch [$CFG_default_repo_branch] but the sui-repo is on [$_BRANCH_NAME]. Do '$WORKDIR update' to fix this."
       fi
     fi
   fi

@@ -8,7 +8,7 @@ sui_exec() {
 
   exit_if_workdir_not_ok;
 
-  # Display some sui-base related info if called without any parameters.
+  # Display some suibase related info if called without any parameters.
   DISPLAY_SUI_BASE_HELP=false
   if [ $# -eq 0 ]; then
     DISPLAY_SUI_BASE_HELP=true
@@ -72,7 +72,7 @@ sui_exec() {
       $SUI_BIN genesis --help
     fi
     echo
-    setup_error "Use sui-base 'localnet start' script instead"
+    setup_error "Use suibase 'localnet start' script instead"
   fi
 
   if [[ $SUI_SUBCOMMAND == "start" ]]; then
@@ -81,7 +81,7 @@ sui_exec() {
       $SUI_BIN start --help
     fi
     echo
-    setup_error "Use sui-base 'localnet start' script instead"
+    setup_error "Use suibase 'localnet start' script instead"
   fi
 
   # Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided

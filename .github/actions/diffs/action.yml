@@ -11,7 +11,7 @@ outputs:
     description: True when changes related to Move
     value: "${{ steps.diff.outputs.isMove }}"
   isScript:
-    description: True when changes related sui-base scripts
+    description: True when changes related suibase scripts
     value: "${{ steps.diff.outputs.isScript }}"
 
 runs:

@@ -1,0 +1,11 @@
+# This file allows to override one or more variables from the
+# defaults defined at:
+#   ~/suibase/workdirs/scripts/defaults/localnet/suibase.yaml
+#
+# Documentation: https://suibase.io/how-to/configure-suibase-yaml
+#
+# (if website is down, check under ~/suibase/docs/src)
+
+# Examples:
+# initial_fund_per_address: 9999999999999999999
+# default_repo_branch: "main"

@@ -33,7 +33,7 @@ publish_local() {
   CMD="$SUI_EXEC client publish --gas-budget 20000000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS --json 2>&1 1>$INSTALL_DIR/publish-output.json"
 
   echo $CMD
-  echo "sui-base: Publishing..."
+  echo "suibase: Publishing..."
   script_cmd $CMD;
 
   #  TODO Investigate problem with exit status here...
@@ -99,17 +99,17 @@ publish_local() {
 
   if [ -z "$_ID_PACKAGE" ]; then
     cat "$INSTALL_DIR/publish-output.json"
-    setup_error "sui-base: Publication failed."
+    setup_error "suibase: Publication failed."
   fi
 
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
   script_cmd "$SUI_EXEC client object $_ID_PACKAGE"
-  echo "sui-base: Verifying new package is on network..."
+  echo "suibase: Verifying new package is on network..."
   validation=$($SUI_EXEC client object "$_ID_PACKAGE" | grep -i "package")
   if [ -z "$validation" ]; then
     cat "$INSTALL_DIR/publish-output.json"
-    setup_error "sui-base: Unexpected object type (Not a package)"
+    setup_error "suibase: Unexpected object type (Not a package)"
   fi
   JSON_STR="[\"$_ID_PACKAGE\"]"
   echo "$JSON_STR" > "$INSTALL_DIR/package-id.json"

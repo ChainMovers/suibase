@@ -8,7 +8,7 @@ editLink: true
 
 Anyone with a Github account can participate.
 
-The cookbook is built from markdown files (.md) and served directly from [github](https://github.com/sui-base/sui-base/tree/main/docs/website).
+The cookbook is built from markdown files (.md) and served directly from [github](https://github.com/suibase/suibase/tree/main/docs/website).
 
 ## Editing on Github (very easy/quick changes)
 
@@ -26,14 +26,14 @@ Requirements are Node.js and pnpm ( [More Info](https://theme-hope.vuejs.press/c
 
 To start vuepress do:
 ```shell
-$ cd ~/sui-base/docs
+$ cd ~/suibase/docs
 $ pnpm docs:dev
 ...
 Open your browser at http://localhost:8080
 ```
 
-The browser updates as you change files under ~/sui-base/docs.
+The browser updates as you change files under ~/suibase/docs.
 
-Sui-base uses [https://theme-hope.vuejs.press/guide/](https://theme-hope.vuejs.press/guide/) for additional markdown features.
+Suibase uses [https://theme-hope.vuejs.press/guide/](https://theme-hope.vuejs.press/guide/) for additional markdown features.
 
 Submit your changes as a pull request, just ask as needed (not as hard as it seems once you go through it once).

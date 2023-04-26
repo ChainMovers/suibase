@@ -10,7 +10,7 @@ edition = "2021"
 
 [workspace.dependencies]
 # Built is done using the same workdir made active
-# with sui-base 'asui'.
+# with suibase 'asui'.
 #
 # This help keeping your selected network, app and SDKs and whatnot
 # use the *same* binary versions.
@@ -18,12 +18,12 @@ edition = "2021"
 # If you prefer the "typical" rust way of indepedently get the latest
 # crates remotely from git, then comment out the 'path' dependencies
 # and un-comment out the 'git' ones.
-sui-sdk = { path = "../../../sui-base/workdirs/active/sui-repo/crates/sui-sdk/" }
-sui-json-rpc-types = { path = "../../../sui-base/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
-sui-keys = { path = "../../../sui-base/workdirs/active/sui-repo/crates/sui-keys/" }
-sui-types = { path = "../../../sui-base/workdirs/active/sui-repo/crates/sui-types/" }
-sui-adapter = { path = "../../../sui-base/workdirs/active/sui-repo/crates/sui-adapter/" }
-shared-crypto = { path = "../../../sui-base/workdirs/active/sui-repo/crates/shared-crypto/" }
+sui-sdk = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
+sui-json-rpc-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
+sui-keys = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
+sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+sui-adapter = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-adapter/" }
+shared-crypto = { path = "../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
 
 # Comment these "git" dependencies if using the above "path" dependencies.
 #sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
@@ -46,8 +46,6 @@ clap = { version = "3.2.22", features = [
 ] }
 
 colored = { version = "2.0.0" }
-
-
 
 [workspace.dependencies.serial_test]
 # Intended to be used as [dev-dependencies] only.

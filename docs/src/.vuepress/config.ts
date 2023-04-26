@@ -9,7 +9,7 @@ export default defineUserConfig({
   locales: {
     "/": {
       lang: "en-US",
-      title: "sui-base.io",
+      title: "suibase.io",
       description:
         "Sui Network Open-Source Development Tools and Community Cookbook",
     },

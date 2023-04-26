@@ -5,12 +5,12 @@ pub(crate) struct SuiBaseRoot {
     // Parent to all internal variables, except for the per workdir ones (see sui_base_workdir.rs)
     is_installed: bool, // false on OS access failure.
 
-    // Absolute path to sui-base installation.
-    // (e.g. /home/johndoe/sui-base )
+    // Absolute path to suibase installation.
+    // (e.g. /home/johndoe/suibase )
     sui_base_path: String,
 
-    // Absolute path to sui-base/workdirs
-    // (e.g. /home/johndoe/sui-base/workdirs )
+    // Absolute path to suibase/workdirs
+    // (e.g. /home/johndoe/suibase/workdirs )
     workdirs_path: String,
 }
 
@@ -42,7 +42,7 @@ impl SuiBaseRoot {
 
     pub fn refresh_state(self: &mut SuiBaseRoot) {
         if let Some(mut path_buf) = home_dir() {
-            path_buf.push("sui-base");
+            path_buf.push("suibase");
             self.sui_base_path = path_buf.to_string_lossy().to_string();
 
             path_buf.push("workdirs");

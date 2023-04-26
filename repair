@@ -1,0 +1,184 @@
+#!/bin/bash
+
+# Script to repair a Suibase installation.
+#
+# Have no effect if there is nothing to repair.
+#
+REPAIR_SB_DIR="$HOME/suibase"
+
+# Function to repair symlinks as needed.
+#
+# Has no effect if symlink already exists and matching.
+update_bin_path() {
+  local _OS_DIR_ON_PATH="$HOME/.local/bin"
+  UBP_TARGET="$REPAIR_SB_DIR/scripts/$1"
+  if [ -d "$_OS_DIR_ON_PATH" ]; then
+    if [ ! -L "$_OS_DIR_ON_PATH/$1" ]; then
+      ln -s "$UBP_TARGET" "$_OS_DIR_ON_PATH/$1"
+    else
+      # Verify link is as intended, if not replace it.
+      UBP_READLINK=$( readlink -f "$_OS_DIR_ON_PATH/$1" )
+      if [[ "$UBP_READLINK" != "$UBP_TARGET" ]]; then
+         ln -sf "$UBP_TARGET" "$_OS_DIR_ON_PATH/$1"
+      fi
+    fi
+  fi
+}
+
+fix_sui_base_rename_dir_symlink() {
+  local _SYMLINK="$1"
+  # Change "sui-base" to "suibase" in the target of the symlink
+  if [ -z "$_SYMLINK" ]; then
+    return
+  fi
+  local _SYMLINK_TARGET
+  local _SYMLINK_TARGET_NEW
+  # Notice '-m' to allow for unresolved portion in the path.
+  # (which is expected when sui-base no longer exists).
+  _SYMLINK_TARGET=$(readlink -m "$_SYMLINK")
+  _SYMLINK_TARGET_NEW="${_SYMLINK_TARGET//sui-base/suibase}"
+  #echo "symlink $_SYMLINK_TARGET_NEW $_SYMLINK_TARGET"
+  if [[ "$_SYMLINK_TARGET" != "$_SYMLINK_TARGET_NEW" ]]; then
+    ln -nsf "$_SYMLINK_TARGET_NEW" "$_SYMLINK"
+  fi
+}
+
+fix_sui_base_rename_file() {
+  local _PATHNAME="$1"
+  # Fix sui-base to suibase text in the file.
+  if [ -z "$_PATHNAME" ] || [ ! -f "$_PATHNAME" ]; then
+    return
+  fi
+  local _SEARCH_STRING="sui-base"
+  local _REPLACE_STRING="suibase"
+  sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" \
+             "$_PATHNAME" && \
+             rm "$_PATHNAME.bak"
+}
+
+suibase_repair() {
+
+  # Check if there is additional variable that we can use
+  # from __globals.sh. This may happen when this script is sourced.
+  local _SCRIPT_SOURCED=false
+  if [ -n "$SUI_BASE_VERSION" ] && [ -n "$USER_CWD" ]; then
+    _SCRIPT_SOURCED=true
+  fi
+
+  # Check if current dir is rooted to ~/sui-base (a deprecated location).
+  local _EXIT_DIRECTORY_INSTRUCTION=false
+  if [[ "$(pwd)" = *"sui-base"* ]]; then
+    _EXIT_DIRECTORY_INSTRUCTION=true
+  fi
+
+  if [ "$_SCRIPT_SOURCED" = true ] && [[ "$USER_CWD" = *"sui-base"* ]]; then
+    _EXIT_DIRECTORY_INSTRUCTION=true
+  fi
+
+  # Check if all the sui-base to suibase repairs have to be done.
+  local _RENAME_DIRECTORY_REPAIR=false
+  if [ -d "$HOME/sui-base" ] && [ ! -d "$REPAIR_SB_DIR" ]; then
+    echo "Starting one-time renaming of sui-base to suibase..."
+    mv "$HOME/sui-base" "$REPAIR_SB_DIR"
+    _RENAME_DIRECTORY_REPAIR=true
+  fi
+
+  # Iterate executeable in $REPAIR_SB_DIR/scripts/ and update symlink to them.
+  for dir_entry in "$REPAIR_SB_DIR"/scripts/* ; do
+    if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
+      script_name=$(basename "$dir_entry")
+      update_bin_path "$script_name"
+    fi
+  done
+
+  # Iterate directory in $REPAIR_SB_DIR/workdirs/
+  for dir_entry in "$REPAIR_SB_DIR"/workdirs/* ; do
+    if [ -L "$dir_entry" ]; then
+      # This is a directory symlink (probably "active"). Check it.
+      fix_sui_base_rename_dir_symlink "$dir_entry"
+      continue
+    fi
+
+    if [ -d "$dir_entry" ]; then
+      # Do all repairs at workdir level related to when sui-base
+      # was renamed suibase.
+      #
+      # Detect with presence/absence of sui-base.yaml vs suibase.yaml.
+      workdir=$(basename "$dir_entry")
+
+      local _DO_SUI_BASE_RENAME_REPAIR=false
+      if [ -f "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml" ]; then
+        _DO_SUI_BASE_RENAME_REPAIR=true
+      fi
+
+      if [ "$_DO_SUI_BASE_RENAME_REPAIR" = true ]; then
+        # Iterate one level deeper to fix symlinks in workdir.
+        for dir_dir_entry in "$dir_entry"/* ; do
+          if [ -L "$dir_dir_entry" ]; then
+            # This is a directory symlink. Fix it.
+            fix_sui_base_rename_dir_symlink "$dir_dir_entry"
+          fi
+        done
+        # Copy suibase.yaml from templates (when does not exists).
+        if [ ! -f "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml" ] &&
+           [ -f "$REPAIR_SB_DIR/scripts/templates/$workdir/suibase.yaml" ]; then
+
+          # Fix client.yaml path (as needed).
+          fix_sui_base_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config-default/client.yaml"
+          fix_sui_base_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config/client.yaml"
+          fix_sui_base_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/faucet/client.yaml"
+
+          # Overwrite the sui-exec and workdir-exec scripts.
+          cp -f "$REPAIR_SB_DIR/scripts/templates/sui-exec" "$REPAIR_SB_DIR/workdirs/$workdir/sui-exec"
+          cp -f "$REPAIR_SB_DIR/scripts/templates/workdir-exec" "$REPAIR_SB_DIR/workdirs/$workdir/workdir-exec"
+
+          cp "$REPAIR_SB_DIR/scripts/templates/$workdir/suibase.yaml" "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml"
+
+          # Append user content from sui-base.yaml to suibase.yaml
+          # (all non-blank lines not starting with #).
+          if [ -f "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml" ] &&
+             [ -f "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml" ]; then
+            { sed '/^$/d;/^#/d' "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml"; } >> "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml"
+            rm "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml"
+            # Force rebuild because of problems with custom builds sometimes refering to old path.
+            echo "Cleaning up $workdir sui repo"
+            cd "$REPAIR_SB_DIR/workdirs/$workdir/sui-repo-default" && (cargo clean);
+          fi
+        fi
+      fi
+    fi
+  done
+
+  if [ "$_RENAME_DIRECTORY_REPAIR" = true ]; then
+    # Force rebuild because of problems with custom builds sometimes refering to old path.
+    echo "Cleaning up local sui-base repos"
+    cd "$REPAIR_SB_DIR/rust/demo-app/" && (cargo clean);
+    cd "$REPAIR_SB_DIR/rust/helper" && (cargo clean);
+    cd "$REPAIR_SB_DIR/rust/helper-uniffi" && (cargo clean);
+  fi
+
+  local _EXIT=false
+  if [ "$_RENAME_DIRECTORY_REPAIR" = true ]; then
+    echo "The directory ~/sui-base has been renamed to ~/suibase."
+    echo
+    echo "** This was a required one-time change **"
+    echo
+    echo "Do a 'localnet update' to rebuild the binaries."
+    _EXIT=true
+  fi
+
+  if [ "$_EXIT_DIRECTORY_INSTRUCTION" = true ]; then
+    echo
+    echo "You should not run any command under ~/sui-base anymore."
+    echo "It has been renamed to ~/suibase."
+    echo
+    echo "Do 'cd' to another directory."
+    _EXIT=true
+  fi
+
+  if [ "$_EXIT" = true ]; then
+    exit 1
+  fi
+}
+
+suibase_repair;

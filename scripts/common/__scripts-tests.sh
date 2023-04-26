@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to perform sui-base tests.
+# Script to perform suibase tests.
 #
 # This is not intended to be called directly by the user.
 #
@@ -14,8 +14,8 @@
 # Check $GITHUB_OPTION to limit what can be tested on github.
 #
 
-WORKDIRS="$HOME/sui-base/workdirs"
-OUT="$HOME/sui-base/scripts/out"
+WORKDIRS="$HOME/suibase/workdirs"
+OUT="$HOME/suibase/scripts/out"
 
 fail() {
   echo Failed ["$1"]
@@ -48,7 +48,7 @@ assert_workdir_ok() {
   [ -f "$_DIR/workdir-exec" ] || fail "workdirs/workdir-exec missing"
   [ -x "$_DIR/workdir-exec" ] || fail "workdirs/workdir-exec not exec"
 
-  [ -f "$_DIR/sui-base.yaml" ] || fail "workdirs/sui-base.yaml missing"
+  [ -f "$_DIR/suibase.yaml" ] || fail "workdirs/suibase.yaml missing"
 
   # First word out of "workdir-exec" should be the workdir name
   local _HELP
@@ -61,8 +61,8 @@ assert_workdir_ok() {
   # Note: Must use contain because of the ANSI color escape code.
   [[ "$_FIRST_WORD" == *"$1"* ]] || fail "usage first word [$_FIRST_WORD] not [$1]"
 
-  # Usage should have the sui-base version, so sanity verify for "sui-base"
-  [[ "$_HELP" == *"sui-base"* ]] || fail "usage does not mention sui-base [$_HELP]"
+  # Usage should have the suibase version, so sanity verify for "suibase"
+  [[ "$_HELP" == *"suibase"* ]] || fail "usage does not mention suibase [$_HELP]"
 }
 
 assert_build_ok() {
@@ -78,12 +78,12 @@ test_no_workdirs() {
   echo "Testing when starting with no workdirs"
   echo "======================================"
 
-  rm -rf ~/sui-base/workdirs
+  rm -rf ~/suibase/workdirs
   echo "localnet create"
   (localnet create >& "$OUT") || fail "create"
   assert_workdir_ok "localnet"
 
-  #rm -rf ~/sui-base/workdirs
+  #rm -rf ~/suibase/workdirs
   #echo "localnet update"
   #(localnet update >& "$OUT") || fail "update"
   #assert_workdir_ok "localnet"
@@ -110,12 +110,12 @@ main() {
   # This script should not be called from under workdirs since it will be deleted.
   local _USER_CWD
   _USER_CWD=$(pwd -P)
-  if [[ "$_USER_CWD" = *"sui-base/workdirs"* ]]; then
-   fail "Should not call this test from a directory that will get deleted [sui-base/workdirs]"
+  if [[ "$_USER_CWD" = *"suibase/workdirs"* ]]; then
+   fail "Should not call this test from a directory that will get deleted [suibase/workdirs]"
   fi
 
-  # shellcheck source=SCRIPTDIR/../../../sui-base/install
-  (source ~/sui-base/install >& "$OUT") || fail "install exit status=[#?]"
+  # shellcheck source=SCRIPTDIR/../../../suibase/install
+  (source ~/suibase/install >& "$OUT") || fail "install exit status=[#?]"
 
   # Add here tests done on github.
   test_no_workdirs;

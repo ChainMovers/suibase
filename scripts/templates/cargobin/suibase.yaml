@@ -1,0 +1,7 @@
+# This file allows to override one or more variables from the
+# defaults defined at:
+#   ~/suibase/workdirs/scripts/defaults/cargobin/suibase.yaml
+#
+# Documentation: https://suibase.io/how-to/configure-suibase-yaml
+#
+# (if website is down, check under ~/suibase/docs/src)

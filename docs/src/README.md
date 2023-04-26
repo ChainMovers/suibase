@@ -3,7 +3,7 @@ home: true
 icon: home
 title: Home
 heroImage: /logo.png
-heroText: Sui-Base
+heroText: Suibase
 tagline: Open-Source Development Tools and Community Cookbook
 actions:
   - text: Install

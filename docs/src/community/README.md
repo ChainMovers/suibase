@@ -5,9 +5,9 @@ headerDepth: 0
 ---
 
 
-For Sui-Base (+any 3rd party dev tool welcome to join):
+For Suibase (+any 3rd party dev tool welcome to join):
 
-  * [Sui-Base Discord](https://discord.com/invite/Erb6SwsVbH)
+  * [Suibase Discord](https://discord.com/invite/Erb6SwsVbH)
 
 For Sui specific discussions:
 

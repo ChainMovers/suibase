@@ -1,12 +1,11 @@
-!!!!Warning!!!!
-If you are looking to configure sui-base, please check instead to modify the sui-base.yaml into the workdir.
+# !!!!Warning!!!!
+If you are looking to configure suibase, please check instead to modify the suibase.yaml into the workdir.
 
-The templates directories are intended for the developers of sui-base itself.
+The templates are intended for the developers of suibase itself.
 
-What are the templates used for?
-================================
+# What are the templates for?
 All files from a sub-directory are copied *once* when a workdir is *created* with the same name.
 
-sui-exec and workdir-exec are shims at two key "abstraction" point (already useful at making the workdir more generic). They may also allow the user to hook their own scripts (future feature?).
+sui-exec and workdir-exec are shims of two "abstractions" (already useful at making the workdir more generic). They may also allow the user to hook their own scripts (future feature?).
 
-The shims are also copied (and updated if older version) into every workdir.
+The shims are also copied (and updated as needed) into every workdir.

@@ -9,7 +9,7 @@ OS_DIR_ON_PATH="$HOME/.local/bin"
 # shellcheck disable=SC2088
 OS_DIR_ON_PATH_ALT="~/.local/bin"
 
-SUI_BASE_DIR="$HOME/sui-base"
+SUIBASE_DIR="$HOME/suibase"
 
 EXIT_TERMINAL_INSTRUCTION=false
 
@@ -21,7 +21,7 @@ is_user_root () { [ "${EUID:-$(id -u)}" -eq 0 ]; }
 #
 # Has no effect if symlink already exists and matching.
 update_bin_path() {
-  UBP_TARGET="$SUI_BASE_DIR/scripts/$1"
+  UBP_TARGET="$SUIBASE_DIR/scripts/$1"
   if [ -d "$OS_DIR_ON_PATH" ]; then
     if [ ! -L "$OS_DIR_ON_PATH/$1" ]; then
       ln -s "$UBP_TARGET" "$OS_DIR_ON_PATH/$1"
@@ -100,19 +100,19 @@ setup_local_bin_as_needed() {
 
 main() {
   if is_user_root; then
-    setup_error "Should not install sui-base as root (or sudo)"
+    setup_error "Should not install suibase as root (or sudo)"
   fi
 
-  # Verify that sui-base was cloned in user directory.
-  if [ ! -f "$SUI_BASE_DIR/install" ]; then
-    echo "sui-base should be git clone in user home directory [$HOME]"
-    echo "See https://sui-base.io/how-to/install/ for more info."
+  # Verify that suibase was cloned in user directory.
+  if [ ! -f "$SUIBASE_DIR/install" ]; then
+    echo "suibase should be git clone in user home directory [$HOME]"
+    echo "See https://suibase.io/how-to/install/ for more info."
     exit 1
   fi
 
   setup_local_bin_as_needed;
 
-  echo "Starting installation of sui-base..."
+  echo "Starting installation of suibase..."
 
   script_list=("localnet" "devnet" "testnet" "lsui" "dsui" "csui" "asui" "tsui")
 
@@ -124,24 +124,24 @@ main() {
   # specifying a path.
   for script_name in "${script_list[@]}"; do
     # Call into each script which should return a string echoing... its own name.
-    test=$($script_name sui-base-script-name)
+    test=$($script_name suibase-script-name)
     if [ "$test" != "$script_name" ]; then
       setup_error "setup of $script_name symlink failed [$test]"
     fi
   done
 
-  # Load sui-base common functions/globals to potentially
+  # Load suibase common functions/globals to potentially
   # do more advanced default workdir creation.
   SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
   WORKDIR="active"
   # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
-  source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+  source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
   create_cargobin_as_needed;
 
   username=$(whoami)
   echo
-  echo "Sui-base is installed now for user [$username]. Great!"
+  echo "Suibase is installed now for user [$username]. Great!"
   echo
   echo "You can start your localnet with:"
   echo "  \$ localnet start"
@@ -151,7 +151,7 @@ main() {
   if $EXIT_TERMINAL_INSTRUCTION; then
     echo "To get started you may need to restart your current shell."
     echo "This would reload your PATH environment variable to include"
-    echo "sui-base's bin directory (\$HOME/.local/bin)."
+    echo "suibase's bin directory (\$HOME/.local/bin)."
     echo
     echo "To configure your current shell, run:"
     echo "source \"\$HOME/.profile\""

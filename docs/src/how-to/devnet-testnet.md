@@ -36,5 +36,5 @@ Status will eventually show the health of the network and your RPC connections.
 ## Upgrading Sui Client
 Do ```devnet update``` to download/rebuild to the latest client.
 
-By default, the latest 'devnet' branch from Mysten Labs is used, you can choose a different branch or repo by editing the sui-base.yaml ([More Info]( ./configure-sui-base-yaml.md#change-default-repo-and-branch )).
+By default, the latest 'devnet' branch from Mysten Labs is used, you can choose a different branch or repo by editing the suibase.yaml ([More Info]( ./configure-suibase-yaml.md#change-default-repo-and-branch )).
 

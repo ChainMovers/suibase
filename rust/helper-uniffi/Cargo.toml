@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 uniffi = "0.23"
-sui-types = { path = "../../../sui-base/workdirs/active/sui-repo/crates/sui-types/" }
+sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
 home = "0.5.4"
 serde_json = "1.0"
 serde_yaml = "0.9"

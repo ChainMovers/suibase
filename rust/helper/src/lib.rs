@@ -1,8 +1,8 @@
-// sui-base helper library
+//  helper library
 //
-// Help automate localnet/devnet/testnet operations in a sui-base environment.
+// Help automate localnet/devnet/testnet operations in a suibase environment.
 //
-// Your app can select to interact with any of the workdir installed with sui-base.
+// Your app can select to interact with any of the workdir installed with suibase.
 //
 // This API is multi-thread safe.
 //
@@ -42,7 +42,7 @@ impl SuiBaseHelper {
         SuiBaseHelper(Arc::new(Mutex::new(SuiBaseHelperImpl::new())))
     }
 
-    // Check first if sui-base is installed, otherwise
+    // Check first if suibase is installed, otherwise
     // most of the other calls will fail in some ways.
     pub fn is_installed(&self) -> Result<bool, SuiBaseError> {
         self.0.lock().unwrap().is_installed()
@@ -79,7 +79,7 @@ impl SuiBaseHelper {
     //
     // package_name is the "name" field specified in the "Move.toml".
     //
-    // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
+    // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn package_object_id(&self, package_name: &str) -> Result<ObjectID, SuiBaseError> {
         self.0.lock().unwrap().package_object_id(package_name)
     }
@@ -107,7 +107,7 @@ impl SuiBaseHelper {
     //
     // The object_type is "acme::Tools::Anvil"
     //
-    // Related path: ~/sui-base/workdirs/<workdir_name>/published-data/<package_name>/
+    // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn published_new_object_ids(
         &self,
         object_type: &str,
@@ -123,7 +123,7 @@ impl SuiBaseHelper {
 
     // Get an address by name.
     //
-    // Sui-base localnet/devnet/testnet workdir are created with a set of pre-defined client addresses.
+    // Suibase localnet/devnet/testnet workdir are created with a set of pre-defined client addresses.
     //
     // These addresses are useful for testing. In particular, with localnet they are prefunded.
     //

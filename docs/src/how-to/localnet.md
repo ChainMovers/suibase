@@ -33,7 +33,7 @@ Do ```localnet update``` to download/rebuild/restart the localnet with the lates
 
 This also update the local repo that can provide the matching Rust SDK and Move dependencies to your app.
 
-By default, the latest 'devnet' branch from Mysten Labs is used, you can choose a different branch or repo by editing the sui-base.yaml ([More Info]( ./configure-sui-base-yaml.md#change-default-repo-and-branch )).
+By default, the latest 'devnet' branch from Mysten Labs is used, you can choose a different branch or repo by editing the suibase.yaml ([More Info]( ./configure-suibase-yaml.md#change-default-repo-and-branch )).
 
 ## Regeneration
 ```shell

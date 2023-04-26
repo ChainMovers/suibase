@@ -3,18 +3,18 @@ import { enNavbar /*, zhNavbar*/ } from "./navbar/index.js";
 import { enSidebar /*, zhSidebar*/ } from "./sidebar/index.js";
 
 export default hopeTheme({
-  hostname: "https://sui-base.io",
+  hostname: "https://suibase.io",
 
   author: {
-    name: "sui-base.io",
-    url: "https://sui-base.io",
+    name: "suibase.io",
+    url: "https://suibase.io",
   },
 
   iconAssets: "iconfont",
 
   logo: "/logo.png",
 
-  repo: "sui-base/sui-base",
+  repo: "sui-base/suibase",
 
   contributors: false,
   editLink: false,
@@ -35,7 +35,7 @@ export default hopeTheme({
       sidebar: enSidebar,
 
       footer:
-        '<a href="https://github.com/sui-base/sui-base">Sui-Base on Github</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://discord.com/invite/Erb6SwsVbH">Sui-Base on Discord</a>',
+        '<a href="https://github.com/sui-base/suibase">Suibase on Github</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://discord.com/invite/Erb6SwsVbH">Suibase on Discord</a>',
 
       copyright: "Apache 2.0 Open-Source License",
 

@@ -10,9 +10,9 @@ What to expect?
   * The counter emit a Move event on every increment.
   * Rust app that subscribe and show all Sui Move events (do "cargo run events")
   * Rust app to send a transaction to increment the counter (do "cargo run count").
-  * Use of sui-base scripts and helper to accelerate and automate Sui development.
+  * Use of suibase scripts and helper to accelerate and automate Sui development.
 
-To run this example, Sui-base installation is required.
-To open the project, point VSCode on ~/sui-base/rust/demo-app.
+To run this example, Suibase installation is required.
+To open the project, point VSCode on ~/rust/demo-app.
 
-Online references: [Source Code](https://github.com/sui-base/sui-base/tree/main/rust/demo-app), [counter.move](https://github.com/sui-base/sui-base/tree/main/rust/demo-app/move/sources/counter.move)
+Online references: [Source Code](https://github.com/suibase/suibase/tree/main/rust/demo-app), [counter.move](https://github.com/suibase/suibase/tree/main/rust/demo-app/move/sources/counter.move)

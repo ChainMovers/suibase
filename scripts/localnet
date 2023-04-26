@@ -2,21 +2,27 @@
 
 # Script to create and control a Sui local network.
 
+SUIBASE_DIR="$HOME/suibase"
+if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
+  ("$HOME/sui-base/repair")
+  exit 1
+fi
+
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="localnet"
 # shellcheck source=SCRIPTDIR/common/__globals.sh
-source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 exit_if_not_installed;
 
 # Trap the case of doing just a self-test for installation.
-if [[ "$1" == "sui-base-script-name" ]]; then
+if [[ "$1" == "suibase-script-name" ]]; then
   # This also test if the sourced "globals" works ($SCRIPT_NAME should be "localnet")
   echo "$SCRIPT_NAME"
   exit
 fi
 
 # shellcheck source=SCRIPTDIR/common/__globals.sh
-source "$HOME/sui-base/scripts/common/__workdir-exec.sh"
+source "$SUIBASE_DIR/scripts/common/__workdir-exec.sh"
 workdir_exec "$@"

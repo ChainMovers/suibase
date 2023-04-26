@@ -1,8 +1,13 @@
 #!/bin/bash
 
-cd ~/sui-base || { echo "sui-base not found. Please install it first."; exit 1; }
+SUIBASE_DIR="$HOME/suibase"
+if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
+   ("$HOME/sui-base/repair")
+fi
 
-_CUR_VER=$(~/sui-base/scripts/localnet | head -n 1 | sed 's/.*sui-base \(.*\)/\1/g')
+cd "$SUIBASE_DIR" || { echo "suibase not found. Please install it first."; exit 1; }
+
+_CUR_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*sui.*base \(.*\)/\1/g')
 
 # Check if there are local changes. If any, protect the user
 # from doing further git operations.
@@ -11,11 +16,11 @@ if [ ! "$(git status --porcelain | wc -l)" -eq "0" ]; then
     echo "Current version $_CUR_VER"
     echo
   fi
-  echo "local changes detected."
+  echo "Changes detected to local files."
   echo
-  echo "Please commit or stash them before updating sui-base."
+  echo "Please commit or stash them before updating suibase."
   echo
-  echo "Do 'git status' to see the changes."
+  echo "Do 'git status' to see changes."
   exit 1
 fi
 
@@ -25,11 +30,18 @@ git remote update >& /dev/null
 V1=$(git rev-parse HEAD)
 V2=$(git rev-parse '@{u}')
 if [ "$V1" != "$V2" ]; then
+  echo "Updating..."
   # Does more than needed, but should recover from most operator errors...
   (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
   (cd "$SUI_REPO_DIR" && git reset --hard origin/main > /dev/null)
   (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
-  _NEW_VER=$(~/sui-base/scripts/localnet | head -n 1 | sed 's/.*sui-base \(.*\)/\1/g')
+  _NEW_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*sui.*base \(.*\)/\1/g')
+
+  # Check for repair/update (noop if no change needed).
+  #
+  # Warning: Do this always last. $SUIBASE_DIR may change after that call
+  #          because of major changes like sui-base -> suibase renaming.
+  ("$SUIBASE_DIR/repair")
 
   if [ -n "$_CUR_VER" ]; then
     echo "Old version $_CUR_VER"
@@ -37,12 +49,13 @@ if [ "$V1" != "$V2" ]; then
   if [ -n "$_NEW_VER" ]; then
     echo "New version $_NEW_VER"
   fi
+
   echo
-  echo "sui-base updated successfully"
+  echo "suibase updated successfully"
 else
   if [ -n "$_CUR_VER" ]; then
     echo "Current version $_CUR_VER"
   fi
   echo
-  echo "sui-base is already up to date"
+  echo "suibase is already up to date"
 fi

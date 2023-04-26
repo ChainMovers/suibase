@@ -1,4 +1,4 @@
-# See scripts/defaults/localnet/sui-base.yaml for documentation.
+# See scripts/defaults/localnet/suibase.yaml for documentation.
 network_type: remote
 
 terminal_color: true

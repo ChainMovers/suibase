@@ -401,7 +401,7 @@ impl SuiBaseWorkdir {
             }
         })?;
 
-        // Simply use the sui-base selected primary.
+        // Simply use the suibaseselected primary.
         let mut link_id: u64 = 0;
         if let Some(selection) = top.get("selection") {
             if let Some(primary_id) = selection.get("primary") {
@@ -416,7 +416,7 @@ impl SuiBaseWorkdir {
             //
             // Could be a transient problem, so do not prevent a RPC selection to be done.
             //
-            // The user should be warn in some alternative ways (e.g. sui-base
+            // The user should be warn in some alternative ways (e.g. suibase
             // health monitoring process).
             if let Some(links) = top.get("links") {
                 if let Some(links_array) = links.as_array() {

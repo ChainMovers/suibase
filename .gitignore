@@ -1,4 +1,4 @@
-# Ignore sui-base outputs
+# Ignore suibase outputs
 workdirs/
 
 # File system
@@ -35,7 +35,7 @@ tmp
 # Move build files
 *.mv
 
-# Move build output (specific to sui-base repo)
+# Move build output (specific to suibase repo)
 **/move/build
 
 # logs

@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Do not call this script directly. It is a "common script" sourced by other sui-base scripts.
+# Do not call this script directly. It is a "common script" sourced by other suibase scripts.
 #
 # It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
 
 USER_CWD=$(pwd -P)
 
-SUI_BASE_VERSION="0.1.2"
+SUI_BASE_VERSION="0.1.3"
 
-# Sui-base does not work with version below these.
+# Suibase does not work with version below these.
 MIN_SUI_VERSION="sui 0.27.0"
 MIN_RUST_VERSION="rustc 1.65.0"
 
@@ -20,13 +20,27 @@ SCRIPT_PATH="$(dirname "$1")"
 SCRIPT_NAME="$(basename "$1")"
 WORKDIR="$2"
 
+# Detect if the script is called from an unexpected symlink.
+if [[ "$SCRIPT_PATH" = *"sui-base"* ]]; then
+  if [ -f "$HOME/suibase/repair" ]; then
+    ("$HOME/suibase/repair")
+  else
+    if [ -f "$HOME/sui-base/repair" ]; then
+      ("$HOME/sui-base/repair")
+    else
+      echo "Cannot find repair script. Contact developer for help."
+    fi
+  fi
+  exit 1
+fi
+
 # Two key directories location.
-SUI_BASE_DIR="$HOME/sui-base"
-WORKDIRS="$SUI_BASE_DIR/workdirs"
+SUIBASE_DIR="$HOME/suibase"
+WORKDIRS="$SUIBASE_DIR/workdirs"
 
 # Some other commonly used locations.
 LOCAL_BIN="$HOME/.local/bin"
-SCRIPTS_DIR="$SUI_BASE_DIR/scripts"
+SCRIPTS_DIR="$SUIBASE_DIR/scripts"
 SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
 CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
@@ -248,7 +262,7 @@ get_key_value() {
 }
 export -f get_key_value
 
-# Now load all the $CFG_ variables from the sui-base.yaml files.
+# Now load all the $CFG_ variables from the suibase.yaml files.
 # shellcheck source=SCRIPTDIR/__parse-yaml.sh
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
 update_sui_base_yaml() {
@@ -259,14 +273,14 @@ update_sui_base_yaml() {
   # This allow to detect if there was an override or not (e.g. to re-assure
   # the user in a message that an override was applied).
   #
-  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/sui-base.yaml"
+  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/suibase.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
     eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
   fi
 
   # Load overrides from workdir with CFG_ prefix.
-  YAML_FILE="$WORKDIRS/$WORKDIR/sui-base.yaml"
+  YAML_FILE="$WORKDIRS/$WORKDIR/suibase.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
   fi
@@ -309,13 +323,13 @@ update_SUI_BASE_NET_MOCK_var() {
      # is set to mock the network!!!
      #
      # The following exit non-zero (should break the CI)
-     setup_error "Bad commit to github. Contact https://sui-base.io devs ASAP to fix the release."
+     setup_error "Bad commit to github. Contact https://suibase.io devs ASAP to fix the release."
    fi
  fi
 
- # Mocking can be control with sui-base.yaml.
+ # Mocking can be control with suibase.yaml.
  #
- # This is undocummented, for sui-base devs only.
+ # This is undocummented, for suibase devs only.
  if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
    SUI_BASE_NET_MOCK=true
  fi
@@ -341,12 +355,12 @@ check_yaml_parsed()
   # Will fail if either not set or empty string. Both
   # wrong in all cases when calling this function.
   if [ -z "${!_var_name}" ]; then
-    setup_error "Missing [ $_var_name ] in sui-base.yaml."
+    setup_error "Missing [ $_var_name ] in suibase.yaml."
   fi
 
   _var_name="CFGDEFAULT_$1"
   if [ -z "${!_var_name}" ]; then
-    setup_error "Missing [ $_var_name ] in *default* sui-base.yaml"
+    setup_error "Missing [ $_var_name ] in *default* suibase.yaml"
   fi
 
 }
@@ -380,7 +394,7 @@ build_sui_repo_branch() {
 
     if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ] ||
        [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
-      echo "sui-base.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
+      echo "suibase.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
     fi
 
     # If not already done, initialize the default repo.
@@ -420,7 +434,7 @@ build_sui_repo_branch() {
     if $_FORCE_GIT_RESET; then
       # Does a bit more than needed, but should allow to recover
       # from most operator error...
-      echo Updating sui "$WORKDIR" in sui-base...
+      echo Updating sui "$WORKDIR" in suibase...
       (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
       (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" > /dev/null)
       (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
@@ -458,16 +472,16 @@ export -f build_sui_repo_branch
 
 exit_if_not_installed() {
   # Help the user that did not even do the installation of the symlinks
-  # and is trying instead to call directly from "~/sui-base/scripts"
+  # and is trying instead to call directly from "~/suibase/scripts"
   # (which will cause some trouble with some script).
   case "$SCRIPT_NAME" in
   "asui"|"lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"workdirs")
     if [ ! -L "$LOCAL_BIN/$SCRIPT_NAME" ]; then
       echo
-      echo "Some sui-base files are missing. The installation was"
+      echo "Some suibase files are missing. The installation was"
       echo "either not done or failed."
       echo
-      echo "Run ~/sui-base/install again to fix this."
+      echo "Run ~/suibase/install again to fix this."
       echo
       exit 1
     fi
@@ -475,7 +489,7 @@ exit_if_not_installed() {
   *) ;;
   esac
 
-  # TODO Test sui-base on $PATH is fine.
+  # TODO Test suibase on $PATH is fine.
 }
 export -f exit_if_not_installed
 
@@ -486,10 +500,10 @@ exit_if_workdir_not_ok() {
       exit_if_sui_binary_not_ok; # Point to a higher problem (as needed).
       echo "cargobin workdir not initialized"
       echo
-      echo "Please run ~/sui-base/.install again to detect"
+      echo "Please run ~/suibase/.install again to detect"
       echo "the ~/.cargo/bin/sui and create the cargobin workdir."
       echo
-      echo "It is safe to re-run ~/sui-base/.install when sui-base"
+      echo "It is safe to re-run ~/suibase/.install when suibase"
       echo "is already installed (it just installs what is missing)."
     else
       echo "$WORKDIR workdir not initialized"
@@ -607,18 +621,18 @@ check_workdir_ok() {
   # This is to minimize support/confusion. First, get the setup right
   # before letting the user do more damage...
   if [ "$WORKDIR" = "cargobin" ]; then
-    # Special case because no repo etc... (later to be handled better by sui-base.yaml)
+    # Special case because no repo etc... (later to be handled better by suibase.yaml)
     # Just check for the basic.
     if [ ! -f "$HOME/.cargo/bin/sui" ]; then
       setup_error "This script is for user who choose to install ~/.cargo/bin/sui. You do not have it installed."
     fi
 
     if [ ! -d "$WORKDIRS" ]; then
-      setup_error "$WORKDIRS missing. Please run '~/sui-base/install' to repair"
+      setup_error "$WORKDIRS missing. Please run '~/suibase/install' to repair"
     fi
 
     if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
-      setup_error "$WORKDIRS/$WORKDIR missing. Please run '~/sui-base/install' to repair"
+      setup_error "$WORKDIRS/$WORKDIR missing. Please run '~/suibase/install' to repair"
     fi
     # Success
     return
@@ -664,7 +678,7 @@ is_workdir_ok() {
     false; return;
   fi
 
-  if [ ! -f "$WORKDIRS/$WORKDIR/sui-base.yaml" ] ||
+  if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ] ||
      [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ] ||
      [ ! -f "$WORKDIRS/$WORKDIR/workdir-exec" ]; then
     false; return;
@@ -784,7 +798,7 @@ create_state_links_as_needed() {
     mkdir -p "$WORKDIRS/$WORKDIR_PARAM/.state"
   fi
 
-  # Take the user sui-base.yaml and create the .state/links
+  # Take the user suibase.yaml and create the .state/links
   #
   # Eventually the state will be updated through health
   # monitoring of the links, not just this "mindless"
@@ -796,8 +810,8 @@ create_state_links_as_needed() {
 
   # Find how many links, and create the primary and secondary id
   # references.
-  if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/links" ] || file_newer_than "$WORKDIRS/$WORKDIR_PARAM/sui-base.yaml" "$WORKDIRS/$WORKDIR_PARAM/.state/links"; then
-    # parse_yaml ~/sui-base/scripts/defaults/testnet/sui-base.yaml;
+  if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/links" ] || file_newer_than "$WORKDIRS/$WORKDIR_PARAM/suibase.yaml" "$WORKDIRS/$WORKDIR_PARAM/.state/links"; then
+    # parse_yaml ~/suibase/scripts/defaults/testnet/suibase.yaml;
     check_yaml_parsed links_;
 
     (( _n_links=0 ))
@@ -806,7 +820,7 @@ create_state_links_as_needed() {
     done
 
     if [ $_n_links -eq 0 ]; then
-      setup_error "No links found in $WORKDIRS/$WORKDIR_PARAM/config/sui-base.yaml"
+      setup_error "No links found in $WORKDIRS/$WORKDIR_PARAM/config/suibase.yaml"
     fi
 
     rm -rf "$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp"
@@ -901,10 +915,20 @@ repair_workdir_as_needed() {
   create_state_as_needed "$WORKDIR_PARAM";
 
   if [ "$WORKDIR_PARAM" = "cargobin" ]; then
+    # Create as needed, but do not change a user override.
     create_config_symlink_as_needed "$WORKDIR_PARAM" "$HOME/.sui/sui_config"
+  elif [ "$WORKDIR_PARAM" = "localnet" ]; then
+    # User cannot override the localnet config, it is always config-default.
+    set_config_symlink_force "$WORKDIR_PARAM" "$WORKDIRS/$WORKDIR_PARAM/config-default"
   else
+    # Create as needed, but do not change a user override.
     create_config_symlink_as_needed "$WORKDIR_PARAM" "$WORKDIRS/$WORKDIR_PARAM/config-default"
   fi
+
+  # Create the default suibase.yaml in case the user deleted it.
+  #if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/suibase.yaml" ]; then
+  #  cp "$SCRIPTS_DIR/templates//$WORKDIR_PARAM/suibase.yaml" "$WORKDIRS/$WORKDIR_PARAM"
+  #fi
 
   cd_sui_log_dir; # Create the sui.log directory as needed and make it the current one.
 }

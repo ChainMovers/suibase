@@ -17,8 +17,8 @@
 #   (e.g. localnet, devnet, cargobin etc...)
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="$(basename $(dirname "$SCRIPT_COMMON_CALLER"))"
-source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+source "$HOME/suibase/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # Call the common code that can handle all the possible context.
-source "$HOME/sui-base/scripts/common/__sui-exec.sh"
+source "$HOME/suibase/scripts/common/__sui-exec.sh"
 sui_exec "$@"

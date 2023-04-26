@@ -13,7 +13,7 @@ apply_sui_base_yaml_to_config_yaml() {
 
   # Detect coding error.
   if [ -z "${CFG_initial_fund_per_address:?}" ] || [ -z "${CFGDEFAULT_initial_fund_per_address:?}" ]; then
-    setup_error "Bad sui-base.yaml initial_fund_per_address [$CFG_initial_fund_per_address] [$CFGDEFAULT_initial_fund_per_address]"
+    setup_error "Bad suibase.yaml initial_fund_per_address [$CFG_initial_fund_per_address] [$CFGDEFAULT_initial_fund_per_address]"
   fi
 
   local _SEARCH_STRING="gas_value:.*\$"
@@ -23,11 +23,11 @@ apply_sui_base_yaml_to_config_yaml() {
              "$_GENDATA_DIR/config.yaml" && \
              rm "$_GENDATA_DIR/config.yaml.bak"
 
-  # Show the user when the changes in sui-base.yaml was used.
+  # Show the user when the changes in suibase.yaml was used.
   if [ "${CFG_initial_fund_per_address:?}" = "${CFGDEFAULT_initial_fund_per_address:?}" ]; then
     local _MSG="Applied default funding [$CFG_initial_fund_per_address]"
   else
-    local _MSG="sui-base.yaml: Applied initial_fund_per_address: [$CFG_initial_fund_per_address]"
+    local _MSG="suibase.yaml: Applied initial_fund_per_address: [$CFG_initial_fund_per_address]"
   fi
 
   echo "$_MSG"
@@ -35,7 +35,7 @@ apply_sui_base_yaml_to_config_yaml() {
   # if enabled, do the same for the faucet funds (best effort)
   if [ "${CFG_sui_faucet_enabled:?}" = true ];  then
     if [ -z "$CFG_sui_faucet_genesis_funding" ] || [ -z "$CFGDEFAULT_sui_faucet_genesis_funding" ]; then
-      echo "Warning: Bad sui-base.yaml sui_faucet_genesis_funding [$CFG_sui_faucet_genesis_funding] [$CFGDEFAULT_sui_faucet_genesis_funding]"
+      echo "Warning: Bad suibase.yaml sui_faucet_genesis_funding [$CFG_sui_faucet_genesis_funding] [$CFGDEFAULT_sui_faucet_genesis_funding]"
       return
     fi
     if [ ! -f "$_GENDATA_DIR/faucet/faucet_wallet_address.txt" ]; then
@@ -52,11 +52,11 @@ apply_sui_base_yaml_to_config_yaml() {
                "$_GENDATA_DIR/config.yaml" && \
               rm "$_GENDATA_DIR/config.yaml.bak"
 
-    # Show the user when the changes in sui-base.yaml was used.
+    # Show the user when the changes in suibase.yaml was used.
     if [ "$CFG_sui_faucet_genesis_funding" = "$CFGDEFAULT_sui_faucet_genesis_funding" ]; then
       local _MSG="Applied faucet default funding [$CFG_sui_faucet_genesis_funding]"
     else
-      local _MSG="sui-base.yaml: Applied sui_faucet_genesis_funding: [$CFG_sui_faucet_genesis_funding]"
+      local _MSG="suibase.yaml: Applied sui_faucet_genesis_funding: [$CFG_sui_faucet_genesis_funding]"
     fi
     echo "$_MSG"
   fi

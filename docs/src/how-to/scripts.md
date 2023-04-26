@@ -1,5 +1,5 @@
 ---
-title: Sui-Base Scripts
+title: Suibase Scripts
 order: 1
 ---
 
@@ -12,11 +12,11 @@ Best way to learn about each is probably just to try them... and "--help".
 | **Script Name**                            | **What are they for?**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <h3>lsui<br>dsui<br>tsui<br></h3>          | Front-ends to Mysten Lab "sui" binaries, each targeting a specific network (no need to "switch" env):<br><p style="text-align:center"><b>l</b>sui→<b>l</b>ocalnet,&nbsp;<b>d</b>sui→<b>d</b>evnet,&nbsp;<b>t</b>sui→<b>t</b>estnet</p>Each script always run within the proper workdir (client+keystore container) for the intended network.<br>The scripts are mostly transparent; all arguments are pass unchanged to a single Mysten Labs sui client call.<br><br>Example: '$ lsui client gas'   ← same as 'sui client gas' but *always* for localnet |
-| <h3>localnet<br>devnet<br>testnet<br></h3> | Provides additional sui-base specific features. These are also called "workdir scripts".<br><br>Example: "$ localnet faucet all"  ← sends Sui coins to every address on your localnet<br>                                                                                                                                                                                                                                                                                                                                                                |
+| <h3>localnet<br>devnet<br>testnet<br></h3> | Provides additional suibase specific features. These are also called "workdir scripts".<br><br>Example: "$ localnet faucet all"  ← sends Sui coins to every address on your localnet<br>                                                                                                                                                                                                                                                                                                                                                                 |
 | <h3>asui</h3>                              | You can designate one workdir as "active". [More Info](scripts.md#what-does-active-mean)<br> This script will call the "active sui" client.                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ## Faster Rust and Move Build
-Sui-base download the Mysten Lab's repo locally to build a sui client for each network, so your apps might as well re-use these.
+Suibase download the Mysten Lab's repo locally to build a sui client for each network, so your apps might as well re-use these.
 
 Advantages are:
 
@@ -26,9 +26,9 @@ Advantages are:
 
 Location of these repos are:
 
-  - ~/sui-base/workdirs/**localnet**/sui-repo
-  - ~/sui-base/workdirs/**devnet**/sui-repo
-  - ~/sui-base/workdirs/**testnet**/sui-repo
+  - ~/suibase/workdirs/**localnet**/sui-repo
+  - ~/suibase/workdirs/**devnet**/sui-repo
+  - ~/suibase/workdirs/**testnet**/sui-repo
 
 Update to latest with the "update" command (e.g. "localnet update").
 <br>
@@ -44,13 +44,13 @@ sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
 with
 ```toml
 [dependencies]
-sui-sdk = { path = "../../sui-base/workdirs/active/sui-repo/crates/sui-sdk/" }
+sui-sdk = { path = "../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
 ```
-The number of ".." may need to be adjusted depending on where your Cargo.toml is located relative to ~/sui-base.
+The number of ".." may need to be adjusted depending on where your Cargo.toml is located relative to ~/suibase.
 
 If you always target the same network you can replace the "active" word with a specific workdir (e.g. localnet/devnet/testnet).
 
-Demo Example: [Cargo.toml](https://github.com/sui-base/sui-base/blob/main/rust/demo-app/Cargo.toml)
+Demo Example: [Cargo.toml](https://github.com/suibase/suibase/blob/main/rust/demo-app/Cargo.toml)
 
 ## What does "active" mean?
 A single workdir is designated as active and allows multiple tools/scripts to execute within the same environment.
@@ -73,16 +73,16 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framew
 with
 ```toml
 [dependencies]
-Sui = { local = "../../sui-base/workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
+Sui = { local = "../../suibase/workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
 ```
-You may need to adjust the number of ".." depending where your Move.toml is located relative to ~/sui-base.
+You may need to adjust the number of ".." depending where your Move.toml is located relative to ~/suibase.
 
 If you prefer to always target the same network you can replace the "active" word with a specific workdir (e.g. localnet/devnet/testnet).
 
-Demo example: [Move.toml](https://github.com/sui-base/sui-base/blob/main/rust/demo-app/move/Move.toml)
+Demo example: [Move.toml](https://github.com/suibase/suibase/blob/main/rust/demo-app/move/Move.toml)
 
 ## How to publish?
-Sui-base has a workdir command to make it easier to publish.
+Suibase has a workdir command to make it easier to publish.
 
 Example to publish on localnet:
 ```shell

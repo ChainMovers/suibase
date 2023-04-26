@@ -12,16 +12,24 @@
 # , --network.config and --keystore-path options on the command line.
 #
 
+SUIBASE_DIR="$HOME/suibase"
+if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
+  ("$HOME/sui-base/repair")
+  exit 1
+fi
+
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="localnet"
-source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
-source "$HOME/sui-base/scripts/common/__sui-exec.sh"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+# shellcheck source=SCRIPTDIR/common/__sui-exec.sh
+source "$SUIBASE_DIR/scripts/common/__sui-exec.sh"
 
 exit_if_not_installed;
 
 # Trap the case of doing just a self-test for installation.
-if [[ "$1" == "sui-base-script-name" ]]; then
+if [[ "$1" == "suibase-script-name" ]]; then
   # This also test if the sourced "globals" works.
   echo "$SUI_SCRIPT"
   exit

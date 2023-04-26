@@ -42,7 +42,7 @@ workdir_init_remote() {
 
     # Create client addresses, but only if there is no sui.keystore already.
 
-    # TODO put some sui-base.yaml customization here! and some error handling!
+    # TODO put some suibase.yaml customization here! and some error handling!
     if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then
       add_test_addresses "$SUI_BIN_DIR/sui" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" "$CONFIG_DATA_DIR_DEFAULT/recovery.txt"
     fi

@@ -1,13 +1,15 @@
 # Changelog
 
-Do '~/sui-base/upgrade' to download and upgrade sui-base itself to latest.
+Do '~/suibase/update' to download and update suibase itself to latest.
 
-Do '<workdir name> update' when you instead only want to download and re-build a workdir local Sui repo with the latest from Mysten Labs. Example: 'localnet update'
+('~/sui-base/update' for v0.1.2 and less)
 
-All notable changes to this project will be documented in this file.
+Do '<workdir_name> update' when you instead want to update only a local Sui repo to the latest from Mysten Labs. Example: 'localnet update'
+
+Only notable changes are documented here. See github commits for all changes.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unpublished]
 
@@ -20,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Display from `coinage` Python demo
 
 ### Changed
-
+- Breaking changes: Renaming of project from sui-base to suibase. Affects paths, URL links, API.
+  Change will facilitate multi-plaftorm consistency by using a namespace without dash.
 - Upgraded Python demos to use newest version of `pysui` 0.17.0
 - Python demo3 (prgtxn.py) updated for changes in 0.17.0
 

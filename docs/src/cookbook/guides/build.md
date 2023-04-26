@@ -13,7 +13,7 @@ If you use the Rust SDK, replace your "git" dependencies with "path".
 
 For Move dependencies replace "git" dependencies with "local".
 
-For sui-base users, see [here](./../../how-to/scripts.md#faster-rust-and-move-build) to re-use its local repo already downloaded.
+For suibase users, see [here](./../../how-to/scripts.md#faster-rust-and-move-build) to re-use its local repo already downloaded.
 
 ## Build only what you need
 
@@ -44,14 +44,14 @@ Measurements are for clean build of sui and sui-faucet only.
 
 ::: details Steps for measuring
 
-With sui-base, do the following to get one measurement:
+With suibase, do the following to get one measurement:
 
 ```shell
 $ localnet delete
 $ localnet update
 ```
 
-If you do not have sui-base, then do the following for the first measurements:
+If you do not have suibase, then do the following for the first measurements:
 
 ```shell
 $ git clone -b devnet https://github.com/MystenLabs/sui.git
@@ -76,7 +76,7 @@ High: Finished dev [unoptimized + debuginfo] target(s) in 2m 55s
 
 Intel i7-13700K (16 Cores), 64 GB, NVMe PCIe 4
 Ubuntu 22.10, Sui 0.31.2
-Sui-Base 0.1.2
+Suibase 0.1.2
 GCC 12.2 / Mold 1.11
 ```
 
@@ -88,7 +88,7 @@ High: Finished dev [unoptimized + debuginfo] target(s) in 4m 24s
 
 Apple M1 Max
 macOS Ventura 13.3.1 (22E261), Sui 0.31.2
-Sui-Base 0.1.2
+Suibase 0.1.2
 Apple clang version 14.0.3
 rustc 1.68.2
 ```
@@ -102,6 +102,6 @@ High: Finished dev [unoptimized + debuginfo] target(s) in 8m 20s
 2xIntel Xeon E5-2697v2@2.7GHz(24 Cores), 64 GB, NVMe PCIe 3
 WSL2 config: 32 VCore, 48 GB
 Ubuntu 22.04, Sui 0.31.2
-Sui-Base 0.1.2
+Suibase 0.1.2
 GCC 11.3 / Mold 1.11
 ```

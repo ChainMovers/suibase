@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script simply forward the command line to the proper sui-base script
+# This script simply forward the command line to the proper suibase script
 # that was selected to be active (e.g. 'localnet set-active').
 #
 # The end result is the proper Sui binary (provided by Mysten) will
@@ -13,15 +13,22 @@
 # , --network.config and --keystore-path options on the command line.
 #
 
+SUIBASE_DIR="$HOME/suibase"
+if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
+   ("$HOME/sui-base/repair")
+   exit 1
+fi
+
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="active"
-source "$HOME/sui-base/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 exit_if_not_installed;
 
 # Trap the case of doing just a self-test for installation.
-if [[ "$1" == "sui-base-script-name" ]]; then
+if [[ "$1" == "suibase-script-name" ]]; then
   # This also test if the sourced "globals" works ($SUI_SCRIPT should be "asui")
   echo "$SUI_SCRIPT"
   exit

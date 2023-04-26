@@ -1,15 +1,15 @@
 # helper
 
-This is the Sui-Base Helper library.
+This is the Suibase Helper library.
 
 
 # demo-app
 
-A Rust/Move application using the sui-base helper.
+A Rust/Move application using the suibase helper.
 
-Open VSCode on "~/sui-base/rust/demo-app"
+Open VSCode on "~/suibase/rust/demo-app"
 
-More info: ~/sui-base/rust/demo-app/docs
+More info: ~/suibase/rust/demo-app/docs
 
 
 

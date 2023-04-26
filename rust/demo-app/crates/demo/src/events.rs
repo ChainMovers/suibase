@@ -6,9 +6,9 @@
 //
 use colored::Colorize;
 use futures::StreamExt;
-use sui_base_helper::SuiBaseHelper;
 use sui_json_rpc_types::EventFilter;
 use sui_sdk::SuiClientBuilder;
+use suibase::SuiBaseHelper;
 
 // Subscribe for all events with the Sui network.
 //
@@ -21,7 +21,7 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
     let rpc_url = suibase.rpc_url()?;
     let ws_url = suibase.ws_url()?;
 
-    println!("Using sui-base workdir [{}]", suibase.workdir()?);
+    println!("Using suibase workdir [{}]", suibase.workdir()?);
     println!("Connecting to Sui network at [{}]", ws_url);
 
     let sui = SuiClientBuilder::default()
