@@ -24,7 +24,7 @@ For faster build your Rust app can also later change its dependencies to the sam
 ## Installation Steps
 ```shell
 $ cd ~
-$ git clone https://github.com/suibase/suibase.git
+$ git clone https://github.com/sui-base/suibase.git
 $ cd suibase
 $ ./install
 ```

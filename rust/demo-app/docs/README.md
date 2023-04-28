@@ -15,4 +15,4 @@ What to expect?
 To run this example, Suibase installation is required.
 To open the project, point VSCode on ~/rust/demo-app.
 
-Online references: [Source Code](https://github.com/suibase/suibase/tree/main/rust/demo-app), [counter.move](https://github.com/suibase/suibase/tree/main/rust/demo-app/move/sources/counter.move)
+Online references: [Source Code](https://github.com/sui-base/suibase/tree/main/rust/demo-app), [counter.move](https://github.com/sui-base/suibase/tree/main/rust/demo-app/move/sources/counter.move)
