@@ -43,7 +43,7 @@ jobs:
       - name: Copy pnpm dependency files
         run: |
           cp -f $GITHUB_WORKSPACE/docs/ci/pnpm-lock.yaml.ci $GITHUB_WORKSPACE/docs/pnpm-lock.yaml
-          cp -f $GITHUB_WORKSPACE/docs/ci/package.yaml.ci $GITHUB_WORKSPACE/docs/package.yaml
+          cp -f $GITHUB_WORKSPACE/docs/ci/package.json.ci $GITHUB_WORKSPACE/docs/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
