@@ -10,7 +10,7 @@ fi
 
 # Source '__globals.sh'.
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="testnet"
+WORKDIR="mainnet"
 # shellcheck source=SCRIPTDIR/common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
@@ -18,7 +18,7 @@ exit_if_not_installed;
 
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "suibase-script-name" ]]; then
-  # This also test if the sourced "globals" works ($SCRIPT_NAME should be "testnet")
+  # This also test if the sourced "globals" works ($SCRIPT_NAME should be "mainnet")
   echo "$SCRIPT_NAME"
   exit
 fi

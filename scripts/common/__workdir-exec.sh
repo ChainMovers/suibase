@@ -365,7 +365,7 @@ workdir_exec() {
 
   if [ "$CMD_STOP_REQ" = true ]; then
     if ! $is_local; then
-      echo "Not applicable yet for $WORKDIR (work in progress)"
+      echo "This will eventually stop the network monitoring for $WORKDIR (feature is work in progress)"
       exit
     fi
 

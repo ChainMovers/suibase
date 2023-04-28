@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# This script simply call the proper sui binary and config combination to interact
+# with remote mainnet Sui network (operated by Mysten Lab).
+#
+# Your mainnet workdir should have been created when you did 'mainnet start' or 'mainnet update'.
+#
+# You use 'msui' in the same way you would use 'sui' from Mysten. Example:
+#    'msui client gas'
+#
+# One convenience is you do not have to specify the --client.config,
+# , --network.config and --keystore-path options on the command line.
+#
+
+SUIBASE_DIR="$HOME/suibase"
+if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
+  ("$HOME/sui-base/repair")
+  exit 1
+fi
+
+# Source '__globals.sh'.
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="mainnet"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+# shellcheck source=SCRIPTDIR/common/__sui-exec.sh
+source "$SUIBASE_DIR/scripts/common/__sui-exec.sh"
+
+exit_if_not_installed;
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "suibase-script-name" ]]; then
+  # This also test if the sourced "globals" works.
+  echo "$SUI_SCRIPT"
+  exit
+fi
+
+sui_exec "$@"

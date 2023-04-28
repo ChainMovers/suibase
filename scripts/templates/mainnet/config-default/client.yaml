@@ -1,0 +1,9 @@
+---
+keystore:
+  File: <PUT_WORKING_DIR_PATH_HERE>/config-default/sui.keystore
+envs:
+  - alias: mainnet
+    rpc: "https://fullnode.testnet.sui.io:443"
+    ws: ~
+active_env: mainnet
+active_address: ~

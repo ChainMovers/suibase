@@ -7,7 +7,7 @@ fi
 
 cd "$SUIBASE_DIR" || { echo "suibase not found. Please install it first."; exit 1; }
 
-_CUR_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*sui.*base \(.*\)/\1/g')
+_CUR_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
 
 # Check if there are local changes. If any, protect the user
 # from doing further git operations.
@@ -35,13 +35,13 @@ if [ "$V1" != "$V2" ]; then
   (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
   (cd "$SUI_REPO_DIR" && git reset --hard origin/main > /dev/null)
   (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
-  _NEW_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*sui.*base \(.*\)/\1/g')
+
+  # TODO Should stop services while update and restart only the ones that were running.
 
   # Check for repair/update (noop if no change needed).
-  #
-  # Warning: Do this always last. $SUIBASE_DIR may change after that call
-  #          because of major changes like sui-base -> suibase renaming.
   ("$SUIBASE_DIR/repair")
+
+  _NEW_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
 
   if [ -n "$_CUR_VER" ]; then
     echo "Old version $_CUR_VER"

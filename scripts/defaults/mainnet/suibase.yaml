@@ -1,0 +1,27 @@
+# See scripts/defaults/localnet/suibase.yaml for documentation.
+network_type: remote
+
+terminal_color: true
+
+initial_fund_per_address: ~
+
+sui_faucet_enabled: false
+sui_faucet_genesis_funding: ~
+sui_faucet_host_ip: "0.0.0.0"
+sui_faucet_port: 9125
+sui_faucet_max_request_per_second: 100
+sui_faucet_num_coins: 1
+sui_faucet_coin_value: 200000000
+sui_faucet_request_buffer_size: 200
+sui_faucet_client_timeout_secs: 10
+
+default_repo_url: "https://github.com/MystenLabs/sui.git"
+default_repo_branch: "main"
+
+links:
+  - alias: "sui.io"
+    rpc: "https://fullnode.testnet.sui.io:443"
+    ws: "wss://fullnode.testnet.sui.io:443"
+  - alias: "vincagame.com"
+    rpc: "https://fullnode.testnet.vincagame.com:443"
+    ws: "wss://fullnode.testnet.vincagame.com:443"

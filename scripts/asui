@@ -41,6 +41,7 @@ case "$ACTIVE_WORKDIR" in
     "localnet") lsui "$@" ;;
     "devnet") dsui "$@" ;;
     "testnet") tsui "$@" ;;
+    "mainnet") msui "$@" ;;
     "cargobin") csui "$@" ;;
     *)
     echo "No active workdir was set (e.g. 'localnet set-active')";

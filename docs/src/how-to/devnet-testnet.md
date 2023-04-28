@@ -3,12 +3,12 @@ title: Using Devnet and Testnet
 order: 3
 ---
 ::: warning
-Instructions here are for devnet, but it is the same for testnet. Just replace "devnet" with "testnet" and "dsui" with "tsui".
+Instructions here are for devnet, but it is the same for testnet and mainnet. Just replace "devnet" with "testnet or mainnet" and "dsui" with "tsui or msui".
 :::
 
 ## Starting
 
-Generally, it works the same as localnet, except you are interacting with a remote and public devnet network instead of your own simulated local Sui network.
+Generally, it works the same as localnet, except you are interacting with a public network instead of your own simulated local Sui network.
 
 ```shell
 $ devnet start

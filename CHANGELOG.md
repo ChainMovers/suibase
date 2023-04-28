@@ -14,9 +14,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unpublished]
 
 ### Added
-
+- Scripts: mainnet support. New 'msui' and 'mainnet' scripts.
 - Python example of Programmable Transaction
-- Language nuetral cookbook guide introducing Programmable Transactions
+- Language neutral cookbook guide introducing Programmable Transactions
 
 ### Fixed
 
@@ -25,7 +25,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Breaking changes: Renaming of project from sui-base to suibase. Affects paths, URL links, API.
-  Change will facilitate multi-plaftorm consistency by using a namespace without dash.
+  Change will facilitate multi-platform consistency by using a namespace without dash.
 - Upgraded Python demos to use newest version of `pysui` 0.17.0
 - Python demo3 (prgtxn.py) updated for changes in 0.17.0
 

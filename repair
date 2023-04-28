@@ -83,16 +83,21 @@ suibase_repair() {
     _RENAME_DIRECTORY_REPAIR=true
   fi
 
-  # Iterate executeable in $REPAIR_SB_DIR/scripts/ and update symlink to them.
-  for dir_entry in "$REPAIR_SB_DIR"/scripts/* ; do
+  # Build the list of scripts (e.g. "localnet, devnet, tsui...")
+  local script_list=()
+  for dir_entry in "$REPAIR_SB_DIR/"scripts/* ; do
     if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
-      script_name=$(basename "$dir_entry")
-      update_bin_path "$script_name"
+      script_list+=("$(basename "$dir_entry")")
     fi
   done
 
+  for script_name in "${script_list[@]}"; do
+    update_bin_path "$script_name"
+  done
+
   # Iterate directory in $REPAIR_SB_DIR/workdirs/
-  for dir_entry in "$REPAIR_SB_DIR"/workdirs/* ; do
+  local _DIR_ENTRIES=("$REPAIR_SB_DIR"/workdirs/*)
+  for dir_entry in "${_DIR_ENTRIES[@]}" ; do
     if [ -L "$dir_entry" ]; then
       # This is a directory symlink (probably "active"). Check it.
       fix_sui_base_rename_dir_symlink "$dir_entry"
@@ -113,7 +118,8 @@ suibase_repair() {
 
       if [ "$_DO_SUI_BASE_RENAME_REPAIR" = true ]; then
         # Iterate one level deeper to fix symlinks in workdir.
-        for dir_dir_entry in "$dir_entry"/* ; do
+        local _DIR_DIR_ENTRIES=("$dir_entry"/*)
+        for dir_dir_entry in "${_DIR_DIR_ENTRIES[@]}" ; do
           if [ -L "$dir_dir_entry" ]; then
             # This is a directory symlink. Fix it.
             fix_sui_base_rename_dir_symlink "$dir_dir_entry"

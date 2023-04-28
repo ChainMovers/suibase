@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to create and control a Sui local network.
+# Script to create and control a Sui remote network.
 
 SUIBASE_DIR="$HOME/suibase"
 if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
@@ -18,7 +18,7 @@ exit_if_not_installed;
 
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "suibase-script-name" ]]; then
-  # This also test if the sourced "globals" works ($SCRIPT_NAME should be "localnet")
+  # This also test if the sourced "globals" works ($SCRIPT_NAME should be "devnet")
   echo "$SCRIPT_NAME"
   exit
 fi

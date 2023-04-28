@@ -128,7 +128,7 @@ impl SuiBaseHelperImpl {
 
     // Get an address by name.
     //
-    // Suibase localnet/devnet/testnet workdir are created with a set of pre-defined client addresses.
+    // Suibase localnet/devnet/testnet/mainnet workdir are created with a set of pre-defined client addresses.
     //
     // These addresses are useful for testing. In particular, with localnet they are prefunded.
     //

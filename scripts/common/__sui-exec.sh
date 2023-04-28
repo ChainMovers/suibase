@@ -8,6 +8,12 @@ sui_exec() {
 
   exit_if_workdir_not_ok;
 
+  if [ "$CFG_network_type" = "local" ]; then
+    is_local=true
+  else
+    is_local=false
+  fi
+
   # Display some suibase related info if called without any parameters.
   DISPLAY_SUI_BASE_HELP=false
   if [ $# -eq 0 ]; then
@@ -60,45 +66,50 @@ sui_exec() {
     exit
   fi
 
-  if [[ $SUI_SUBCOMMAND == "network" ]]; then
-    shift 1
-    $SUI_BIN "$SUI_SUBCOMMAND" --network.config "$NETWORK_CONFIG" "$@"
-    exit
+  if [ $is_local = true ]; then
+    case $SUI_SUBCOMMAND in
+      "keytool")
+        # Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided
+        # more than once, but cannot be used multiple times?
+        #
+        # This is because by default lsui point to the keystore created with the localnet.
+        #
+        # TODO Fix this. Still default to workdirs, but allow user to override with its own --keystore-path.
+        #
+        shift 1
+        $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+        ;;
+      "genesis"|"genesis-ceremony"|"start")
+        # Protect the user from starting more than one sui process.
+        if [[ "$2" == "--help" || "$2" == "-h" ]]; then
+          $SUI_BIN "$SUI_SUBCOMMAND" --help
+        fi
+        setup_error "Use suibase 'localnet start' script instead"
+        ;;
+      "network")
+        shift 1
+        $SUI_BIN "$SUI_SUBCOMMAND" --network.config "$NETWORK_CONFIG" "$@"
+        ;;
+      *)
+        # By default, just pass transparently everything to the proper sui binary.
+        $SUI_BIN "$@"
+        ;;
+    esac
+  else
+    # For remote network, trap many commands that just don't make sense.
+    case $SUI_SUBCOMMAND in
+      "genesis"|"genesis-ceremony"|"start"|"network")
+        if [[ "$2" == "--help" || "$2" == "-h" ]]; then
+          $SUI_BIN "$SUI_SUBCOMMAND" --help
+        fi
+        setup_error "Command not appplicable to remote network"
+        ;;
+      *)
+        # By default, just pass transparently everything to the proper sui binary.
+        $SUI_BIN "$@"
+        ;;
+    esac
   fi
-
-  if [[ $SUI_SUBCOMMAND == "genesis" ]]; then
-    # Protect the user from damaging its localnet
-    if [[ "$2" == "--help" || "$2" == "-h" ]]; then
-      $SUI_BIN genesis --help
-    fi
-    echo
-    setup_error "Use suibase 'localnet start' script instead"
-  fi
-
-  if [[ $SUI_SUBCOMMAND == "start" ]]; then
-    # Protect the user from starting more than one sui process.
-    if [[ "$2" == "--help" || "$2" == "-h" ]]; then
-      $SUI_BIN start --help
-    fi
-    echo
-    setup_error "Use suibase 'localnet start' script instead"
-  fi
-
-  # Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided
-  # more than once, but cannot be used multiple times?
-  #
-  # This is because by default lsui point to the keystore created with the localnet.
-  #
-  # TODO Fix this. Still default to workdirs, but allow user to override with its own --keystore-path.
-  #
-  if [[ $SUI_SUBCOMMAND == "keytool" ]]; then
-    shift 1
-    $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
-    exit
-  fi
-
-  # By default, just pass transparently everything to the proper sui binary.
-  $SUI_BIN "$@"
 
   if [ "$DISPLAY_SUI_BASE_HELP" = true ]; then
     update_ACTIVE_WORKDIR_var;

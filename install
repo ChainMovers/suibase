@@ -114,7 +114,13 @@ main() {
 
   echo "Starting installation of suibase..."
 
-  script_list=("localnet" "devnet" "testnet" "lsui" "dsui" "csui" "asui" "tsui")
+  # Build the list of scripts (e.g. "localnet, devnet, tsui...")
+  local script_list=()
+  for dir_entry in "$SUIBASE_DIR/"scripts/* ; do
+    if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
+      script_list+=("$(basename "$dir_entry")")
+    fi
+  done
 
   for script_name in "${script_list[@]}"; do
     update_bin_path "$script_name"

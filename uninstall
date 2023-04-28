@@ -1,29 +1,59 @@
 #!/bin/bash
 
+OS_DIR_ON_PATH="$HOME/.local/bin"
+SUIBASE_DIR="$HOME/suibase"
+
 # Function to remove suibase scripts symlinks in ~/.local/bin
 # Has no effect if symlink does not exists.
 remove_bin_path() {
-  UBP_SRC_DIR="$HOME/.local/bin"
-  if [ -d "$UBP_SRC_DIR" ]; then
-    if [ -L "$UBP_SRC_DIR/$1" ]; then
-      rm -f "$UBP_SRC_DIR/$1"
-      echo "   Symlink removed: $UBP_SRC_DIR/$1"
+  if [ -d "$OS_DIR_ON_PATH" ]; then
+    if [ -L "$OS_DIR_ON_PATH/$1" ]; then
+      rm -f "$OS_DIR_ON_PATH/$1"
+      echo "   Symlink removed: $OS_DIR_ON_PATH/$1"
     fi
   fi
 }
 
 main() {
 
-  # TODO Check if localnet or other processes need to be stopped/killed.
-
   username=$(whoami)
 
   echo
+
+  # Call stop on every workdirs.
+  local _DIR_ENTRIES=("$SUIBASE_DIR"/workdirs/*)
+  for dir_entry in "${_DIR_ENTRIES[@]}" ; do
+    if [ -L "$dir_entry" ]; then
+      # Symlink, probably the "active", just skip it.
+      continue
+    fi
+    if [ -d "$dir_entry" ]; then
+      workdir=$(basename "$dir_entry")
+      echo "Stopping workdir [$workdir]..."
+      ("$SUIBASE_DIR/workdirs/$workdir/workdir-exec" stop)
+    fi
+  done
+
+  # Build the list of scripts (e.g. "localnet, devnet, tsui...")
+  local script_list=()
+  for dir_entry in "$SUIBASE_DIR/"scripts/* ; do
+    if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
+      script_list+=("$(basename "$dir_entry")")
+    fi
+  done
+
+  for script_name in "${script_list[@]}"; do
+    remove_bin_path "$script_name"
+  done
+
+  # In addition of the dynamic list, try also with a hardcoded list that we know of.
   remove_bin_path "localnet"
   remove_bin_path "testnet"
+  remove_bin_path "mainnet"
   remove_bin_path "devnet"
   remove_bin_path "lsui"
   remove_bin_path "tsui"
+  remove_bin_path "msui"
   remove_bin_path "dsui"
   remove_bin_path "asui"
   remove_bin_path "csui"

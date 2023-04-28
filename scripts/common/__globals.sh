@@ -57,6 +57,9 @@ case $WORKDIR in
   testnet)
     SUI_SCRIPT="tsui"
     ;;
+  mainnet)
+    SUI_SCRIPT="msui"
+    ;;
   active)
     SUI_SCRIPT="asui"
     ;;
@@ -73,11 +76,11 @@ esac
 NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
 CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
 
-# This is the default repo for localnet/devnet/testnet scripts.
+# This is the default repo for localnet/devnet/testnet/mainnet scripts.
 # Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
 SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
 
-# This is the default config for localnet/devnet/testnet scripts.
+# This is the default config for localnet/devnet/testnet/mainnet scripts.
 # Normally $CONFIG_DATA_DIR will symlink to CONFIG_DATA_DIR_DEFAULT
 CONFIG_DATA_DIR_DEFAULT="$WORKDIRS/$WORKDIR/config-default"
 
@@ -369,6 +372,15 @@ export -f check_yaml_parsed
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
 
+  local _BUILD_DESC
+  if [ "$CFG_network_type" = "local" ]; then
+    is_local=true
+    _BUILD_DESC="binaries"
+  else
+    is_local=false
+    _BUILD_DESC="client"
+  fi
+
   # Verify Sui pre-requisites are installed.
   which curl &> /dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites";
   which git &> /dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites";
@@ -382,7 +394,7 @@ build_sui_repo_branch() {
   if [ "$ALLOW_DOWNLOAD" = "false" ]; then
     if is_sui_repo_dir_override; then
       echo "Skipping git clone/fetch/pull because set-sui-repo is set."
-      echo "Building $WORKDIR at [$RESOLVED_SUI_REPO_DIR]"
+      echo "Building $WORKDIR $_BUILD_DESC at [$RESOLVED_SUI_REPO_DIR]"
       if [ ! -d "$RESOLVED_SUI_REPO_DIR" ]; then
         echo "Error: repo not found at [$RESOLVED_SUI_REPO_DIR]"
         echo "Either create this repo, or revert localnet to work with"
@@ -434,12 +446,12 @@ build_sui_repo_branch() {
     if $_FORCE_GIT_RESET; then
       # Does a bit more than needed, but should allow to recover
       # from most operator error...
-      echo Updating sui "$WORKDIR" in suibase...
+      echo "Updating sui $WORKDIR in ~/suibase/workdirs/$WORKDIR/sui-config..."
       (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
       (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" > /dev/null)
       (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
     fi
-    echo "Building $WORKDIR from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+    echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
   # TODO do an 'integrity/version check' of the repo here...
@@ -455,7 +467,13 @@ build_sui_repo_branch() {
       exit 1
   fi
 
-  (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
+  if [ $is_local = true ]; then
+    (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  else
+    (if cd "$SUI_REPO_DIR"; then cargo build -p sui; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  fi
+
 
   # Sanity test that the sui binary works
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
@@ -475,7 +493,7 @@ exit_if_not_installed() {
   # and is trying instead to call directly from "~/suibase/scripts"
   # (which will cause some trouble with some script).
   case "$SCRIPT_NAME" in
-  "asui"|"lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"workdirs")
+  "asui"|"lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"mainnet"|"workdirs")
     if [ ! -L "$LOCAL_BIN/$SCRIPT_NAME" ]; then
       echo
       echo "Some suibase files are missing. The installation was"

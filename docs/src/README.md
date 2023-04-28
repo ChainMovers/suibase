@@ -34,7 +34,7 @@ features:
 
   - title:  Version Matching
     icon: api
-    details: A distinct Sui client binary to each network (localnet, devnet, testnet).
+    details: A distinct Sui client binary to each network (localnet, devnet, testnet, mainnet).
     link: /how-to/scripts.html#Introduction
 
   - title: Workdir 'Containers'
