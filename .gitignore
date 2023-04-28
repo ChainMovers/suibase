@@ -113,5 +113,20 @@ playwright/.cache/
 # MSVC Windows builds (debug info)
 *.pdb
 
+# Website related ignores.
+docs/src/.vuepress/.cache/
+docs/src/.vuepress/.temp/
+docs/src/.vuepress/dist/
+
+# PNPM is used by suibase Github Action for website deployment.
+# package.json and pnpm-lock.yaml are needed to be commited but
+# only by the site maintainer.
+docs/pnpm-lock.yaml
+docs/package.json
+
+# Other package "lock" should *never* be pushed.
+package-lock.json
+yarn.lock
+
 # Never ignore .gitkeep files. Trick to preserve empty directories.
 !**/.gitkeep

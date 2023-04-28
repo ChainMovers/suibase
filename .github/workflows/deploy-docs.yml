@@ -33,14 +33,17 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          # if your docs needs submodules, uncomment the following line
-          # submodules: true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8
           run_install: true
+
+      - name: Copy pnpm dependency files
+        run: |
+          cp -f $GITHUB_WORKSPACE/docs/ci/pnpm-lock.yaml.ci $GITHUB_WORKSPACE/docs/pnpm-lock.yaml
+          cp -f $GITHUB_WORKSPACE/docs/ci/package.yaml.ci $GITHUB_WORKSPACE/docs/package.yaml
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
