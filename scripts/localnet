@@ -4,7 +4,16 @@
 
 SUIBASE_DIR="$HOME/suibase"
 if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
-  ("$HOME/sui-base/repair")
+  if [ $# -eq 0 ]; then
+    # This is to handle a rare and unlikely case where "update" would call localnet to get
+    # the version upon ~/sui-base/update but localnet is not yet "suibase renamed". We cheat
+    # a bit here by returning a dummy version without further involving any logic.
+    echo "localnet suibase renamed required"
+    echo "Do ~/sui-base/repair"
+  else
+    # Save the day. Do the one-time sui-base to suibase renaming.
+    ("$HOME/sui-base/repair")
+  fi
   exit 1
 fi
 
