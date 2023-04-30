@@ -8,7 +8,7 @@ editLink: true
 ## Introduction
 
 Prior to Sui 0.28.x, to submit transactions with mutliple commands one was required to invoke the,
-recently renames, `unsafe_batchTransaction`. This is somewhat limited to allowing only calls to
+recently renamed, `unsafe_batchTransaction`. This is somewhat limited to allowing only calls to
 `public entry fun` on contracts (a.k.a. move calls) and transfers.
 
 Starting around Sui version 0.28.x MystenLabs introduced 'programmable transactions' which expanded
