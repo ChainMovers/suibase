@@ -1,50 +1,74 @@
-//  helper library
-//
-// Help automate localnet/devnet/testnet/mainnet operations in a suibase environment.
-//
-// Your app can select to interact with any of the workdir installed with suibase.
-//
-// This API is multi-thread safe.
-//
-// UniFFI bindings compatible (Sync+Send)
+//! suibase
+//!
+//! API to suibase ( https://suibase.io ) mostly intended for development of Sui tool/test automation and production backends.
+//!
+//! This API is:
+//!   * multi-thread safe.
+//!   * UniFFI bindings compatible (Sync+Send)
+//!
+//! You need to install Suibase first, which is both easy and non-conflicting with your existing Sui installation.
+//!
+//! see https://suibase.io for instructions.
+//!
+//! What is Suibase?
+//!
+//! Suibase makes it easy for Sui devs to simultaneoulsly interact with multiple Sui
+//! networks (localnet/devnet/testnet/mainnet) without having to "switch env".
+//!
+//! Your dev setup gains stability by having a client binary match every network version.
+//!
 
 mod error;
-mod sui_base_helper_impl;
-mod sui_base_root;
-mod sui_base_workdir;
+pub use crate::error::Error;
 
-use crate::error::SuiBaseError;
-use crate::sui_base_helper_impl::SuiBaseHelperImpl;
+mod suibase_helper_impl;
+mod suibase_root;
+mod suibase_workdir;
+
+use crate::suibase_helper_impl::SuibaseHelperImpl;
 
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::{ObjectID, SuiAddress};
 
 #[cfg(feature = "build-with-uniffi")]
 uniffi::include_scaffolding!("suibase");
-pub struct SuiBaseHelper(Arc<Mutex<SuiBaseHelperImpl>>);
+/// A lightweight API to suibase. Multiple instance can be created within the same app.
+///
+/// You interact with Suibase in 3 steps:
+///
+///  (1) Check if suibase is_installed()
+///  (2) Call select_workdir() to pick among "localnet", "devnet", "testnet", "mainnet" or the one currently set "active" by the user.
+///  (3) You can now call any other API functions (in any order). Most calls will relate to the selected workdir.
+///
+/// You can call again select_workdir() to switch to another workdir.
+pub struct Helper(Arc<Mutex<SuibaseHelperImpl>>);
 
-impl Default for SuiBaseHelper {
+/// This is the documentation for the impl Default
+///
+impl Default for Helper {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SuiBaseHelper {
-    // Steps to get started with the API:
-    //
-    //  (1) Check if is_installed()
-    //
-    //  (2) Call select_workdir()
-    //
-    //  (3) You can now call any other API functions (in any order).
-    //      Most calls will relate to the selected workdir.
+/// Comment for the impl Helper Do we care?
+impl Helper {
+    /// Constructs a new `Helper`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use suibase::Helper;
+    ///
+    /// let sbh = Helper::new();
+    /// ``
     pub fn new() -> Self {
-        SuiBaseHelper(Arc::new(Mutex::new(SuiBaseHelperImpl::new())))
+        Helper(Arc::new(Mutex::new(SuibaseHelperImpl::new())))
     }
 
-    // Check first if suibase is installed, otherwise
-    // most of the other calls will fail in some ways.
-    pub fn is_installed(&self) -> Result<bool, SuiBaseError> {
+    /// Check first if suibase is installed, otherwise
+    /// most of the other calls will fail in some ways.
+    pub fn is_installed(&self) -> Result<bool, Error> {
         self.0.lock().unwrap().is_installed()
     }
 
@@ -59,19 +83,19 @@ impl SuiBaseHelper {
     //       to be done for "localnet". The selection does not change even if the user
     //       externally change the active after this call.
     //
-    pub fn select_workdir(&self, workdir_name: &str) -> Result<(), SuiBaseError> {
+    pub fn select_workdir(&self, workdir_name: &str) -> Result<(), Error> {
         self.0.lock().unwrap().select_workdir(workdir_name)
     }
 
     // Get the name of the selected workdir.
-    pub fn workdir(&self) -> Result<String, SuiBaseError> {
+    pub fn workdir(&self) -> Result<String, Error> {
         self.0.lock().unwrap().workdir()
     }
 
     // Get the pathname of the file keystore (when available).
     //
     // Context: Selected Workdir by this API.
-    pub fn keystore_pathname(&self) -> Result<String, SuiBaseError> {
+    pub fn keystore_pathname(&self) -> Result<String, Error> {
         self.0.lock().unwrap().keystore_pathname()
     }
 
@@ -80,12 +104,12 @@ impl SuiBaseHelper {
     // package_name is the "name" field specified in the "Move.toml".
     //
     // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn package_object_id(&self, package_name: &str) -> Result<ObjectID, SuiBaseError> {
+    pub fn package_object_id(&self, package_name: &str) -> Result<ObjectID, Error> {
         self.0.lock().unwrap().package_object_id(package_name)
     }
 
     // Alternative for string-based API.
-    pub fn package_id(&self, package_name: &str) -> Result<String, SuiBaseError> {
+    pub fn package_id(&self, package_name: &str) -> Result<String, Error> {
         let id = self.package_object_id(package_name)?;
         Ok(id.to_string())
     }
@@ -108,15 +132,12 @@ impl SuiBaseHelper {
     // The object_type is "acme::Tools::Anvil"
     //
     // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn published_new_object_ids(
-        &self,
-        object_type: &str,
-    ) -> Result<Vec<ObjectID>, SuiBaseError> {
+    pub fn published_new_object_ids(&self, object_type: &str) -> Result<Vec<ObjectID>, Error> {
         self.0.lock().unwrap().published_new_object_ids(object_type)
     }
 
     // Alternative for string-based API.
-    pub fn published_new_objects(&self, object_type: &str) -> Result<Vec<String>, SuiBaseError> {
+    pub fn published_new_objects(&self, object_type: &str) -> Result<Vec<String>, Error> {
         let res = self.published_new_object_ids(object_type)?;
         Ok(res.iter().map(|c| c.to_string()).collect())
     }
@@ -133,23 +154,23 @@ impl SuiBaseHelper {
     //
     // "active" is same as doing "sui client active-address" for the selected workdir.
     //
-    pub fn client_sui_address(&self, address_name: &str) -> Result<SuiAddress, SuiBaseError> {
+    pub fn client_sui_address(&self, address_name: &str) -> Result<SuiAddress, Error> {
         self.0.lock().unwrap().client_sui_address(address_name)
     }
 
     // Alternative for string-based API.
-    pub fn client_address(&self, address_name: &str) -> Result<String, SuiBaseError> {
+    pub fn client_address(&self, address_name: &str) -> Result<String, Error> {
         let addr = self.client_sui_address(address_name)?;
         Ok(addr.to_string())
     }
 
     // Get a RPC URL for the selected workdir.
-    pub fn rpc_url(&self) -> Result<String, SuiBaseError> {
+    pub fn rpc_url(&self) -> Result<String, Error> {
         self.0.lock().unwrap().rpc_url()
     }
 
     // Get a Websocket URL for the selected workdir.
-    pub fn ws_url(&self) -> Result<String, SuiBaseError> {
+    pub fn ws_url(&self) -> Result<String, Error> {
         self.0.lock().unwrap().ws_url()
     }
 }

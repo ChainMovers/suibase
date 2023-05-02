@@ -1,12 +1,12 @@
 namespace suibase {};
 
 [Error]
-enum SuiBaseError {
+enum Error {
   "NotInstalled",
   "WorkdirNotSelected",
   "WorkdirAccessError",
   "WorkdirNotExists",
-  "SuiBaseKeystoreNotExists",
+  "SuibaseKeystoreNotExists",
   "PublishedDataNotFound",
   "MissingLinkDefinition",
   "MissingAtLeastOneLinkDefinition",
@@ -39,33 +39,33 @@ enum SuiBaseError {
   "StateNameEmpty",
 };
 
-interface SuiBaseHelper {
+interface Helper {
   constructor();
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   boolean is_installed();
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   void select_workdir([ByRef]string workdir_name);
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   string workdir();
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   string keystore_pathname();
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   string package_id([ByRef]string package_name);
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   sequence<string> published_new_objects([ByRef]string object_type);
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   string client_address([ByRef]string address_name);
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   string rpc_url();
 
-  [Throws=SuiBaseError]
+  [Throws=Error]
   string ws_url();
 };

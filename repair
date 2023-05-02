@@ -25,7 +25,7 @@ update_bin_path() {
   fi
 }
 
-fix_sui_base_rename_dir_symlink() {
+fix_suibase_rename_dir_symlink() {
   local _SYMLINK="$1"
   # Change "sui-base" to "suibase" in the target of the symlink
   if [ -z "$_SYMLINK" ]; then
@@ -43,7 +43,7 @@ fix_sui_base_rename_dir_symlink() {
   fi
 }
 
-fix_sui_base_rename_file() {
+fix_suibase_rename_file() {
   local _PATHNAME="$1"
   # Fix sui-base to suibase text in the file.
   if [ -z "$_PATHNAME" ] || [ ! -f "$_PATHNAME" ]; then
@@ -100,7 +100,7 @@ suibase_repair() {
   for dir_entry in "${_DIR_ENTRIES[@]}" ; do
     if [ -L "$dir_entry" ]; then
       # This is a directory symlink (probably "active"). Check it.
-      fix_sui_base_rename_dir_symlink "$dir_entry"
+      fix_suibase_rename_dir_symlink "$dir_entry"
       continue
     fi
 
@@ -122,7 +122,7 @@ suibase_repair() {
         for dir_dir_entry in "${_DIR_DIR_ENTRIES[@]}" ; do
           if [ -L "$dir_dir_entry" ]; then
             # This is a directory symlink. Fix it.
-            fix_sui_base_rename_dir_symlink "$dir_dir_entry"
+            fix_suibase_rename_dir_symlink "$dir_dir_entry"
           fi
         done
         # Copy suibase.yaml from templates (when does not exists).
@@ -130,9 +130,9 @@ suibase_repair() {
            [ -f "$REPAIR_SB_DIR/scripts/templates/$workdir/suibase.yaml" ]; then
 
           # Fix client.yaml path (as needed).
-          fix_sui_base_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config-default/client.yaml"
-          fix_sui_base_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config/client.yaml"
-          fix_sui_base_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/faucet/client.yaml"
+          fix_suibase_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config-default/client.yaml"
+          fix_suibase_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config/client.yaml"
+          fix_suibase_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/faucet/client.yaml"
 
           # Overwrite the sui-exec and workdir-exec scripts.
           cp -f "$REPAIR_SB_DIR/scripts/templates/sui-exec" "$REPAIR_SB_DIR/workdirs/$workdir/sui-exec"

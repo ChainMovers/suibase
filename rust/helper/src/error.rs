@@ -1,6 +1,6 @@
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum SuiBaseError {
+pub enum Error {
     /************************************************************/
     // API caller errors (e.g. doing things in wrong order)
     /************************************************************/
@@ -19,7 +19,7 @@ pub enum SuiBaseError {
     WorkdirNotExists,
 
     #[error("suibase: Not finding keystore `{path:?}`. Run the sui client to create it?")]
-    SuiBaseKeystoreNotExists { path: String },
+    SuibaseKeystoreNotExists { path: String },
 
     #[error("suibase: No published data found for package `{package_name:?}`. Did you do `{workdir:?}` publish?")]
     PublishedDataNotFound {

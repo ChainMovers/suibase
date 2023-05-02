@@ -11,7 +11,7 @@ use shared_crypto::intent::Intent;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
-use suibase::SuiBaseHelper;
+use suibase::Helper;
 
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::types::messages::Transaction;
@@ -32,7 +32,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     //    - A client address
 
     // Initialize the suibase helper.
-    let suibase = SuiBaseHelper::new();
+    let suibase = Helper::new();
     suibase.select_workdir("active")?;
     println!("Using suibase workdir [{:?}]", suibase.workdir());
 

@@ -8,7 +8,7 @@
 # Intended to be sourced only in __workdir-exec.sh
 
 
-apply_sui_base_yaml_to_config_yaml() {
+apply_suibase_yaml_to_config_yaml() {
   local _GENDATA_DIR=$1
 
   # Detect coding error.
@@ -228,7 +228,7 @@ workdir_init_local() {
       fi
     fi
 
-    apply_sui_base_yaml_to_config_yaml "$_GENDATA_DIR";
+    apply_suibase_yaml_to_config_yaml "$_GENDATA_DIR";
 
    # Important NO OTHER files allowed in $_GENDATA_DIR prior to the genesis call, otherwise
    # it will fail!

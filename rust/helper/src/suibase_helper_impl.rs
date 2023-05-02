@@ -4,22 +4,22 @@
 
 use sui_types::base_types::{ObjectID, SuiAddress};
 
-use crate::error::SuiBaseError;
-use crate::sui_base_root::SuiBaseRoot;
-use crate::sui_base_workdir::SuiBaseWorkdir;
+use crate::error::Error;
+use crate::suibase_root::SuibaseRoot;
+use crate::suibase_workdir::SuibaseWorkdir;
 
-pub struct SuiBaseHelperImpl {
-    root: SuiBaseRoot,               // for most features related to ~/suibase
-    workdir: Option<SuiBaseWorkdir>, // for *one* selected workdir under ~/suibase/workdirs
+pub struct SuibaseHelperImpl {
+    root: SuibaseRoot,               // for most features related to ~/suibase
+    workdir: Option<SuibaseWorkdir>, // for *one* selected workdir under ~/suibase/workdirs
 }
 
-impl Default for SuiBaseHelperImpl {
+impl Default for SuibaseHelperImpl {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SuiBaseHelperImpl {
+impl SuibaseHelperImpl {
     // Steps to get started with the API:
     //
     //  (1) Check if is_installed()
@@ -29,16 +29,16 @@ impl SuiBaseHelperImpl {
     //  (3) You can now call any other API functions (in any order).
     //      Most calls will relate to the selected workdir.
 
-    pub fn new() -> SuiBaseHelperImpl {
-        SuiBaseHelperImpl {
-            root: SuiBaseRoot::new(),
+    pub fn new() -> SuibaseHelperImpl {
+        SuibaseHelperImpl {
+            root: SuibaseRoot::new(),
             workdir: None,
         }
     }
 
     // Check first if suibase is installed, otherwise
     // most of the other calls will fail in some ways.
-    pub fn is_installed(self: &mut SuiBaseHelperImpl) -> Result<bool, SuiBaseError> {
+    pub fn is_installed(self: &mut SuibaseHelperImpl) -> Result<bool, Error> {
         Ok(self.root.is_installed())
     }
 
@@ -53,33 +53,30 @@ impl SuiBaseHelperImpl {
     //       to be done for "localnet". The selection does not change even if the user
     //       externally change the active after this call.
     //
-    pub fn select_workdir(
-        self: &mut SuiBaseHelperImpl,
-        workdir_name: &str,
-    ) -> Result<(), SuiBaseError> {
-        let mut new_wd = SuiBaseWorkdir::new();
+    pub fn select_workdir(self: &mut SuibaseHelperImpl, workdir_name: &str) -> Result<(), Error> {
+        let mut new_wd = SuibaseWorkdir::new();
         new_wd.init_from_existing(&mut self.root, workdir_name)?;
         self.workdir = Some(new_wd);
         Ok(())
     }
 
     // Get the name of the selected workdir.
-    pub fn workdir(&self) -> Result<String, SuiBaseError> {
+    pub fn workdir(&self) -> Result<String, Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.get_name()?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 
     // Get the pathname of the file keystore (when available).
     //
     // Context: Selected Workdir by this API.
-    pub fn keystore_pathname(&mut self) -> Result<String, SuiBaseError> {
+    pub fn keystore_pathname(&mut self) -> Result<String, Error> {
         // TODO Implement this better with suibase.yaml and/or ENV variables.
         //      See https://github.com/sui-base/suibase/issues/6
         match &self.workdir {
             Some(wd) => Ok(wd.keystore_pathname(&mut self.root)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 
@@ -89,12 +86,12 @@ impl SuiBaseHelperImpl {
     //
     // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn package_object_id(
-        self: &mut SuiBaseHelperImpl,
+        self: &mut SuibaseHelperImpl,
         package_name: &str,
-    ) -> Result<ObjectID, SuiBaseError> {
+    ) -> Result<ObjectID, Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.package_object_id(&mut self.root, package_name)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 
@@ -117,12 +114,12 @@ impl SuiBaseHelperImpl {
     //
     // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
     pub fn published_new_object_ids(
-        self: &mut SuiBaseHelperImpl,
+        self: &mut SuibaseHelperImpl,
         object_type: &str,
-    ) -> Result<Vec<ObjectID>, SuiBaseError> {
+    ) -> Result<Vec<ObjectID>, Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.published_new_object_ids(&mut self.root, object_type)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 
@@ -138,28 +135,28 @@ impl SuiBaseHelperImpl {
     // Example of valid names: "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
     //
     pub fn client_sui_address(
-        self: &mut SuiBaseHelperImpl,
+        self: &mut SuibaseHelperImpl,
         address_name: &str,
-    ) -> Result<SuiAddress, SuiBaseError> {
+    ) -> Result<SuiAddress, Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.client_sui_address(&mut self.root, address_name)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 
     // Get a RPC URL for the selected workdir.
-    pub fn rpc_url(&mut self) -> Result<String, SuiBaseError> {
+    pub fn rpc_url(&mut self) -> Result<String, Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.rpc_url(&mut self.root)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 
     // Get a Websocket URL for the selected workdir.
-    pub fn ws_url(&mut self) -> Result<String, SuiBaseError> {
+    pub fn ws_url(&mut self) -> Result<String, Error> {
         match &self.workdir {
             Some(wd) => Ok(wd.ws_url(&mut self.root)?),
-            None => Err(SuiBaseError::WorkdirNotSelected),
+            None => Err(Error::WorkdirNotSelected),
         }
     }
 }

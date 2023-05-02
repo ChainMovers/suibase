@@ -268,7 +268,7 @@ export -f get_key_value
 # Now load all the $CFG_ variables from the suibase.yaml files.
 # shellcheck source=SCRIPTDIR/__parse-yaml.sh
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
-update_sui_base_yaml() {
+update_suibase_yaml() {
   # Load defaults twice.
   #
   # First with CFG_ prefix, the second with CFGDEFAULT_
@@ -288,11 +288,11 @@ update_sui_base_yaml() {
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
   fi
 }
-export -f update_sui_base_yaml
+export -f update_suibase_yaml
 
-update_sui_base_yaml;
+update_suibase_yaml;
 
-update_sui_base_version() {
+update_suibase_version() {
   # Best effort to add the build number to the version.
   # If no success, just use the hard coded major.minor.patch info.
   local _BUILD
@@ -301,9 +301,9 @@ update_sui_base_version() {
     SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
   fi
 }
-export -f update_sui_base_version
+export -f update_suibase_version
 
-update_sui_base_version;
+update_suibase_version;
 
 cd_sui_log_dir() {
   if [ -d "$WORKDIRS/$WORKDIR" ]; then

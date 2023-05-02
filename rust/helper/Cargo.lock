@@ -132,7 +132,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=05322deb1795a5d482630740bc938fa7f067c58f#05322deb1795a5d482630740bc938fa7f067c58f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -165,7 +165,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=05322deb1795a5d482630740bc938fa7f067c58f#05322deb1795a5d482630740bc938fa7f067c58f"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.56",
@@ -176,7 +176,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=05322deb1795a5d482630740bc938fa7f067c58f#05322deb1795a5d482630740bc938fa7f067c58f"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -192,7 +192,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=691e43c3f4df5e33b898a91cb1a808f68f76f52e#691e43c3f4df5e33b898a91cb1a808f68f76f52e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=05322deb1795a5d482630740bc938fa7f067c58f#05322deb1795a5d482630740bc938fa7f067c58f"
 dependencies = [
  "anemo",
  "bytes",
@@ -461,6 +461,17 @@ dependencies = [
  "ark-std",
  "tracing",
  "tracing-subscriber 0.2.25",
+]
+
+[[package]]
+name = "ark-secp256r1"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3975a01b0a6e3eae0f72ec7ca8598a6620fc72fa5981f6f5cca33b7cd788f633"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
@@ -1193,9 +1204,9 @@ dependencies = [
 
 [[package]]
 name = "cached"
-version = "0.42.0"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e5877db5d1af7fae60d06b5db9430b68056a69b3582a0be8e3691e87654aeb6"
+checksum = "bc2fafddf188d13788e7099295a59b99e99b2148ab2195cae454e754cc099925"
 dependencies = [
  "async-trait",
  "async_once",
@@ -2835,10 +2846,14 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=19540b8550685173f4998ae64d0291ddbdc93868#19540b8550685173f4998ae64d0291ddbdc93868"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=27ee552d5c1feb02b6b64b4f77be3c84e82a0469#27ee552d5c1feb02b6b64b4f77be3c84e82a0469"
 dependencies = [
  "aes",
  "aes-gcm",
+ "ark-ec",
+ "ark-ff",
+ "ark-secp256r1",
+ "ark-serialize",
  "auto_ops",
  "base64ct",
  "bincode",
@@ -2885,7 +2900,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=19540b8550685173f4998ae64d0291ddbdc93868#19540b8550685173f4998ae64d0291ddbdc93868"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=27ee552d5c1feb02b6b64b4f77be3c84e82a0469#27ee552d5c1feb02b6b64b4f77be3c84e82a0469"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.56",
@@ -2896,7 +2911,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=19540b8550685173f4998ae64d0291ddbdc93868#19540b8550685173f4998ae64d0291ddbdc93868"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=27ee552d5c1feb02b6b64b4f77be3c84e82a0469#27ee552d5c1feb02b6b64b4f77be3c84e82a0469"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -8228,17 +8243,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
-name = "sui-base-helper"
-version = "0.0.1"
-dependencies = [
- "home",
- "serde_json",
- "serde_yaml 0.9.21",
- "sui-types",
- "thiserror",
-]
-
-[[package]]
 name = "sui-cost-tables"
 version = "0.1.0"
 dependencies = [
@@ -8345,6 +8349,17 @@ dependencies = [
  "tracing",
  "typed-store",
  "workspace-hack",
+]
+
+[[package]]
+name = "suibase"
+version = "0.0.1"
+dependencies = [
+ "home",
+ "serde_json",
+ "serde_yaml 0.9.21",
+ "sui-types",
+ "thiserror",
 ]
 
 [[package]]
@@ -9953,6 +9968,7 @@ dependencies = [
  "ark-poly",
  "ark-r1cs-std",
  "ark-relations",
+ "ark-secp256r1",
  "ark-serialize",
  "ark-serialize-derive",
  "ark-snark",
@@ -10421,6 +10437,7 @@ dependencies = [
  "peeking_take_while",
  "pem",
  "pem-rfc7468 0.6.0",
+ "pem-rfc7468 0.7.0",
  "percent-encoding",
  "pest",
  "pest_derive",

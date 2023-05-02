@@ -8,14 +8,14 @@ use colored::Colorize;
 use futures::StreamExt;
 use sui_json_rpc_types::EventFilter;
 use sui_sdk::SuiClientBuilder;
-use suibase::SuiBaseHelper;
+use suibase::Helper;
 
 // Subscribe for all events with the Sui network.
 //
 // This function loop until Ctrl-C or error.
 //
 pub async fn display_events_loop() -> Result<(), anyhow::Error> {
-    let suibase = SuiBaseHelper::new();
+    let suibase = Helper::new();
     suibase.select_workdir("active")?;
 
     let rpc_url = suibase.rpc_url()?;
