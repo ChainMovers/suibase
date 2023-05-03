@@ -2,6 +2,12 @@
 
 This is the Suibase Helper library.
 
+# helper-uniffi
+
+Adds UniFFI bindings to the Rust Suibase Helper.
+
+Allows calling from python, Kotlin, NodeJS...
+
 
 # demo-app
 

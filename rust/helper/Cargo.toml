@@ -3,6 +3,14 @@ name = "suibase"
 version = "0.0.1"
 edition = "2021"
 
+license = "Apache-2.0"
+description = "Crate to assist development, testing and deployment of Sui Move apps."
+homepage = "https://suibase.io"
+repository = "https://github.com/sui-base/suibase"
+readme = "README.md"
+keywords = ["sui","move"]
+categories = ["development-tools"]
+
 [lib]
 crate-type = ["lib"]
 
