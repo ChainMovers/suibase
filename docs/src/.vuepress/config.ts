@@ -1,7 +1,9 @@
+import * as path from "path";
 import { defineUserConfig } from "vuepress";
 import theme from "./theme.js";
 //import { searchProPlugin } from "vuepress-plugin-search-pro";
 import { docsearchPlugin } from "@vuepress/plugin-docsearch";
+//import { registerComponentsPlugin } from "@vuepress/plugin-register-components";
 
 export default defineUserConfig({
   base: "/",
@@ -19,9 +21,8 @@ export default defineUserConfig({
 
   plugins: [
     /*
-    searchProPlugin({
-      // index all contents
-      indexContent: true,
+    registerComponentsPlugin({
+      componentsDir: path.resolve(__dirname, "./components"),
     }),*/
     docsearchPlugin({
       // your options

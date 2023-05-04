@@ -58,3 +58,24 @@ a:has(polygon) {
 //#main-content.page {
 //  padding-inline-start: calc(var(--sidebar-space) + 0.5rem);
 //}
+
+// Style for code group
+.code-info-title {
+  color: #999999;
+  transform: translateY(70%);
+  display: flex;
+  justify-content: center;
+  font-size: 13.6px;
+}
+
+.code-group__ul {
+  display: flex;
+}
+
+.code-group__nav {
+  padding-right: 10px;
+}
+
+.flex-grow {
+  flex-grow: 1;
+}

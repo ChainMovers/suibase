@@ -3,4 +3,26 @@ title: Example Code Snippet
 contributors: true
 editLink: true
 ---
-# Example code snippet
+
+# Simple Example (Recommended theme code-tabs)
+
+::: code-tabs
+
+@tab:active Rust
+
+```rust
+let y = &x;
+```
+
+@tab Python
+
+```python
+y = x;
+```
+
+@tab TS
+
+```ts
+Whatever
+```
+:::
