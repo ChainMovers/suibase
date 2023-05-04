@@ -12,8 +12,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unpublished]
+### Added
+
+### Fixed
+
+### Changed
+
+### Removed
+
+
+## [0.1.3] 2023-05-03
 
 ### Added
+
 - Scripts: mainnet support. New 'msui' and 'mainnet' scripts.
 - Python example of Programmable Transaction
 - Language neutral cookbook guide introducing Programmable Transactions
