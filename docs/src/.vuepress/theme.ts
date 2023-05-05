@@ -22,7 +22,7 @@ export default hopeTheme({
   breadcrumb: false,
   toc: false,
 
-  docsDir: "docs/src/", // Might not be needed when editLink false?
+  docsDir: "docs/src/",
 
   hotReload: true,
 
@@ -81,7 +81,7 @@ export default hopeTheme({
       attrs: true,
       chart: true,
       codetabs: true,
-      demo: true,
+      /*demo: true,*/
       echarts: false,
       figure: false,
       flowchart: true,
@@ -92,12 +92,12 @@ export default hopeTheme({
       katex: true,
       mark: true,
       mermaid: true,
-      playground: {
+      /*playground: {
         presets: ["ts", "vue"],
-      },
-      presentation: {
+      },*/
+      /*presentation: {
         plugins: ["highlight", "math", "search", "notes", "zoom"],
-      },
+      },*/
       stylize: [
         {
           matcher: "Recommended",
@@ -115,7 +115,7 @@ export default hopeTheme({
       sup: true,
       tabs: true,
       vPre: true,
-      vuePlayground: true,
+      vuePlayground: false,
     },
 
     // uncomment these if you want a pwa
