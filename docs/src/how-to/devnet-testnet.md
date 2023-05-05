@@ -1,27 +1,27 @@
 ---
-title: Using Devnet and Testnet
+title: Using Devnet, Testnet and Mainnet
 order: 3
 ---
 ::: warning
-Instructions here are for devnet, but it is the same for testnet and mainnet. Just replace "devnet" with "testnet or mainnet" and "dsui" with "tsui or msui".
+Instructions here are for devnet, but it is the same for testnet and mainnet. Just replace "devnet" with testnet/mainnet and dsui with tsui/msui.
 :::
 
 ## Starting
 
-Generally, it works the same as localnet, except you are interacting with a public network instead of your own simulated local Sui network.
+Generally, works similar to localnet, except you are interacting with a public network instead of your own simulated local Sui network.
 
 ```shell
 $ devnet start
 ```
 The first time will take minutes because of downloading and building the binaries.
 
-You do not call ```sui``` directly anymore. Instead call ```dsui```:
+You do not call ```sui``` directly anymore, instead call ```dsui```:
 
 ```shell
 $ dsui client active-address
 0x92c03721eabfc753453b097d14d87e4012a9fe562da3582a6a023da7c6120c95
 ```
-You no longer have to "switch env". You can assume ```dsui``` always transparently execute with its proper ```sui``` client and keystore for devnet (in same way, ```lsui``` for localnet and ```tsui``` for testnet).
+You no longer have to "switch env". You can assume ```dsui``` always transparently execute with its proper ```sui``` client and keystore for devnet (in same way, ```tsui``` for testnet, ```msui`` for mainnet. Each have their own keystore).
 
 Type ```devnet``` for help.
 <br>

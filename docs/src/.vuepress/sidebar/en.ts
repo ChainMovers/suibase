@@ -20,7 +20,7 @@ export const enSidebar = sidebar({
           link: "how-to/localnet.md",
         },
         {
-          text: "Devnet/Testnet",
+          text: "Devnet/Testnet/Mainnet",
           link: "how-to/devnet-testnet.md",
         },
       ],
@@ -32,10 +32,6 @@ export const enSidebar = sidebar({
         {
           text: "Scripts",
           link: "how-to/scripts.md",
-        },
-        {
-          text: "Workdir Conventions",
-          link: "references.md",
         },
         {
           text: "Suibase Helpers",
@@ -66,6 +62,10 @@ export const enSidebar = sidebar({
               link: "demos/README.md",
             },
           ],
+        },
+        {
+          text: "Workdir Conventions",
+          link: "references.md",
         },
       ],
     },

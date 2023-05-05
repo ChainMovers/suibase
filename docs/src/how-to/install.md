@@ -42,7 +42,7 @@ Suibase files are an "open standard" and benefit from being easily found by many
 $ ~/suibase/update
 ```
 Will pull latest from github to only update suibase itself.
-To update sui clients and local repos, use instead the workdir scripts (e.g. ```localnet update```)
+To update sui clients and their local repos, use instead the workdir scripts (e.g. ```mainnet update```)
 <br>
 
 ## Uninstall
