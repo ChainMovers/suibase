@@ -4,6 +4,7 @@ import theme from "./theme.js";
 //import { searchProPlugin } from "vuepress-plugin-search-pro";
 import { docsearchPlugin } from "@vuepress/plugin-docsearch";
 //import { registerComponentsPlugin } from "@vuepress/plugin-register-components";
+import { redirectPlugin } from "vuepress-plugin-redirect";
 
 export default defineUserConfig({
   base: "/",

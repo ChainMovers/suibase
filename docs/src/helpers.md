@@ -12,8 +12,11 @@ These IDs are generated at publication time by the Sui client. Suibase makes it 
 
 This JSON file is then conveniently readable by your apps through a Suibase Helper API.
 
-#### Example 1: What is the last published package ID?
+#### Example 1: What is the active client address of localnet?
+TBD
 
+#### Example 2: What is my last published package ID?
+TBD
 
 
 

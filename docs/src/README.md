@@ -19,7 +19,7 @@ actions:
 features:
   - title:  A "Better" Localnet
     icon: support
-    details: "Easy start/stop commands gives you 15 deterministic addresses of various key types with an abundance of Mist."
+    details: "Easy start/stop commands gives you 15 deterministic addresses of various key types with an abundance of Sui coins."
     link: /how-to/localnet.md
 
   - title: Test Automation

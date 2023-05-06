@@ -90,10 +90,6 @@ export const enSidebar = sidebar({
           prefix: "code/",
           children: "structure",
         },
-        {
-          text: "SDK List",
-          link: "sdk-list.md",
-        },
       ],
     },
     {
@@ -107,6 +103,16 @@ export const enSidebar = sidebar({
         {
           text: "Become an Editor",
           link: "community/editors.md",
+        },
+      ],
+    },
+    {
+      text: "Links",
+      link: "links/",
+      children: [
+        {
+          text: "External Resources",
+          link: "links/",
         },
       ],
     },
