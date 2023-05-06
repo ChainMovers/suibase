@@ -36,3 +36,12 @@ virtual environment (`. env/bin/activate`).
 | sysinfo | displays general sui chain information        | `bin/sysinfo` | src/demo1 |
 | coinage | displays information about coins and balanced | `bin/coinage` | src/demo2 |
 | pkgtxn  | demonstrate programmable transaction          | `bin/prgtxn`  | src/demo3 |
+
+## pysui utililties
+
+With installing `pysui` you also have access to a number of installed utilities:
+
+1. `wallet --local [command]`
+2. `async-gas --local`
+3. `async-sub --local`
+4. `async-sub-txn --local`

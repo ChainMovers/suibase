@@ -1,4 +1,3 @@
-
 # Copyright Frank Castellucci
 
 # Licensed under the Apache License, Version 2.0 (the "License")
@@ -35,13 +34,11 @@ def main(client: SuiClient):
     If finds a address that is ed25519 and one that is secp256k1 and transfers a
     coin from the former to the latter.
 
-    Remember to have `localnet` running before executing.
+    Remember to have `localnet start` running before executing and `localnet set-active`.
     """
     # Get the from (source) and to (recpient) address (ignore the keypair in return tuple)
-    from_address, _ = first_address_for_keytype(client,
-                                                SignatureScheme.ED25519)
-    to_address, _ = first_address_for_keytype(client,
-                                              SignatureScheme.SECP256K1)
+    from_address, _ = first_address_for_keytype(client, SignatureScheme.ED25519)
+    to_address, _ = first_address_for_keytype(client, SignatureScheme.SECP256K1)
 
     # Setup the Transaction Builder using the client
     # By default, the 'sender' is set to client.config.active-address
@@ -51,22 +48,18 @@ def main(client: SuiClient):
     tx_builder.signer_block.sender = from_address
 
     # Get the first coin that the 'from_address' has
-    gasses: list[SuiCoinObject] = handle_result(
-        client.get_gas(from_address)).data
+    gasses: list[SuiCoinObject] = handle_result(client.get_gas(from_address)).data
     a_coin: SuiCoinObject = gasses[0]
     # Get it's balance and convert to int
     a_coin_balance = int(a_coin.balance)
 
-    print(
-        f"Transferring 50% of coin: {a_coin.coin_object_id} from address: {from_address} to address: {to_address}")
+    print(f"Transferring 50% of coin: {a_coin.coin_object_id} from address: {from_address} to address: {to_address}")
     # Construct a split coin for 50% of a_coin
     # We want the result as input into the subsequent transfer
-    split_coin = tx_builder.split_coin(coin=a_coin.coin_object_id,
-                                       amounts=int(a_coin_balance/2))
+    split_coin = tx_builder.split_coin(coin=a_coin.coin_object_id, amounts=int(a_coin_balance / 2))
     # Construct a transfer to send the result of splitting out the coin
     # to the recipient
-    tx_builder.transfer_objects(
-        transfers=split_coin, recipient=SuiAddress(to_address))
+    tx_builder.transfer_objects(transfers=split_coin, recipient=SuiAddress(to_address))
 
     # An alternative is to combine:
     # tx_builder.transfer_objects(transfers=tx_builder.split_coin(
