@@ -133,8 +133,9 @@ workdir_exec() {
     *) usage;;
   esac
 
-  # Optional params (the "debug" is purposely not documented).
+  # Optional params (the "debug" and "nobinary" are purposely not documented).
   DEBUG_RUN=false
+  NOBINARY=false
 
   # Parsing the command line shifting "rule":
   #   -t|--target) target="$2"; shift ;; That's an example with a parameter
@@ -165,6 +166,7 @@ workdir_exec() {
       while [[ "$#" -gt 0 ]]; do
         case $1 in
           --debug) DEBUG_RUN=true ;;
+          --nobinary) NOBINARY=true ;;
           -p|--path)
              OPTIONAL_PATH="${2%/}"; shift
              if [ -z "$OPTIONAL_PATH" ]; then echo "--path <path> must be specified"; exit 1; fi ;;
@@ -178,6 +180,7 @@ workdir_exec() {
       while [[ "$#" -gt 0 ]]; do
         case $1 in
           --debug) DEBUG_RUN=true ;;
+          --nobinary) NOBINARY=true ;;
           *) echo "Unknown parameter passed: $1"; exit 1 ;;
         esac
         shift
@@ -186,6 +189,10 @@ workdir_exec() {
 
   if [ "$DEBUG_RUN" = true ]; then
     echo "Debug flag set. May run in foreground Ctrl-C to Exit"
+  fi
+
+  if [ "$NOBINARY" = true ]; then
+    echo "nobinary flag set. Will not build sui binaries from the repo."
   fi
 
   # Validate if the path exists.
@@ -573,7 +580,17 @@ workdir_exec() {
     ALLOW_DOWNLOAD="false"
   fi
 
-  build_sui_repo_branch "$ALLOW_DOWNLOAD";
+  ALLOW_BUILD="true"
+  if [ "$NOBINARY" = true ]; then
+    ALLOW_BUILD="false"
+  fi
+
+  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BUILD";
+
+  if [ "$ALLOW_BUILD" = false ]; then
+    # Can't do anything more than getting the repo.
+    return
+  fi
 
   if $is_local; then
     # shellcheck source=SCRIPTDIR/__workdir-init-local.sh

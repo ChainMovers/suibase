@@ -371,6 +371,7 @@ export -f check_yaml_parsed
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
+  ALLOW_BUILD="$2";
 
   local _BUILD_DESC
   if [ "$CFG_network_type" = "local" ]; then
@@ -465,6 +466,10 @@ build_sui_repo_branch() {
       echo "    $WORKDIR update"
       echo
       exit 1
+  fi
+
+  if [ "$ALLOW_BUILD" = false ]; then
+    return
   fi
 
   # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
