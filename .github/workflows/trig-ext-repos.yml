@@ -20,8 +20,8 @@ jobs:
         id: diff
 
   trig:
-    # needs: diff
-    # if: ${{ (needs.diff.outputs.isDocHelperAPI == 'true') || (github.event_name == 'workflow_dispatch') }}
+    needs: diff
+    if: ${{ (needs.diff.outputs.isDocHelperAPI == 'true') || (github.event_name == 'workflow_dispatch') }}
 
     runs-on: ubuntu-latest
 
