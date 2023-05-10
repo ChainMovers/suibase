@@ -1,3 +1,8 @@
+
+I wish we could give
+https://ai.suiscan.com/
+
+
 # Workdir Conventions
 
 Suibase define a few conventions to coordinate among SDKs, apps and user.
@@ -14,13 +19,13 @@ There are 6 <WORKDIR\>: `active`, `localnet`, `devnet`, `testnet`, `mainnet` and
 
 Each <WORKDIR\> has the following components:
 
-| Component      | Purpose                                                                                                                                                                                 |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| sui-exec       | A script allowing any app to safely call the right sui client+config combination for this workdir. Use it like you would use the "sui" client from Mysten Lab.                          |
-| config         | Directory with Mysten Lab files needed to run the sui client (client.yaml and sui.keystore).                                                                                            |
-| sui-repo       | A local repo of the Mysten lab sui code for building the client binary, but also for any apps to use the Rust SDK crates for compatibility.                                             |
-| published-data | Information about last package published from this <WORKDIR\> using suibase scripts. This can be retrieved through JSON files or through suibase SDK helpers.                           |
-| workdir-exec   | A script allowing any app to safely call the right "workdir script".<br> Example: `$ ~/workdirs/localnet/workdir-exec client gas` is equivalent to the shortcut `$ localnet client gas` |
+| Component      | Purpose                                                                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| sui-exec       | A script allowing any app to safely call the right sui client+config combination for this workdir. Use it like you would use the "sui" client from Mysten Lab.                  |
+| config         | Directory with Mysten Lab files needed to run the sui client (client.yaml and sui.keystore).                                                                                    |
+| sui-repo       | A local repo of the Mysten lab sui code for building the client binary, but also for any apps to use the Rust SDK crates for compatibility.                                     |
+| published-data | Information about last package published from this <WORKDIR\> using suibase scripts. This can be retrieved through JSON files or through suibase SDK helpers.                   |
+| workdir-exec   | A script allowing any app to safely call the right "workdir script".<br> Example: `$ ~/workdirs/localnet/workdir-exec update` is equivalent to the shortcut `$ localnet update` |
 
 Applications can expect the components to be always at these **fix** locations:
 ```text
