@@ -47,6 +47,10 @@ export const enSidebar = sidebar({
           prefix: "rust/",
           children: [
             {
+              text: "Helper API",
+              link: "helper.md",
+            },
+            {
               text: "Demo-App",
               link: "demo-app/README.md",
             },

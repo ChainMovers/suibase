@@ -1,14 +1,12 @@
 //! suibase
 //!
-//! API to suibase ( <https://suibase.io> ) mostly intended for development of Sui tool/test automation and production backends.
+//! API to suibase mostly intended for development of Sui tool/test automation and production backends.
 //!
 //! This API is:
 //!   * multi-thread safe.
 //!   * UniFFI bindings compatible (Sync+Send)
 //!
-//! You need to install Suibase first, which is both easy and non-conflicting with your existing Sui installation.
-//!
-//! see <https://suibase.io> for instructions.
+//! See <https://suibase.io> for more info.
 //!
 //! What is Suibase?
 //!
@@ -17,6 +15,19 @@
 //!
 //! Your dev setup gains stability by having a client binary match every network version.
 //!
+//! How to use?
+//!
+//! Suibase is not available on crates.io. It is instead installed (github cloned) to your local machine and
+//! your app references it. That way your app and the suibase installation are certainly matching versions.
+//!
+//! After installing suibase ([more info](https://suibase.io/how-to/install)), add to your Cargo.toml:
+//!
+//! ```toml
+//! [dependencies]
+//! suibase = { path = "../../suibase/rust/helper" }
+//! ```
+//!
+//! You may have to adjust the number "../" depending on where your Cargo.toml is located relative to ~/suibase.
 
 mod error;
 pub use crate::error::Error;
