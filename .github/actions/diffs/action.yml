@@ -13,6 +13,9 @@ outputs:
   isScript:
     description: True when changes related suibase scripts
     value: "${{ steps.diff.outputs.isScript }}"
+  isDocHelperAPI:
+    description: True when changes to Helper API (docs)
+    value: "${{ steps.diff.outputs.isDoc }}"
 
 runs:
   using: composite
@@ -39,3 +42,7 @@ runs:
             - 'uninstall'
             - 'update'
             - '.github/workflows/scripts-tests.yml'
+          isDocHelperAPI:
+            - 'rust/helper/lib.rs'
+            - 'rust/helper/error.rs'
+            - '.github/workflows/trig-ext-repos.yml'

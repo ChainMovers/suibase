@@ -1,0 +1,37 @@
+name: Trig refresh of the repo hosting the Suibase helper API rustdocs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isDocHelperAPI: ${{ steps.diff.outputs.isDocHelperAPI }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  trig:
+    needs: diff
+    if: ${{ (needs.diff.outputs.isDocHelperAPI == 'true') || (github.event_name == 'workflow_dispatch') }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pushes test file
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.SUIBASE_API_DOC_TOKEN }}
+        with:
+          source_file: "CHANGELOG.md"
+          destination_repo: "sui-base/suibase-api-docs"
+          user_email: "4542410+mario4tier@users.noreply.github.com"
+          user_name: "Mario Fortier"
