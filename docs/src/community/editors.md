@@ -20,11 +20,19 @@ When ready to propose your changes just select "Create a **new branch**" and giv
 Your proposed changes will be merged after review.
 
 ## Editing the Cookbook on your machine
-If you prefer to preview exactly your change, then you need to run [vuepress]( https://vuepress.vuejs.org/ ) on your machine and modify the markdown files with an editor (e.g. VSCode).
+If you prefer to preview exactly your change, then you need to run vuepress on your machine and modify the markdown files with an editor (e.g. VSCode).
 
-Requirements are Node.js and pnpm ( [More Info](https://theme-hope.vuejs.press/cookbook/tutorial/env.html) )
+Prerequisites:
+   * NodeJS (>= 16.4) ( https://nodejs.dev/en/learn/how-to-install-nodejs/ )
+   * pnpm ( https://pnpm.io/installation )
 
-To start vuepress do:
+For the one-time vuepress installation do:
+```shell
+$ cd ~/suibase/docs
+$ pnpm install
+```
+
+To start vuepress (the server) do:
 ```shell
 $ cd ~/suibase/docs
 $ pnpm start
@@ -34,6 +42,6 @@ Open your browser at http://localhost:8080
 
 The browser updates as you change files under ~/suibase/docs/src
 
-Suibase uses [https://theme-hope.vuejs.press/guide/](https://theme-hope.vuejs.press/guide/) for additional markdown features.
+See [https://theme-hope.vuejs.press/guide/](https://theme-hope.vuejs.press/guide/) for advanced markdown features.
 
-Submit your changes as a pull request, just ask as needed (not as hard as it seems once you go through it once).
+Submit your changes as a pull request, just ask as needed (not as hard as it seems once you do it once).
