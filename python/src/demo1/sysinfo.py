@@ -23,7 +23,7 @@ from pysui.sui.sui_clients.sync_client import SuiClient
 
 
 def _stats_0291(client: SuiClient):
-    """Show system info for 0.28.x +.
+    """Show system info for local node.
 
     Args:
         client (SuiClient): The interface to the Sui RPC API
