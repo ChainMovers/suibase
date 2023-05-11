@@ -20,6 +20,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Bumped pysui version
+- Prefix each cookbook code subject with Facts section
 
 ### Removed
 

@@ -4,13 +4,19 @@ contributors: true
 editLink: true
 ---
 
+## Facts
+
+::: tip Fact Sheet
+:::
+
 Great for first time contributor.
 
 Suggested subjects:
- * How to create a new Token
- * How to get the balance of a Token
- * How to control authority of a Token
- * How to delete/close Token
+
+- How to create a new Token
+- How to get the balance of a Token
+- How to control authority of a Token
+- How to delete/close Token
 
 Template for snippets:
 

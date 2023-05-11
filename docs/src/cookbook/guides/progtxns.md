@@ -7,11 +7,11 @@ editLink: true
 
 ## Introduction
 
-Prior to Sui 0.28.x, to submit transactions with mutliple commands one was required to invoke the,
+Prior to Sui 0.28.x to submit transactions with mutliple commands one was required to invoke the,
 recently renamed, `unsafe_batchTransaction`. This is somewhat limited to allowing only calls to
-`public entry fun` on contracts (a.k.a. move calls) and transfers.
+`public entry fun` functions on contracts (a.k.a. move calls) and object transfers.
 
-Starting around Sui version 0.28.x MystenLabs introduced 'programmable transactions' which expanded
+Recently MystenLabs introduced 'programmable transactions' which expanded
 the capability of structuring multiple-diverse commands, sharing results between commands, lifting the
 limitations of calling only `public entry fun` to now include any `public fun` contract functions and much more.
 
@@ -52,6 +52,7 @@ Commands are a single unit of execution to which you can add many in a single tr
   operating with address 'A' owned objects, a subequent command can not include address 'B' owned objects as there is no
   way to include another signer. This restriction, and the associated signing liimitation, is reported to be in review to hopefully ease this constraint
 - Collections are limited to a depth level of 16 (e.g. `vector<vector<vector<.....>>>`)
+- Additional transactions and command constraints can be viewed via the `sui_getProtocolConfig` RPC method
 
 ### Signing Transactions
 
