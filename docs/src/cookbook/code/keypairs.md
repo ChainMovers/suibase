@@ -129,7 +129,6 @@ const secretKey = new Uint8Array(SECP256K1_SECRET_KEY);
 const keypair = Secp256k1Keypair.fromSecretKey(secretKey)
 ```
 
-@tab PySui Wallet
 
 ```Ruse
 To be done. Add your contribution here.
@@ -168,7 +167,6 @@ const secretKey = fromB64(ED25519_SECRET_KEY)
 const keypair = Ed25519Keypair.fromSecretKey(secretKey)
 ```
 
-@tab PySui Wallet
 
 ```Ruse
 To be done. Add your contribution here.
