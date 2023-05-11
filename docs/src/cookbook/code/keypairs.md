@@ -47,11 +47,6 @@ Different actions that you make with Sui libraries require a keypair. A keypair 
 To be done. Add your contribution here.
 ```
 
-@tab Rust
-
-```rust
-To be done. Add your contribution here.
-```
 
 @tab Python
 
@@ -105,11 +100,6 @@ If you already have your secret, you can get your Keypair and you can use it to 
 To be done. Add your contribution here.
 ```
 
-@tab Rust
-
-```rust
-To be done. Add your contribution here.
-```
 
 @tab Python
 
@@ -130,9 +120,6 @@ const keypair = Secp256k1Keypair.fromSecretKey(secretKey)
 ```
 
 
-```Ruse
-To be done. Add your contribution here.
-```
 
 :::
 
@@ -145,11 +132,6 @@ To be done. Add your contribution here.
 To be done. Add your contribution here.
 ```
 
-@tab Rust
-
-```rust
-To be done. Add your contribution here.
-```
 
 @tab Python
 
@@ -168,8 +150,5 @@ const keypair = Ed25519Keypair.fromSecretKey(secretKey)
 ```
 
 
-```Ruse
-To be done. Add your contribution here.
-```
 
 :::
