@@ -28,11 +28,8 @@ editLink: true
 
 :::
 
-Great for first time contributor.
-
 Suggested subjects:
 
-- How to generate a new keypair
 - How to restore a Keypair from a secret
 - How to verify a Keypair
 - How to generate a vanity address
@@ -71,6 +68,90 @@ const keypair_ed25519 = new Ed25519Keypair()
 
 // Generate Seco256k1 keypair
 const keypair_secp256k1 = new Secp256k1Keypair()
+```
+
+@tab PySui Wallet
+
+```Ruse
+To be done. Add your contribution here.
+```
+
+:::
+
+## How to restore a Keypair from a secret
+
+If you already have your secret, you can get your Keypair and you can use it to perform different actions.
+
+1. From Bytes
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab Rust
+
+```rust
+To be done. Add your contribution here.
+```
+
+@tab Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+const SECP256K1_SECRET_KEY = [
+    59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203,
+    174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
+  ]
+const secretKey = new Uint8Array(SECP256K1_SECRET_KEY);
+
+const keypair = Secp256k1Keypair.fromSecretKey(secretKey)
+```
+
+@tab PySui Wallet
+
+```Ruse
+To be done. Add your contribution here.
+```
+
+:::
+
+2. From Base64 String
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab Rust
+
+```rust
+To be done. Add your contribution here.
+```
+
+@tab Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+const ED25519_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg='
+
+const secretKey = fromB64(ED25519_SECRET_KEY)
+
+const keypair = Ed25519Keypair.fromSecretKey(secretKey)
 ```
 
 @tab PySui Wallet
