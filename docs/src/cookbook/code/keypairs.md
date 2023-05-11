@@ -130,7 +130,7 @@ const keypair = Secp256k1Keypair.fromSecretKey(secretKey)
 ```
 
 
-```Ruse
+```Rust
 To be done. Add your contribution here.
 ```
 
@@ -168,7 +168,7 @@ const keypair = Ed25519Keypair.fromSecretKey(secretKey)
 ```
 
 
-```Ruse
+```Rust
 To be done. Add your contribution here.
 ```
 
