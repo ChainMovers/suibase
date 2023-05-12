@@ -28,9 +28,8 @@ editLink: true
 
 :::
 
-Suggested subjects:
+Suggested additions:
 
-- How to restore a Keypair from a secret
 - How to verify a Keypair
 - How to generate a vanity address
 - How to import/export (explain sui.keystore hexa need 'sui keytool convert' for wallet import).
@@ -46,7 +45,6 @@ Different actions that you make with Sui libraries require a keypair. A keypair 
 ```shell
 To be done. Add your contribution here.
 ```
-
 
 @tab Python
 
@@ -92,6 +90,8 @@ const keypair_secp256k1 = new Secp256k1Keypair();
 If you already have your secret, you can get your Keypair and you can use it to perform different actions.
 
 1. From Bytes
+   ::: code-tabs
+
 ::: code-tabs
 
 @tab:active CLI
@@ -100,30 +100,40 @@ If you already have your secret, you can get your Keypair and you can use it to 
 To be done. Add your contribution here.
 ```
 
-
 @tab Python
 
 ```python
-To be done. Add your contribution here.
+# pysui automatically loads all keypairs from 'sui.keystore'
+# However you can get a keypair from the secret key bytes:
+
+import base64
+from pysui.sui.sui_crypto import SuiKeyPairED25519
+
+_ED25519_SECRET_KEYBYTES = [
+  0, 133, 15, 197, 11, 222, 99, 95, 16, 198, 16, 195, 117, 51, 180,
+  15, 67, 131, 232, 243, 85, 249, 235, 121, 211, 78, 188, 119, 88,
+  63, 172, 140, 165
+  ]
+
+kp_ed25519 = SuiKeyPairED25519.from_bytes(bytearray(_ED25519_SECRET_KEYBYTES))
 ```
 
 @tab TypeScript
 
 ```ts
 const SECP256K1_SECRET_KEY = [
-    59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203,
-    174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
-  ]
+  59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203,
+  174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
+];
 const secretKey = new Uint8Array(SECP256K1_SECRET_KEY);
 
-const keypair = Secp256k1Keypair.fromSecretKey(secretKey)
+const keypair = Secp256k1Keypair.fromSecretKey(secretKey);
 ```
-
-
 
 :::
 
 2. From Base64 String
+
 ::: code-tabs
 
 @tab:active CLI
@@ -132,23 +142,27 @@ const keypair = Secp256k1Keypair.fromSecretKey(secretKey)
 To be done. Add your contribution here.
 ```
 
-
 @tab Python
 
 ```python
-To be done. Add your contribution here.
+# pysui automatically loads all keypairs from 'sui.keystore'
+# However you can get a keypair from a base64 keystring
+
+from pysui.sui.sui_crypto import keypair_from_keystring
+
+_ED25519_SECRET_KEYSTRING = "AIUPxQveY18QxhDDdTO0D0OD6PNV+et50068d1g/rIyl"
+
+kp_ed25519 = keypair_from_keystring(_ED25519_SECRET_KEYSTRING)
 ```
 
 @tab TypeScript
 
 ```ts
-const ED25519_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg='
+const ED25519_SECRET_KEY = "mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=";
 
-const secretKey = fromB64(ED25519_SECRET_KEY)
+const secretKey = fromB64(ED25519_SECRET_KEY);
 
-const keypair = Ed25519Keypair.fromSecretKey(secretKey)
+const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 ```
-
-
 
 :::
