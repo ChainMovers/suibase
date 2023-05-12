@@ -1,8 +1,4 @@
 
-I wish we could give
-https://ai.suiscan.com/
-
-
 # Workdir Conventions
 
 Suibase define a few conventions to coordinate among SDKs, apps and user.
@@ -77,5 +73,3 @@ When attempting to do many things at once (multiple apps accessing multiple netw
 
 ::: warning
 When the active workdir of "asui" is changed, it is recommended to "cargo clean" or "rebuild" your dependent apps. This is to make sure that the new workdir context is re-applied to all tools/SDKs.
-
-
