@@ -166,3 +166,70 @@ const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 ```
 
 :::
+
+## How to verify a Keypair
+
+f you are given a keypair, you can verify whether or not the secret matches the given public key
+
+1. Verify with Secp256k1
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+const publicKey = "Ah0VIwfGtysO0EGLDnDNgOf1KVuNhvVyLT9SE/vSOU82";
+
+const keypair = Secp256k1Keypair.fromSecretKey(
+  new Uint8Array([
+    59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203,
+    174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
+  ])
+);
+
+console.log(keypair.getPublicKey().toBase64() == publicKey);
+// true
+```
+
+:::
+
+2. Verify with Ed25519
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+const publicKey = "Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI=";
+
+const keypair = Ed25519Keypair.fromSecretKey(
+  fromB64("mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=")
+);
+
+console.log(keypair.getPublicKey().toBase64() == publicKey);
+// true
+```
+
+:::
