@@ -40,13 +40,13 @@ Different actions that you make with Sui libraries require a keypair. A keypair 
 
 ::: code-tabs
 
-@tab:active CLI
+@tab CLI
 
 ```shell
 To be done. Add your contribution here.
 ```
 
-@tab Python
+@tab:active Python
 
 ```python
 from pysui.abstracts.client_keypair import SignatureScheme
@@ -94,13 +94,13 @@ If you already have your secret, you can get your Keypair and you can use it to 
 
 ::: code-tabs
 
-@tab:active CLI
+@tab CLI
 
 ```shell
 To be done. Add your contribution here.
 ```
 
-@tab Python
+@tab:active Python
 
 ```python
 # pysui automatically loads all keypairs from 'sui.keystore'
@@ -136,13 +136,13 @@ const keypair = Secp256k1Keypair.fromSecretKey(secretKey);
 
 ::: code-tabs
 
-@tab:active CLI
+@tab CLI
 
 ```shell
 To be done. Add your contribution here.
 ```
 
-@tab Python
+@tab:active Python
 
 ```python
 # pysui automatically loads all keypairs from 'sui.keystore'
@@ -169,12 +169,12 @@ const keypair = Ed25519Keypair.fromSecretKey(secretKey);
 
 ## How to verify a Keypair
 
-f you are given a keypair, you can verify whether or not the secret matches the given public key
+If you are given a keypair, you can verify whether or not the secret matches the given public key
 
 1. Verify with Secp256k1
 ::: code-tabs
 
-@tab:active CLI
+@tab CLI
 
 ```shell
 To be done. Add your contribution here.
@@ -186,7 +186,7 @@ To be done. Add your contribution here.
 To be done. Add your contribution here.
 ```
 
-@tab TypeScript
+@tab:active TypeScript
 
 ```ts
 const publicKey = "Ah0VIwfGtysO0EGLDnDNgOf1KVuNhvVyLT9SE/vSOU82";
@@ -204,10 +204,10 @@ console.log(keypair.getPublicKey().toBase64() == publicKey);
 
 :::
 
-2. Verify with Ed25519
+1. Verify with Ed25519
 ::: code-tabs
 
-@tab:active CLI
+@tab CLI
 
 ```shell
 To be done. Add your contribution here.
@@ -219,7 +219,7 @@ To be done. Add your contribution here.
 To be done. Add your contribution here.
 ```
 
-@tab TypeScript
+@tab:active TypeScript
 
 ```ts
 const publicKey = "Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI=";
