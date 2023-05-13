@@ -14,7 +14,7 @@ export default hopeTheme({
 
   logo: "/logo.png",
 
-  repo: "sui-base/suibase",
+  repo: "chainmovers/suibase",
 
   contributors: false,
   editLink: false,
@@ -35,7 +35,7 @@ export default hopeTheme({
       sidebar: enSidebar,
 
       footer:
-        '<a href="https://github.com/sui-base/suibase">Suibase on Github</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://discord.com/invite/Erb6SwsVbH">Suibase on Discord</a>',
+        '<a href="https://github.com/chainmovers/suibase">Suibase on Github</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://discord.com/invite/Erb6SwsVbH">Suibase on Discord</a>',
 
       copyright: "Apache 2.0 Open-Source License",
 

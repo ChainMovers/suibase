@@ -8,7 +8,7 @@ editLink: true
 
 Anyone with a Github account can participate.
 
-The cookbook is built from markdown files (.md) and served directly from [github](https://github.com/sui-base/suibase/tree/main/docs/website).
+The cookbook is built from markdown files (.md) and served directly from [github](https://github.com/chainmovers/suibase/tree/main/docs/website).
 
 ## Editing on Github (for easy/quick changes)
 

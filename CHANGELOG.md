@@ -18,7 +18,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 ### Changed
-
+- Git *organization* name changed from sui-base to ChainMovers. May affect some URL and local repositories (e.g github.com/*chainmovers*/suibase.git instead of github.com/*sui-base*/suibase.git )
 - Bumped pysui version
 - Prefix each cookbook code subject with Facts section
 

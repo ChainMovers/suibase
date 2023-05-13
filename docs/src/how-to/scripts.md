@@ -51,7 +51,7 @@ The number of ".." may need to be adjusted depending on where your Cargo.toml is
 
 If you always target the same network you can replace the "active" word with a specific workdir (e.g. localnet/devnet/testnet/mainnet).
 
-Demo Example: [Cargo.toml](https://github.com/sui-base/suibase/blob/main/rust/demo-app/Cargo.toml)
+Demo Example: [Cargo.toml](https://github.com/chainmovers/suibase/blob/main/rust/demo-app/Cargo.toml)
 
 ## What does "active" mean?
 A single workdir is designated as active and allows multiple tools/scripts to run in the same context and target the same network.

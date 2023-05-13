@@ -2,7 +2,7 @@
 
 Changing the remote github repo, branch, RPC ports etc... are done using the suibase.yaml found in each workdir ( Example: ~/suibase/workdirs/localnet/suibase.yaml )
 
-We will cover here only a few common use case. See this [suibase.yaml](https://github.com/sui-base/suibase/blob/main/scripts/defaults/localnet/suibase.yaml) for the complete parameters list.
+We will cover here only a few common use case. See this [suibase.yaml](https://github.com/chainmovers/suibase/blob/main/scripts/defaults/localnet/suibase.yaml) for the complete parameters list.
 
 ### Increase localnet initial funding
 Add ```initial_fund_per_address: 9999999999999999999``` to the file then type ```localnet regen```.

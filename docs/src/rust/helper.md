@@ -2,7 +2,7 @@
 title: Rust Suibase Helper API
 ---
 
-See the [crates documentation](https://sui-base.github.io/suibase-api-docs)
+See the [crates documentation](https://chainmovers.github.io/suibase-api-docs)
 
 To use the helper add the following to your Cargo.toml:
 

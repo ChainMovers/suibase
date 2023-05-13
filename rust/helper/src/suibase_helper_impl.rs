@@ -73,7 +73,7 @@ impl SuibaseHelperImpl {
     // Context: Selected Workdir by this API.
     pub fn keystore_pathname(&mut self) -> Result<String, Error> {
         // TODO Implement this better with suibase.yaml and/or ENV variables.
-        //      See https://github.com/sui-base/suibase/issues/6
+        //      See https://github.com/chainmovers/suibase/issues/6
         match &self.workdir {
             Some(wd) => Ok(wd.keystore_pathname(&mut self.root)?),
             None => Err(Error::WorkdirNotSelected),

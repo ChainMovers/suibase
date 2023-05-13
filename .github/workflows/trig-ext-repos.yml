@@ -33,6 +33,6 @@ jobs:
           API_TOKEN_GITHUB: ${{ secrets.SUIBASE_API_DOC_TOKEN }}
         with:
           source_file: "CHANGELOG.md"
-          destination_repo: "sui-base/suibase-api-docs"
+          destination_repo: "chainmovers/suibase-api-docs"
           user_email: "4542410+mario4tier@users.noreply.github.com"
           user_name: "Mario Fortier"

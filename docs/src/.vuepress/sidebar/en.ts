@@ -38,10 +38,6 @@ export const enSidebar = sidebar({
           link: "helpers.md",
         },
         {
-          text: "Workdir Config",
-          link: "how-to/configure-suibase-yaml.md",
-        },
-        {
           text: "Rust",
           collapsible: true,
           prefix: "rust/",
@@ -66,6 +62,10 @@ export const enSidebar = sidebar({
               link: "demos/README.md",
             },
           ],
+        },
+        {
+          text: "Workdir Config",
+          link: "how-to/configure-suibase-yaml.md",
         },
         {
           text: "Workdir Conventions",
