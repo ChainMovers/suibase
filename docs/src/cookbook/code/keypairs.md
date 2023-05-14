@@ -297,3 +297,62 @@ while (!keypair.getPublicKey().toSuiAddress().startsWith("0xsui")) {
 ```
 
 :::
+
+## How to generate a mnemonic phrase
+
+If you're creating a wallet, you will need to generate a mnemonic phrase so that the user can save it as a backup.
+
+::: code-tabs
+
+@tab CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab:active Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+import * as bip39 from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english';
+
+const mnemonic = bip39.generateMnemonic(wordlist);
+```
+
+:::
+
+## How to restore a Keypair from a mnemonic phrase
+
+Some virtual wallets use mnemonics to represent their secret keys. You can convert the mnemonic to Keypairs for local testing.
+
+1. BIP-39
+
+::: code-tabs
+
+@tab CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab:active Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+import { Ed25519Keypair } from '@mysten/sui.js';
+
+const keypair = Ed25519Keypair.deriveKeypair(mnemonic, "m/44'/784'/0'/0'/0'");
+```
+
+:::
