@@ -204,7 +204,7 @@ console.log(keypair.getPublicKey().toBase64() == publicKey);
 
 :::
 
-1. Verify with Ed25519
+2. Verify with Ed25519
 ::: code-tabs
 
 @tab CLI
@@ -230,6 +230,70 @@ const keypair = Ed25519Keypair.fromSecretKey(
 
 console.log(keypair.getPublicKey().toBase64() == publicKey);
 // true
+```
+
+:::
+
+## How to generate a vanity address
+
+Vanity publickeys, or custom addresses are keys that have start with specific characters.
+
+Note: The more characters in your vanity address, the longer it will take.
+
+1. Generate vanity address using Secp256k1
+
+::: code-tabs
+
+@tab CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab:active Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+let keypair = new Secp256k1Keypair();
+
+while (!keypair.getPublicKey().toSuiAddress().startsWith("0xsui")) {
+    keypair = new Secp256k1Keypair();
+    console.log(keypair.getPublicKey().toSuiAddress());
+  }
+```
+
+:::
+
+2. Generate vanity address using Ed25519
+
+::: code-tabs
+
+@tab CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab:active Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TypeScript
+
+```ts
+let keypair = new Ed25519Keypair();
+
+while (!keypair.getPublicKey().toSuiAddress().startsWith("0xsui")) {
+    keypair = new Ed25519Keypair();
+    console.log(keypair.getPublicKey().toSuiAddress());
+  }
 ```
 
 :::
