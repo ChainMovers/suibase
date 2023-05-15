@@ -75,6 +75,8 @@ print(f"secp256r1 Address: {r1_address.address} phrase: {r1_mnemonics}")
 @tab TypeScript
 
 ```ts
+import { Ed25519Keypair, Secp256k1Keypair } from '@mysten/sui.js';
+
 // Generate Ed25519 keypair
 const keypair_ed25519 = new Ed25519Keypair();
 
@@ -120,6 +122,8 @@ kp_ed25519 = SuiKeyPairED25519.from_bytes(bytearray(_ED25519_SECRET_KEYBYTES))
 @tab TypeScript
 
 ```ts
+import { Secp256k1Keypair } from '@mysten/sui.js';
+
 const SECP256K1_SECRET_KEY = [
   59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203,
   174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
@@ -157,6 +161,9 @@ kp_ed25519 = keypair_from_keystring(_ED25519_SECRET_KEYSTRING)
 @tab TypeScript
 
 ```ts
+import { fromB64 } from '@mysten/bcs';
+import { Ed25519Keypair } from '@mysten/sui.js';
+
 const ED25519_SECRET_KEY = "mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=";
 
 const secretKey = fromB64(ED25519_SECRET_KEY);
@@ -188,6 +195,8 @@ To be done. Add your contribution here.
 @tab:active TypeScript
 
 ```ts
+import { Secp256k1Keypair } from '@mysten/sui.js';
+
 const publicKey = "Ah0VIwfGtysO0EGLDnDNgOf1KVuNhvVyLT9SE/vSOU82";
 
 const keypair = Secp256k1Keypair.fromSecretKey(
@@ -221,6 +230,9 @@ To be done. Add your contribution here.
 @tab:active TypeScript
 
 ```ts
+import { Ed25519Keypair } from '@mysten/sui.js';
+import { fromB64 } from '@mysten/bcs';
+
 const publicKey = "Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI=";
 
 const keypair = Ed25519Keypair.fromSecretKey(
