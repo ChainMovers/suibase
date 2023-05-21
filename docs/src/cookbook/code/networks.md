@@ -6,7 +6,7 @@ editLink: true
 
 ## Connecting to specific network environment
 
-When you are working on Sui development, you will need to connect to a specific Sui Full node on a Sui network. 
+When you are working on Sui development, you will need to connect to a specific Sui Full node on a Sui network.
 
 - mainnet https://fullnode.mainnet.sui.io:443/
 - devnet https://fullnode.devnet.sui.io:443/
@@ -23,7 +23,8 @@ To be done. Add your contribution here.
 @tab Python
 
 ```python
-To be done. Add your contribution here.
+# pysui uses the environment alias settings in client.yaml
+# Use CLI command sui client switch --env <ALIAS_NAME> to change network
 ```
 
 @tab:active TypeScript
@@ -31,15 +32,12 @@ To be done. Add your contribution here.
 ```ts
 import { JsonRpcProvider, Connection } from "@mysten/sui.js";
 
-
 const localnetConnection = new Connection({
-    fullnode: 'http://127.0.0.1:9000',
-    faucet: 'http://127.0.0.1:9123/gas', // optional
-  });
-
+  fullnode: "http://127.0.0.1:9000",
+  faucet: "http://127.0.0.1:9123/gas", // optional
+});
 
 const provider = new JsonRpcProvider(localnetConnection);
-
 ```
 
 :::
@@ -65,14 +63,14 @@ To be done. Add your contribution here.
 @tab:active TypeScript
 
 ```ts
-import { JsonRpcProvider, devnetConnection } from '@mysten/sui.js';
+import { JsonRpcProvider, devnetConnection } from "@mysten/sui.js";
 
 // connect to Devnet
 const provider = new JsonRpcProvider(devnetConnection);
 
 // get test Sui from the DevNet faucet server
 await provider.requestSuiFromFaucet(
-  '0x8bab471b0b2e69ac5051c58bbbf81159c4c9d42bf7a58d4f795ecfb12c968506',
+  "0x8bab471b0b2e69ac5051c58bbbf81159c4c9d42bf7a58d4f795ecfb12c968506"
 );
 ```
 
