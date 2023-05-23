@@ -175,7 +175,7 @@ faucet_command() {
     if [[ "$_FAUCET_ADDR" == *"0x"* ]]; then
       echo "Address: $_FAUCET_ADDR"
       local _FAUCET_GAS
-      _FAUCET_GAS=$("$SUI_BIN_DIR/sui" client --client.config "$WORKDIRS/$WORKDIR/faucet/client.yaml" gas | awk '{ sum += $3} END { print sum }')
+      _FAUCET_GAS=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$WORKDIRS/$WORKDIR/faucet/client.yaml" gas | awk '{ sum += $3} END { print sum }')
       # Display balance only if looking coherent.
       if ! [[ "$_FAUCET_GAS" =~ ^[^0-9]+$ ]]; then
         echo "Balance: $_FAUCET_GAS"

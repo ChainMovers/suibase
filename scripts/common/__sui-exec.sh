@@ -23,10 +23,10 @@ sui_exec() {
   # Identify the binary to execute
   if [ "$WORKDIR" = "cargobin" ]; then
     # Special case for cargobin workdir
-    SUI_BIN="$HOME/.cargo/bin/sui"
+    SUI_BIN="$SUI_BIN_ENV $HOME/.cargo/bin/sui"
   else
     # All other workdir use the binary from their repo.
-    SUI_BIN="$SUI_BIN_DIR/sui"
+    SUI_BIN="$SUI_BIN_ENV $SUI_BIN_DIR/sui"
   fi
 
   exit_if_sui_binary_not_ok;

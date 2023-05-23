@@ -46,6 +46,7 @@ CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
 FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 
 case $WORKDIR in
   localnet)
@@ -614,7 +615,7 @@ is_sui_binary_ok() {
   # Get the version, but in a way that would not exit on failure.
   cd_sui_log_dir;
   local _SUI_VERSION_ATTEMPT
-  _SUI_VERSION_ATTEMPT=$("$SUI_BIN_DIR/sui" --version)
+  _SUI_VERSION_ATTEMPT=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" --version)
   # TODO test here what would really happen on corrupted binary...
   if [ -z "$_SUI_VERSION_ATTEMPT" ]; then
     false; return
@@ -1124,7 +1125,7 @@ start_sui_process() {
       if $SUI_BASE_NET_MOCK; then
         CHECK_ALIVE="some output"
       else
-        CHECK_ALIVE=$("$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
+        CHECK_ALIVE=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
       fi
       if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
@@ -1169,11 +1170,11 @@ ensure_client_OK() {
   #if [ "$CFG_network_type" = "local" ]; then
     # Make sure localnet exists in sui envs (ignore errors because likely already exists)
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
-    "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc "$CFG_links_1_rpc" >& /dev/null
+    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc "$CFG_links_1_rpc" >& /dev/null
 
     # Make localnet the active envs (should already be done, just in case, do it again here).
     #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
-    "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" switch --env "$WORKDIR" >& /dev/null
+    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" switch --env "$WORKDIR" >& /dev/null
   #fi
 }
 export -f ensure_client_OK
@@ -1341,18 +1342,18 @@ add_test_addresses() {
 
   {
     for _ in {1..5}; do
-      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address ed25519;
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519;
       echo ============================; echo; echo;
-      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256k1;
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256k1;
       echo ============================; echo; echo;
-      $_SUI_BINARY client --client.config "$_CLIENT_FILE" new-address secp256r1;
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256r1;
       echo ============================; echo; echo;
     done
   } >> "$_WORDS_FILE";
 
   # Set highest address as active. Best-effort... no major issue if fail (I assume).
   local _HIGH_ADDR
-  _HIGH_ADDR=$($_SUI_BINARY client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
-   $_SUI_BINARY client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
+  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
+   $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
 }
 export -f add_test_addresses

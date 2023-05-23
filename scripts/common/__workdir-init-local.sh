@@ -85,7 +85,7 @@ create_faucet_keystore() {
   # client.yaml as template).
 
   # Create a sui.keystore with a single keypair
-  (cd "$_DEST_DIR" && $_SUI_BINARY keytool generate ed25519 >& /dev/null)
+  (cd "$_DEST_DIR" && $SUI_BIN_ENV "$_SUI_BINARY" keytool generate ed25519 >& /dev/null)
 
   _PUBKEY_PATHNAME=$(ls "$_DEST_DIR"/*.key)
   _PUBKEY=$(basename "$_PUBKEY_PATHNAME" | sed 's/.key//g')
@@ -107,12 +107,12 @@ create_faucet_keystore() {
   sed -i.bak -e "s+$_SRC_DIR+$_DEST_DIR+g" "$_DEST_DIR/client.yaml" && rm "$_DEST_DIR/client.yaml.bak"
 
   # Just set the active address (don't care about the rest).
-  $_SUI_BINARY client --client.config "$_DEST_DIR/client.yaml" switch --address "$_PUBKEY" >& /dev/null
+  $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_DEST_DIR/client.yaml" switch --address "$_PUBKEY" >& /dev/null
 
   # Verify that this client.yaml/sui.keystore has
   # that keypair as the active-address.
   local _CHECK_ACTIVE
-  _CHECK_ACTIVE=$($_SUI_BINARY client --client.config "$_DEST_DIR/client.yaml" active-address)
+  _CHECK_ACTIVE=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_DEST_DIR/client.yaml" active-address)
 
   if [ "$_CHECK_ACTIVE" != "$_PUBKEY" ]; then
     setup_error "Could not set active the faucet key [$_PUBKEY], got [$_CHECK_ACTIVE]"
@@ -140,15 +140,15 @@ workdir_init_local() {
 
       # Generate the templates to be used for building our own config.yaml
       mkdir -p "$_GENDATA_DIR/template"
-      "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" >& /dev/null
-      "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" --write-config "$_GENDATA_DIR/template/config.yaml" >& /dev/null
+      $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" >& /dev/null
+      $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" --write-config "$_GENDATA_DIR/template/config.yaml" >& /dev/null
       # Get everything before the accounts section.
       sed '/accounts:/q' "$_GENDATA_DIR/template/config.yaml" > "$_GENDATA_DIR/config.yaml.template_head"
       # Check in case there is trailing stuff after the accounts section (for now it is empty).
       sed -n '/accounts:/,$p' "$_GENDATA_DIR/template/config.yaml" | sed '/^accounts/d' | sed -n '/^[a-z]/,$p' > "$_GENDATA_DIR/config.yaml.template_tail"
       rm -rf "$_GENDATA_DIR/template"
       # Find which static genesis_data version should be used.
-      if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.31"; then
+      if version_greater_equal "$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" -V)" "sui 0.31"; then
         _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.31"
         # Use the templates to build the config.yaml.
         {
@@ -157,7 +157,7 @@ workdir_init_local() {
           cat "$_GENDATA_DIR/config.yaml.template_tail"
         } > "$_GENDATA_DIR/config.yaml"
       else
-        if version_greater_equal "$("$SUI_BIN_DIR/sui" -V)" "sui 0.28"; then
+        if version_greater_equal "$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" -V)" "sui 0.28"; then
           _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.28"
         else
           _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
@@ -179,7 +179,7 @@ workdir_init_local() {
       if [ ! -d "$_GENDATA_DIR" ]; then
         mkdir -p "$_GENDATA_DIR"
         # Generate the genesis data for the very first time.
-        "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >& /dev/null
+        $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >& /dev/null
         clear_keystore "$_GENDATA_DIR"
         add_test_addresses "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
         create_faucet_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR" "$_GENDATA_DIR/faucet"
@@ -198,7 +198,7 @@ workdir_init_local() {
         echo "]" >> "$_GENDATA_DIR/sui.keystore"
 
         # Generate the config.yaml that will allow a deterministic setup.
-        "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml" >& /dev/null
+        $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml" >& /dev/null
         echo "New client addresses generated (new client.yaml and sui.keystore)"
 
         # Save this temporary keystore for potentially debugging.
@@ -243,9 +243,9 @@ workdir_init_local() {
 
     # "regen" from the genesis config.yaml
     if [ "$DEBUG_RUN" = true ]; then
-      "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT"
+      $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT"
     else
-      "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT" >& /dev/null
+      $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT" >& /dev/null
     fi
 
     # Now is a safe time to add more files to $_GENDATA_DIR
@@ -262,7 +262,7 @@ workdir_init_local() {
     # When need to start in foreground to debug.
     if [ "$DEBUG_RUN" = true ]; then
       echo "Starting localnet process (foreground for debug)"
-      "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG"
+      $SUI_BIN_ENV "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG"
       exit
     fi
 }
