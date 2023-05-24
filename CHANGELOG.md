@@ -12,9 +12,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Object cookbook
 - MultiSig cookbook entries for Python
 
 ### Fixed
+
 - #44: Fix log display issue related to Sui client v1.2.0
 - Rust demo-app: Fix by increasing gas amount, plus filtering on package-id.
 
