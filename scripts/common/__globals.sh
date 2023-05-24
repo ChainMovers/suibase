@@ -904,7 +904,8 @@ create_state_as_needed() {
   fi
 
   if [ "$WORKDIR_PARAM" != "active" ]; then
-    if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/name" ]; then
+    if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/name" ] ||
+       [ "$(get_key_value "name")" != "$WORKDIR_PARAM" ]; then
       set_key_value "name" "$WORKDIR_PARAM"
     fi
   fi
