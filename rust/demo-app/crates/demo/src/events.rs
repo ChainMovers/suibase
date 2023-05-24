@@ -21,6 +21,9 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
     let rpc_url = suibase.rpc_url()?;
     let ws_url = suibase.ws_url()?;
 
+    // Get information from the last publication.
+    let package_id = suibase.package_object_id("demo")?;
+
     println!("Using suibase workdir [{}]", suibase.workdir()?);
     println!("Connecting to Sui network at [{}]", ws_url);
 
@@ -31,11 +34,16 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
 
     let mut subscribe_all = sui
         .event_api()
-        .subscribe_event(EventFilter::All(vec![]))
+        .subscribe_event(EventFilter::Package(package_id))
         .await?;
 
-    let ready_message = "subscribe_event() success. Listening for all events...";
-    println!("{}", ready_message.green());
+    let ready_message =
+        "subscribe_event() success. Listening for events from last published package:";
+    println!(
+        "{}\n   {}",
+        ready_message.green(),
+        package_id.to_string().green()
+    );
 
     loop {
         let nxt = subscribe_all.next().await;

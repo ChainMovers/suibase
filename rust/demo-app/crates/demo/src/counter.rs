@@ -14,8 +14,8 @@ use sui_sdk::SuiClientBuilder;
 use suibase::Helper;
 
 use sui_sdk::json::SuiJsonValue;
-use sui_sdk::types::messages::Transaction;
-use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::Transaction;
 
 use anyhow::ensure;
 
@@ -34,7 +34,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // Initialize the suibase helper.
     let suibase = Helper::new();
     suibase.select_workdir("active")?;
-    println!("Using suibase workdir [{:?}]", suibase.workdir());
+    println!("Using suibase workdir [{}]", suibase.workdir()?);
 
     // Get information from the last publication.
     let package_id = suibase.package_object_id("demo")?;
@@ -79,7 +79,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
             vec![],
             call_args,
             None, // The node will pick a gas object belong to the signer if not provided.
-            20000,
+            2000000,
         )
         .await?;
 

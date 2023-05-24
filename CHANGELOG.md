@@ -1,9 +1,6 @@
 # Changelog
 
 Do '~/suibase/update' to download and update suibase itself to latest.
-
-('~/sui-base/update' for v0.1.2 and less)
-
 Do '<workdir_name> update' when you instead want to update only a local Sui repo to the latest from Mysten Labs. Example: 'localnet update'
 
 Only notable changes are documented here. See github commits for all changes.
@@ -18,6 +15,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - MultiSig cookbook entries for Python
 
 ### Fixed
+- #44: Fix log display issue related to Sui client v1.2.0
+- Rust demo-app: Fix by increasing gas amount, plus filtering on package-id.
 
 ### Changed
 
