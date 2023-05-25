@@ -40,8 +40,6 @@ def find_files() -> tuple[list]:
     return e_contributors_files, t_contributors_files
 
 
-
-
 def json_source(raw_source: str) -> dict:
     """Load raw source file of contributor file"""
 
@@ -89,9 +87,6 @@ def get_raw_contributors(json_source: dict) -> list:
 
     # Return raw contributors from JSON source
     return raw_contributors
-
-
-
 
 
 def remove_duplicated_contributors(contributors: list) -> list[dict]:
@@ -155,11 +150,6 @@ def inject(f, composed_source: str) -> bool:
     return True
 
 
-
-
-
-
-
 if __name__ == "__main__":
 
     # Get corresponding file names
@@ -200,16 +190,3 @@ if __name__ == "__main__":
 
                 # Peform the injection
                 inject(f, t_compose_source(dumped))
-
-
-
-
-
-
-
-
-
-
-
-
-
