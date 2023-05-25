@@ -270,6 +270,14 @@ export -f get_key_value
 # shellcheck source=SCRIPTDIR/__parse-yaml.sh
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
 update_suibase_yaml() {
+  local _WORKDIR="$WORKDIR"
+
+  if [ ! -f "$SCRIPTS_DIR/defaults/$_WORKDIR" ]; then
+     # If the specified workdir name does not exists, fallback
+     # to localnet defaults (least damageable possible).
+    _WORKDIR="localnet"
+  fi
+
   # Load defaults twice.
   #
   # First with CFG_ prefix, the second with CFGDEFAULT_
@@ -277,14 +285,14 @@ update_suibase_yaml() {
   # This allow to detect if there was an override or not (e.g. to re-assure
   # the user in a message that an override was applied).
   #
-  YAML_FILE="$SCRIPTS_DIR/defaults/$WORKDIR/suibase.yaml"
+  YAML_FILE="$SCRIPTS_DIR/defaults/$_WORKDIR/suibase.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
     eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
   fi
 
   # Load overrides from workdir with CFG_ prefix.
-  YAML_FILE="$WORKDIRS/$WORKDIR/suibase.yaml"
+  YAML_FILE="$WORKDIRS/$_WORKDIR/suibase.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
   fi

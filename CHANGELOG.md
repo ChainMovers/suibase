@@ -11,13 +11,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unpublished]
 
 ### Added
-
+- Python Suibase Helper. Do ~/suibase/pip-install in venv to install ( more info: https://suibase.io/helpers )
 - Object cookbook
 - MultiSig cookbook entries for Python
 
 ### Fixed
 
-- #44: Fix log display issue related to Sui client v1.2.0
+- Scripts: (#44) Fix log display issue related to Sui client v1.2.0
 - Rust demo-app: Fix by increasing gas amount, plus filtering on package-id.
 
 ### Changed

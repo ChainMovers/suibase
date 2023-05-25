@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Install the Suibase Helper into the current python virtual environment.
+#
+# You can re-run this script to update the helper.
+#
+# For now clean re-installation is done on every call (more efficient
+# versioning might be added later).
+
+
+# The version UniFFI bindgen used in Python and Rust must be the same.
+# This script make sure that both match the version specified here.
+UNIFFI_BINDGEN_VERSION="0.23"
+
+# The minimum version of maturin supported by this script.
+MINIMUM_MATURIN_VERSION="1.0.0"
+
+SUIBASE_DIR="$HOME/suibase"
+if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
+   ("$HOME/sui-base/repair")
+fi
+
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="none"
+# shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
+function main () {
+    # Verify pre-requisite
+    which pip &> /dev/null || setup_error "Need to install pip. See https://pip.pypa.io/en/stable/installing/ for more info.";
+
+    cd "$SUIBASE_DIR" || { echo "suibase not found. Please install it first."; exit 1; }
+
+    # Detect if in virtual environment.
+    if [[ -z "$VIRTUAL_ENV" ]]; then
+        setup_error "You are not in a python virtual environment. Please activate one first."
+    fi
+
+    # Install/update maturin as needed.
+    local _MATURIN_FOUND
+    _MATURIN_FOUND=$(pip list | grep maturin)
+    if [ -z "$_MATURIN_FOUND" ]; then
+        pip --require-virtualenv install maturin || setup_error "Failed to install maturin."
+    else
+        pip --require-virtualenv install --upgrade maturin || setup_error "Failed to upgrade maturin."
+    fi
+
+    pip --require-virtualenv install maturin[patchelf]
+
+    # Install Uniffi-bindgen (exact version)
+    pip --require-virtualenv install uniffi-bindgen=="$UNIFFI_BINDGEN_VERSION" || setup_error "Failed to install uniffi-bindgen $UNIFFI_BINDGEN_VERSION"
+
+    # Verify installation of maturin.
+    _MATURIN_FOUND=$(pip list | grep maturin)
+    if [ -z "$_MATURIN_FOUND" ]; then
+        setup_error "Failed to install maturin (not found in by 'pip list')."
+    fi
+
+    # Verify minimum maturin version requirements.
+    local _MATURIN_VERSION
+    _MATURIN_VERSION=$(maturin --version)
+    if version_less_than "$_MATURIN_VERSION" "maturin $MINIMUM_MATURIN_VERSION"; then
+        setup_error "Need to upgrade maturin to at least $MINIMUM_MATURIN_VERSION"
+    fi
+
+    # Get into Suibase Helper Rust source directory.
+    local _BUILD_DIR
+    _BUILD_DIR="$HOME/suibase/rust/helper-uniffi"
+
+    if [ -d "$_BUILD_DIR" ]; then
+        cd "$_BUILD_DIR" || setup_error "Failed to change to $_BUILD_DIR. Permission error or disk error problem?"
+    else
+        setup_error "Failed to find $_BUILD_DIR. Try ~/suibase/repair and ~/suibase/update to fix your installation."
+    fi
+
+    # Build and install the helper.
+    maturin develop
+}
+
+main "$@";
