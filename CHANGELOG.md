@@ -9,9 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unpublished]
+### Added
+
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.1.4] 2023-05-26
 
 ### Added
-- Python Suibase Helper. Do ~/suibase/pip-install in venv to install ( more info: https://suibase.io/helpers )
+
+- Rust/Python Suibase Helper ( more info: https://suibase.io/helpers )
 - Object cookbook
 - MultiSig cookbook entries for Python
 

@@ -58,6 +58,10 @@ export const enSidebar = sidebar({
           prefix: "python/",
           children: [
             {
+              text: "Helper API",
+              link: "helper.md",
+            },
+            {
               text: "Demos",
               link: "demos/README.md",
             },
