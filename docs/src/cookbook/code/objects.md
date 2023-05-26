@@ -175,3 +175,73 @@ else:
 ```
 
 :::
+
+## Object Fetch Options
+
+Sui RPC API allows you to specify options when fetching objects to determine what
+kind of information you want returned. The following key values are the _available_ options:
+
+```json
+{
+  "showType": true,
+  "showOwner": true,
+  "showPreviousTransaction": true,
+  "showDisplay": true,
+  "showContent": true,
+  "showBcs": true,
+  "showStorageRebate": true
+}
+```
+
+Using the above in your object fetch calls would return _all_ information about the object.
+However; you can choose individual flags individually or in combination.
+
+::: code-tabs
+
+@tab CLI
+
+```shell
+
+Not supported
+
+```
+
+@tab Python
+
+```python
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_config import SuiConfig
+from pysui.sui.sui_builders.get_builders import GetObject
+
+def get_object_with_options(client: SuiClient = None):
+    """Iterate through various options to display associated results."""
+    client = client if client else SuiClient(SuiConfig.default_config())
+    target = "0x002bd2d4aac5da6af372a842baf98590213a6bf4160eb0b46ec0cc3d626b42d3"
+    # Full list of options. Note that if no options are provided to GetObject
+    # or GetMultipleObjects, they default to all options being True
+    options: dict = {
+        "showType": True,
+        "showOwner": True,
+        "showPreviousTransaction": True,
+        "showDisplay": True,
+        "showContent": True,
+        "showBcs": True,
+        "showStorageRebate": True,
+    }
+
+    # Create a list of unique options
+    entries = [dict([x]) for x in options.items()]
+    # For each options, demonstrate the return content
+    for entry in entries:
+        print(f"Getting object with option {entry}")
+        print(handle_result(
+          client.execute(GetObject(object_id=target, options=entry))).to_json(indent=2))
+```
+
+@tab TypeScript
+
+```ts
+
+```
+
+:::
