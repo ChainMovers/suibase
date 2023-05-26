@@ -7,7 +7,7 @@
 
 USER_CWD=$(pwd -P)
 
-SUI_BASE_VERSION="0.1.3"
+SUI_BASE_VERSION="0.1.4"
 
 # Suibase does not work with version below these.
 MIN_SUI_VERSION="sui 0.27.0"
