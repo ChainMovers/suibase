@@ -1,10 +1,11 @@
-import * as path from "path";
+//import * as path from "path";
 import { defineUserConfig } from "vuepress";
 import theme from "./theme.js";
 //import { searchProPlugin } from "vuepress-plugin-search-pro";
 import { docsearchPlugin } from "@vuepress/plugin-docsearch";
 //import { registerComponentsPlugin } from "@vuepress/plugin-register-components";
 //import { redirectPlugin } from "vuepress-plugin-redirect";
+import { googleAnalyticsPlugin } from "@vuepress/plugin-google-analytics";
 
 export default defineUserConfig({
   base: "/",
@@ -31,6 +32,9 @@ export default defineUserConfig({
       appId: "VN5D5IVTPC",
       apiKey: "7c6732e9f43a129ee2396d1c459db319",
       indexName: "sui-base",
+    }),
+    googleAnalyticsPlugin({
+      id: "G-JVE9L5ZDYZ",
     }),
   ],
 
