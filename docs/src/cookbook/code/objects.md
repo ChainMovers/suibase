@@ -112,7 +112,23 @@ else:
 @tab TypeScript
 
 ```ts
+import { JsonRpcProvider, Connection } from "@mysten/sui.js";
 
+// Set a provider
+const connection = new Connection({
+    fullnode: "http://127.0.0.1:9000",
+});
+
+// Connect to provider
+const provider = new JsonRpcProvider(connection);
+
+// Get owned objects by an address
+const ownedObjects = await provider.getOwnedObjects({
+  owner: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+});
+
+// Print owned objects
+console.log(ownedObjects.data);
 ```
 
 :::
