@@ -61,7 +61,7 @@ jobs:
         run: |-
           cd docs
           pnpm run docs:build
-          python post_processing_html.py
+
           > src/.vuepress/dist/.nojekyll
 
       - name: Deploy Docs
