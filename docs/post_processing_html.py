@@ -1,7 +1,17 @@
-"""Post-processing HTML script for rendering non-duplicated contributors
+"""
+Post-processing HTML script for rendering non-duplicated contributors
+
 cd docs
 pnpm docs:build
 python3 post_processing_html.py
+
+When doing "pnpm docs:build" it only generates the static website. 
+Vuepress does not seem to support a "just serve the content without rebuilding". 
+So it seems we have to use a static web server. ( See : https://medium.com/swlh/need-a-local-static-server-here-are-several-options-bbbe77e59a11)
+
+To start the web server locally: 
+cd ~/suibase/docs/src/.vuepress/dist 
+npx http-server 
 """
 import json
 import os
@@ -21,8 +31,8 @@ os.chdir("src/.vuepress/dist/assets")
 def find_files() -> tuple[list]:
     """Return js files that contain 'contributors'"""
 
-    # Run grep -ril 'contributors' inside os.chdir()
-    command: list = ["grep", "-ril", "contributors"]
+    # Run grep -ril 'const.*JSON.*git.*contributors' inside os.chdir()
+    command: list = ["grep", "-ril", "const.*JSON.*git.*contributors"]
     output: str = run(command, capture_output=True).stdout.decode("utf-8")
 
     for out in output.splitlines():
@@ -106,7 +116,7 @@ def sort_contributors_by_commits(contributors: list) -> list:
     sorted_contributors: list = sorted(contributors, key=lambda d: d["commits"])
 
     # Return sorted contributors by number of commits
-    return sorted_contributors
+    return sorted_contributors[::-1]
 
 
 def append_contributors(json_source: dict, contributors: list) -> str:
@@ -115,7 +125,7 @@ def append_contributors(json_source: dict, contributors: list) -> str:
     # Append processed contributors to actual JSON object
     json_source["git"]["contributors"] = contributors
 
-    # Return
+    # Return dumped JSON object
     return json.dumps(json_source)
 
 
@@ -167,7 +177,7 @@ if __name__ == "__main__":
 
             # Avoid extra processing by checking if there are more than 1 contributor
             if len(raw_contributors) > 1:
-                contributors = remove_duplicated_contributors(raw_contributors)
+                contributors = sort_contributors_by_commits(remove_duplicated_contributors(raw_contributors))
                 dumped = append_contributors(js_source, contributors)
 
                 # Peform the injection
@@ -185,7 +195,7 @@ if __name__ == "__main__":
 
             # Avoid extra processing by checking if there are more than 1 contributor
             if len(raw_contributors) > 1:
-                contributors = remove_duplicated_contributors(raw_contributors)
+                contributors = sort_contributors_by_commits(remove_duplicated_contributors(raw_contributors))
                 dumped = append_contributors(js_source, contributors)
 
                 # Peform the injection
