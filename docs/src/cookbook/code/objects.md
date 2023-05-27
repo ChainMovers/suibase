@@ -204,6 +204,26 @@ else:
 @tab TypeScript
 
 ```ts
+import { JsonRpcProvider, Connection } from "@mysten/sui.js";
+
+
+// Set a provider
+const connection = new Connection({
+    fullnode: "http://127.0.0.1:9000",
+});
+
+// Connect to provider
+const provider = new JsonRpcProvider();
+
+// Fetch multiple object details in one request
+const txns = await provider.multiGetObjects({
+  ids: [
+    '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+    '0x9ad3de788483877fe348aef7f6ba3e52b9cfee5f52de0694d36b16a6b50c1429',
+  ],
+  // only fetch the object type
+  options: { showType: true },
+});
 
 ```
 
