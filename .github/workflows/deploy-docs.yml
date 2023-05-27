@@ -32,6 +32,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
@@ -56,6 +61,7 @@ jobs:
         run: |-
           cd docs
           pnpm run docs:build
+          python post_processing_html.py
           > src/.vuepress/dist/.nojekyll
 
       - name: Deploy Docs
