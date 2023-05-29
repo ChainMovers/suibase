@@ -81,3 +81,64 @@ console.log({ result });
 ```
 
 :::
+
+## How to transfer Sui
+
+::: code-tabs
+
+@tab:active CLI
+
+```CLI
+To be done. Add your contribution here.
+```
+
+@tab Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab TS
+
+```ts
+import {
+    Ed25519Keypair,
+    Connection,
+    JsonRpcProvider,
+    RawSigner,
+    TransactionBlock,
+  } from "@mysten/sui.js";
+
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+
+// Set a provider
+const connection = new Connection({
+    fullnode: "http://127.0.0.1:9000",
+  });
+
+// Connect to provider
+const provider = new JsonRpcProvider(connection);
+
+// Instantiate RawSigner object
+const signer = new RawSigner(keypair, provider);
+
+// Instantiate TransactionBlock object
+const tx = new TransactionBlock();
+
+// Set 1 Sui to be sent
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(1_000_000_000)]);
+
+tx.transferObjects([coin], tx.pure("0x8bab471b0b2e69ac5051c58bbbf81159c4c9d42bf7a58d4f795ecfb12c968506"));
+
+// Perform SUI transfer
+const result = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+});
+
+// Print output
+console.log({ result });
+
+```
+
+:::
