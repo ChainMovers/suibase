@@ -41,7 +41,7 @@ start_sui_faucet_process() {
       if $SUI_BASE_NET_MOCK; then
         CHECK_ALIVE="imagine some JSON here"
       else
-        CHECK_ALIVE=$(curl -s --location \
+        CHECK_ALIVE=$(curl -x "" -s --location \
                 --request POST "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/gas" \
                 --header 'Content-Type: application/json' --data-raw '{Bad Request}' | grep "JSON")
       fi
@@ -206,7 +206,7 @@ faucet_command() {
   for _addr in "${_ALL_ADDRS[@]}"; do
     local _RESP
 
-    _RESP=$(curl -s --location \
+    _RESP=$(curl -x "" -s --location \
     --request POST "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/gas" \
     --header "Content-Type: application/json" \
     --data-raw "{ \"FixedAmountRequest\": {\"recipient\": \"$_addr\"}}")
