@@ -170,7 +170,7 @@ faucet_command() {
     cd_sui_log_dir;
     echo "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}"
     local _FAUCET_ADDR
-    _FAUCET_ADDR=$("$SUI_BIN_DIR/sui" client --client.config "$WORKDIRS/$WORKDIR/faucet/client.yaml" active-address)
+    _FAUCET_ADDR=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$WORKDIRS/$WORKDIR/faucet/client.yaml" active-address)
     # Display address only if looking coherent.
     if [[ "$_FAUCET_ADDR" == *"0x"* ]]; then
       echo "Address: $_FAUCET_ADDR"
