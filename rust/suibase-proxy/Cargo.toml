@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/suibase-proxy",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+
+[workspace.dependencies]
+sui-sdk = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
+sui-json-rpc-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
+sui-keys = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
+sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+sui-adapter = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-adapter/" }
+shared-crypto = { path = "../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
+
+# Comment these "git" dependencies if using the above "path" dependencies.
+#sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
+#sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-json-rpc-types" }
+#sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-keys" }
+#sui-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-types" }
+#sui-adapter = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-adapter" }
+
+futures = "0.3.25"
+
+tokio = { version = "1.28.1", features = ["full"] }
+tokio-graceful-shutdown = "0.12.1"
+
+anyhow = { version = "1.0.65", features = ["backtrace"] }
+thiserror = "1.0"
+
+# No upgrade to v4 until color are back.
+clap = { version = "3.2.22", features = [
+    "derive",
+] }
+
+colored = { version = "2.0.0" }
