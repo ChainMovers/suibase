@@ -17,7 +17,14 @@ When you are working on Sui development, you will need to connect to a specific 
 @tab CLI
 
 ```shell
-To be done. Add your contribution here.
+# Display network environments 
+sui client envs
+
+# Switch to a network environment
+sui client switch --env <ENVIRONMENT>
+
+# Add a network environment
+sui client new-env --alias <ENVIRONMENT> --rpc <RPC-URL>
 ```
 
 @tab Python
