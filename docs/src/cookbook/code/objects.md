@@ -17,7 +17,7 @@ editLink: true
 - In addition to field values, queried objects also reveal other attributes such as **owner**
 - Objects ownership may be one of: _AddressOwner_, _ObjectOwner_, _Shared_ or _Immutable_
 - With the exception of objects with _Immutable_ ownership, objects can be modified by the module that created them
-- Manipulating the data returned from querying an object has no effect on the chain
+- Manipulating the data returned from querying an object has no effect on the chain objects data
 
 :::
 
@@ -65,10 +65,9 @@ else:
 ```ts
 import { JsonRpcProvider, Connection } from "@mysten/sui.js";
 
-
 // Set a provider
 const connection = new Connection({
-    fullnode: "http://127.0.0.1:9000",
+  fullnode: "http://127.0.0.1:9000",
 });
 
 // Connect to provider
@@ -76,11 +75,10 @@ const provider = new JsonRpcProvider();
 
 // Fetch object details
 const txn = await provider.getObject({
-  id: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+  id: "0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231",
   // fetch the object content field
   options: { showContent: true },
 });
-
 ```
 
 :::
@@ -133,7 +131,7 @@ import { JsonRpcProvider, Connection } from "@mysten/sui.js";
 
 // Set a provider
 const connection = new Connection({
-    fullnode: "http://127.0.0.1:9000",
+  fullnode: "http://127.0.0.1:9000",
 });
 
 // Connect to provider
@@ -141,7 +139,7 @@ const provider = new JsonRpcProvider(connection);
 
 // Get owned objects by an address
 const ownedObjects = await provider.getOwnedObjects({
-  owner: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
+  owner: "0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231",
 });
 
 // Print owned objects
@@ -206,10 +204,9 @@ else:
 ```ts
 import { JsonRpcProvider, Connection } from "@mysten/sui.js";
 
-
 // Set a provider
 const connection = new Connection({
-    fullnode: "http://127.0.0.1:9000",
+  fullnode: "http://127.0.0.1:9000",
 });
 
 // Connect to provider
@@ -218,13 +215,12 @@ const provider = new JsonRpcProvider();
 // Fetch multiple object details in one request
 const txns = await provider.multiGetObjects({
   ids: [
-    '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
-    '0x9ad3de788483877fe348aef7f6ba3e52b9cfee5f52de0694d36b16a6b50c1429',
+    "0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231",
+    "0x9ad3de788483877fe348aef7f6ba3e52b9cfee5f52de0694d36b16a6b50c1429",
   ],
   // only fetch the object type
   options: { showType: true },
 });
-
 ```
 
 :::
