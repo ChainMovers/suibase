@@ -72,7 +72,14 @@ Different actions that you make with Sui libraries require a keypair. A keypair 
 @tab CLI
 
 ```shell
-To be done. Add your contribution here.
+# Create ED25519 keypair scheme
+sui client new-address ed25519
+
+# Create SECP256K1 keypair scheme
+sui client new-address secp256k1
+
+# Create SECP256R1 keypair scheme
+sui client new-address secp256r1
 ```
 
 @tab:active Python
@@ -110,7 +117,7 @@ import { Ed25519Keypair, Secp256k1Keypair } from "@mysten/sui.js";
 // Generate Ed25519 keypair
 const keypair_ed25519 = new Ed25519Keypair();
 
-// Generate Seco256k1 keypair
+// Generate Secp256k1 keypair
 const keypair_secp256k1 = new Secp256k1Keypair();
 ```
 

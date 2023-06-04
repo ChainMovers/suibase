@@ -22,8 +22,9 @@ Suggested subjects:
 
 @tab:active CLI
 
-```CLI
-To be done. Add your contribution here.
+```shell
+# Transfer an object
+sui client transfer --to <ADDRESS> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 ```
 
 @tab Python
@@ -116,8 +117,12 @@ console.log({ result });
 
 @tab:active CLI
 
-```CLI
-To be done. Add your contribution here.
+```shell
+# Transfer SUI, and pay gas with the same SUI coin object. 
+# If amount is specified, only the amount is transferred; 
+# otherwise the entire object is transferred
+
+sui client transfer-sui --to <ADDRESS> --sui-coin-object-id <SUI_COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
 ```
 
 @tab Python
@@ -203,8 +208,9 @@ console.log({ result });
 
 @tab:active CLI
 
-```CLI
-To be done. Add your contribution here.
+```shell
+# Merge two coin objects into one coin
+sui client merge-coin --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
 ```
 
 @tab Python
