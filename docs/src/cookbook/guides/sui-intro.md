@@ -1,16 +1,20 @@
 ---
-title: Sui Basic Concepts
+title: Sui *Must Read*
 order: 1
 contributors: true
 editLink: true
 ---
 
----
-This is an easy mini-project for first time contributor.
+Official Mysten Labs links to get you started.
 
-TODO Simple short sentence intro. Mostly "links to more info". Value is in the code snippets.
+### Sui Developer Portal
+https://sui.io/developers
 
-## Sui Official Links
-   - [https://sui.io](https://sui.io)
-   - [https://suifoundation.io](https://suifoundation.io)
-   - [https://mystenlabs.com](https://mystenlabs.com)
+### Useful Links
+- [References - docs.sui.io/reference ](https://docs.sui.io/reference)
+- [JSON-RPC - docs.sui.io/sui-jsonrpc ](https://docs.sui.io/sui-jsonrpc)
+- [Cheat Sheet - docs.sui.io/dev_cheat_sheet ](https://docs.sui.io/devnet/build/dev_cheat_sheet)
+- https://suiexplorer.com
+
+
+Check the [Links Section](../../links/README.md) for more.

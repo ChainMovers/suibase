@@ -11,9 +11,13 @@ External resources for Sui developers
 Either [edit it yourself]( ../community/editors.html ) or request someone else on our [Discord #cookbook channel]( https://discord.com/invite/Erb6SwsVbH ).<br><br>
 All links are reviewed and could be edited for brevity.<br><br>
 
-No blatant and competitive marketing in description. The audience are devs. This is not the right place for NFT marketplace and non-dev related closed source product ...
+No blatant and competitive marketing in description. The target audience is developers. Not the right place for NFT marketplaces or exchanges.
 :::
 
+## Official Sui Websites
+- [https://sui.io](https://sui.io)
+- [https://suifoundation.io](https://suifoundation.io)
+- [https://mystenlabs.com](https://mystenlabs.com)
 
 ## SDKs
 |                          |  Developer   |                           Links                            |
@@ -27,6 +31,12 @@ No blatant and competitive marketing in description. The audience are devs. This
 |        **Python**        |   Axiom:1    |        [github](https://github.com/FrankC01/pysui)         |
 |         **Rust**         | Mysten Labs  |         [docs](https://docs.sui.io/devnet/build/)          |
 | **Typescript/Javacript** | Mysten Labs  | [github](https://github.com/MystenLabs/sui/tree/main/sdk/) |
+
+## Explorers/Viewers
+|                    Name                    |                         Description                          |
+| :----------------------------------------: | :----------------------------------------------------------: |
+| [suiexplorer.com](https://suiexplorer.com) |              Official Mysten Labs Sui explorer               |
+|     [suiscan.xyz](https://suiscan.xyz)     | Rich blockchain explorer for validators, packages, analytics |
 
 
 ## Wallets
