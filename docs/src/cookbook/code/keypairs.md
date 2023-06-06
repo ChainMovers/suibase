@@ -82,7 +82,7 @@ sui client new-address secp256k1
 sui client new-address secp256r1
 ```
 
-@tab:active Python
+@tab Python
 
 ```python
 from pysui.abstracts.client_keypair import SignatureScheme
@@ -128,17 +128,16 @@ const keypair_secp256k1 = new Secp256k1Keypair();
 If you already have your secret, you can get your Keypair and you can use it to perform different actions.
 
 1. From Bytes
-   ::: code-tabs
 
 ::: code-tabs
 
 @tab CLI
 
 ```shell
-To be done. Add your contribution here.
+Not supported
 ```
 
-@tab:active Python
+@tab Python
 
 ```python
 # pysui automatically loads all keypairs from 'sui.keystore'
@@ -179,10 +178,10 @@ const keypair = Secp256k1Keypair.fromSecretKey(secretKey);
 @tab CLI
 
 ```shell
-To be done. Add your contribution here.
+Not supported
 ```
 
-@tab:active Python
+@tab Python
 
 ```python
 # pysui automatically loads all keypairs from 'sui.keystore'

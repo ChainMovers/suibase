@@ -118,8 +118,8 @@ console.log({ result });
 @tab:active CLI
 
 ```shell
-# Transfer SUI, and pay gas with the same SUI coin object. 
-# If amount is specified, only the amount is transferred; 
+# Transfer SUI, and pay gas with the same SUI coin object.
+# If amount is specified, only the amount is transferred;
 # otherwise the entire object is transferred
 
 sui client transfer-sui --to <ADDRESS> --sui-coin-object-id <SUI_COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
@@ -294,6 +294,87 @@ const result = await signer.signAndExecuteTransactionBlock({
 
 // Print the output
 console.log({ result });
+```
+
+:::
+
+## Transaction Options
+
+Sui RPC API allows you to specify options to control the results returned when
+executing a transaction. The following key values are the _available_ options:
+
+```json
+{
+  "showBalanceChanges": true,
+  "showEffects": true,
+  "showEvents": true,
+  "showInput": true,
+  "showObjectChanges": true,
+  "showRawInput": true
+}
+```
+
+Using the above in your transaction execution calls would return _all_ information about the transaction.
+However; you can choose individual flags individually or in combination.
+
+::: code-tabs
+
+@tab CLI
+
+```shell
+
+Not supported
+
+```
+
+@tab Python
+
+```python
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_config import SuiConfig
+from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_clients.common import handle_result
+from pysui.sui.sui_builders.get_builders import GetTx
+
+def get_txn_with_options(client: SuiClient, target_digest: str):
+    """Iterate through various options to display associated results."""
+    options = {
+        "showEffects": True,
+        "showEvents": True,
+        "showBalanceChanges": True,
+        "showObjectChanges": True,
+        "showRawInput": True,
+        "showInput": True,
+    }
+    # For each options
+    entries = [dict([x]) for x in options.items()]
+    for entry in entries:
+        print(handle_result(client.execute(GetTx(digest=target_digest, options=entry))).to_json(indent=2))
+
+    # Uncomment for full options (defaults to ALL the above)
+    # print(handle_result(client.execute(GetTx(digest=target_digest))).to_json(indent=2))
+
+def execution_options(client: SuiClient = None):
+    """Setup transaction and inspect options."""
+    client = client if client else SuiClient(SuiConfig.default_config())
+    # Create simple transaction
+    txer = SuiTransaction(client)
+    scres = txer.split_coin(coin=txer.gas, amounts=[100000000])
+    txer.transfer_objects(transfers=[scres], recipient=client.config.active_address)
+    # Execute
+    tx_result = txer.execute(gas_budget="100000")
+    # Review result
+    if tx_result.is_ok():
+        get_txn_with_options(client, tx_result.result_data.digest)
+    else:
+        print(tx_result.result_string)
+
+```
+
+@tab TypeScript
+
+```ts
+
 ```
 
 :::
