@@ -12,9 +12,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Transacction result options to cookbook
 - Python transactions to cookbook code-snippets
 
 ### Fixed
+
+- Typos in Keypair cookbook code-snippets
 
 ### Changed
 
