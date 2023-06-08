@@ -25,13 +25,13 @@ update_bin_path() {
   if [ -d "$OS_DIR_ON_PATH" ]; then
     if [ ! -L "$OS_DIR_ON_PATH/$1" ]; then
       ln -s "$UBP_TARGET" "$OS_DIR_ON_PATH/$1"
-      echo "   Symlink added: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
+      echo_info "   Symlink added: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
     else
       # Verify link is as intended, if not replace it.
       UBP_READLINK=$( readlink -f "$OS_DIR_ON_PATH/$1" )
       if [[ "$UBP_READLINK" != "$UBP_TARGET" ]]; then
          ln -sf "$UBP_TARGET" "$OS_DIR_ON_PATH/$1"
-         echo "   Symlink updated: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
+         echo_info "   Symlink updated: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
       fi
     fi
   fi
@@ -90,15 +90,31 @@ setup_local_bin_as_needed() {
 #    fi
 #  fi
 
-  echo "Please add $OS_DIR_ON_PATH to your \$PATH variable"
-  echo
-  echo "The installation will not proceed until you complete this step."
-  echo
-  echo "(Please report this to the developer to make the install script better)"
+  echo_info "Please add $OS_DIR_ON_PATH to your \$PATH variable"
+  echo_info
+  echo_info "The installation will not proceed until you complete this step."
+  echo_info
+  echo_info "(Please report this to the developer to make the install script better)"
   exit 1
 }
 
+echo_info() {
+  if [ "$QUIET_OPT" = false ]; then
+    echo "$*"
+  fi
+}
+
 main() {
+
+  QUIET_OPT=false
+  while [[ "$#" -gt 0 ]]; do
+    case $1 in
+      --quiet) QUIET_OPT=true ;;
+      *) setup_error "Unknown option '$1'";;
+    esac
+    shift
+  done
+
   if is_user_root; then
     setup_error "Should not install suibase as root (or sudo)"
   fi
@@ -112,7 +128,7 @@ main() {
 
   setup_local_bin_as_needed;
 
-  echo "Starting installation of suibase..."
+  echo_info "Starting installation of suibase..."
 
   # Build the list of scripts (e.g. "localnet, devnet, tsui...")
   local script_list=()
@@ -146,22 +162,22 @@ main() {
   create_cargobin_as_needed;
 
   username=$(whoami)
-  echo
-  echo "Suibase is installed now for user [$username]. Great!"
-  echo
-  echo "You can start your localnet with:"
-  echo "  \$ localnet start"
-  echo
-  echo "For more info type \"localnet\"."
-  echo
+  echo_info
+  echo_info "Suibase is installed now for user [$username]. Great!"
+  echo_info
+  echo_info "You can start your localnet with:"
+  echo_info "  \$ localnet start"
+  echo_info
+  echo_info "For more info type \"localnet\"."
+  echo_info
   if $EXIT_TERMINAL_INSTRUCTION; then
-    echo "To get started you may need to restart your current shell."
-    echo "This would reload your PATH environment variable to include"
-    echo "suibase's bin directory (\$HOME/.local/bin)."
-    echo
-    echo "To configure your current shell, run:"
-    echo "source \"\$HOME/.profile\""
+    echo_info "To get started you may need to restart your current shell."
+    echo_info "This would reload your PATH environment variable to include"
+    echo_info "suibase's bin directory (\$HOME/.local/bin)."
+    echo_info
+    echo_info "To configure your current shell, run:"
+    echo_info "source \"\$HOME/.profile\""
   fi
 }
 
-main;
+main "$@";
