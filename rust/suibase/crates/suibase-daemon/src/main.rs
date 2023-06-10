@@ -8,16 +8,17 @@
 //     - TcpProxyServer (this application purpose!)
 //     - ServicesMonitor (thread to monitor other remote services)
 
-mod tcp_server;
-
-use tcp_server::TCPServer;
+//mod tcp_server;
+mod http_server;
+use http_server::HttpServer;
+//use tcp_server::TCPServer;
 
 use anyhow::Result;
 
 use clap::*;
 
 use colored::Colorize;
-use env_logger::{Builder, Env};
+use pretty_env_logger::env_logger::{Builder, Env};
 
 use tokio::time::{sleep, Duration};
 use tokio_graceful_shutdown::{SubsystemHandle, Toplevel};
@@ -42,12 +43,14 @@ impl Command {
             Command::Run {} => {
                 // Initialize the subsystems parameters here.
                 let json_rpc_server = JsonRPCServer { enabled: true };
-                let tcp_server = TCPServer { enabled: true };
+                //let tcp_server = TCPServer { enabled: true };
+                let http_server = HttpServer { enabled: true };
 
                 // Start the subsystems.
                 Toplevel::new()
                     .start("JsonRPCServer", |a| json_rpc_server.run(a))
-                    .start("TCPServer", |a| tcp_server.run(a))
+                    //.start("TCPServer", |a| tcp_server.run(a))
+                    .start("HttpServer", |a| http_server.run(a))
                     .catch_signals()
                     .handle_shutdown_requests(Duration::from_millis(1000))
                     .await
@@ -92,6 +95,7 @@ async fn main() {
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
 
+    //pretty_env_logger::init();
     Builder::from_env(Env::default().default_filter_or("debug")).init();
 
     let cmd: Command = Command::parse();

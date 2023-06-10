@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/suibase-proxy",
+    "crates/suibase-daemon",
 ]
 
 [workspace.package]

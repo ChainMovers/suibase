@@ -1,12 +1,14 @@
 [package]
-name = "suibase-proxy"
+name = "suibase-daemon"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 log = "0.4.0"
-env_logger = "0.10.0"
+pretty_env_logger = "0.4"
 
+axum = "0.6"
+hyper = { version = "0.14", features = ["full"] }
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true
 
