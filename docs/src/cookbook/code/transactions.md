@@ -298,6 +298,239 @@ console.log({ result });
 
 :::
 
+## How to split coins
+
+Split a coin object into multiple coins.
+
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+sui client split-coin --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> --amounts <AMOUNTS>
+```
+
+@tab Python
+
+```python
+
+```
+
+@tab TS
+
+```ts
+import {
+    Ed25519Keypair,
+    JsonRpcProvider,
+    RawSigner,
+    Connection,
+    TransactionBlock
+  } from '@mysten/sui.js';
+  
+// Set a provider
+const connection = new Connection({
+    fullnode: "http://127.0.0.1:9000",
+})
+
+// Set a MMENONIC
+const MNEMONIC = ""
+
+// Get keypair from deriving mnemonic phassphrase
+const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
+
+// Connect to specified provider
+const provider = new JsonRpcProvider(connection);
+
+// Get signer object
+const signer = new RawSigner(keypair, provider);
+
+// Instantiate TransactionBlock() object
+const tx = new TransactionBlock();
+
+// Build splitCoins tx
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(1_000_000)]);
+
+// Transfer the objects to a specified address
+tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
+
+// Perform the split
+const result = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+});
+
+// Print the output
+console.log({ result });
+```
+
+:::
+
+## How to publish a package
+
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+sui client publish --gas-budget <GAS_BUDGET> --path <PACKAGE_PATH>
+```
+
+@tab Python
+
+```python
+
+```
+
+@tab TS
+
+```ts
+import {
+    Ed25519Keypair,
+    JsonRpcProvider,
+    RawSigner,
+    devnetConnection,
+    TransactionBlock,
+  } from '@mysten/sui.js';
+  
+import { execSync } from 'child_process';
+
+// Set a mnemonic passphrase
+const MNEMONIC = ""
+
+// Generate Ed25519 keypair from MNEMONIC
+const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
+
+// Set a provider
+const provider = new JsonRpcProvider(devnetConnection);
+
+// Get signer object
+const signer = new RawSigner(keypair, provider);
+
+// Set the package path
+const packagePath = ""
+
+// Set Sui CLI path
+const cliPath = ""
+
+// Get modules and dependencies output in JSON format
+const { modules, dependencies } = JSON.parse(
+  execSync(
+    `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
+    { encoding: 'utf-8' },
+  ),
+);
+
+// Instantiate TransactionBlock object
+const tx = new TransactionBlock();
+
+// Publish modules and dependencies
+const [upgradeCap] = tx.publish({
+  modules,
+  dependencies,
+});
+
+// Transfer object to signer
+tx.transferObjects(
+  [upgradeCap],
+  tx.pure(await signer.getAddress())
+);
+
+// Perform the package deployment
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
+
+// Print the output
+console.log({ result });
+
+```
+
+:::
+
+## How to make a Move call
+
+You can make a move call only if you provide a package, module and a function.
+The standardized rule of a move call is : `package::module::function`.
+
+::: code-tabs
+
+@tab:active CLI
+
+```shell
+sui client call --function function --module module --package <PACKAGE_ID> --gas-budget <GAS_BUDGET>
+```
+
+@tab Python
+
+```python
+
+```
+
+@tab TS
+
+```ts
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Connection,
+  devnetConnection,
+  TransactionBlock
+} from '@mysten/sui.js';
+
+const connection = new Connection({
+    fullnode: "http://127.0.0.1:9000",
+})
+
+// Set a mnemonic passphrase
+const MNEMONIC = ""
+
+// Generate Ed25519 keypair from MNEMONIC
+const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
+
+// Set a provider
+const provider = new JsonRpcProvider(connection);
+
+// Get signer object
+const signer = new RawSigner(keypair, provider)
+
+// Set a package object ID
+const packageObjectId = ""
+
+// Instantiate TransactionBlock() object
+const tx = new TransactionBlock();
+
+// Move Call without any arguments.
+tx.moveCall({
+  target: `${packageObjectId}::module::function`,
+});
+
+// Move Call with a single argument
+tx.moveCall({
+  target : `${packageObjectId}::module::function`,
+  arguments : [tx.pure("0x83e059bce01752a768004cdcc86cf50acf0b47d28802e18226de63fda0023603")],
+})
+
+// Move call with more than 1 argument
+tx.moveCall({
+  target : `${packageObjectId}::module::function`,
+  arguments : [
+    tx.pure("an_argument"),
+    tx.pure("another_argument")
+    ],
+})
+
+// Perform the move call
+const result = await signer.signAndExecuteTransactionBlock({
+  transactionBlock: tx,
+});
+
+// Print the output
+console.log({ result });
+
+```
+
+:::
+
 ## Transaction Options
 
 Sui RPC API allows you to specify options to control the results returned when
