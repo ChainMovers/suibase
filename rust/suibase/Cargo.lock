@@ -9841,6 +9841,7 @@ dependencies = [
  "hyper",
  "log",
  "pretty_env_logger",
+ "serde_json",
  "shared-crypto",
  "sui-json-rpc-types",
  "sui-keys",
