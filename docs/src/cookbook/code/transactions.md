@@ -313,27 +313,50 @@ sui client split-coin --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> --amounts <A
 @tab Python
 
 ```python
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_config import SuiConfig
+from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_types.address import SuiAddress
 
+def test_tb_split_from_gas(client: SuiClient = None):
+    """Split out multiple coins and transfer."""
+    client = client if client else SuiClient(SuiConfig.default_config())
+    txer = SuiTransaction(client)
+    # Split two new coins from gas
+    splits:list = txer.split_coin(coin=txer.gas, amounts=[100000000, 100000000])
+    # Transfer both the coins to receipient
+    txer.transfer_objects(transfers=splits, recipient=SuiAddress("<SOME_SUI_ADDRESS>"))
+    # You can also send coins to different address
+    # txer.transfer_objects([transfers=splits[0]], recipient=SuiAddress("<SOME_SUI_ADDRESS_0>"))
+    # txer.transfer_objects([transfers=splits[1]], recipient=SuiAddress("<SOME_SUI_ADDRESS_1>"))
+    tx_result = txer.execute(gas_budget="100000")
+    if tx_result.is_ok():
+        if hasattr(tx_result.result_data, "to_json"):
+            print(tx_result.result_data.to_json(indent=2))
+        else:
+            print(tx_result.result_data)
+    else:
+        print(tx_result.result_string)
 ```
 
 @tab TS
 
 ```ts
 import {
-    Ed25519Keypair,
-    JsonRpcProvider,
-    RawSigner,
-    Connection,
-    TransactionBlock
-  } from '@mysten/sui.js';
-  
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Connection,
+  TransactionBlock,
+} from "@mysten/sui.js";
+
 // Set a provider
 const connection = new Connection({
-    fullnode: "http://127.0.0.1:9000",
-})
+  fullnode: "http://127.0.0.1:9000",
+});
 
 // Set a MMENONIC
-const MNEMONIC = ""
+const MNEMONIC = "";
 
 // Get keypair from deriving mnemonic phassphrase
 const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
@@ -355,7 +378,7 @@ tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
 
 // Perform the split
 const result = await signer.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
+  transactionBlock: tx,
 });
 
 // Print the output
@@ -377,6 +400,27 @@ sui client publish --gas-budget <GAS_BUDGET> --path <PACKAGE_PATH>
 @tab Python
 
 ```python
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_config import SuiConfig
+from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_types.address import SuiAddress
+
+def test_tb_publish(client: SuiClient = None):
+    """Publish a sui move package."""
+    client = client if client else SuiClient(SuiConfig.default_config())
+    txer = SuiTransaction(client)
+    # Prove a path to the project folder (where the Move.toml lives)
+    pcap = txer.publish(project_path="PATH_TO_CONTRACT_PROJECT")
+    # Transfer the UpgradeCap to the current active address
+    txer.transfer_objects(transfers=[pcap], recipient=client.config.active_address)
+    tx_result = txer.execute(gas_budget="100000")
+    if tx_result.is_ok():
+        if hasattr(tx_result.result_data, "to_json"):
+            print(tx_result.result_data.to_json(indent=2))
+        else:
+            print(tx_result.result_data)
+    else:
+        print(tx_result.result_string)
 
 ```
 
@@ -384,17 +428,17 @@ sui client publish --gas-budget <GAS_BUDGET> --path <PACKAGE_PATH>
 
 ```ts
 import {
-    Ed25519Keypair,
-    JsonRpcProvider,
-    RawSigner,
-    devnetConnection,
-    TransactionBlock,
-  } from '@mysten/sui.js';
-  
-import { execSync } from 'child_process';
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  devnetConnection,
+  TransactionBlock,
+} from "@mysten/sui.js";
+
+import { execSync } from "child_process";
 
 // Set a mnemonic passphrase
-const MNEMONIC = ""
+const MNEMONIC = "";
 
 // Generate Ed25519 keypair from MNEMONIC
 const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
@@ -406,17 +450,17 @@ const provider = new JsonRpcProvider(devnetConnection);
 const signer = new RawSigner(keypair, provider);
 
 // Set the package path
-const packagePath = ""
+const packagePath = "";
 
 // Set Sui CLI path
-const cliPath = ""
+const cliPath = "";
 
 // Get modules and dependencies output in JSON format
 const { modules, dependencies } = JSON.parse(
   execSync(
     `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-    { encoding: 'utf-8' },
-  ),
+    { encoding: "utf-8" }
+  )
 );
 
 // Instantiate TransactionBlock object
@@ -429,10 +473,7 @@ const [upgradeCap] = tx.publish({
 });
 
 // Transfer object to signer
-tx.transferObjects(
-  [upgradeCap],
-  tx.pure(await signer.getAddress())
-);
+tx.transferObjects([upgradeCap], tx.pure(await signer.getAddress()));
 
 // Perform the package deployment
 const result = await signer.signAndExecuteTransactionBlock({
@@ -441,7 +482,6 @@ const result = await signer.signAndExecuteTransactionBlock({
 
 // Print the output
 console.log({ result });
-
 ```
 
 :::
@@ -462,7 +502,32 @@ sui client call --function function --module module --package <PACKAGE_ID> --gas
 @tab Python
 
 ```python
+from pysui.sui.sui_types.scalars import ObjectID
+from pysui.sui.sui_clients.sync_client import SuiClient
+from pysui.sui.sui_config import SuiConfig
+from pysui.sui.sui_clients.transaction import SuiTransaction
 
+def test_tb_move_call(client: SuiClient = None):
+    """Call a sui contract function."""
+    client = client if client else SuiClient(SuiConfig.default_config())
+    txer = SuiTransaction(client)
+    # The target is a triplet of 'sui_contract_address::contract_module_name::module_function_name'
+    # Good to know the signature and whether there is a returned value from the function. For example:
+    # entry public set_dynamic_field(Arg0: &mut ServiceTracker, Arg1: &mut TxContext)
+    # Note: Function does not have to be of 'entry' type, as long as it is public
+    # Note: No need to provide the TxContext object as it is done by the chain before entering contract
+    txer.move_call(
+        target="0xcc9f55f5403e5df0ec802b3bf6f9849e0fe85ae3fa29c166d066425aa96b6ea9::base::set_dynamic_field",
+        arguments=[ObjectID("0xe4b6e6c24adac8f389f4fd15cfd02a7362af3026757eabd46402098b59a2629e")],
+    )
+    tx_result = txer.execute(gas_budget="100000")
+    if tx_result.is_ok():
+        if hasattr(tx_result.result_data, "to_json"):
+            print(tx_result.result_data.to_json(indent=2))
+        else:
+            print(tx_result.result_data)
+    else:
+        print(tx_result.result_string)
 ```
 
 @tab TS
@@ -474,15 +539,15 @@ import {
   RawSigner,
   Connection,
   devnetConnection,
-  TransactionBlock
-} from '@mysten/sui.js';
+  TransactionBlock,
+} from "@mysten/sui.js";
 
 const connection = new Connection({
-    fullnode: "http://127.0.0.1:9000",
-})
+  fullnode: "http://127.0.0.1:9000",
+});
 
 // Set a mnemonic passphrase
-const MNEMONIC = ""
+const MNEMONIC = "";
 
 // Generate Ed25519 keypair from MNEMONIC
 const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
@@ -491,10 +556,10 @@ const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
 const provider = new JsonRpcProvider(connection);
 
 // Get signer object
-const signer = new RawSigner(keypair, provider)
+const signer = new RawSigner(keypair, provider);
 
 // Set a package object ID
-const packageObjectId = ""
+const packageObjectId = "";
 
 // Instantiate TransactionBlock() object
 const tx = new TransactionBlock();
@@ -506,18 +571,19 @@ tx.moveCall({
 
 // Move Call with a single argument
 tx.moveCall({
-  target : `${packageObjectId}::module::function`,
-  arguments : [tx.pure("0x83e059bce01752a768004cdcc86cf50acf0b47d28802e18226de63fda0023603")],
-})
+  target: `${packageObjectId}::module::function`,
+  arguments: [
+    tx.pure(
+      "0x83e059bce01752a768004cdcc86cf50acf0b47d28802e18226de63fda0023603"
+    ),
+  ],
+});
 
 // Move call with more than 1 argument
 tx.moveCall({
-  target : `${packageObjectId}::module::function`,
-  arguments : [
-    tx.pure("an_argument"),
-    tx.pure("another_argument")
-    ],
-})
+  target: `${packageObjectId}::module::function`,
+  arguments: [tx.pure("an_argument"), tx.pure("another_argument")],
+});
 
 // Perform the move call
 const result = await signer.signAndExecuteTransactionBlock({
@@ -526,7 +592,6 @@ const result = await signer.signAndExecuteTransactionBlock({
 
 // Print the output
 console.log({ result });
-
 ```
 
 :::
@@ -551,14 +616,6 @@ Using the above in your transaction execution calls would return _all_ informati
 However; you can choose individual flags individually or in combination.
 
 ::: code-tabs
-
-@tab CLI
-
-```shell
-
-Not supported
-
-```
 
 @tab Python
 
