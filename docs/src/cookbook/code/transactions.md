@@ -220,6 +220,7 @@ from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
 from pysui.sui.sui_clients.transaction import SuiTransaction
 from pysui.sui.sui_types.address import SuiAddress
+from pysui.sui.sui_txresults.single_tx import SuiCoinObjects
 
 def test_tb_merge_to_gas(client: SuiClient = None):
     """Merge all coins but 1 (gas) to gas."""
@@ -231,7 +232,7 @@ def test_tb_merge_to_gas(client: SuiClient = None):
     txer = SuiTransaction(client, initial_sender=sender)
     # Get senders coin inventory and ensure there is at least 2
     e_coins: SuiCoinObjects = handle_result(client.get_gas(sender))
-    assert len(e_coins.data) > 1. "Nothing to merge"
+    assert len(e_coins.data) > 1, "Nothing to merge"
     # Merge all other coins but 1st (gas) to  gas
     txer.merge_coins(merge_to=txer.gas, merge_from=e_coins.data[1:])
     # Execute
