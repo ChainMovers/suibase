@@ -3,18 +3,16 @@
 // main.rs does:
 //  - Validate command line.
 //  - Telemetry setup
-//  - Top level subsystem starting:
-//     - JsonRPCServer (the API)
-//     - HttpServer (this application purpose!)
-//     - ServerMonitor (thread to monitor configured target servers)
+//  - Top level threads started here:
+//     - NetworkMonitor: Maintains various stats/status from messages fed from multiple sources. Uses crossbeam-channel.
+//     - AdminController: The thread validating and applying the config, and also handle the JSON-RPC API.
+//
+// Other threads exists but are not started here:
+//  - ProxyServer: Async handling of user traffic. One instance per listening port. Uses Axum/Hyper.
+//                 Started by the AdminController.
+//
 
-//mod tcp_server;
-mod app_error;
-mod globals;
-mod http_server;
 use std::sync::Arc;
-
-use http_server::HttpServer;
 
 use anyhow::Result;
 
@@ -23,10 +21,22 @@ use clap::*;
 use colored::Colorize;
 use pretty_env_logger::env_logger::{Builder, Env};
 
-use tokio::time::{sleep, Duration};
-use tokio_graceful_shutdown::{SubsystemHandle, Toplevel};
+use tokio::time::Duration;
+use tokio_graceful_shutdown::Toplevel;
 
-use globals::{Globals, SafeGlobals};
+//mod tcp_server;
+mod admin_controller;
+mod app_error;
+mod basic_types;
+mod globals;
+mod network_monitor;
+mod proxy_server;
+mod target_server;
+
+//use crate::basic_types::*;
+use crate::admin_controller::AdminController;
+use crate::globals::{Globals, SafeGlobals};
+use crate::network_monitor::NetworkMonitor;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -46,60 +56,30 @@ impl Command {
     pub async fn execute(self, globals: Globals) -> Result<(), anyhow::Error> {
         match self {
             Command::Run {} => {
-                // Create the default subsystems.
-                let http_server = HttpServer::new(globals.clone());
-                let json_rpc_server = JsonRPCServer::new(globals.clone());
+                // Create internal messaging (between threads) channels.
+                //
+                // The NetworkMonitor receives network activities statistics from multiple producers.
+                //
+                // The reason that we use messaging is to minimize slowdown the user traffic for stats updates
+                // (e.g. waiting on a global write Mutex on every request is not ideal).
+                let (netmon_tx, netmon_rx) = crossbeam_channel::bounded(10000);
 
-                // Initialize the subsystems parameters here.
+                // Instantiate all subsystems (while none is "running" yet).
+                let admctrl = AdminController::new(globals.clone(), netmon_tx.clone());
+
+                let netmon =
+                    NetworkMonitor::new(globals.clone(), netmon_rx.clone(), netmon_tx.clone());
 
                 // Start the subsystems.
                 Toplevel::new()
-                    .start("JsonRPCServer", |a| json_rpc_server.run(a))
-                    .start("HttpServer", |a| http_server.run(a))
+                    .start("admctrl", move |a| admctrl.run(a))
+                    .start("netmon", move |a| netmon.run(a))
                     .catch_signals()
                     .handle_shutdown_requests(Duration::from_millis(1000))
                     .await
                     .map_err(Into::into)
             }
         }
-    }
-}
-
-struct JsonRPCServer {
-    // Configuration.
-    enabled: bool,
-    globals: Globals,
-}
-
-impl JsonRPCServer {
-    pub fn new(globals: Globals) -> Self {
-        Self {
-            enabled: false,
-            globals,
-        }
-    }
-
-    async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        // This is going to be the API thread later... for now serve and do nothing,
-        // just test our shutdown mechanism.
-        log::info!("JsonRPCServer started. Enabled: {}", self.enabled);
-        loop {
-            sleep(Duration::from_millis(1000)).await;
-            if subsys.is_shutdown_requested() {
-                // Do a normal shutdown.
-                log::info!("Shutting down JsonRPCServer (2).");
-                return Ok(());
-            }
-        }
-
-        // Task ends with an error. This should cause the main program to shutdown.
-        // Err(anyhow!("JsonRPCServer threw an error."))
-
-        // Normal shutdown:
-        //   subsys.on_shutdown_requested().await;
-        //   log::info!("Shutting down Subsystem1 ...");
-        //   log::info!("Subsystem1 stopped.");
-        //   Ok(())
     }
 }
 
