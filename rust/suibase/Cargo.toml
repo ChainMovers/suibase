@@ -16,13 +16,6 @@ sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types
 sui-adapter = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-adapter/" }
 shared-crypto = { path = "../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
 
-# Comment these "git" dependencies if using the above "path" dependencies.
-#sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
-#sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-json-rpc-types" }
-#sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-keys" }
-#sui-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-types" }
-#sui-adapter = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-adapter" }
-
 futures = "0.3.25"
 
 tokio = { version = "1.28.1", features = ["full"] }

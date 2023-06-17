@@ -4,7 +4,8 @@ use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 pub struct NetmonMsg {
-    // Internal messaging. Sent for every user request/response. Purposely keep this small.
+    // Internal messaging. Sent for every user request/response.
+    // Purposely kept this <64 bytes for performance reason.
     para8: [u8; 2],   // Often [0]:event_id [1]:client_idx
     para16: [u16; 3], // Often [0]:port [1]:config_id [2]: time-to-response (ms)
     para32: [u32; 4], // Various stats.

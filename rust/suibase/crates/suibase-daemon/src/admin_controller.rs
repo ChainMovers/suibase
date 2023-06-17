@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
 use crate::basic_types::*;
-use crate::globals::{Globals, PortStates};
+use crate::globals::Globals;
 use crate::network_monitor::NetMonTx;
+use crate::port_states::PortStates;
 use crate::proxy_server::ProxyServer;
 use crate::target_server::TargetServer;
+
 use anyhow::Result;
 use tokio::time::{sleep, Duration};
 use tokio_graceful_shutdown::SubsystemHandle;
@@ -34,46 +36,48 @@ impl AdminController {
         // TODO Check first if there is something to load... before getting a write lock.
 
         // Get a write lock on the globals.
-        let mut globals_guard = self.globals.write().await;
-        let globals = &mut *globals_guard;
+        let port_id = {
+            let mut globals_guard = self.globals.write().await;
+            let globals = &mut *globals_guard;
 
-        // Add default listen ports
-        //    44343 (mainnet RPC)
-        //    44342 (testnet RPC)
-        //    44341 (devnet RPC)
-        //    44340 (localnet RPC)
-        let ports = &mut globals.input_ports;
+            // Add default listening ports
+            //    44343 (mainnet RPC)
+            //    44342 (testnet RPC)
+            //    44341 (devnet RPC)
+            //    44340 (localnet RPC)
+            let ports = &mut globals.input_ports;
 
-        if ports.map.len() == 0 {
-            // Add target server vincagame and Mysten labs.
-            let mut port_states = PortStates::new(9124);
-            let id = port_states.id();
+            if ports.map.len() == 0 {
+                // Add target servers
+                let mut port_states = PortStates::new(44343);
+                let port_id = port_states.id();
+                let mut uri = "https://sui-rpc-mainnet.testnet-pride.com:443";
+                port_states
+                    .target_servers
+                    .insert(uri.to_string(), TargetServer::new(uri.to_string()));
 
-            // Add sui-rpc-mainnet.testnet-pride.com:443
-            //port_states.target_servers.insert( TargetServer::new("142.132.202.87:443") );
-            let connection_str = "0.0.0.0:9123";
-            port_states.target_servers.insert(
-                connection_str.to_string(),
-                TargetServer::new(connection_str),
-            );
+                uri = "https://fullnode.mainnet.sui.io:443";
+                port_states
+                    .target_servers
+                    .insert(uri.to_string(), TargetServer::new(uri.to_string()));
 
-            // Add it to globals.
-            ports.map.insert(id, port_states);
+                // Add it to globals.
+                ports.map.insert(port_id, port_states);
 
-            // TODO: Try to leave the globals lock here...
+                port_id
+            } else {
+                0
+            }
+        }; // Release Globals write lock
 
+        if port_id != 0 {
             // Start a proxy server for this port.
-            let proxy_server = ProxyServer::new(self.globals.clone(), self.netmon_tx.clone());
-
-            // Remember the proxy server has been started for this port.
-            self.proxy_servers.insert(
-                id,
-                ProxyServerManagement {
-                    created_time: EpochTimestamp::now(),
-                },
-            );
-
-            subsys.start("proxy_server", move |a| proxy_server.run(a, id));
+            let proxy_server = ProxyServer::new();
+            let globals = self.globals.clone();
+            let netmon_tx = self.netmon_tx.clone();
+            subsys.start("proxy_server", move |a| {
+                proxy_server.run(a, port_id, globals, netmon_tx)
+            });
         }
     }
 
