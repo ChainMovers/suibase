@@ -36,7 +36,7 @@ impl AdminController {
         // TODO Check first if there is something to load... before getting a write lock.
 
         // Get a write lock on the globals.
-        let port_id = {
+        let port_id: InputPortIdx = {
             let mut globals_guard = self.globals.write().await;
             let globals = &mut *globals_guard;
 
@@ -53,12 +53,12 @@ impl AdminController {
                 let mut uri = "https://sui-rpc-mainnet.testnet-pride.com:443";
                 input_port
                     .target_servers
-                    .insert(uri.to_string(), TargetServer::new(uri.to_string()));
+                    .push(TargetServer::new(uri.to_string()));
 
                 uri = "https://fullnode.mainnet.sui.io:443";
                 input_port
                     .target_servers
-                    .insert(uri.to_string(), TargetServer::new(uri.to_string()));
+                    .push(TargetServer::new(uri.to_string()));
 
                 // TODO Rework this for error handling.
                 if let Some(port_id) = ports.map.push(input_port) {

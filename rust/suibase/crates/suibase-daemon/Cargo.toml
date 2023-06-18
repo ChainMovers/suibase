@@ -9,6 +9,7 @@ pretty_env_logger = "0.4"
 
 serde_json = "1.0"
 #crossbeam-channel = "0.5"
+bitflags = "2.3"
 
 axum = "0.6"
 hyper = { version = "0.14", features = ["full"] }

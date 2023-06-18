@@ -28,7 +28,7 @@ pub struct InputPort {
     pub healthy: bool,
 
     // Configuration. Can be change at runtime by the AdminController.
-    pub target_servers: HashMap<IPKey, TargetServer>,
+    pub target_servers: ManagedVec<TargetServer>,
 
     // Statistics (updated by the NetwworkMonitor).
     pub num_ok_req: u64,
@@ -53,7 +53,7 @@ impl InputPort {
             deactivate_request: false,
             proxy_server_running: false,
             healthy: false,
-            target_servers: HashMap::new(),
+            target_servers: ManagedVec::new(),
             num_ok_req: 0,
             last_ok_req: now,
             num_failed_req: 0,
@@ -87,18 +87,26 @@ impl InputPort {
         self.proxy_server_running = false;
     }
 
-    pub fn find_best_target_server_uri(&self) -> Option<String> {
+    pub fn find_best_target_server(&self) -> Option<(TargetServerIdx, String)> {
         let mut best_score = i8::MIN;
-        let mut best_uri = None;
+        let mut best_uri: String = String::new();
+        let mut best_idx = None;
 
-        for (_, target_server) in &self.target_servers {
+        for (i, target_server) in self.target_servers.iter() {
             let score = target_server.relative_health_score();
             if score > best_score {
                 best_score = score;
-                best_uri = Some(target_server.uri());
+                best_idx = Some(i);
+                best_uri = target_server.uri();
             }
         }
+        if best_idx.is_none() {
+            return None;
+        }
+        Some((best_idx.unwrap(), best_uri))
+    }
 
-        best_uri
+    pub fn uri(&self, server_idx: TargetServerIdx) -> Option<String> {
+        self.target_servers.get(server_idx).map(|ts| ts.uri())
     }
 }
