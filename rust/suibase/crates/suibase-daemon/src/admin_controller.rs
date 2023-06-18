@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::basic_types::*;
 use crate::globals::Globals;
+use crate::input_port::InputPort;
 use crate::network_monitor::NetMonTx;
-use crate::port_states::PortStates;
 use crate::proxy_server::ProxyServer;
 use crate::target_server::TargetServer;
 
@@ -15,7 +15,7 @@ struct ProxyServerManagement {
     created_time: EpochTimestamp,
 }
 
-type ProxyServers = HashMap<PortMapID, ProxyServerManagement>;
+type ProxyServers = HashMap<ManagedVecUSize, ProxyServerManagement>;
 
 pub struct AdminController {
     globals: Globals,
@@ -49,28 +49,29 @@ impl AdminController {
 
             if ports.map.len() == 0 {
                 // Add target servers
-                let mut port_states = PortStates::new(44343);
-                let port_id = port_states.id();
+                let mut input_port = InputPort::new(44343);
                 let mut uri = "https://sui-rpc-mainnet.testnet-pride.com:443";
-                port_states
+                input_port
                     .target_servers
                     .insert(uri.to_string(), TargetServer::new(uri.to_string()));
 
                 uri = "https://fullnode.mainnet.sui.io:443";
-                port_states
+                input_port
                     .target_servers
                     .insert(uri.to_string(), TargetServer::new(uri.to_string()));
 
-                // Add it to globals.
-                ports.map.insert(port_id, port_states);
-
-                port_id
+                // TODO Rework this for error handling.
+                if let Some(port_id) = ports.map.push(input_port) {
+                    port_id
+                } else {
+                    ManagedVecUSize::MAX
+                }
             } else {
-                0
+                ManagedVecUSize::MAX
             }
         }; // Release Globals write lock
 
-        if port_id != 0 {
+        if port_id != ManagedVecUSize::MAX {
             // Start a proxy server for this port.
             let proxy_server = ProxyServer::new();
             let globals = self.globals.clone();

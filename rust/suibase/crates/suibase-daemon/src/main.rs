@@ -4,7 +4,7 @@
 //  - Validate command line.
 //  - Telemetry setup
 //  - Top level threads started here:
-//     - NetworkMonitor: Maintains various stats/status from messages fed from multiple sources. Uses crossbeam-channel.
+//     - NetworkMonitor: Maintains various stats/status from messages fed from multiple sources (mpsc channel).
 //     - AdminController: The thread validating and applying the config, and also handle the JSON-RPC API.
 //
 // Other threads exists but are not started here:
@@ -29,8 +29,8 @@ mod admin_controller;
 mod app_error;
 mod basic_types;
 mod globals;
+mod input_port;
 mod network_monitor;
-mod port_states;
 mod proxy_server;
 mod server_stats;
 mod target_server;
@@ -63,14 +63,13 @@ impl Command {
                 // The NetworkMonitor receives network activities statistics from multiple producers.
                 //
                 // The reason that we use messaging is to minimize slowdown the user traffic for stats updates
-                // (e.g. waiting on a global write Mutex on every request is not ideal).
-                let (netmon_tx, netmon_rx) = crossbeam_channel::bounded(10000);
+                // (e.g. waiting on a global write Mutex on a given request is not ideal).
+                let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(10000);
 
                 // Instantiate all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(globals.clone(), netmon_tx.clone());
 
-                let netmon =
-                    NetworkMonitor::new(globals.clone(), netmon_rx.clone(), netmon_tx.clone());
+                let netmon = NetworkMonitor::new(globals.clone(), netmon_rx, netmon_tx.clone());
 
                 // Start the subsystems.
                 Toplevel::new()

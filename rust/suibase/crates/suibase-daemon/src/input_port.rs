@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use crate::basic_types::*;
 use crate::target_server::TargetServer;
 
-pub struct PortStates {
-    // Unique ID for this PortStates instance. Set once at construction (can never change).
-    id: PortMapID,
+pub struct InputPort {
+    // Unique ID for this InputPort instance. Set once at construction (can never change).
+    obj_id: InstanceID,
+
+    // Fast access to data structure for this input port.
+    //port_idx: ManagedVecUSize,
 
     // TCP/UDP port number. Set once at construction (can never change).
     port_number: u16,
@@ -39,12 +42,13 @@ pub struct PortStates {
     pub last_up_transition: EpochTimestamp,
 }
 
-impl PortStates {
+impl InputPort {
     pub fn new(port_number: u16) -> Self {
         let now = EpochTimestamp::now();
 
         Self {
-            id: gen_id(),
+            obj_id: gen_id(),
+            //port_idx: INPUT_PORT_MAX,
             port_number,
             deactivate_request: false,
             proxy_server_running: false,
@@ -59,8 +63,8 @@ impl PortStates {
         }
     }
 
-    pub fn id(&self) -> PortMapID {
-        self.id
+    pub fn id(&self) -> InstanceID {
+        self.obj_id
     }
 
     pub fn port_number(&self) -> u16 {

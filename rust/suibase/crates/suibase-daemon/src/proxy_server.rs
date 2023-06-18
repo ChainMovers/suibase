@@ -26,7 +26,7 @@ use tokio_graceful_shutdown::SubsystemHandle;
 //
 #[derive(Clone)]
 pub struct SharedStates {
-    port_id: PortMapID,
+    port_id: ManagedVecUSize,
     client: reqwest::Client,
     netmon_tx: NetMonTx,
     globals: Globals,
@@ -56,8 +56,8 @@ impl ProxyServer {
         let globals = &*globals_read_guard;
 
         // Build the request toward the best target server.
-        let uri = if let Some(port_states) = globals.input_ports.map.get(&shared_state.port_id) {
-            port_states.find_best_target_server_uri()
+        let uri = if let Some(input_port) = globals.input_ports.map.get(shared_state.port_id) {
+            input_port.find_best_target_server_uri()
         } else {
             None
         };
@@ -83,7 +83,7 @@ impl ProxyServer {
     pub async fn run(
         self,
         subsys: SubsystemHandle,
-        port_id: PortMapID,
+        port_id: ManagedVecUSize,
         globals: Globals,
         netmon_tx: NetMonTx,
     ) -> Result<()> {
@@ -108,8 +108,8 @@ impl ProxyServer {
             let shared_state = &mut *states_guard;
             let mut globals_write_guard = shared_state.globals.write().await;
             let globals = &mut *globals_write_guard;
-            let port_states = &mut globals.input_ports;
-            if let Some(port_state) = port_states.map.get_mut(&port_id) {
+            let input_port = &mut globals.input_ports;
+            if let Some(port_state) = input_port.map.get_mut(port_id) {
                 port_state.report_proxy_server_starting();
                 port_state.port_number()
             } else {
@@ -140,8 +140,8 @@ impl ProxyServer {
             let shared_state = &mut *states_guard;
             let mut globals_write_guard = shared_state.globals.write().await;
             let globals = &mut *globals_write_guard;
-            let port_states = &mut globals.input_ports;
-            if let Some(port_state) = port_states.map.get_mut(&port_id) {
+            let input_port = &mut globals.input_ports;
+            if let Some(port_state) = input_port.map.get_mut(port_id) {
                 port_state.report_proxy_server_not_running();
             }
         }

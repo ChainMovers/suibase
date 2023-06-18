@@ -12,22 +12,19 @@
 //  - A thread can choose read/write access to that 'SafeGlobal'
 //
 
-use std::collections::HashMap;
-
 use std::sync::Arc;
 
 use crate::basic_types::*;
-use crate::port_states::PortStates;
+use crate::input_port::InputPort;
 
 pub struct PortMap {
-    pub map: HashMap<PortMapID, PortStates>,
-    // TODO: Add methogs to add/rm from map to keep PortKey/PortStates/uid tightly coupled.
+    pub map: ManagedVec<InputPort>,
 }
 
 impl PortMap {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            map: ManagedVec::new(),
         }
     }
 }
