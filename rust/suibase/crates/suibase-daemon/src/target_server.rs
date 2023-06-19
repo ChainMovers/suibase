@@ -3,7 +3,7 @@ use crate::server_stats::ServerStats;
 
 pub struct TargetServer {
     //pub address: SocketAddr,
-    stats: ServerStats,
+    pub stats: ServerStats,
     uri: String,
 }
 

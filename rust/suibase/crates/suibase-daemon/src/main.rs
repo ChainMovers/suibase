@@ -4,8 +4,9 @@
 //  - Validate command line.
 //  - Telemetry setup
 //  - Top level threads started here:
-//     - NetworkMonitor: Maintains various stats/status from messages fed from multiple sources (mpsc channel).
-//     - AdminController: The thread validating and applying the config, and also handle the JSON-RPC API.
+//     - NetworkMonitor: Maintains remote server stats. Info coming from multiple sources (on a mpsc channel).
+//     - AdminController: The thread validating and applying the config, and also handles the JSON-RPC API.
+//     - ClockThread: Trigger periodic events (network stats recalculation, watchdog etc...)
 //
 // Other threads exists but are not started here:
 //  - ProxyServer: Async handling of user traffic. One instance per listening port. Uses Axum/Hyper.
@@ -18,16 +19,14 @@ use anyhow::Result;
 
 use clap::*;
 
+use clock_thread::ClockThread;
 use colored::Colorize;
 use pretty_env_logger::env_logger::{Builder, Env};
 
-use tokio::time::Duration;
-use tokio_graceful_shutdown::Toplevel;
-
-//mod tcp_server;
 mod admin_controller;
 mod app_error;
 mod basic_types;
+mod clock_thread;
 mod globals;
 mod input_port;
 mod network_monitor;
@@ -35,7 +34,10 @@ mod proxy_server;
 mod server_stats;
 mod target_server;
 
-//use crate::basic_types::*;
+use tokio::time::Duration;
+
+use tokio_graceful_shutdown::Toplevel;
+
 use crate::admin_controller::AdminController;
 use crate::globals::{Globals, SafeGlobals};
 use crate::network_monitor::NetworkMonitor;
@@ -71,10 +73,13 @@ impl Command {
 
                 let netmon = NetworkMonitor::new(globals.clone(), netmon_rx, netmon_tx.clone());
 
+                let clock: ClockThread = ClockThread::new(globals.clone(), netmon_tx.clone());
+
                 // Start the subsystems.
                 Toplevel::new()
                     .start("admctrl", move |a| admctrl.run(a))
                     .start("netmon", move |a| netmon.run(a))
+                    .start("clock", move |a| clock.run(a))
                     .catch_signals()
                     .handle_shutdown_requests(Duration::from_millis(1000))
                     .await
@@ -88,9 +93,9 @@ impl Command {
 async fn main() {
     // Allocate the globals "singleton".
     //
-    // From this point, Globals will only get "cloned" by reference count.
+    // Globals are cloned by reference count.
     //
-    // Keep a reference here at main level so will never get "deleted" until the
+    // Keep a reference here at main level so it will never get "deleted" until the
     // end of the program.
     let main_globals = Arc::new(tokio::sync::RwLock::new(SafeGlobals::new()));
 
@@ -105,7 +110,7 @@ async fn main() {
     match cmd.execute(main_globals.clone()).await {
         Ok(_) => (),
         Err(err) => {
-            println!("{}", err.to_string().red());
+            log::error!("error: {}", err.to_string().red());
             std::process::exit(1);
         }
     }

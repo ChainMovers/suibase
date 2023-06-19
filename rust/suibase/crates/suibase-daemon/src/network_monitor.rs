@@ -1,4 +1,4 @@
-use crate::basic_types::*;
+use crate::{basic_types::*, input_port::InputPort};
 
 use crate::globals::Globals;
 use bitflags::bitflags;
@@ -24,7 +24,7 @@ impl NetmonMsg {
 
 // Events ID
 //
-const EVENT_TRIG_TGT_AUDIT: u8 = 1; // Periodic check, including considering check for a RTT measurements.
+const EVENT_TRIG_TGT_AUDIT: u8 = 1; // Periodic read-only audit of the globals. May trig other events.
 const EVENT_REPORT_TGT_REQ_OK: u8 = 2; // proxy_server reporting stats on successul request/response.
 const EVENT_REPORT_TGT_REQ_FAIL: u8 = 3;
 
@@ -66,6 +66,15 @@ impl NetworkMonitor {
         }
     }
 
+    pub async fn send_event_globals_audit(tx_channel: &NetMonTx) -> Result<()> {
+        let mut msg = NetmonMsg::new();
+        msg.para8[0] = EVENT_TRIG_TGT_AUDIT;
+        tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
     pub async fn report_proxy_handler_resp_ok(
         tx_channel: &NetMonTx,
         port_idx: InputPortIdx,
@@ -94,8 +103,8 @@ impl NetworkMonitor {
 
         // Send the message.
         tx_channel.send(msg).await.map_err(|e| {
-            log::debug!("send failed {}", e);
-            anyhow!("send failed {}", e)
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
         })
     }
 
@@ -108,22 +117,39 @@ impl NetworkMonitor {
         {
             let mut globals_write_guard = self.globals.write().await;
             let globals = &mut *globals_write_guard;
-            let input_port = &mut globals.input_ports;
+            let input_ports = &mut globals.input_ports;
+
             loop {
-                // Consume the message.
                 match msg.para8[0] {
                     EVENT_TRIG_TGT_AUDIT => {
                         log::info!("EVENT_TRIG_TGT_AUDIT");
                     }
                     EVENT_REPORT_TGT_REQ_OK => {
+                        // Consume the message.
                         log::info!("EVENT_REPORT_TGT_REQ_OK");
+                        if let Some(input_port) = input_ports.map.get_mut(msg.para8[2]) {
+                            let target_server = input_port.target_servers.get_mut(msg.para8[3]);
+                            if target_server.is_none() {
+                                // TODO This should log only once to avoid flooding.
+                                log::debug!(
+                                    "input port {} target server {} not found",
+                                    msg.para8[2],
+                                    msg.para8[3]
+                                );
+                            } else {
+                                let target_server = target_server.unwrap();
+
+                                // Update the stats.
+                                target_server.stats.report_latency(msg.para32[1]);
+                            }
+                        }
                     }
                     EVENT_REPORT_TGT_REQ_FAIL => {
                         log::info!("EVENT_REPORT_TGT_REQ_FAIL");
                     }
                     _ => {
-                        // Should not happen.
-                        panic!("unexpected event id {}", msg.para8[0]);
+                        log::debug!("unexpected event id {}", msg.para8[0]);
+                        return None; // Consume the bad message.
                     }
                 }
                 // Check if more messages are available.
@@ -156,7 +182,7 @@ impl NetworkMonitor {
             // Do processing of message(s) that requires globals mutex (if any)
             let next_i = self.process_mut_globals(i).await;
 
-            // Handle processing of one message that do not require globals mutex (if any).
+            // Handle processing of one message that do not require mutex (if any).
             if next_i.is_some() {
                 println!("got = {:?}", next_i.unwrap());
             }

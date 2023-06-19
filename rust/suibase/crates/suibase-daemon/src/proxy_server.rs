@@ -84,8 +84,8 @@ impl ProxyServer {
 
         let resp_end = EpochTimestamp::now();
 
-        // Log performance stats.
-        NetworkMonitor::report_proxy_handler_resp_ok(
+        // Log performance stats (ignore error).
+        let _perf_report = NetworkMonitor::report_proxy_handler_resp_ok(
             &states.netmon_tx,
             states.port_idx,
             target_idx,
@@ -93,7 +93,7 @@ impl ProxyServer {
             send_start,
             resp_end,
         )
-        .await?;
+        .await;
 
         Ok(resp)
     }
@@ -123,10 +123,10 @@ impl ProxyServer {
             // and is the price to pay to make "flexible and safe" multi-threaded globals in Rust.
             let mut globals_write_guard = shared_states.globals.write().await;
             let globals = &mut *globals_write_guard;
-            let input_port = &mut globals.input_ports;
-            if let Some(port_state) = input_port.map.get_mut(port_idx) {
-                port_state.report_proxy_server_starting();
-                port_state.port_number()
+            let input_ports = &mut globals.input_ports;
+            if let Some(input_port) = input_ports.map.get_mut(port_idx) {
+                input_port.report_proxy_server_starting();
+                input_port.port_number()
             } else {
                 log::error!("port {} not found", port_idx);
                 return Err(anyhow!("port {} not found", port_idx));
