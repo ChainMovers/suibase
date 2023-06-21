@@ -20,16 +20,22 @@ impl ClockThread {
 
     async fn clock_loop(&mut self, subsys: &SubsystemHandle) {
         let mut interval = interval(Duration::from_secs(1));
+        let mut tick: u64 = 0;
         loop {
+            tick += 1;
+
             interval.tick().await;
             if subsys.is_shutdown_requested() {
                 return;
             }
 
-            let result = NetworkMonitor::send_event_globals_audit(&self.netmon_tx).await;
-            if let Err(e) = result {
-                log::error!("error sending tick event: {}", e);
-                // TODO This is bad if sustain for many seconds. Add watchdog here.
+            if (tick % 10) == 0 {
+                // Every 10 seconds
+                let result = NetworkMonitor::send_event_globals_audit(&self.netmon_tx).await;
+                if let Err(e) = result {
+                    log::error!("send_event_globals_audit {}", e);
+                    // TODO This is bad if sustain for many seconds. Add watchdog here.
+                }
             }
         }
     }

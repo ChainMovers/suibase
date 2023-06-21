@@ -1,7 +1,6 @@
 // Some common types depending only on built-in or "standard" types.
 use std::sync::atomic::{AtomicUsize, Ordering};
 pub type EpochTimestamp = tokio::time::Instant;
-pub type IPKey = String;
 
 pub type InstanceID = usize;
 pub fn gen_id() -> usize {
@@ -9,10 +8,23 @@ pub fn gen_id() -> usize {
     COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
+// Some duration are stored in micro-seconds. In many context,
+// above 1 min is a likely bug (with the benefit that the limit
+// can be stored into 32-bits without failure).
+pub const MICROSECOND_LIMIT: u32 = 60000000; // 1 minute
+pub fn duration_to_micros(value: std::time::Duration) -> u32 {
+    match value.as_micros().try_into() {
+        Ok(value) => std::cmp::max(value, MICROSECOND_LIMIT),
+        Err(_) => MICROSECOND_LIMIT,
+    }
+}
+
 pub type InputPortIdx = ManagedVecUSize;
 pub type TargetServerIdx = ManagedVecUSize;
 
-// An fix sized array with management of used/empty cells.
+// A fix sized array with recycling of empty cells.
+//
+// This is used for very fast indexing versus HashMap lookup.
 pub type ManagedVecUSize = u8;
 pub struct ManagedVec<T> {
     data: Vec<Option<T>>,

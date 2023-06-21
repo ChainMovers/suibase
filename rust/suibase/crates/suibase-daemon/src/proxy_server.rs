@@ -5,13 +5,15 @@ use std::sync::Arc;
 use crate::app_error::AppError;
 use crate::basic_types::*;
 use crate::globals::Globals;
-use crate::network_monitor::{NetMonTx, NetworkMonitor};
+use crate::network_monitor::{
+    NetMonTx, NetmonFlags, NetmonMsg, NetworkMonitor, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
+};
 
 use anyhow::{anyhow, Result};
 use axum::{
     body::Body,
     extract::State,
-    http::{uri::Uri, Request, Response},
+    http::{header, HeaderMap, Request, Response},
     routing::get,
     Router,
 };
@@ -45,18 +47,92 @@ impl ProxyServer {
         }
     }
 
+    // From https://docs.rs/axum/0.6.18/src/axum/json.rs.html#147
+    fn is_json_content_type(headers: &HeaderMap) -> bool {
+        let content_type = if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
+            content_type
+        } else {
+            return false;
+        };
+
+        let content_type = if let Ok(content_type) = content_type.to_str() {
+            content_type
+        } else {
+            return false;
+        };
+
+        let mime = if let Ok(mime) = content_type.parse::<mime::Mime>() {
+            mime
+        } else {
+            return false;
+        };
+
+        let is_json_content_type = mime.type_() == "application"
+            && (mime.subtype() == "json" || mime.suffix().map_or(false, |name| name == "json"));
+
+        is_json_content_type
+    }
+
+    fn process_header_server_idx(
+        headers: &mut HeaderMap,
+        stats_flags: &mut NetmonFlags,
+    ) -> Option<TargetServerIdx> {
+        if let Some(server_idx) = headers.remove(HEADER_SBSD_SERVER_IDX) {
+            if let Ok(server_idx) = server_idx.to_str().unwrap().parse::<u8>() {
+                stats_flags.insert(NetmonFlags::HEADER_SBSD_SERVER_IDX_SET);
+                return Some(server_idx);
+            }
+        }
+        None
+    }
+
+    fn process_header_server_health_check(
+        headers: &mut HeaderMap,
+        stats_flags: &mut NetmonFlags,
+    ) -> bool {
+        if let Some(_prot_code) = headers.remove(HEADER_SBSD_SERVER_HC) {
+            // TODO: validate the prot_code...
+            stats_flags.insert(NetmonFlags::HEADER_SBSD_SERVER_HC_SET);
+            return true;
+        }
+        false
+    }
+
     async fn proxy_handler(
         State(states): State<Arc<SharedStates>>,
         req: Request<Body>,
     ) -> Result<Response<Body>, AppError> {
         let handler_start = EpochTimestamp::now();
 
+        // Identify additional processing just by interpreting headers.
+        // At same time:
+        //  - Remove custom headers (X-SBSD-) from the request.
+        //  - Start building the flags used later for stats/debugging.
+        //
+        let mut headers = req.headers().clone();
+        let mut stats_flags: NetmonFlags = NetmonFlags::empty();
+
+        let do_http_body_extraction = ProxyServer::is_json_content_type(&headers);
+        let do_force_target_server_idx =
+            ProxyServer::process_header_server_idx(&mut headers, &mut stats_flags);
+
+        let _ = ProxyServer::process_header_server_health_check(&mut headers, &mut stats_flags);
+
+        // Find which target server to send to...
         let best_target_found = {
             let globals_read_guard = states.globals.read().await;
             let globals = &*globals_read_guard;
 
             if let Some(input_port) = globals.input_ports.map.get(states.port_idx) {
-                input_port.find_best_target_server()
+                if let Some(target_server_idx) = do_force_target_server_idx {
+                    if let Some(target_server) = input_port.target_servers.get(target_server_idx) {
+                        Some((target_server_idx, target_server.uri()))
+                    } else {
+                        None
+                    }
+                } else {
+                    input_port.find_best_target_server()
+                }
             } else {
                 None
             }
@@ -67,14 +143,32 @@ impl ProxyServer {
         // deconstruct best_target_found
         let (target_idx, target_uri) = best_target_found.unwrap();
 
-        // Build the request toward the best target server.
-        let req_builder = states
-            .client
-            .request(req.method().clone(), target_uri)
-            .headers(req.headers().clone())
-            .body(req.into_body());
+        let method = req.method().clone();
 
-        let send_start = EpochTimestamp::now();
+        let req_builder = {
+            if do_http_body_extraction {
+                let bytes = hyper::body::to_bytes(req.into_body()).await?;
+
+                // TODO: Later we can interpret bytes for more advanced feature!!!
+
+                states
+                    .client
+                    .request(method, target_uri)
+                    .headers(headers)
+                    .body(bytes)
+            } else {
+                states
+                    .client
+                    .request(method, target_uri)
+                    .headers(headers)
+                    .body(req.into_body())
+            }
+        };
+
+        // Build the request toward the best target server.
+
+        let req_initiation_time = EpochTimestamp::now();
+
         // Execute the request.
         let resp = req_builder.send().await?;
 
@@ -82,16 +176,17 @@ impl ProxyServer {
         let builder = Response::builder().body(Body::from(resp.bytes().await?));
         let resp = builder.unwrap();
 
-        let resp_end = EpochTimestamp::now();
+        let resp_received = EpochTimestamp::now();
 
         // Log performance stats (ignore error).
         let _perf_report = NetworkMonitor::report_proxy_handler_resp_ok(
             &states.netmon_tx,
+            &mut stats_flags,
             states.port_idx,
             target_idx,
             handler_start,
-            send_start,
-            resp_end,
+            req_initiation_time,
+            resp_received,
         )
         .await;
 

@@ -1,17 +1,17 @@
 // Shared Global Variables
 //
-// Multi-threaded Arc tokio async RwLock protected.
+// Multi-threaded (tokio rt async) and Arc<RwLock> protected.
 //
 // Simple design:
 //
-//  - A single "all encompassing" Mutex for all global variables shared between the subsystems/threads
-//    (JsonRPCServer, ServerMonitor, ProxyServer etc...)
+//  - A single "all encompassing" RwLock for all global variables shared between the subsystems/threads
+//    (AdminController, NetworkMonitor, ProxyServer etc...)
 //
 //  - Each thread get a reference count (Arc) on the same 'SafeGlobal' instance.
 //
 //  - A thread can choose read/write access to that 'SafeGlobal'
 //
-
+// Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
 use crate::basic_types::*;

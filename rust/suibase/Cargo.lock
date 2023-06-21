@@ -1272,6 +1272,7 @@ dependencies = [
  "futures",
  "hyper",
  "log",
+ "mime",
  "notify",
  "pretty_env_logger",
  "reqwest",
