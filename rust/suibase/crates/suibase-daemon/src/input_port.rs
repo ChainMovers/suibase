@@ -1,14 +1,14 @@
 use crate::basic_types::*;
 use crate::target_server::TargetServer;
+use crate::workdirs::*;
 
 pub struct InputPort {
-    // Unique ID for this InputPort instance. Set once at construction (can never change).
-    obj_id: InstanceID,
+    managed_idx: Option<ManagedVecUSize>,
 
-    // Fast access to data structure for this input port.
-    //port_idx: ManagedVecUSize,
+    // The related workdir (localnet, testnet, mainnet?). Set once at construction.
+    workdir_idx: WorkdirIdx,
 
-    // TCP/UDP port number. Set once at construction (can never change).
+    // TCP/UDP port number. Set once at construction.
     port_number: u16,
 
     // Request that processing on this port be abandon.
@@ -41,17 +41,25 @@ pub struct InputPort {
 }
 
 impl InputPort {
-    pub fn new(port_number: u16) -> Self {
+    pub fn new(workdir_idx: WorkdirIdx, config: &WorkdirProxyConfig) -> Self {
         let now = EpochTimestamp::now();
 
+        // Iterate the links and add them to the target_servers list.
+        let mut target_servers = ManagedVec::new();
+        for (_key, value) in config.links.iter() {
+            if let Some(rpc) = &value.rpc {
+                target_servers.push(TargetServer::new(rpc.clone()));
+            }
+        }
+
         Self {
-            obj_id: gen_id(),
-            //port_idx: INPUT_PORT_MAX,
-            port_number,
+            managed_idx: None,
+            workdir_idx,
+            port_number: config.proxy_port_number,
             deactivate_request: false,
             proxy_server_running: false,
             healthy: false,
-            target_servers: ManagedVec::new(),
+            target_servers,
             num_ok_req: 0,
             last_ok_req: now,
             num_failed_req: 0,
@@ -61,8 +69,8 @@ impl InputPort {
         }
     }
 
-    pub fn id(&self) -> InstanceID {
-        self.obj_id
+    pub fn workdir_idx(&self) -> WorkdirIdx {
+        self.workdir_idx
     }
 
     pub fn port_number(&self) -> u16 {
@@ -106,5 +114,15 @@ impl InputPort {
 
     pub fn uri(&self, server_idx: TargetServerIdx) -> Option<String> {
         self.target_servers.get(server_idx).map(|ts| ts.uri())
+    }
+}
+
+impl ManagedElement for InputPort {
+    fn managed_idx(&self) -> Option<ManagedVecUSize> {
+        self.managed_idx
+    }
+
+    fn set_managed_idx(&mut self, index: Option<ManagedVecUSize>) {
+        self.managed_idx = index;
     }
 }

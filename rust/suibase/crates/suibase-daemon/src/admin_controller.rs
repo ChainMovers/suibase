@@ -3,14 +3,11 @@ use crate::globals::Globals;
 use crate::input_port::InputPort;
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::target_server::TargetServer;
-use crate::workdirs::Workdirs;
+use crate::workdirs::{WorkdirProxyConfig, Workdirs};
 
 use anyhow::Result;
 
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
-
-use std::{collections::HashMap, path::Path, path::PathBuf, str::FromStr};
 
 // Design (WIP)
 //
@@ -32,6 +29,7 @@ use std::{collections::HashMap, path::Path, path::PathBuf, str::FromStr};
 // if the workdir is deleted.
 
 pub struct AdminController {
+    managed_idx: Option<ManagedVecUSize>,
     globals: Globals,
     admctrl_rx: AdminControllerRx,
     admctrl_tx: AdminControllerTx,
@@ -73,73 +71,6 @@ impl std::fmt::Debug for AdminControllerMsg {
 pub type AdminControllerEventID = u8;
 pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 1;
 
-struct Link {
-    alias: String,
-    enabled: bool,
-    rpc: Option<String>,
-    ws: Option<String>,
-    priority: u8,
-}
-struct LinksConfig {
-    links: HashMap<String, Link>, // alias is also the key. TODO Look into Hashset?
-    links_overrides: bool,
-}
-
-impl LinksConfig {
-    pub fn new() -> Self {
-        Self {
-            links: HashMap::new(),
-            links_overrides: false,
-        }
-    }
-
-    pub fn links_overrides(&self) -> bool {
-        self.links_overrides
-    }
-
-    pub fn load_from_file(&mut self, path: &str) -> Result<()> {
-        // Example of suibase.yaml:
-        //
-        // links:
-        //  - alias: "localnet"
-        //    rpc: "http://0.0.0.0:9000"
-        //    ws: "ws://0.0.0.0:9000"
-        //    priority: 1
-        //  - alias: "localnet"
-        //    rpc: "http://0.0.0.0:9000"
-        //    ws: "ws://0.0.0.0:9000"
-        //    priority: 2
-        let contents = std::fs::read_to_string(path)?;
-        let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
-        // TODO: Implement links override flag.
-        if let Some(links) = yaml["links"].as_sequence() {
-            for link in links {
-                // TODO: Lots of robustness needed to be added here...
-                if let Some(alias) = link["alias"].as_str() {
-                    // Purpose of "enabled" is actually to disable a link... so if not present, default
-                    // to enabled.
-                    let enabled = link["enabled"].as_bool().unwrap_or_else(|| true);
-                    let rpc = link["rpc"].as_str().map(|s| s.to_string()); // Optional
-                    let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
-                                                                         // Should instead remove all alpha, do absolute value, and clamp to 1-255.
-                    let priority = link["priority"].as_u64().unwrap_or_else(|| u64::MAX) as u8;
-                    let link = Link {
-                        alias: alias.to_string(),
-                        enabled,
-                        rpc,
-                        ws,
-                        priority,
-                    };
-
-                    self.links.insert(alias.to_string(), link);
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
 impl AdminController {
     pub fn new(
         globals: Globals,
@@ -148,6 +79,7 @@ impl AdminController {
         netmon_tx: NetMonTx,
     ) -> Self {
         Self {
+            managed_idx: None,
             globals,
             admctrl_rx,
             admctrl_tx,
@@ -166,55 +98,62 @@ impl AdminController {
     }
 
     async fn process_config_msg(&mut self, msg: AdminControllerMsg, subsys: &SubsystemHandle) {
-        // TODO Check first if there is something to load... before getting a write lock.
+        // This process always only one Workdir at a time.
         log::info!("Processing config file change notification {:?}", msg);
 
-        let workdir = self.workdirs.find_workdir(&msg.data_string());
-        if workdir.is_none() {
+        let workdir_search_result = self.workdirs.find_workdir(&msg.data_string());
+        if workdir_search_result.is_none() {
             log::error!("Workdir not found for path {:?}", &msg.data_string());
             // Do nothing. Consume the message.
             return;
         }
-        let workdir = workdir.unwrap();
+        let (workdir_idx, workdir) = workdir_search_result.unwrap();
 
         // TODO Load the user config (if exists).
         // TODO Load the default (unless the user config completely overides it).
         // For now, just load the default.
-        let config_candidate = LinksConfig::new().load_from_file(workdir.suibase_yaml_default());
+        let mut workdir_config = WorkdirProxyConfig::new();
+        let try_load = workdir_config.load_from_file(workdir.suibase_yaml_default());
+        if try_load.is_err() {
+            log::error!(
+                "Failed to load config file {:?}",
+                workdir.suibase_yaml_default()
+            );
+            // Do nothing. Consume the message.
+            return;
+        }
 
-        // Get a write lock on the globals.
-        let port_id: InputPortIdx = {
+        // TODO Optimization. Get a read lock and check if the config has changed before getting a write lock.
+
+        // Need a write lock, so we need to modify the globals.
+        let port_id = {
+            // Get a write lock on the globals.
             let mut globals_guard = self.globals.write().await;
             let globals = &mut *globals_guard;
 
-            // Add default listening ports
+            // Apply the config to add/modify the related InputPort in the globals (as needed).
+            //
+            // Default listening ports
             //    44343 (mainnet RPC)
             //    44342 (testnet RPC)
             //    44341 (devnet RPC)
             //    44340 (localnet RPC)
             let ports = &mut globals.input_ports;
 
-            if ports.map.len() == 0 {
-                // Add target servers
-                let mut input_port = InputPort::new(44343);
-                let mut uri = "https://sui-rpc-mainnet.testnet-pride.com:443";
-                input_port
-                    .target_servers
-                    .push(TargetServer::new(uri.to_string()));
-
-                uri = "https://fullnode.mainnet.sui.io:443";
-                input_port
-                    .target_servers
-                    .push(TargetServer::new(uri.to_string()));
-
-                // TODO Rework this for error handling.
-                if let Some(port_id) = ports.map.push(input_port) {
+            // Find the InputPort with a matching workdir_idx.
+            let input_port_search = ports.iter().find(|p| p.1.workdir_idx() == workdir_idx);
+            if let Some((_port_idx, _input_port)) = input_port_search {
+                // TODO Modify the existing InputPort.
+                log::error!("Need to implement modify an existing InputPort on config change!");
+                ManagedVecUSize::MAX
+            } else {
+                // TODO Verify there is no conflicting port assigment.
+                let input_port = InputPort::new(workdir_idx, &workdir_config);
+                if let Some(port_id) = ports.push(input_port) {
                     port_id
                 } else {
                     ManagedVecUSize::MAX
                 }
-            } else {
-                ManagedVecUSize::MAX
             }
         }; // Release Globals write lock
 
@@ -250,7 +189,7 @@ impl AdminController {
         // the globals. Do not rely on the file watcher, instead prime the
         // event into the queue to force the config to be loaded right now.
         let workdirs = Workdirs::new();
-        for workdir in workdirs.workdirs {
+        for workdir in workdirs.workdirs.iter() {
             self.send_notif_config_file_change(workdir.1.suibase_yaml_default().to_string())
                 .await;
         }
@@ -268,23 +207,32 @@ impl AdminController {
     }
 }
 
+impl ManagedElement for AdminController {
+    fn managed_idx(&self) -> Option<ManagedVecUSize> {
+        self.managed_idx
+    }
+    fn set_managed_idx(&mut self, idx: Option<ManagedVecUSize>) {
+        self.managed_idx = idx;
+    }
+}
+
 #[test]
 fn test_load_config_from_suibase_default() {
     // Note: More of a functional test. Suibase need to be installed.
 
     // Test a known "standard" localnet suibase.yaml
     let workdirs = Workdirs::new();
-    let mut path = PathBuf::from(workdirs.suibase_home());
+    let mut path = std::path::PathBuf::from(workdirs.suibase_home());
     path.push("scripts");
     path.push("defaults");
     path.push("localnet");
     path.push("suibase.yaml");
 
-    let workdir = workdirs.find_workdir(&path.to_string_lossy().to_string());
-    assert!(workdir.is_some());
-    let workdir = workdir.unwrap();
+    let workdir_search_result = workdirs.find_workdir(&path.to_string_lossy().to_string());
+    assert!(workdir_search_result.is_some());
+    let (_workdir_idx, workdir) = workdir_search_result.unwrap();
 
-    let mut config = LinksConfig::new();
+    let mut config = WorkdirProxyConfig::new();
     let result = config.load_from_file(workdir.suibase_yaml_default());
     assert!(result.is_ok());
     // Expected:

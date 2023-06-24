@@ -17,26 +17,14 @@ use std::sync::Arc;
 use crate::basic_types::*;
 use crate::input_port::InputPort;
 
-pub struct PortMap {
-    pub map: ManagedVec<InputPort>,
-}
-
-impl PortMap {
-    pub fn new() -> Self {
-        Self {
-            map: ManagedVec::new(),
-        }
-    }
-}
-
 pub struct SafeGlobals {
-    pub input_ports: PortMap,
+    pub input_ports: ManagedVec<InputPort>,
 }
 
 impl SafeGlobals {
     pub fn new() -> Self {
         Self {
-            input_ports: PortMap::new(),
+            input_ports: ManagedVec::new(),
         }
     }
 }

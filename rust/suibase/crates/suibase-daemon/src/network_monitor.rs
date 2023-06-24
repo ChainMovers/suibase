@@ -174,7 +174,7 @@ impl NetworkMonitor {
                     EVENT_GLOBALS_AUDIT => {
                         log::info!("EVENT_GLOBALS_AUDIT");
                         // Send a health check request for every server due for it.
-                        for (port_idx, input_port) in input_ports.map.iter() {
+                        for (port_idx, input_port) in input_ports.iter() {
                             // Iterate every target_servers.
                             for (server_idx, target_server) in input_port.target_servers.iter() {
                                 if target_server.stats.most_recent_latency_report().is_none()
@@ -246,7 +246,7 @@ impl NetworkMonitor {
                     EVENT_REPORT_TGT_REQ_OK => {
                         // Consume the message.
                         log::info!("EVENT_REPORT_TGT_REQ_OK");
-                        if let Some(input_port) = input_ports.map.get_mut(cur_msg.port_idx) {
+                        if let Some(input_port) = input_ports.get_mut(cur_msg.port_idx) {
                             let target_server =
                                 input_port.target_servers.get_mut(cur_msg.server_idx);
                             if target_server.is_none() {

@@ -119,7 +119,7 @@ impl ProxyServer {
             let globals_read_guard = states.globals.read().await;
             let globals = &*globals_read_guard;
 
-            if let Some(input_port) = globals.input_ports.map.get(states.port_idx) {
+            if let Some(input_port) = globals.input_ports.get(states.port_idx) {
                 if let Some(target_server_idx) = do_force_target_server_idx {
                     if let Some(target_server) = input_port.target_servers.get(target_server_idx) {
                         Some((target_server_idx, target_server.uri()))
@@ -215,7 +215,7 @@ impl ProxyServer {
             let mut globals_write_guard = shared_states.globals.write().await;
             let globals = &mut *globals_write_guard;
             let input_ports = &mut globals.input_ports;
-            if let Some(input_port) = input_ports.map.get_mut(port_idx) {
+            if let Some(input_port) = input_ports.get_mut(port_idx) {
                 input_port.report_proxy_server_starting();
                 input_port.port_number()
             } else {
@@ -245,7 +245,7 @@ impl ProxyServer {
             let mut globals_write_guard = shared_states.globals.write().await;
             let globals = &mut *globals_write_guard;
             let input_port = &mut globals.input_ports;
-            if let Some(port_state) = input_port.map.get_mut(port_idx) {
+            if let Some(port_state) = input_port.get_mut(port_idx) {
                 port_state.report_proxy_server_not_running();
             }
         }
