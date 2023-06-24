@@ -6,7 +6,7 @@ use crate::app_error::AppError;
 use crate::basic_types::*;
 use crate::globals::Globals;
 use crate::network_monitor::{
-    NetMonTx, NetmonFlags, NetmonMsg, NetworkMonitor, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
+    NetMonTx, NetmonFlags, NetworkMonitor, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
 };
 
 use anyhow::{anyhow, Result};
@@ -36,15 +36,11 @@ pub struct SharedStates {
 
 pub struct ProxyServer {
     enabled: bool,
-    is_target_local: bool,
 }
 
 impl ProxyServer {
     pub fn new() -> Self {
-        Self {
-            enabled: false,
-            is_target_local: false,
-        }
+        Self { enabled: false }
     }
 
     // From https://docs.rs/axum/0.6.18/src/axum/json.rs.html#147

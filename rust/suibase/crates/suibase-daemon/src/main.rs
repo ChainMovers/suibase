@@ -3,14 +3,18 @@
 // main.rs does:
 //  - Validate command line.
 //  - Telemetry setup
-//  - Top level threads started here:
+//  - Top level threads started here. These runs until the program terminates:
 //     - NetworkMonitor: Maintains remote server stats. Info coming from multiple sources (on a mpsc channel).
 //     - AdminController: The thread validating and applying the config, and also handles the JSON-RPC API.
 //     - ClockThread: Trigger periodic events (network stats recalculation, watchdog etc...)
 //
-// Other threads exists but are not started here:
-//  - ProxyServer: Async handling of user traffic. One instance per listening port. Uses Axum/Hyper.
-//                 Started by the AdminController.
+// Other threads (not started here):
+//
+//  - ProxyServer: One long-running thread instance per listening port. Async handling of all user traffic.
+//                 Uses axum::Server and reqwest::Client. Started/stopped by the AdminController.
+//
+//  - RequestWorker: Perform on-demand JSON-RPC requests for health check+latency test.
+//                   Uses reqwest::Client. Started/stopped by the NetworkMonitor.
 //
 
 use std::sync::Arc;
@@ -31,8 +35,10 @@ mod globals;
 mod input_port;
 mod network_monitor;
 mod proxy_server;
+mod request_worker;
 mod server_stats;
 mod target_server;
+mod workdirs;
 
 use tokio::time::Duration;
 
@@ -60,16 +66,22 @@ impl Command {
     pub async fn execute(self, globals: Globals) -> Result<(), anyhow::Error> {
         match self {
             Command::Run {} => {
-                // Create internal messaging (between threads) channels.
+                // Create mpsc channels (internal messaging between threads).
                 //
-                // The NetworkMonitor receives network activities statistics from multiple producers.
+                // The AdminController handles events about configuration changes and API interactions.
                 //
-                // The reason that we use messaging is to minimize slowdown the user traffic for stats updates
-                // (e.g. waiting on a global write Mutex on a given request is not ideal).
+                // The NetworkMonitor handles events about network stats and periodic healtch checks.
+                //
+                let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(100);
                 let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(10000);
 
-                // Instantiate all subsystems (while none is "running" yet).
-                let admctrl = AdminController::new(globals.clone(), netmon_tx.clone());
+                // Instantiate and connect all subsystems (while none is "running" yet).
+                let admctrl = AdminController::new(
+                    globals.clone(),
+                    admctrl_rx,
+                    admctrl_tx.clone(),
+                    netmon_tx.clone(),
+                );
 
                 let netmon = NetworkMonitor::new(globals.clone(), netmon_rx, netmon_tx.clone());
 

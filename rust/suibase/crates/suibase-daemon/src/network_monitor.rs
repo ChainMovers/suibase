@@ -1,21 +1,17 @@
 use crate::basic_types::*;
 
 use crate::globals::Globals;
+use crate::request_worker::RequestWorker;
+
 use bitflags::bitflags;
 
 use anyhow::{anyhow, Result};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use axum::http::header;
-use reqwest::{Client, Method};
-
 use tokio::time::{Duration, Instant};
 
 pub const HEADER_SBSD_SERVER_IDX: &str = "X-SBSD-SERVER-IDX";
 pub const HEADER_SBSD_SERVER_HC: &str = "X-SBSD-SERVER-HC";
-
-const SERVER_CHECK_REQUEST_BODY: &str =
-    "{\"jsonrpc\":\"2.0\",\"method\":\"suix_getLatestSuiSystemState\",\"id\":1,\"params\":[\"\"]}";
 
 pub struct NetmonMsg {
     // Internal messaging. Sent for every user request/response.
@@ -40,14 +36,20 @@ impl NetmonMsg {
             para32: [0; 2],
         }
     }
+    pub fn server_idx(&self) -> u8 {
+        self.server_idx
+    }
+    pub fn para32(&self) -> [u32; 2] {
+        self.para32
+    }
 }
 
 // Events ID
 pub type NetmonEvent = u8;
-const EVENT_GLOBALS_AUDIT: u8 = 1; // Periodic read-only audit of the globals. May trig other events.
-const EVENT_REPORT_TGT_REQ_OK: u8 = 2; // proxy_server reporting stats on a successul request/response.
-const EVENT_REPORT_TGT_REQ_FAIL: u8 = 3; // proxy_server reporting stats on a failed request/response.
-const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 4; // Start an async health check (a request/response test) for one server.
+pub const EVENT_GLOBALS_AUDIT: u8 = 1; // Periodic read-only audit of the globals. May trig other events.
+pub const EVENT_REPORT_TGT_REQ_OK: u8 = 2; // proxy_server reporting stats on a successul request/response.
+pub const EVENT_REPORT_TGT_REQ_FAIL: u8 = 3; // proxy_server reporting stats on a failed request/response.
+pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 4; // Start an async health check (a request/response test) for one server.
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -80,23 +82,13 @@ pub type NetMonTx = tokio::sync::mpsc::Sender<NetmonMsg>;
 pub type NetMonRx = tokio::sync::mpsc::Receiver<NetmonMsg>;
 
 pub struct NetworkMonitor {
-    // Configuration.
-    pub enabled: bool,
     globals: Globals,
     netmon_rx: NetMonRx,
-    netmon_tx: NetMonTx,
-    client: Client,
 }
 
 impl NetworkMonitor {
-    pub fn new(globals: Globals, netmon_rx: NetMonRx, netmon_tx: NetMonTx) -> Self {
-        Self {
-            enabled: false,
-            globals,
-            netmon_rx,
-            netmon_tx,
-            client: Client::new(),
-        }
+    pub fn new(globals: Globals, netmon_rx: NetMonRx, _netmon_tx: NetMonTx) -> Self {
+        Self { globals, netmon_rx }
     }
 
     pub async fn send_event_globals_audit(tx_channel: &NetMonTx) -> Result<()> {
@@ -155,7 +147,11 @@ impl NetworkMonitor {
         })
     }
 
-    async fn process_read_only_globals(&mut self, msg: NetmonMsg) -> Option<NetmonMsg> {
+    async fn process_read_only_globals(
+        &mut self,
+        msg: NetmonMsg,
+        request_worker_tx: &NetMonTx,
+    ) -> Option<NetmonMsg> {
         // Process messages that requires READ only access to the globals.
         //
         // All the NetmonMsg are process single threaded (by the netmon thread).
@@ -187,7 +183,7 @@ impl NetworkMonitor {
                                         > Duration::from_secs(15)
                                 {
                                     let _ = NetworkMonitor::send_do_server_health_check(
-                                        &self.netmon_tx,
+                                        request_worker_tx,
                                         port_idx,
                                         server_idx,
                                         input_port.port_number(),
@@ -311,8 +307,12 @@ impl NetworkMonitor {
         }
     }
 
-    async fn process_msg(&mut self, msg: NetmonMsg) -> Option<NetmonMsg> {
-        // Process messages that do not require any global access.
+    async fn process_msg(
+        &mut self,
+        msg: NetmonMsg,
+        request_worker_tx: &NetMonTx,
+    ) -> Option<NetmonMsg> {
+        // Process messages that do not require any global mutex.
         //
         // All the NetmonMsg are process single threaded (by the netmon thread).
         //
@@ -329,18 +329,11 @@ impl NetworkMonitor {
             loop {
                 match cur_msg.event_id {
                     EVENT_DO_SERVER_HEALTH_CHECK => {
-                        log::info!("process_mut_globals EVENT_DO_SERVER_HEALTH_CHECK");
-                        // TODO Spawn a tokio task to do a htpp reqwest.
-                        let uri = format!("http://0.0.0.0:{}", cur_msg.para32[0]);
-                        let _ = self
-                            .client
-                            .request(Method::GET, uri)
-                            .header(header::CONTENT_TYPE, "application/json")
-                            .header(HEADER_SBSD_SERVER_IDX, cur_msg.flags.bits().to_string())
-                            .header(HEADER_SBSD_SERVER_HC, "1")
-                            .body(SERVER_CHECK_REQUEST_BODY)
-                            .send()
-                            .await;
+                        // Just forward to the request worker as-is.
+                        let _ = request_worker_tx.send(cur_msg).await.map_err(|e| {
+                            log::debug!("failed {}", e);
+                            // TODO Unlikely to happen, but should do some stats accumulation here.
+                        });
                     }
                     _ => {
                         log::debug!("process_msg unexpected event id {}", cur_msg.event_id);
@@ -369,7 +362,7 @@ impl NetworkMonitor {
         }
     }
 
-    async fn monitor_loop(&mut self, subsys: &SubsystemHandle) {
+    async fn event_loop(&mut self, subsys: &SubsystemHandle, request_worker_tx: NetMonTx) {
         let mut cur_msg: Option<NetmonMsg> = Option::None;
 
         while !subsys.is_shutdown_requested() {
@@ -383,7 +376,9 @@ impl NetworkMonitor {
             }
 
             // Do processing of consecutive messages that requires READ only globals mutex (if any)
-            cur_msg = self.process_read_only_globals(cur_msg.unwrap()).await;
+            cur_msg = self
+                .process_read_only_globals(cur_msg.unwrap(), &request_worker_tx)
+                .await;
 
             if cur_msg.is_none() {
                 continue;
@@ -397,14 +392,24 @@ impl NetworkMonitor {
             }
 
             // Do processing of consecutive messages that do not requires globals.
-            cur_msg = self.process_msg(cur_msg.unwrap()).await;
+            cur_msg = self.process_msg(cur_msg.unwrap(), &request_worker_tx).await;
         }
     }
 
     pub async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
         log::info!("started");
 
-        match self.monitor_loop(&subsys).cancel_on_shutdown(&subsys).await {
+        // Start another thread to initiate requests toward target servers (e.g. health check)
+        let (request_worker_tx, request_worker_rx) = tokio::sync::mpsc::channel(1000);
+        let request_worker = RequestWorker::new(request_worker_rx);
+        subsys.start("request-worker", move |a| request_worker.run(a));
+
+        // The loop to handle all incoming messages.
+        match self
+            .event_loop(&subsys, request_worker_tx)
+            .cancel_on_shutdown(&subsys)
+            .await
+        {
             Ok(()) => {
                 log::info!("shutting down - normal exit (2)");
                 Ok(())
@@ -416,3 +421,5 @@ impl NetworkMonitor {
         }
     }
 }
+
+// TODO Add test to verify that every event_id are handled (otherwise will have an infinite loop right now).

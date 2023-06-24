@@ -6,9 +6,10 @@ edition.workspace = true
 [dependencies]
 log = "0.4.0"
 pretty_env_logger = "0.4"
+home = "0.5.5"
 
 serde_json = "1.0"
-#crossbeam-channel = "0.5"
+serde_yaml = "0.9"
 bitflags = "2.3"
 
 axum = "0.6"
@@ -19,7 +20,9 @@ mime = "0.3.16"
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true
 
-notify = "6.0"
+notify = { version = "6.0", default-features = false, features = [
+    "macos_kqueue",
+] }
 
 anyhow.workspace = true
 

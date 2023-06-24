@@ -1,8 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/suibase-daemon",
-]
+members = ["crates/suibase-daemon"]
 
 [workspace.package]
 version = "0.0.1"
@@ -19,14 +17,12 @@ shared-crypto = { path = "../../../suibase/workdirs/active/sui-repo/crates/share
 futures = "0.3.25"
 
 tokio = { version = "1.28.1", features = ["full"] }
-tokio-graceful-shutdown = "0.12.1"
+tokio-graceful-shutdown = "0.13"
 
 anyhow = { version = "1.0.65", features = ["backtrace"] }
 thiserror = "1.0"
 
 # No upgrade to v4 until color are back.
-clap = { version = "3.2.22", features = [
-    "derive",
-] }
+clap = { version = "3.2.22", features = ["derive"] }
 
 colored = { version = "2.0.0" }
