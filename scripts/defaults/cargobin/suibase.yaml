@@ -5,6 +5,7 @@ terminal_color: true
 
 initial_fund_per_address: ~
 
+# sui-faucet not applicable to cargobin
 sui_faucet_enabled: false
 sui_faucet_genesis_funding: ~
 sui_faucet_host_ip: "0.0.0.0"
@@ -15,8 +16,13 @@ sui_faucet_coin_value: 200000000
 sui_faucet_request_buffer_size: 200
 sui_faucet_client_timeout_secs: 10
 
-default_repo_url: "https://github.com/MystenLabs/sui.git"
-default_repo_branch: "devnet"
+# default_repo not applicable to cargobin
+default_repo_url: ~
+default_repo_branch: ~
+
+# proxy not applicable to cargobin
+proxy_port_number: ~
+proxy_enabled: false
 
 links:
   - alias: "devnet"

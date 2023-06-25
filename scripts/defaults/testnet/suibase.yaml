@@ -18,6 +18,9 @@ sui_faucet_client_timeout_secs: 10
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "testnet"
 
+proxy_port_number: 44342
+proxy_enabled: true
+
 links:
   - alias: "sui.io"
     rpc: "https://fullnode.testnet.sui.io:443"

@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = ["crates/suibase-daemon"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+
+[workspace.dependencies]
+sui-sdk = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
+sui-json-rpc-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
+sui-keys = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
+sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+sui-adapter = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-adapter/" }
+shared-crypto = { path = "../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
+
+futures = "0.3.25"
+
+tokio = { version = "1.28.1", features = ["full"] }
+tokio-graceful-shutdown = "0.13"
+
+anyhow = { version = "1.0.65", features = ["backtrace"] }
+thiserror = "1.0"
+
+# No upgrade to v4 until color are back.
+clap = { version = "3.2.22", features = ["derive"] }
+
+colored = { version = "2.0.0" }

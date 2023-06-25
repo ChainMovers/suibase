@@ -38,6 +38,9 @@ sui_faucet_client_timeout_secs: 10
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
 
+proxy_port_number: 44340
+proxy_enabled: false
+
 links:
   - alias: "localnet"
     rpc: "http://0.0.0.0:9000"
