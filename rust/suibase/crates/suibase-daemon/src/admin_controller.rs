@@ -1,9 +1,12 @@
 use crate::basic_types::*;
+use crate::managed_vec::*;
+
 use crate::globals::Globals;
 use crate::input_port::InputPort;
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
 use crate::workdirs::{WorkdirProxyConfig, Workdirs};
+use crate::workdirs_watcher::WorkdirsWatcher;
 
 use anyhow::Result;
 
@@ -43,17 +46,19 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 pub struct AdminControllerMsg {
     // Message sent toward the AdminController from various sources.
     event_id: AdminControllerEventID,
-    data_string: String,
+    workdir_idx: Option<WorkdirIdx>,
+    data_string: Option<String>,
 }
 
 impl AdminControllerMsg {
     pub fn new() -> Self {
         Self {
             event_id: 0,
-            data_string: String::new(),
+            workdir_idx: None,
+            data_string: None,
         }
     }
-    pub fn data_string(&self) -> String {
+    pub fn data_string(&self) -> Option<String> {
         self.data_string.clone()
     }
 }
@@ -91,7 +96,7 @@ impl AdminController {
     async fn send_notif_config_file_change(&mut self, path: String) {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
-        msg.data_string = path;
+        msg.data_string = Some(path);
         let _ = self.admctrl_tx.send(msg).await.map_err(|e| {
             log::debug!("failed {}", e);
         });
@@ -101,7 +106,19 @@ impl AdminController {
         // This process always only one Workdir at a time.
         log::info!("Processing config file change notification {:?}", msg);
 
-        let workdir_search_result = self.workdirs.find_workdir(&msg.data_string());
+        if msg.event_id != EVENT_NOTIF_CONFIG_FILE_CHANGE {
+            log::error!("Unexpected event_id {:?}", msg.event_id);
+            // Do nothing. Consume the message.
+            return;
+        }
+
+        if msg.data_string().is_none() {
+            log::error!("EVENT_NOTIF_CONFIG_FILE_CHANGE missing path information");
+            return;
+        }
+        let path = msg.data_string().unwrap();
+
+        let workdir_search_result = self.workdirs.find_workdir(&path);
         if workdir_search_result.is_none() {
             log::error!("Workdir not found for path {:?}", &msg.data_string());
             // Do nothing. Consume the message.
@@ -112,8 +129,10 @@ impl AdminController {
         // TODO Load the user config (if exists).
         // TODO Load the default (unless the user config completely overides it).
         // For now, just load the default.
+
         let mut workdir_config = WorkdirProxyConfig::new();
-        let try_load = workdir_config.load_from_file(workdir.suibase_yaml_default());
+        let try_load = workdir_config
+            .load_from_file(&workdir.suibase_yaml_default().to_string_lossy().to_string());
         if try_load.is_err() {
             log::error!(
                 "Failed to load config file {:?}",
@@ -162,7 +181,7 @@ impl AdminController {
             let proxy_server = ProxyServer::new();
             let globals = self.globals.clone();
             let netmon_tx = self.netmon_tx.clone();
-            subsys.start("proxy_server", move |a| {
+            subsys.start("proxy-server", move |a| {
                 proxy_server.run(a, port_id, globals, netmon_tx)
             });
         }
@@ -188,10 +207,24 @@ impl AdminController {
         // This is the point where the user configuration can be loaded into
         // the globals. Do not rely on the file watcher, instead prime the
         // event into the queue to force the config to be loaded right now.
+
         let workdirs = Workdirs::new();
-        for workdir in workdirs.workdirs.iter() {
-            self.send_notif_config_file_change(workdir.1.suibase_yaml_default().to_string())
+        /*
+        for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
+            if workdir.is_user_request_start() {
+                self.send_notif_config_file_change(
+                    workdir.suibase_yaml_default().to_string_lossy().to_string(),
+                )
                 .await;
+            }
+        }*/
+
+        // Initialize a subsystem to watch workdirs files. Notifications are then send back
+        // to this thread on the AdminController channel.
+        {
+            let admctrl_tx = self.admctrl_tx.clone();
+            let mut workdirs_watcher = WorkdirsWatcher::new(workdirs, admctrl_tx);
+            subsys.start("workdirs-watcher", move |a| workdirs_watcher.run(a));
         }
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
@@ -233,7 +266,13 @@ fn test_load_config_from_suibase_default() {
     let (_workdir_idx, workdir) = workdir_search_result.unwrap();
 
     let mut config = WorkdirProxyConfig::new();
-    let result = config.load_from_file(workdir.suibase_yaml_default());
+    let result = config.load_from_file(
+        &workdir
+            .suibase_yaml_default()
+            .to_string_lossy()
+            .to_string()
+            .to_string(),
+    );
     assert!(result.is_ok());
     // Expected:
     // - alias: "localnet"

@@ -14,8 +14,8 @@
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
-use crate::basic_types::*;
 use crate::input_port::InputPort;
+use crate::managed_vec::ManagedVec;
 
 pub struct SafeGlobals {
     pub input_ports: ManagedVec<InputPort>,

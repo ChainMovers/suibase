@@ -1,12 +1,13 @@
-// Workdirs and paths related to the user's installation.
+// File access to the user's Suibase installation (~/suibase)
 //
-// Focus is on converting suibase.yaml to roughly matching Rust structs.
+// In particular, converts suibase.yaml to roughly matching Rust structs.
 //
 use home::home_dir;
 use std::collections::HashMap;
 
-use crate::basic_types::*;
-use std::path::PathBuf;
+use crate::managed_vec::*;
+
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -23,6 +24,7 @@ pub struct Link {
 }
 pub struct WorkdirProxyConfig {
     // Created from parsing/merging suibase.yaml file(s) for a single workdir.
+    pub proxy_enabled: bool,
     pub links: HashMap<String, Link>, // alias is also the key. TODO Look into Hashset?
     pub links_overrides: bool,
     pub proxy_port_number: u16,
@@ -31,6 +33,7 @@ pub struct WorkdirProxyConfig {
 impl WorkdirProxyConfig {
     pub fn new() -> Self {
         Self {
+            proxy_enabled: false,
             links: HashMap::new(),
             links_overrides: false,
             proxy_port_number: 0,
@@ -96,8 +99,11 @@ impl WorkdirProxyConfig {
 pub struct Workdir {
     managed_idx: Option<ManagedVecUSize>,
     name: String,
-    suibase_yaml_default: String,
-    suibase_yaml_user: String,
+    path: PathBuf,
+    state_path: PathBuf,
+    suibase_state_file: PathBuf,
+    suibase_yaml_user: PathBuf,
+    suibase_yaml_default: PathBuf,
 }
 
 impl Workdir {
@@ -105,18 +111,45 @@ impl Workdir {
         &self.name
     }
 
-    pub fn suibase_yaml_default(&self) -> &str {
-        &self.suibase_yaml_default
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
-    pub fn suibase_yaml_user(&self) -> &str {
+    pub fn state_path(&self) -> &Path {
+        &self.state_path
+    }
+
+    pub fn is_user_request_start(&self) -> bool {
+        // Return true if suibase_state_file() exists, and if so, check if its text
+        // content is ""start".
+        // If there is any error, return false.
+        //
+        // Must not panic.
+        if let Ok(contents) = std::fs::read_to_string(self.suibase_state_file()) {
+            if contents == "start" {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn suibase_state_file(&self) -> &Path {
+        &self.suibase_state_file
+    }
+
+    pub fn suibase_yaml_user(&self) -> &Path {
         &self.suibase_yaml_user
+    }
+
+    pub fn suibase_yaml_default(&self) -> &Path {
+        &self.suibase_yaml_default
     }
 }
 
 pub struct Workdirs {
     pub workdirs: ManagedVec<Workdir>,
     suibase_home: String,
+    path: PathBuf,
 }
 
 impl Workdirs {
@@ -129,28 +162,47 @@ impl Workdirs {
             PathBuf::from("/tmp")
         };
 
-        // Generate all the suibase paths for loading the config files of each WORKDIRS_KEYS.
+        // Generate all the suibase paths for state and config files of each WORKDIRS_KEYS.
         let mut workdirs = ManagedVec::new();
 
+        let mut workdirs_path = home_dir.clone();
+        workdirs_path.push("suibase");
+        workdirs_path.push("workdirs");
+
         for workdir in WORKDIRS_KEYS.iter() {
+            // Paths
+            let mut path = home_dir.clone();
+            path.push("suibase");
+            path.push("workdirs");
+            path.push(workdir);
+
+            let mut state_path = path.clone();
+            state_path.push(".state");
+
+            // Files
+            let mut state = state_path.clone();
+            state.set_file_name("user_request");
+
+            let mut user = path.clone();
+            user.set_file_name("suibase");
+            user.set_extension("yaml");
+
             let mut default = home_dir.clone();
             default.push("suibase");
             default.push("scripts");
             default.push("defaults");
             default.push(workdir);
-            default.push("suibase.yaml");
-
-            let mut user = home_dir.clone();
-            user.push("suibase");
-            user.push("workdirs");
-            user.push(workdir);
-            user.push("suibase.yaml");
+            default.set_file_name("suibase");
+            default.set_extension("yaml");
 
             workdirs.push(Workdir {
                 managed_idx: None,
                 name: workdir.to_string(),
-                suibase_yaml_default: default.to_string_lossy().to_string(),
-                suibase_yaml_user: user.to_string_lossy().to_string(),
+                path,
+                state_path,
+                suibase_state_file: state,
+                suibase_yaml_user: user,
+                suibase_yaml_default: default,
             });
         }
 
@@ -160,11 +212,16 @@ impl Workdirs {
         Self {
             suibase_home: suibase_home.to_string_lossy().to_string(),
             workdirs,
+            path: workdirs_path,
         }
     }
 
     pub fn suibase_home(&self) -> &str {
         &self.suibase_home
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     // Given a path string, find the corresponding workdir object.

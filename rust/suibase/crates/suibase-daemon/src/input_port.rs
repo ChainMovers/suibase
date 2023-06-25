@@ -1,4 +1,5 @@
 use crate::basic_types::*;
+use crate::managed_vec::*;
 use crate::target_server::TargetServer;
 use crate::workdirs::*;
 

@@ -19,6 +19,7 @@ default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
 
 proxy_port_number: 44341
+proxy_enabled: false
 
 links:
   - alias: "sui.io"

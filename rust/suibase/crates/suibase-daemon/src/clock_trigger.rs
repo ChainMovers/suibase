@@ -5,12 +5,12 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use crate::network_monitor::{NetMonTx, NetworkMonitor};
 use tokio::time::{interval, Duration};
-pub struct ClockThread {
+pub struct ClockTrigger {
     _globals: Globals,
     netmon_tx: NetMonTx,
 }
 
-impl ClockThread {
+impl ClockTrigger {
     pub fn new(globals: Globals, netmon_tx: NetMonTx) -> Self {
         Self {
             _globals: globals,

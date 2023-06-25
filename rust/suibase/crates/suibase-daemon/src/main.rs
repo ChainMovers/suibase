@@ -6,7 +6,7 @@
 //  - Top level threads started here. These runs until the program terminates:
 //     - NetworkMonitor: Maintains remote server stats. Info coming from multiple sources (on a mpsc channel).
 //     - AdminController: The thread validating and applying the config, and also handles the JSON-RPC API.
-//     - ClockThread: Trigger periodic events (network stats recalculation, watchdog etc...)
+//     - ClockTrigger: Send periodic events (network stats recalculation, watchdog etc...)
 //
 // Other threads (not started here):
 //
@@ -16,6 +16,8 @@
 //  - RequestWorker: Perform on-demand JSON-RPC requests for health check+latency test.
 //                   Uses reqwest::Client. Started/stopped by the NetworkMonitor.
 //
+//  - WorkdirsWatcher: Watch for changes to config files in the suibase workdirs. Send events to AdminController.
+//                     Started/stopped by the AdminController.
 
 use std::sync::Arc;
 
@@ -23,22 +25,24 @@ use anyhow::Result;
 
 use clap::*;
 
-use clock_thread::ClockThread;
+use clock_trigger::ClockTrigger;
 use colored::Colorize;
 use pretty_env_logger::env_logger::{Builder, Env};
 
 mod admin_controller;
 mod app_error;
 mod basic_types;
-mod clock_thread;
+mod clock_trigger;
 mod globals;
 mod input_port;
+mod managed_vec;
 mod network_monitor;
 mod proxy_server;
 mod request_worker;
 mod server_stats;
 mod target_server;
 mod workdirs;
+mod workdirs_watcher;
 
 use tokio::time::Duration;
 
@@ -85,7 +89,7 @@ impl Command {
 
                 let netmon = NetworkMonitor::new(globals.clone(), netmon_rx, netmon_tx.clone());
 
-                let clock: ClockThread = ClockThread::new(globals.clone(), netmon_tx.clone());
+                let clock: ClockTrigger = ClockTrigger::new(globals.clone(), netmon_tx.clone());
 
                 // Start the subsystems.
                 Toplevel::new()
