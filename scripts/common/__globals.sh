@@ -710,8 +710,7 @@ is_workdir_ok() {
     false; return;
   fi
 
-  if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ] ||
-     [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ] ||
+  if [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ] ||
      [ ! -f "$WORKDIRS/$WORKDIR/workdir-exec" ]; then
     false; return;
   fi
