@@ -23,6 +23,9 @@ usage_local() {
   echo "  Workdir to simulate a Sui network running fully on this machine"
   echo "  Accessible from $CFG_links_1_rpc"
   echo
+  echo "  If not sure what to do, then type '$WORKDIR start' and all that is"
+  echo "  needed will be downloaded, built and started for you."
+  echo
   echo_low_yellow "USAGE: "; echo;
   echo "      $WORKDIR <SUBCOMMAND> <Options>"
   echo
@@ -33,16 +36,20 @@ usage_local() {
   echo_low_green "   status"; echo "   indicate if running or not"
   echo
   echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
-  echo "            the configuration before doing the first start."
+  echo "            the configuration before doing the first build/start."
+  echo
+  echo_low_green "   build"; echo "    Download/update local repo and build binaries only. You may"
+  echo "            have to do next an update, start or regen to create a wallet."
   echo
   echo_low_green "   delete"; echo "   Delete workdir completely. Can free up a lot of"
   echo "            disk space for when the localnet is not needed."
   echo
-  echo_low_green "   update"; echo "   Update local sui repo and regen $WORKDIR."
+  echo_low_green "   update"; echo "   Update local sui repo, build binaries, create a wallet as"
+  echo "            as needed and regen the network (gas refueling)."
   echo "            Note: Will not do any git operations if your own"
   echo "                  repo is configured with set-sui-repo."
   echo
-  echo_low_green "   regen"; echo "    Only regenerate $WORKDIR. Useful for gas refueling."
+  echo_low_green "   regen"; echo "    Only regenerate the network. Useful for gas refueling."
   echo
   echo_low_green "   publish"; echo "  Publish the module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
@@ -69,6 +76,9 @@ usage_remote() {
   echo_low_yellow "USAGE: "; echo;
   echo "      $WORKDIR <SUBCOMMAND> <Options>"
   echo
+  echo "  If not sure what to do, then type '$WORKDIR start' and all that is"
+  echo "  needed will be downloaded, built and started for you."
+  echo
   echo_low_yellow "SUBCOMMANDS:"; echo;
   echo
   echo_low_green "   start"; echo "    start $WORKDIR processes (will run in background)"
@@ -76,9 +86,13 @@ usage_remote() {
   echo_low_green "   status"; echo "   indicate if running or not"
   echo
   echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
-  echo "            the configuration before doing the first start."
+  echo "            the configuration before doing the first build/start."
   echo
-  echo_low_green "   update"; echo "   Update local sui repo and regen $WORKDIR."
+  echo_low_green "   build"; echo "    Download/update local repo and build binaries only. You"
+  echo "            may have to do next an update or start to create a wallet."
+  echo
+  echo_low_green "   update"; echo "   Update local sui repo, build binaries, create a wallet as"
+  echo "            needed."
   echo "            Note: Will not do any git operations if your own"
   echo "                  repo is configured with set-sui-repo."
   echo
@@ -123,6 +137,7 @@ workdir_exec() {
     stop) CMD_STOP_REQ=true ;;
     status) CMD_STATUS_REQ=true ;;
     create) CMD_CREATE_REQ=true ;;
+    build) CMD_BUILD_REQ=true ;;
     delete) CMD_DELETE_REQ=true ;;
     update) CMD_UPDATE_REQ=true ;;
     regen) CMD_REGEN_REQ=true ;;
@@ -176,6 +191,14 @@ workdir_exec() {
         esac
         shift
       done ;; # End parsing publish
+    build)
+      while [[ "$#" -gt 0 ]]; do
+        case $1 in
+          --debug|--nobinary) echo "Option '$1' not compatible with build command"; exit 1 ;;
+          *) PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1" ;;
+        esac
+        shift
+      done ;; # End parsing build
     *)
       while [[ "$#" -gt 0 ]]; do
         case $1 in
@@ -214,6 +237,21 @@ workdir_exec() {
     source "$SUIBASE_DIR"/repair
   fi
 
+  if [ "$CFG_network_type" = "local" ]; then
+    is_local=true
+  else
+    is_local=false
+  fi
+
+  # Detect commands that should not be done on a remote network.
+  if [ "$is_local" = false ]; then
+    case "$CMD_REQ" in
+      regen)
+        echo "Command '$CMD_REQ' not allowed for $WORKDIR"
+        exit 1 ;;
+    esac
+  fi
+
   ###################################################################
   #
   #  Most command line validation done (PASSTHRU_OPTIONS remaining)
@@ -222,11 +260,6 @@ workdir_exec() {
   #
   ####################################################################
 
-  if [ "$CFG_network_type" = "local" ]; then
-    is_local=true
-  else
-    is_local=false
-  fi
 
   if $is_local; then
     # shellcheck source=SCRIPTDIR/__sui-faucet-process.sh
@@ -585,7 +618,27 @@ workdir_exec() {
     ALLOW_BUILD="false"
   fi
 
-  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BUILD";
+  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BUILD" "$PASSTHRU_OPTIONS"
+
+  if [ "$CMD_BUILD_REQ" = true ]; then
+    # No further action needed when "build" command.
+    local _BINARIES=()
+    if [ -f "$SUI_BIN_DIR/sui" ]; then
+      _BINARIES+=("sui")
+    fi
+    if [ -f "$SUI_BIN_DIR/sui-faucet" ]; then
+      _BINARIES+=("sui-faucet")
+    fi
+    if [ -f "$SUI_BIN_DIR/sui-node" ]; then
+      _BINARIES+=("sui-node")
+    fi
+    if [ ${#_BINARIES[@]} -gt 0 ]; then
+      info_exit "Binaries available in '$SUI_BIN_DIR' are: ${_BINARIES[*]}"
+
+    else
+      info_exit "No binaries found in 'SUI_BIN_DIR'. Check for errors."
+    fi
+  fi
 
   if [ "$ALLOW_BUILD" = false ]; then
     # Can't do anything more than getting the repo.

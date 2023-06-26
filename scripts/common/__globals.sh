@@ -272,7 +272,7 @@ source "$SCRIPTS_DIR/common/__parse-yaml.sh"
 update_suibase_yaml() {
   local _WORKDIR="$WORKDIR"
 
-  if [ ! -f "$SCRIPTS_DIR/defaults/$_WORKDIR" ]; then
+  if [ ! -d "$SCRIPTS_DIR/defaults/$_WORKDIR" ]; then
      # If the specified workdir name does not exists, fallback
      # to localnet defaults (least damageable possible).
     _WORKDIR="localnet"
@@ -381,6 +381,7 @@ export -f check_yaml_parsed
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1";
   ALLOW_BUILD="$2";
+  PASSTHRU_OPTIONS="$3";
 
   local _BUILD_DESC
   if [ "$CFG_network_type" = "local" ]; then
@@ -483,9 +484,9 @@ build_sui_repo_branch() {
 
   # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
   if [ $is_local = true ]; then
-    (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
   else
-    (if cd "$SUI_REPO_DIR"; then cargo build -p sui; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    (if cd "$SUI_REPO_DIR"; then cargo build -p sui $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
   fi
 
 

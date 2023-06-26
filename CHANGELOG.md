@@ -12,11 +12,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Scripts: (#57) New "build" command (e.g. "testnet build -p sui-node").
 - Transacction result options to cookbook
 - Python transactions to cookbook code-snippets
 
 ### Fixed
 
+- Scripts: (#60) "localnet start" now works even when suibase.yaml is deleted.
+- Scripts: (#43) Ignore http_proxy envs when trying to use the sui-faucet.
 - Typos in Keypair cookbook code-snippets
 
 ### Changed
