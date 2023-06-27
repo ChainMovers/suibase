@@ -634,7 +634,6 @@ workdir_exec() {
     fi
     if [ ${#_BINARIES[@]} -gt 0 ]; then
       info_exit "Binaries available in '$SUI_BIN_DIR' are: ${_BINARIES[*]}"
-
     else
       info_exit "No binaries found in 'SUI_BIN_DIR'. Check for errors."
     fi

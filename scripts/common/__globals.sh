@@ -483,22 +483,25 @@ build_sui_repo_branch() {
   fi
 
   # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
-  if [ $is_local = true ]; then
-    (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  if [ -z "$PASSTHRU_OPTIONS" ]; then
+    if [ $is_local = true ]; then
+      (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    else
+      (if cd "$SUI_REPO_DIR"; then cargo build -p sui; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    fi
+
+    # Sanity test that the sui binary works
+    if [ ! -f "$SUI_BIN_DIR/sui" ]; then
+      setup_error "$SUI_BIN_DIR/sui binary not found"
+    fi
+
+    update_SUI_VERSION_var;
+
+    # Check if sui is recent enough.
+    version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
   else
-    (if cd "$SUI_REPO_DIR"; then cargo build -p sui $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    (if cd "$SUI_REPO_DIR"; then cargo build $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
   fi
-
-
-  # Sanity test that the sui binary works
-  if [ ! -f "$SUI_BIN_DIR/sui" ]; then
-    setup_error "$SUI_BIN_DIR/sui binary not found"
-  fi
-
-  update_SUI_VERSION_var;
-
-  # Check if sui is recent enough.
-  version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
 }
 
 export -f build_sui_repo_branch
