@@ -668,24 +668,28 @@ workdir_exec() {
   ensure_client_OK;
 
   # print sui envs to help debugging (if someone else is using this script).
-  $SUI_EXEC client envs
+
+  CLIENT_YAML_ENVS=$($SUI_EXEC client envs | grep $WORKDIR)
+  echo "SUI envs: $CLIENT_YAML_ENVS"
   echo "========"
 
-  if $is_local; then
-    echo "All client addresses with coins:"
-  else
-    echo "All client addresses:"
-  fi
+  echo "All client addresses:"
 
   $SUI_EXEC client addresses
   echo "========"
 
-  WALLET_ADDR=$($SUI_EXEC client active-address)
-  echo "Coins owned by $WALLET_ADDR (active):"
-  $SUI_EXEC client gas
+  WALLET_ADDR=$($SUI_EXEC client active-address)  
+  COINS_OWNED=$($SUI_EXEC client gas)
+  COINS_SUM=$(echo "$COINS_OWNED" | awk "{ sum += \$3} END { print sum }")
+  if [ "$COINS_SUM" = "0" ]; then
+    echo "Coins owned by $WALLET_ADDR (active): None"
+  else
+    echo "Coins owned by $WALLET_ADDR (active):"
+    echo "$COINS_OWNED"
+    echo "----------------------------------------------------------------------------------"
+  fi
 
   # TODO Display only if a shortcut is defined.
-  echo "----------------------------------------------------------------------"
   echo
   echo "Remember:"
   echo "  Use \"$SUI_SCRIPT\" to access your $WORKDIR"
@@ -754,6 +758,9 @@ start_all_services() {
   #   0: Success (all process needed to be started were started)
   #   1: Everything was already running. Call was NOOP (except for user_request writing)
   set_key_value "user_request" "start";
+
+  # A good time to double-check if some commands from the suibase.yaml need to be applied.
+  copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
 
   # Verify if the faucet is supported for this version.
   local _SUPPORT_FAUCET

@@ -101,7 +101,7 @@ create_faucet_keystore() {
   echo "]" >> "$_DEST_DIR/sui.keystore"
 
   # Take a client known to be compatible as a template.
-  cp "$_SRC_DIR/client.yaml" "$_DEST_DIR"
+  \cp "$_SRC_DIR/client.yaml" "$_DEST_DIR"
 
   # Adjust the sui.keystore path
   sed -i.bak -e "s+$_SRC_DIR+$_DEST_DIR+g" "$_DEST_DIR/client.yaml" && rm "$_DEST_DIR/client.yaml.bak"
@@ -162,17 +162,25 @@ workdir_init_local() {
         else
           _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
         fi
-        yes | cp -rf "$_STATIC_SOURCE_DIR/config.yaml" "$_GENDATA_DIR"
+        \cp -rf "$_STATIC_SOURCE_DIR/config.yaml" "$_GENDATA_DIR"
       fi
 
-      yes | cp -rf "$_STATIC_SOURCE_DIR/sui.keystore" "$_GENDATA_DIR"
-      yes | cp -rf "$_STATIC_SOURCE_DIR/client.yaml" "$_GENDATA_DIR"
-      yes | cp -rf "$_STATIC_SOURCE_DIR/recovery.txt" "$_GENDATA_DIR"
+      \cp -rf "$_STATIC_SOURCE_DIR/client.yaml" "$_GENDATA_DIR"
+      \cp -rf "$_STATIC_SOURCE_DIR/recovery.txt" "$_GENDATA_DIR"
+
+      if [[ "${CFG_auto_key_generation:?}" == 'true' ]]; then
+        \cp -rf "$_STATIC_SOURCE_DIR/sui.keystore" "$_GENDATA_DIR"      
+      else
+        # Create an empty sui.keystore and clear the active-address in client.yaml.
+        clear_keystore "$_GENDATA_DIR"                
+        # Replace everything after 'active_address: ' with a ~ in the file $_GENDATA_DIR/client.yaml
+        sed -i.bak -e 's/active_address: .*/active_address: ~/' "$_GENDATA_DIR/client.yaml" && rm "$_GENDATA_DIR/client.yaml.bak"
+      fi
 
       mkdir -p "$_GENDATA_DIR/faucet"
-      yes | cp -rf "$_STATIC_SOURCE_DIR/faucet_sui.keystore" "$_GENDATA_DIR/faucet/sui.keystore"
-      yes | cp -rf "$_STATIC_SOURCE_DIR/faucet_client.yaml" "$_GENDATA_DIR/faucet/client.yaml"
-      yes | cp -rf "$_STATIC_SOURCE_DIR/faucet_wallet_address.txt" "$_GENDATA_DIR/faucet"
+      \cp -rf "$_STATIC_SOURCE_DIR/faucet_sui.keystore" "$_GENDATA_DIR/faucet/sui.keystore"
+      \cp -rf "$_STATIC_SOURCE_DIR/faucet_client.yaml" "$_GENDATA_DIR/faucet/client.yaml"
+      \cp -rf "$_STATIC_SOURCE_DIR/faucet_wallet_address.txt" "$_GENDATA_DIR/faucet"
     else
       # This is the logic for when set-sui-repo
       local _GENDATA_DIR="$GENERATED_GENESIS_DATA_DIR/user-repo"
@@ -181,24 +189,25 @@ workdir_init_local() {
         # Generate the genesis data for the very first time.
         $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >& /dev/null
         clear_keystore "$_GENDATA_DIR"
-        add_test_addresses "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
+        add_test_addresses "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"        
         create_faucet_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR" "$_GENDATA_DIR/faucet"
+
+        \cp "$_GENDATA_DIR/sui.keystore" "$_GENDATA_DIR/sui.keystore.temp_save"
 
         # Temporarly "merge" the keystores for generating the config.yaml
         # (so the faucet address can get prefunded as well)
-        cp "$_GENDATA_DIR/sui.keystore" "$_GENDATA_DIR/sui.keystore.temp_save"
-
-        # Doing it this way to minimize risk with portability issue with newline.
-        rm -f "$_GENDATA_DIR/sui.keystore"
-        # Remove last line ']', append ','
-        sed '$d' "$_GENDATA_DIR/sui.keystore.temp_save" | sed '$s/$/,/' > "$_GENDATA_DIR/sui.keystore"
-        # Append faucet address
-        _FAUCET_ADDR=$(head -n 2 "$_GENDATA_DIR/faucet/sui.keystore" | tail -n 1)
-        echo "  $_FAUCET_ADDR" >> "$_GENDATA_DIR/sui.keystore"
-        echo "]" >> "$_GENDATA_DIR/sui.keystore"
-
+        load_ACTIVE_KEYSTORE "$_GENDATA_DIR/sui.keystore"
+        # Save a copy of ACTIVE_KEYSTORE into PREV_KEYSTORE
+        PREV_KEYSTORE=("${ACTIVE_KEYSTORE[@]}")
+        load_ACTIVE_KEYSTORE "$_GENDATA_DIR/faucet/sui.keystore"
+        # Merge the keystores
+        ACTIVE_KEYSTORE=("${PREV_KEYSTORE[@]}" "${ACTIVE_KEYSTORE[@]}")
+        # Write the ACTIVE_KEYSTORE array.                
+        write_ACTIVE_KEYSTORE "$_GENDATA_DIR/sui.keystore"        
+                
         # Generate the config.yaml that will allow a deterministic setup.
-        $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml" >& /dev/null
+        #$SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml" >& /dev/null
+        $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml"
         echo "New client addresses generated (new client.yaml and sui.keystore)"
 
         # Save this temporary keystore for potentially debugging.
@@ -208,7 +217,7 @@ workdir_init_local() {
         mv "$_GENDATA_DIR/sui.keystore.temp_save" "$_GENDATA_DIR/sui.keystore"
 
         # Save an original of config.yaml for debugging (because it is modified on regen).
-        cp "$_GENDATA_DIR/config.yaml" "$_GENDATA_DIR/config.yaml.dbg_original"
+        \cp "$_GENDATA_DIR/config.yaml" "$_GENDATA_DIR/config.yaml.dbg_original"
 
         # Transform the client.yaml into templates (so we can easily replace any path into it later).
         _SEARCH_STRING="File:.*\$"
@@ -230,10 +239,10 @@ workdir_init_local() {
 
     apply_suibase_yaml_to_config_yaml "$_GENDATA_DIR";
 
-   # Important NO OTHER files allowed in $_GENDATA_DIR prior to the genesis call, otherwise
-   # it will fail!
-    yes | cp -rf "$_GENDATA_DIR/sui.keystore" "$CONFIG_DATA_DIR_DEFAULT"
-    yes | cp -rf "$_GENDATA_DIR/client.yaml" "$CONFIG_DATA_DIR_DEFAULT"
+    # Important NO OTHER files allowed in $_GENDATA_DIR prior to the genesis call, otherwise
+    # it will fail!
+    \cp -rf "$_GENDATA_DIR/sui.keystore" "$CONFIG_DATA_DIR_DEFAULT"
+    \cp -rf "$_GENDATA_DIR/client.yaml" "$CONFIG_DATA_DIR_DEFAULT"
 
     # Replace a string in client.yaml to end up with an absolute path to the keystore.
     # Notice sed uses '+'' for seperator instead of '/' to avoid clash
@@ -249,13 +258,32 @@ workdir_init_local() {
     fi
 
     # Now is a safe time to add more files to $_GENDATA_DIR
-    yes | cp -rf "$_GENDATA_DIR/recovery.txt" "$CONFIG_DATA_DIR_DEFAULT"
+    if [ -f "$_GENDATA_DIR/recovery.txt" ]; then
+      \cp -rf "$_GENDATA_DIR/recovery.txt" "$CONFIG_DATA_DIR_DEFAULT"
+    fi
+
+    # Adjust the sui.keystore and client.yaml from commands in the suibase.yaml
+    copy_private_keys_yaml_to_keystore "$CONFIG_DATA_DIR_DEFAULT/sui.keystore"
+
+    # Potentially adjust the active address in client.yaml (in case there is no auto-generated address).
+    STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
+    if [ -n "$STR_FOUND" ]; then
+      # The following trick will update the client.yaml active address field if not set!
+      # (a client call switch to an address, using output of another client call picking a default).
+      # For when doing optimized internal calls, must be followed by the workdir config.
+      local _ACTIVE_ADDRESS
+      _ACTIVE_ADDRESS=$($SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" active-address)
+      # Check that _ACTIVE_ADDRESS does not contain "None"      
+      if [ -n "$_ACTIVE_ADDRESS" ] && [[ "$_ACTIVE_ADDRESS" != *"None"* ]]; then
+        $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" switch --address "$_ACTIVE_ADDRESS"
+      fi
+    fi
 
     # Install the faucet config.
     rm -rf "$WORKDIRS/$WORKDIR/faucet"
     mkdir -p "$WORKDIRS/$WORKDIR/faucet"
-    yes | cp -rf "$_GENDATA_DIR/faucet/sui.keystore" "$WORKDIRS/$WORKDIR/faucet"
-    yes | cp -rf "$_GENDATA_DIR/faucet/client.yaml" "$WORKDIRS/$WORKDIR/faucet"
+    \cp -rf "$_GENDATA_DIR/faucet/sui.keystore" "$WORKDIRS/$WORKDIR/faucet"
+    \cp -rf "$_GENDATA_DIR/faucet/client.yaml" "$WORKDIRS/$WORKDIR/faucet"
     # Adjust the sui.keystore path
     sed -i.bak -e "s+<PUT_FAUCET_PATH_HERE>+$WORKDIRS/$WORKDIR/faucet+g" "$WORKDIRS/$WORKDIR/faucet/client.yaml" && rm "$WORKDIRS/$WORKDIR/faucet/client.yaml.bak"
 

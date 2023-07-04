@@ -19,7 +19,7 @@ workdir_init_remote() {
       # Attempt to copy from templates.
       SRC="$SCRIPTS_DIR/templates/$WORKDIR/config-default/client.yaml"
       if [ -f "$SRC" ]; then
-        cp "$SRC" "$CONFIG_DATA_DIR_DEFAULT/client.yaml"
+        \cp "$SRC" "$CONFIG_DATA_DIR_DEFAULT/client.yaml"
       fi
 
       # Final check.
@@ -43,14 +43,17 @@ workdir_init_remote() {
     # Create client addresses, but only if there is no sui.keystore already.
 
     # TODO put some suibase.yaml customization here! and some error handling!
-    if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then
-      add_test_addresses "$SUI_BIN_DIR/sui" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" "$CONFIG_DATA_DIR_DEFAULT/recovery.txt"
+    if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then      
+      add_test_addresses "$SUI_BIN_DIR/sui" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" "$CONFIG_DATA_DIR_DEFAULT/recovery.txt"      
     fi
 
+    copy_private_keys_yaml_to_keystore "$CONFIG_DATA_DIR_DEFAULT/sui.keystore"
+    
     STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
     if [ -n "$STR_FOUND" ]; then
       # The following trick will update the client.yaml active address field if not set!
       # (a client call switch to an address, using output of another client call picking a default).
-      $SUI_EXEC client switch --address $($SUI_EXEC client active-address)
+      #shellcheck disable=SC2046
+      $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" switch --address $($SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" active-address)
     fi
 }

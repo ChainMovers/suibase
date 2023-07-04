@@ -13,29 +13,35 @@ start_sui_faucet_process() {
   exit_if_sui_binary_not_ok;
 
   update_SUI_FAUCET_PROCESS_PID_var;
-  if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-    echo "Starting $WORKDIR faucet"
+  if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
+    return;
+  fi
 
-    mkdir -p "$CONFIG_DATA_DIR/faucet.wal"
+  echo "Starting $WORKDIR faucet"
 
+  mkdir -p "$CONFIG_DATA_DIR/faucet.wal"
+
+  # Try up to 3 times to start the process.
+  end=$((SECONDS+30))
+  ALIVE=false
+  AT_LEAST_ONE_SECOND=false
+  for _i in {1..3}; do    
     if $SUI_BASE_NET_MOCK; then
       export SUI_FAUCET_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
+      rm -f "$CONFIG_DATA_DIR/sui-faucet-process.log"
       env SUI_CONFIG_DIR="$WORKDIRS/$WORKDIR/faucet" "$SUI_BIN_DIR/sui-faucet" \
-          --amount "${CFG_sui_faucet_coin_value:?}" \
-          --host-ip "${CFG_sui_faucet_host_ip:?}" \
-          --max-request-per-second "${CFG_sui_faucet_max_request_per_second:?}" \
-          --num-coins "${CFG_sui_faucet_num_coins:?}" \
-          --port "${CFG_sui_faucet_port:?}" \
-          --request-buffer-size "${CFG_sui_faucet_request_buffer_size:?}" \
-          --wallet-client-timeout-secs "${CFG_sui_faucet_client_timeout_secs:?}" \
-          --write-ahead-log "$CONFIG_DATA_DIR/faucet.wal" >& "$CONFIG_DATA_DIR/sui-faucet-process.log" &
+        --amount "${CFG_sui_faucet_coin_value:?}" \
+        --host-ip "${CFG_sui_faucet_host_ip:?}" \
+        --max-request-per-second "${CFG_sui_faucet_max_request_per_second:?}" \
+        --num-coins "${CFG_sui_faucet_num_coins:?}" \
+        --port "${CFG_sui_faucet_port:?}" \
+        --request-buffer-size "${CFG_sui_faucet_request_buffer_size:?}" \
+        --wallet-client-timeout-secs "${CFG_sui_faucet_client_timeout_secs:?}" \
+        --write-ahead-log "$CONFIG_DATA_DIR/faucet.wal" >& "$CONFIG_DATA_DIR/sui-faucet-process.log" &
     fi
 
     # Loop until confirms can connect, or exit if that takes more than 20 seconds.
-    end=$((SECONDS+20))
-    ALIVE=false
-    AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
       # If it returns an error about "JSON" then it is alive!
       if $SUI_BASE_NET_MOCK; then
@@ -53,22 +59,33 @@ start_sui_faucet_process() {
         sleep 1
         AT_LEAST_ONE_SECOND=true
       fi
+      # Detect if should do a retry at starting it. This happen if the faucet
+      # has difficulty to open its sockets. For unknown reason, it sometimes fail.
+      if grep -q "HTTP error: error trying to connect" "$CONFIG_DATA_DIR/sui-faucet-process.log"; then
+        # Sleep 5 seconds before retrying.
+        for _j in {1..5}; do
+          echo -n "."
+          sleep 1
+          AT_LEAST_ONE_SECOND=true
+        done
+        break
+      fi
     done
+  done
 
-    # Just UI aesthetic newline for when there was "." printed.
-    if [ "$AT_LEAST_ONE_SECOND" = true ]; then
-      echo
-    fi
-
-    # Act on success/failure of the sui process responding to "sui client".
-    if [ "$ALIVE" = false ]; then
-      echo "sui-faucet process not responding. Try again? (may be the host is too slow?)."
-      exit;
-    fi
-
-    update_SUI_FAUCET_PROCESS_PID_var;
-    echo "faucet started (process pid $SUI_FAUCET_PROCESS_PID)"
+  # Just UI aesthetic newline for when there was "." printed.
+  if [ "$AT_LEAST_ONE_SECOND" = true ]; then
+    echo
   fi
+
+  # Act on success/failure of the sui process responding to "sui client".
+  if [ "$ALIVE" = false ]; then
+    echo "sui-faucet process not responding. Try again? (may be the host is too slow?)."
+    exit;
+  fi
+
+  update_SUI_FAUCET_PROCESS_PID_var;
+  echo "faucet started (process pid $SUI_FAUCET_PROCESS_PID)"
 }
 export -f start_sui_faucet_process
 
@@ -82,11 +99,7 @@ stop_sui_faucet_process() {
     if $SUI_BASE_NET_MOCK; then
       unset SUI_FAUCET_PROCESS_PID
     else
-      if [[ $(uname) == "Darwin" ]]; then
-        kill -9 "$SUI_FAUCET_PROCESS_PID"
-      else
-        skill -9 "$SUI_FAUCET_PROCESS_PID"
-      fi
+      kill -s SIGTERM "$SUI_FAUCET_PROCESS_PID"
     fi
 
     # Make sure it is dead.

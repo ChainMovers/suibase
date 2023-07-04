@@ -1,6 +1,8 @@
 # See scripts/defaults/localnet/suibase.yaml for documentation.
 network_type: remote
 
+auto_key_generation: true
+
 terminal_color: true
 
 initial_fund_per_address: ~
@@ -30,3 +32,4 @@ links:
     rpc: "https://fullnode.devnet.vincagame.com:443"
     ws: "wss://fullnode.devnet.vincagame.com:443"
     priority: 1
+

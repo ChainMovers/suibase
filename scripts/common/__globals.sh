@@ -46,6 +46,8 @@ CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
 FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+
+# Prefix often used when calling sui client.
 SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 
 case $WORKDIR in
@@ -105,6 +107,10 @@ SUI_CLIENT_LOG_DIR="$WORKDIRS/$WORKDIR/logs/sui.log"
 SUI_BASE_NET_MOCK=false
 SUI_BASE_NET_MOCK_VER="sui 0.99.99-abcdef"
 SUI_BASE_NET_MOCK_PID="999999"
+
+# Utility macro specific to calling the keytool in a safer manner
+# such that no "key" information gets actually log.
+NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF $SUI_BIN_DIR/sui keytool"
 
 # Add color
 function __echo_color() {
@@ -500,6 +506,7 @@ build_sui_repo_branch() {
     # Check if sui is recent enough.
     version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
   else
+    #shellcheck disable=SC2086 # Don't want to double quote $PASSTHRU_OPTIONS
     (if cd "$SUI_REPO_DIR"; then cargo build $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
   fi
 }
@@ -1078,11 +1085,7 @@ stop_sui_process() {
     if $SUI_BASE_NET_MOCK; then
       unset SUI_PROCESS_PID
     else
-      if [[ $(uname) == "Darwin" ]]; then
-        kill -9 "$SUI_PROCESS_PID"
-      else
-        skill -9 "$SUI_PROCESS_PID"
-      fi
+      kill -s SIGTERM "$SUI_PROCESS_PID"
     fi
 
     # Make sure it is dead.
@@ -1127,20 +1130,24 @@ start_sui_process() {
     fi
     #NEW_PID=$!
 
-    # Loop until "sui client" confirms to be working, or exit if that takes
-    # more than 30 seconds.
+    # Loop until "sui client" confirms being able to talk to the sui process, or exit 
+    # if that takes too long.
     end=$((SECONDS+60))
     (( _mid_message=30 ))
     ALIVE=false
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
       if $SUI_BASE_NET_MOCK; then
-        CHECK_ALIVE="some output"
-      else
-        CHECK_ALIVE=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects | grep -i Digest)
-      fi
-      if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
+      else
+        CHECK_ALIVE=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects)
+        # It is alive if first line either contains "Digest" or "No managed addresses". Both indicates
+        # the daemon is running and responding to requests.
+        if [[ "$CHECK_ALIVE" == *"igest"* ]] || [[ "$CHECK_ALIVE" == *"managed addresses"* ]]; then
+          ALIVE=true
+        fi
+      fi
+      if [ "$ALIVE" = true ]; then
         break
       else
         echo -n "."
@@ -1346,6 +1353,11 @@ exit_if_not_valid_sui_address() {
 export -f exit_if_not_valid_sui_address
 
 add_test_addresses() {
+
+  if [[ "${CFG_auto_key_generation:?}" == 'false' ]]; then  
+    return;
+  fi
+
   # Add 15 addresses to the specified client.yaml (sui.keystore)
   # The _WORDS_FILE is what is normally appended in "recovery.txt"
   local _SUI_BINARY=$1
@@ -1369,3 +1381,252 @@ add_test_addresses() {
    $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
 }
 export -f add_test_addresses
+
+check_is_valid_base64_keypair() {
+  # Return true if the parameter is a valid base64 keypair format
+  # (as stored in a sui.keystore).
+  #
+  # Disable logs for additional "security" on all key related operations.  
+  local _KEYPAIR="$1"
+
+  # Use the Mysten Lab keytool to convert from Base64 to bytes.
+  #
+  # Check if the output resolves to 33 bytes. If yes, then assume this is a key pair
+  # in valid "sui.keystore" format, otherwise, move on to try something else.
+  _bytes=$($NOLOG_KEYTOOL_BIN base64-to-bytes "$_keyvalue")
+  # Check that the string does not have the word "Invalid" or "Error" in it...      
+  if [[ "${_bytes}" != *"nvalid"* && "${_bytes}" != *"rror"* ]]; then
+    # Keep in the string only the values between the [] brackets.
+    _bytes=${_bytes##*[}
+    _bytes=${_bytes%%]*}
+    # Further confirm that bytes is a string that contains 33 bytes (that's 32 comma).
+    # TODO Is such check really needed after a successful base64-to-bytes conversion?
+    _comma_count=$(echo "$_bytes" | grep -o "," | wc -l)
+    if [ "$_comma_count" -eq 32 ]; then
+      # This is in a valid keypair sui.keystore format.
+      true; return
+    fi
+  fi               
+  false; return
+}
+export -f check_is_valid_base64_keypair
+
+export ACTIVE_KEYSTORE=()
+load_ACTIVE_KEYSTORE() {
+  # Set second parameter to true to enforce additional validation (slower).
+  # If not set, then just do a quick check.
+  local _SRC="$1"  
+  local _SLOW_VALIDATION="$2"
+
+  ACTIVE_KEYSTORE=()
+
+  if [ ! -f "$_SRC" ]; then    
+    return
+  fi
+
+  # If second parameter is not set, then set it to false.
+  if [ -z "$_SLOW_VALIDATION" ]; then
+    _SLOW_VALIDATION=false
+  fi
+
+  # Load the sui.keystore elements into ACTIVE_KEYSTORE (a bash array).
+  #
+  # The _SRC is the path to a file. It contains a JSON array of strings.
+  #
+  # Example of content:
+  #  [
+  #   "AOToawZbfMNATU6KPldYuoGQpp82BE0w5BknPCTBjgXT",
+  #   "AAYp6dagpe5U055xhXEFeAfvpg5CL37tJLbWd2TwsgIF",
+  #   "APDKm1PElnKl8ho8uNhpM552kdJznTT+bg1UZCjANF+V",
+  #   "AmTXXoiEVTdpy3pBWVAaAWx5baNanBN21NshmAiSPDWW",
+  #  ]  
+  #  
+  
+  # Load the file into a bash array.  
+  local _keyvalue
+  while IFS= read -r _keyvalue; do
+    # Validate the line is a valid input.
+    # Trim space at start/end of line.
+    _keyvalue=$(echo "$_keyvalue" | xargs)
+    # Skip empty lines.
+    if [ -z "$_keyvalue" ]; then
+      continue
+    fi
+    if [ "$_SLOW_VALIDATION" = true ]; then
+      if ! check_is_valid_base64_keypair "$_keyvalue"; then
+        error_exit "Invalid keypair [$_keyvalue] in $_SRC"
+      fi
+    else
+      # Just do a sanity test that the string is at least 41 characters long and not
+      # starting with "0x".
+      if [ "${#_keyvalue}" -lt 41 ] || [[ "$_keyvalue" == 0x* ]]; then
+        error_exit "Invalid keypair [$_keyvalue] in $_SRC"
+      fi
+    fi
+    ACTIVE_KEYSTORE+=("$_keyvalue")
+  done < <(grep -Eo '"[^"]*"|[^,]*' "$_SRC" | tr -d '[]"')
+}
+export -f load_ACTIVE_KEYSTORE
+
+write_ACTIVE_KEYSTORE() {
+  local _DST="$1"
+  # Write the ACTIVE_KEYSTORE array to _DST file.
+  # JSON Format is:
+  # [
+  #    <element1>,
+  #    <element2>,  
+  # ]
+
+  # Overwrites if already exists.
+  echo -n "[" >| "$_DST"
+  local _firstline=true
+  local _keyvalue
+  for _keyvalue in "${ACTIVE_KEYSTORE[@]}"; do
+    if [ "$_firstline" = true ]; then
+      _firstline=false        
+    else
+      echo -n "," >> "$_DST"
+    fi
+    echo >> "$_DST"
+    echo -n "  \"$_keyvalue\"" >> "$_DST"
+  done
+  echo >> "$_DST"
+  echo -n "]" >> "$_DST"  
+}
+export -f write_ACTIVE_KEYSTORE
+
+array_contains() {
+  # Check for coding errors.
+  if [ "$#" -ne 2 ]; then
+    error_exit "array_contains() requires 2 parameters"
+  fi
+
+  # Return true if the array (first parameter) contains the element (second parameter)
+  local _ARRAY="$1[@]"
+  local _ELEMENT="$2"
+  local _e
+
+  if [ -z "$_ELEMENT" ]; then
+    # Array can't contain empty string, so can't be in the array.
+    false; return
+  fi
+
+  # Check if the array is empty.
+  if [ ${#_ARRAY} -eq 0 ]; then
+    false; return
+  fi
+
+  # Linear search in the array.
+  for _e in "${!_ARRAY}"; do
+    if [[ "$_e" == "$_ELEMENT" ]]; then
+      true; return
+    fi
+  done
+  false; return
+}
+export -f array_contains
+
+copy_private_keys_yaml_to_keystore() {
+  if [ "$WORKDIR" = "cargobin" ]; then
+    return;    
+  fi
+
+  # Load private keys from suibase.yaml into a sui.keystore
+  # Do not duplicate key.  
+  local _DST="$1"
+  
+  # Do nothing if variable CFG_add_private_keys_ is not set
+  if [ -z "${CFG_add_private_keys_:-}" ]; then
+    return
+  fi
+
+  # TODO Protect the user. Enforce log disabling when using keytool.
+ 
+  # Do a fast load (assume the content is valid).
+  load_ACTIVE_KEYSTORE "$_DST" false
+
+  # Example of suibase.yaml:
+  #
+  # add-private-keys:
+  #  - 0x937273cdae34592736ab25dcad423a4adfae3a4d
+  #  - AIFdx03sdsjEDFSSMakjdhyRuejiS
+  
+  # 
+  # Do a first pass to parse/convert as much as possible from
+  # the suibase.yaml.
+  #
+  # Will put in an array all the private keys to be tentatively 
+  # added. Duplicate entries are silently dropped.
+  #
+  # If they are all good, then the new keys are imported to the
+  # destination sui.keystore in a second pass.
+  # 
+  # The second pass is slower, but more strict on validation.
+  local _KEYS_TO_ADD=()
+  for _keyvar in ${CFG_add_private_keys_:?} ; do    
+    local _original_keyvalue
+    local _keyvalue    
+    local _word_count
+    _original_keyvalue=${!_keyvar}
+    _keyvalue=$_original_keyvalue
+    _wordcount="$(echo "$_keyvalue" | wc -w)"
+
+    # if more than 5 words on the line, assume it is an attempt at inserting a mnemonic string.
+    if [ "$_wordcount" -gt 5 ]; then
+      # Look for an exact count of 24 words.
+      if [ ! "$_wordcount" -eq 24 ]; then
+        error_exit "add_private_keys mnemonic should be exactly 24 words [$_keyvalue]"
+      fi
+    else
+      # Check if _keyvalue string has unexpectably more than one word.    
+      if [ "$_wordcount" -gt 1 ]; then
+        error_exit "add_private_keys should not have more than one value per line in suibase.yaml [$_keyvalue]"
+      fi
+
+      # If start with 0x, then try first with converting directly with keytool.
+      if [[ "${_keyvalue}" == "0x"* ]]; then
+        # Keep only the last line which should be the key pair translated to Base64.
+        # Send to /dev/null the *successful* messages on stderr!
+        _keyvalue=$($NOLOG_KEYTOOL_BIN convert "$_keyvalue" 2> /dev/null | tail -n 1)
+      fi      
+
+      # If the $_keyvalue is already in the sui.keystore, assume it is 
+      # valid and skip it.
+      if array_contains ACTIVE_KEYSTORE "$_keyvalue"; then
+        continue;
+      fi
+
+      if check_is_valid_base64_keypair "$_keyvalue"; then
+          _KEYS_TO_ADD+=("$_keyvalue")
+          continue;
+      fi
+      
+      error_exit Invalid private key format ["$_original_keyvalue"]
+    fi
+  done
+
+  # Nothing more to do if there is no key to add.
+  if [ "${#_KEYS_TO_ADD[@]}" -eq 0 ]; then
+    return
+  fi
+
+  # Now do a slow load to make sure everything is valid.
+  load_ACTIVE_KEYSTORE "$_DST" true
+
+  # Merge _KEYS_TO_ADD into ACTIVE_KEYSTORE. Remove duplicates.
+  local _NEW_KEYSTORE=()
+  for _keyvalue in "${ACTIVE_KEYSTORE[@]}" "${_KEYS_TO_ADD[@]}"; do
+    if ! array_contains _NEW_KEYSTORE "$_keyvalue"; then
+      _NEW_KEYSTORE+=("$_keyvalue")
+    fi
+  done
+
+  # Write the end result (if something changed).
+  if [ "${#ACTIVE_KEYSTORE[@]}" -ne "${#_NEW_KEYSTORE[@]}" ]; then
+    ACTIVE_KEYSTORE=("${_NEW_KEYSTORE[@]}")
+    mv "$_DST" "$_DST.bak"    
+    echo "Updating $_DST"
+    write_ACTIVE_KEYSTORE "$_DST"
+  fi
+}
+export -f copy_private_keys_yaml_to_keystore
