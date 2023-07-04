@@ -1,0 +1,1 @@
+import{_ as e}from"./plugin-vue_export-helper-c27b6911.js";import{o,c as t,a as s}from"./app-094c7827.js";const c={},n=s("p",null,"Introductory course to the Sui Move language maintained by Suibase",-1),a=[n];function r(_,i){return o(),t("div",null,a)}const m=e(c,[["render",r],["__file","sui-move.html.vue"]]);export{m as default};
