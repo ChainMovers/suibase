@@ -31,9 +31,9 @@ usage_local() {
   echo
   echo_low_yellow "SUBCOMMANDS:"; echo;
   echo
-  echo_low_green "   start"; echo "    start $WORKDIR processes (will run in background)"
-  echo_low_green "   stop"; echo "     stop $WORKDIR processes (will all exit)"
-  echo_low_green "   status"; echo "   indicate if running or not"
+  echo_low_green "   start"; echo "    Start $WORKDIR processes (will run in background)"
+  echo_low_green "   stop"; echo "     Stop $WORKDIR processes (will all exit)"
+  echo_low_green "   status"; echo "   Info about all the suibase related processes"
   echo
   echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
   echo "            the configuration before doing the first build/start."
@@ -44,12 +44,13 @@ usage_local() {
   echo_low_green "   delete"; echo "   Delete workdir completely. Can free up a lot of"
   echo "            disk space for when the localnet is not needed."
   echo
-  echo_low_green "   update"; echo "   Update local sui repo, build binaries, create a wallet as"
-  echo "            as needed and regen the network (gas refueling)."
-  echo "            Note: Will not do any git operations if your own"
-  echo "                  repo is configured with set-sui-repo."
+  echo_low_green "   update"; echo "   Update local sui repo and perform a regen."
+  echo "            Note: When set-sui-repo is configured, there is no git"
+  echo "                  operations and this does regen only."
   echo
-  echo_low_green "   regen"; echo "    Only regenerate the network. Useful for gas refueling."
+  echo_low_green "   regen"; echo "    Build binaries, create a wallet as needed and rebuild the"
+  echo "            network. Useful for gas refueling or to wipe-out the network"
+  echo "            'database' on binaries update or when suspecting problems."
   echo
   echo_low_green "   publish"; echo "  Publish the module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
@@ -81,9 +82,9 @@ usage_remote() {
   echo
   echo_low_yellow "SUBCOMMANDS:"; echo;
   echo
-  echo_low_green "   start"; echo "    start $WORKDIR processes (will run in background)"
-  echo_low_green "   stop"; echo "     stop $WORKDIR processes (will all exit)"
-  echo_low_green "   status"; echo "   indicate if running or not"
+  echo_low_green "   start"; echo "    Start $WORKDIR processes (will run in background)"
+  echo_low_green "   stop"; echo "     Stop $WORKDIR processes (will all exit)"
+  echo_low_green "   status"; echo "   Info about all the suibase related processes"
   echo
   echo_low_green "   create"; echo "   Create workdir only. This can be useful for changing"
   echo "            the configuration before doing the first build/start."
