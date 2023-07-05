@@ -51,28 +51,28 @@ SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 
 case $WORKDIR in
-  localnet)
-    SUI_SCRIPT="lsui"
-    ;;
-  devnet)
-    SUI_SCRIPT="dsui"
-    ;;
-  testnet)
-    SUI_SCRIPT="tsui"
-    ;;
-  mainnet)
-    SUI_SCRIPT="msui"
-    ;;
-  active)
-    SUI_SCRIPT="asui"
-    ;;
-  cargobin)
-    SUI_SCRIPT="csui"
-    SUI_BIN_DIR="$HOME/.cargo/bin"
-    ;;
-  *)
-    SUI_SCRIPT="sui-exec"
-    ;;
+localnet)
+  SUI_SCRIPT="lsui"
+  ;;
+devnet)
+  SUI_SCRIPT="dsui"
+  ;;
+testnet)
+  SUI_SCRIPT="tsui"
+  ;;
+mainnet)
+  SUI_SCRIPT="msui"
+  ;;
+active)
+  SUI_SCRIPT="asui"
+  ;;
+cargobin)
+  SUI_SCRIPT="csui"
+  SUI_BIN_DIR="$HOME/.cargo/bin"
+  ;;
+*)
+  SUI_SCRIPT="sui-exec"
+  ;;
 esac
 
 # Configuration files (often needed for sui CLI calls)
@@ -114,51 +114,51 @@ NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF $SUI_BIN_DIR/sui keytool"
 
 # Add color
 function __echo_color() {
-	if [[ "${CFG_terminal_color:?}" == 'false' ]]; then
-		echo -e -n "$2"
-	else
-		echo -e -n "\033[$1;$2$3\033[0m"
-	fi
+  if [[ "${CFG_terminal_color:?}" == 'false' ]]; then
+    echo -e -n "$2"
+  else
+    echo -e -n "\033[$1;$2$3\033[0m"
+  fi
 }
 
 # Bold colors, mostly used for status.
 function echo_black() {
-	__echo_color "1" "30m" "$1"
+  __echo_color "1" "30m" "$1"
 }
 export -f echo_black
 
 function echo_red() {
-	__echo_color "1" "31m" "$1"
+  __echo_color "1" "31m" "$1"
 }
 export -f echo_red
 
 function echo_green() {
-	__echo_color "1" "32m" "$1"
+  __echo_color "1" "32m" "$1"
 }
 export -f echo_green
 
 function echo_yellow() {
-	__echo_color "1" "33m" "$1"
+  __echo_color "1" "33m" "$1"
 }
 export -f echo_yellow
 
 function echo_blue() {
-	__echo_color "1" "34m" "$1"
+  __echo_color "1" "34m" "$1"
 }
 export -f echo_blue
 
 function echo_magenta() {
-	__echo_color "1" "35m" "$1"
+  __echo_color "1" "35m" "$1"
 }
 export -f echo_magenta
 
 function echo_cyan() {
-	__echo_color "1" "36m" "$1"
+  __echo_color "1" "36m" "$1"
 }
 export -f echo_cyan
 
 function echo_white() {
-	__echo_color "1" "37m" "$1"
+  __echo_color "1" "37m" "$1"
 }
 export -f echo_white
 
@@ -172,20 +172,37 @@ function echo_low_yellow() {
 }
 
 # Utility functions.
-info_exit() { echo "$*" 1>&2; exit 0; }
+info_exit() {
+  echo "$*" 1>&2
+  exit 0
+}
 export -f info_exit
 
-error_exit() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
+error_exit() {
+  {
+    echo_red "Error: "
+    echo "$*"
+  } 1>&2
+  exit 1
+}
 export -f error_exit
 
-setup_error() { { echo_red "Error: "; echo "$*"; } 1>&2; exit 1; }
+setup_error() {
+  {
+    echo_red "Error: "
+    echo "$*"
+  } 1>&2
+  exit 1
+}
 export -f setup_error
 
-warn_user() { { echo_yellow "Warning: "; echo "$*"; } 1>&2; }
+warn_user() { {
+  echo_yellow "Warning: "
+  echo "$*"
+} 1>&2; }
 export -f warn_user
 
-version_greater_equal()
-{
+version_greater_equal() {
   local _arg1 _arg2
   # Remove everything until first digit
   # Remove trailing "-build number" if specified.
@@ -194,39 +211,43 @@ version_greater_equal()
   _arg1=$(echo "$1" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
   # shellcheck disable=SC2001
   _arg2=$(echo "$2" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
-  printf '%s\n%s\n' "$_arg2" "$_arg1" | sort --check=quiet --version-sort;
+  printf '%s\n%s\n' "$_arg2" "$_arg1" | sort --check=quiet --version-sort
 }
 export -f version_greater_equal
 
-version_less_than()
-{
+version_less_than() {
   if version_greater_equal "$1" "$2"; then
-    false; return
+    false
+    return
   fi
-  true; return
+  true
+  return
 }
 export -f version_less_than
 
 script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
 export -f script_cmd
-beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
+beginswith() { case $2 in "$1"*) true ;; *) false ;; esac }
 export -f beginswith
 
 file_newer_than() {
   # Check if file $1 is newer than file $2
   # Return true on any error (assuming need attention).
   if [ ! -f "$1" ] || [ ! -f "$2" ]; then
-    true; return
+    true
+    return
   fi
   local _date1 _date2
   _date1=$(date -r "$1" +%s)
   _date2=$(date -r "$2" +%s)
 
   if [[ "$_date1" > "$_date2" ]]; then
-    true; return
+    true
+    return
   fi
 
-  false; return
+  false
+  return
 }
 export -f file_newer_than
 
@@ -245,7 +266,7 @@ set_key_value() {
     setup_error "Can't use an empty key for value [$_VALUE]"
   fi
   mkdir -p "$WORKDIRS/$WORKDIR/.state"
-  echo "$_VALUE" >| "$WORKDIRS/$WORKDIR/.state/$_KEY"
+  echo "$_VALUE" >|"$WORKDIRS/$WORKDIR/.state/$_KEY"
 }
 export -f set_key_value
 
@@ -257,14 +278,16 @@ get_key_value() {
     setup_error "Can't retreive empty key"
   fi
   if [ ! -f "$WORKDIRS/$WORKDIR/.state/$_KEY" ]; then
-    echo "NULL"; return
+    echo "NULL"
+    return
   fi
 
   local _VALUE
   _VALUE=$(cat "$WORKDIRS/$WORKDIR/.state/$_KEY")
 
   if [ -z "$_VALUE" ]; then
-      echo "NULL"; return
+    echo "NULL"
+    return
   fi
 
   # Error
@@ -279,25 +302,33 @@ update_suibase_yaml() {
   local _WORKDIR="$WORKDIR"
 
   if [ ! -d "$SCRIPTS_DIR/defaults/$_WORKDIR" ]; then
-     # If the specified workdir name does not exists, fallback
-     # to localnet defaults (least damageable possible).
+    # If the specified workdir name does not exists, fallback
+    # to localnet defaults (least damageable possible).
     _WORKDIR="localnet"
   fi
 
-  # Load defaults twice.
+  # Load the suibase defaults twice.
   #
-  # First with CFG_ prefix, the second with CFGDEFAULT_
+  # First time with CFG_ prefix, the second time with CFGDEFAULT_
   #
-  # This allow to detect if there was an override or not (e.g. to re-assure
-  # the user in a message that an override was applied).
-  #
+  # This allow to detect if there was an override or not
+  # from users (e.g. to re-assure the user in a message that
+  # an override was applied).
   YAML_FILE="$SCRIPTS_DIR/defaults/$_WORKDIR/suibase.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
     eval "$(parse_yaml "$YAML_FILE" "CFGDEFAULT_")"
   fi
 
-  # Load overrides from workdir with CFG_ prefix.
+  # Load the users overrides with CFG_ prefix.
+  #
+  # The common users overrides are loaded first and the more
+  # precise workdir overrides are applied last.
+  YAML_FILE="$WORKDIRS/common/suibase.yaml"
+  if [ -f "$YAML_FILE" ]; then
+    eval "$(parse_yaml "$YAML_FILE" "CFG_")"
+  fi
+
   YAML_FILE="$WORKDIRS/$_WORKDIR/suibase.yaml"
   if [ -f "$YAML_FILE" ]; then
     eval "$(parse_yaml "$YAML_FILE" "CFG_")"
@@ -305,7 +336,7 @@ update_suibase_yaml() {
 }
 export -f update_suibase_yaml
 
-update_suibase_yaml;
+update_suibase_yaml
 
 update_suibase_version() {
   # Best effort to add the build number to the version.
@@ -318,7 +349,7 @@ update_suibase_version() {
 }
 export -f update_suibase_version
 
-update_suibase_version;
+update_suibase_version
 
 cd_sui_log_dir() {
   if [ -d "$WORKDIRS/$WORKDIR" ]; then
@@ -328,35 +359,35 @@ cd_sui_log_dir() {
 }
 export -f cd_sui_log_dir
 
-cd_sui_log_dir;
+cd_sui_log_dir
 
 # SUI_BASE_MOCK is a global boolean always defined.
 update_SUI_BASE_NET_MOCK_var() {
   # OS_RUNNER is defined when running in github actions.
- if [ -n "$OS_RUNNER" ]; then
-   SUI_BASE_NET_MOCK=true
-   if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
-     # This is really really bad and would be an accidental commit of a dev
-     # test setup. Fix ASAP. It means github found the default configuration
-     # is set to mock the network!!!
-     #
-     # The following exit non-zero (should break the CI)
-     setup_error "Bad commit to github. Contact https://suibase.io devs ASAP to fix the release."
-   fi
- fi
+  if [ -n "$OS_RUNNER" ]; then
+    SUI_BASE_NET_MOCK=true
+    if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
+      # This is really really bad and would be an accidental commit of a dev
+      # test setup. Fix ASAP. It means github found the default configuration
+      # is set to mock the network!!!
+      #
+      # The following exit non-zero (should break the CI)
+      setup_error "Bad commit to github. Contact https://suibase.io devs ASAP to fix the release."
+    fi
+  fi
 
- # Mocking can be control with suibase.yaml.
- #
- # This is undocummented, for suibase devs only.
- if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
-   SUI_BASE_NET_MOCK=true
- fi
+  # Mocking can be control with suibase.yaml.
+  #
+  # This is undocummented, for suibase devs only.
+  if [ "$CFG_SUI_BASE_NET_MOCK" = "true" ]; then
+    SUI_BASE_NET_MOCK=true
+  fi
 
- # If mocking AND state is started, then simulate
- # that the process are already running.
- if $SUI_BASE_NET_MOCK; then
+  # If mocking AND state is started, then simulate
+  # that the process are already running.
+  if $SUI_BASE_NET_MOCK; then
     local _USER_REQUEST
-    _USER_REQUEST=$(get_key_value "user_request");
+    _USER_REQUEST=$(get_key_value "user_request")
     if [ "$_USER_REQUEST" = "start" ]; then
       export SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
       export SUI_FAUCET_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
@@ -365,10 +396,9 @@ update_SUI_BASE_NET_MOCK_var() {
 }
 export -f update_SUI_BASE_NET_MOCK_var
 
-update_SUI_BASE_NET_MOCK_var;
+update_SUI_BASE_NET_MOCK_var
 
-check_yaml_parsed()
-{
+check_yaml_parsed() {
   local _var_name="CFG_$1"
   # Will fail if either not set or empty string. Both
   # wrong in all cases when calling this function.
@@ -385,9 +415,9 @@ check_yaml_parsed()
 export -f check_yaml_parsed
 
 build_sui_repo_branch() {
-  ALLOW_DOWNLOAD="$1";
-  ALLOW_BUILD="$2";
-  PASSTHRU_OPTIONS="$3";
+  ALLOW_DOWNLOAD="$1"
+  ALLOW_BUILD="$2"
+  PASSTHRU_OPTIONS="$3"
 
   local _BUILD_DESC
   if [ "$CFG_network_type" = "local" ]; then
@@ -399,14 +429,14 @@ build_sui_repo_branch() {
   fi
 
   # Verify Sui pre-requisites are installed.
-  which curl &> /dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites";
-  which git &> /dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites";
-  which cmake &> /dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites";
-  which rustc &> /dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites";
-  which cargo &> /dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites";
+  which curl &>/dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
+  which git &>/dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
+  which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
+  which rustc &>/dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
+  which cargo &>/dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
 
   # Verify Rust is recent enough.
-  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version";
+  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
 
   if [ "$ALLOW_DOWNLOAD" = "false" ]; then
     if is_sui_repo_dir_override; then
@@ -422,19 +452,19 @@ build_sui_repo_branch() {
   else
 
     if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ] ||
-       [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
+      [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
       echo "suibase.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
     fi
 
     # If not already done, initialize the default repo.
     if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]; then
-      git clone -b "$CFG_default_repo_branch" "$CFG_default_repo_url" "$SUI_REPO_DIR_DEFAULT"  || setup_error "Failed cloning branch [$CFG_default_repo_branch] from [$CFG_default_repo_url]";
-      set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
+      git clone -b "$CFG_default_repo_branch" "$CFG_default_repo_url" "$SUI_REPO_DIR_DEFAULT" || setup_error "Failed cloning branch [$CFG_default_repo_branch] from [$CFG_default_repo_url]"
+      set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
     fi
 
     # Add back the default sui-repo link in case it was deleted.
     if [ ! -L "$SUI_REPO_DIR" ]; then
-      set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
+      set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
     fi
 
     # Force git reset  if this is the very first time cloning (cover for
@@ -451,9 +481,9 @@ build_sui_repo_branch() {
     local _BRANCH
     _BRANCH=$(cd "$SUI_REPO_DIR" && git branch --show-current)
     if [ "$_BRANCH" != "$CFG_default_repo_branch" ]; then
-      (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >& /dev/null)
+      (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >&/dev/null)
     fi
-    (cd "$SUI_REPO_DIR" && git remote update >& /dev/null)
+    (cd "$SUI_REPO_DIR" && git remote update >&/dev/null)
     V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
     V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
     if [ "$V1" != "$V2" ]; then
@@ -464,24 +494,24 @@ build_sui_repo_branch() {
       # Does a bit more than needed, but should allow to recover
       # from most operator error...
       echo "Updating sui $WORKDIR in ~/suibase/workdirs/$WORKDIR/sui-config..."
-      (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
-      (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" > /dev/null)
-      (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
+      (cd "$SUI_REPO_DIR" && git fetch >/dev/null)
+      (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null)
+      (cd "$SUI_REPO_DIR" && git merge '@{u}' >/dev/null)
     fi
     echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
   # TODO do an 'integrity/version check' of the repo here...
   if [ ! -d "$SUI_REPO_DIR" ]; then
-      # Help user doing things out-of-order (like trying to regen something not yet initialized?)
-      echo
-      echo "The Sui repo is not initialized."
-      echo
-      echo " Do one of the following:"
-      echo "    $WORKDIR start (recommended)"
-      echo "    $WORKDIR update"
-      echo
-      exit 1
+    # Help user doing things out-of-order (like trying to regen something not yet initialized?)
+    echo
+    echo "The Sui repo is not initialized."
+    echo
+    echo " Do one of the following:"
+    echo "    $WORKDIR start (recommended)"
+    echo "    $WORKDIR update"
+    echo
+    exit 1
   fi
 
   if [ "$ALLOW_BUILD" = false ]; then
@@ -501,7 +531,7 @@ build_sui_repo_branch() {
       setup_error "$SUI_BIN_DIR/sui binary not found"
     fi
 
-    update_SUI_VERSION_var;
+    update_SUI_VERSION_var
 
     # Check if sui is recent enough.
     version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
@@ -518,7 +548,7 @@ exit_if_not_installed() {
   # and is trying instead to call directly from "~/suibase/scripts"
   # (which will cause some trouble with some script).
   case "$SCRIPT_NAME" in
-  "asui"|"lsui"|"csui"|"dsui"|"tsui"|"localnet"|"devnet"|"testnet"|"mainnet"|"workdirs")
+  "asui" | "lsui" | "csui" | "dsui" | "tsui" | "localnet" | "devnet" | "testnet" | "mainnet" | "workdirs")
     if [ ! -L "$LOCAL_BIN/$SCRIPT_NAME" ]; then
       echo
       echo "Some suibase files are missing. The installation was"
@@ -540,7 +570,7 @@ exit_if_workdir_not_ok() {
   # This is a common "operator" error (not doing command in right order).
   if ! is_workdir_ok; then
     if [ "$WORKDIR" = "cargobin" ]; then
-      exit_if_sui_binary_not_ok; # Point to a higher problem (as needed).
+      exit_if_sui_binary_not_ok # Point to a higher problem (as needed).
       echo "cargobin workdir not initialized"
       echo
       echo "Please run ~/suibase/.install again to detect"
@@ -594,7 +624,7 @@ exit_if_sui_binary_not_ok() {
   # Sometimes the binary are ok, but not the config (may happen when the
   # localnet config directory is safely wipe out on set-sui-repo transitions).
   if [ "$CFG_network_type" = "local" ]; then
-    if  [ ! -f "$CLIENT_CONFIG" ]; then
+    if [ ! -f "$CLIENT_CONFIG" ]; then
       echo
       echo "The localnet need to be regenerated."
       echo
@@ -605,17 +635,17 @@ exit_if_sui_binary_not_ok() {
       exit 1
     fi
 
-    update_SUI_VERSION_var; # Requires $SUI_BIN_DIR/sui (was verified above)
+    update_SUI_VERSION_var # Requires $SUI_BIN_DIR/sui (was verified above)
     if version_greater_equal "$SUI_VERSION" "0.27"; then
       if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
-      echo
-      echo "The sui-faucet binary for $WORKDIR was not found."
-      echo
-      echo " Do one of the following to build it:"
-      echo "    $WORKDIR start"
-      echo "    $WORKDIR update"
-      echo
-      exit 1
+        echo
+        echo "The sui-faucet binary for $WORKDIR was not found."
+        echo
+        echo " Do one of the following to build it:"
+        echo "    $WORKDIR start"
+        echo "    $WORKDIR update"
+        echo
+        exit 1
       fi
     fi
   fi
@@ -628,31 +658,36 @@ is_sui_binary_ok() {
   # is used to detect problems and have the caller try to repair the
   # binary.
   if [ ! -f "$SUI_BIN_DIR/sui" ]; then
-    false; return
+    false
+    return
   fi
 
   # Get the version, but in a way that would not exit on failure.
-  cd_sui_log_dir;
+  cd_sui_log_dir
   local _SUI_VERSION_ATTEMPT
   _SUI_VERSION_ATTEMPT=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" --version)
   # TODO test here what would really happen on corrupted binary...
   if [ -z "$_SUI_VERSION_ATTEMPT" ]; then
-    false; return
+    false
+    return
   fi
 
   if version_greater_equal "$_SUI_VERSION_ATTEMPT" "0.27"; then
     if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
-      false; return
+      false
+      return
     fi
   fi
 
   if [ "$CFG_network_type" = "local" ]; then
-    if  [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
-      false; return
+    if [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
+      false
+      return
     fi
   fi
 
-  true; return
+  true
+  return
 }
 export -f is_sui_binary_ok
 
@@ -714,23 +749,28 @@ is_workdir_ok() {
   #
   # In other word, detect if at least the "create" command was performed.
   if [ ! -d "$WORKDIRS" ]; then
-    false; return;
+    false
+    return
   fi
 
   if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
-    false; return;
+    false
+    return
   fi
 
   if [ ! -f "$WORKDIRS/$WORKDIR/sui-exec" ] ||
-     [ ! -f "$WORKDIRS/$WORKDIR/workdir-exec" ]; then
-    false; return;
+    [ ! -f "$WORKDIRS/$WORKDIR/workdir-exec" ]; then
+    false
+    return
   fi
 
   if [ ! -L "$WORKDIRS/$WORKDIR/config" ]; then
-    false; return;
+    false
+    return
   fi
 
-  true; return
+  true
+  return
 }
 export -f is_workdir_ok
 
@@ -772,7 +812,7 @@ create_active_symlink_as_needed() {
   # Create a new active symlink, but not overwrite an
   # existing one (because it represents the user intent).
   if [ ! -L "$WORKDIRS/active" ]; then
-     set_active_symlink_force "$WORKDIR_PARAM"
+    set_active_symlink_force "$WORKDIR_PARAM"
   fi
 }
 export -f create_active_symlink_as_needed
@@ -784,7 +824,7 @@ create_config_symlink_as_needed() {
   # Create a new config symlink, but not overwrite an
   # existing one (because it represents the user intent).
   if [ ! -L "$WORKDIRS/$WORKDIR_PARAM/config" ]; then
-     set_config_symlink_force "$WORKDIR_PARAM" "$TARGET_CONFIG"
+    set_config_symlink_force "$WORKDIR_PARAM" "$TARGET_CONFIG"
   fi
 }
 export -f create_config_symlink_as_needed
@@ -813,16 +853,16 @@ create_state_dns_as_needed() {
         for scheme in "${_KEY_SCHEME_LIST[@]}"; do
           local _LINES
           _LINES=$(grep -i "$scheme" "$_SRC" | sort | sed 's/.*\[\(.*\)\]/\1/')
-          (( i=1 ))
+          ((i = 1))
           while IFS= read -r line; do
             if ! $_FIRST_LINE; then echo ","; else _FIRST_LINE=false; fi
             echo -n "\"sb-$i-$scheme\": { \"address\": \"$line\" }"
-            (( i++ ))
+            ((i++))
           done < <(printf '%s\n' "$_LINES")
         done
         echo
         echo "}}"
-      } >> "$WORKDIRS/$WORKDIR_PARAM/.state/dns"
+      } >>"$WORKDIRS/$WORKDIR_PARAM/.state/dns"
     fi
   fi
 }
@@ -854,11 +894,11 @@ create_state_links_as_needed() {
   # references.
   if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/links" ] || file_newer_than "$WORKDIRS/$WORKDIR_PARAM/suibase.yaml" "$WORKDIRS/$WORKDIR_PARAM/.state/links"; then
     # parse_yaml ~/suibase/scripts/defaults/testnet/suibase.yaml;
-    check_yaml_parsed links_;
+    check_yaml_parsed links_
 
-    (( _n_links=0 ))
-    for _links in ${CFG_links_:?} ; do
-      (( _n_links++))
+    ((_n_links = 0))
+    for _links in ${CFG_links_:?}; do
+      ((_n_links++))
     done
 
     if [ $_n_links -eq 0 ]; then
@@ -882,8 +922,8 @@ create_state_links_as_needed() {
 
       echo "\"links\": ["
       _FIRST_LINE=true
-      (( _i=0 ))
-      for _links in ${CFG_links_:?} ; do
+      ((_i = 0))
+      for _links in ${CFG_links_:?}; do
         if ! $_FIRST_LINE; then echo ","; else _FIRST_LINE=false; fi
         echo "    {"
         echo "      \"id\": $_i, "
@@ -896,13 +936,13 @@ create_state_links_as_needed() {
 
         _ws="${_links}_ws"
         echo "      \"ws\": \"${!_ws}\""
-        (( _i++ ))
-        echo -n "    }"; # close link
+        ((_i++))
+        echo -n "    }" # close link
       done
       echo
-      echo "  ]"; # close links
-      echo "}";
-    } > "$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp"
+      echo "  ]" # close links
+      echo "}"
+    } >"$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp"
     # Atomic mv assuming Linux ext4 (good enough for now)
     mv -f "$WORKDIRS/$WORKDIR_PARAM/.state/links.tmp" "$WORKDIRS/$WORKDIR_PARAM/.state/links"
   fi
@@ -923,13 +963,13 @@ create_state_as_needed() {
 
   if [ "$WORKDIR_PARAM" != "active" ]; then
     if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/name" ] ||
-       [ "$(get_key_value "name")" != "$WORKDIR_PARAM" ]; then
+      [ "$(get_key_value "name")" != "$WORKDIR_PARAM" ]; then
       set_key_value "name" "$WORKDIR_PARAM"
     fi
   fi
 
-  create_state_dns_as_needed "$WORKDIR_PARAM";
-  create_state_links_as_needed "$WORKDIR_PARAM";
+  create_state_dns_as_needed "$WORKDIR_PARAM"
+  create_state_links_as_needed "$WORKDIR_PARAM"
 }
 export -f create_state_as_needed
 
@@ -939,7 +979,7 @@ repair_workdir_as_needed() {
   mkdir -p "$WORKDIRS"
 
   if [ "$WORKDIR_PARAM" = "active" ]; then
-    update_ACTIVE_WORKDIR_var;
+    update_ACTIVE_WORKDIR_var
     if [ -z "$ACTIVE_WORKDIR" ] || [ ! -d "$WORKDIRS/$ACTIVE_WORKDIR" ]; then
       # Do not create an "active" directory, but...
       return
@@ -951,11 +991,11 @@ repair_workdir_as_needed() {
       # "Create" using the template.
       cp -r "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" "$WORKDIRS"
     fi
-    create_active_symlink_as_needed "$WORKDIR_PARAM";
+    create_active_symlink_as_needed "$WORKDIR_PARAM"
   fi
 
-  create_exec_shims_as_needed "$WORKDIR_PARAM";
-  create_state_as_needed "$WORKDIR_PARAM";
+  create_exec_shims_as_needed "$WORKDIR_PARAM"
+  create_state_as_needed "$WORKDIR_PARAM"
 
   if [ "$WORKDIR_PARAM" = "cargobin" ]; then
     # Create as needed, but do not change a user override.
@@ -973,7 +1013,7 @@ repair_workdir_as_needed() {
   #  cp "$SCRIPTS_DIR/templates//$WORKDIR_PARAM/suibase.yaml" "$WORKDIRS/$WORKDIR_PARAM"
   #fi
 
-  cd_sui_log_dir; # Create the sui.log directory as needed and make it the current one.
+  cd_sui_log_dir # Create the sui.log directory as needed and make it the current one.
 }
 export -f repair_workdir_as_needed
 
@@ -983,10 +1023,10 @@ set_active_symlink_force() {
   if [ ! -L "$WORKDIRS/active" ]; then
     ln -s "$WORKDIRS/$WORKDIR_PARAM" "$WORKDIRS/active"
   else
-    update_ACTIVE_WORKDIR_var;
+    update_ACTIVE_WORKDIR_var
     if [ "$ACTIVE_WORKDIR" != "$WORKDIR_PARAM" ]; then
       ln -nsf "$WORKDIRS/$WORKDIR_PARAM" "$WORKDIRS/active"
-      update_ACTIVE_WORKDIR_var;
+      update_ACTIVE_WORKDIR_var
     fi
   fi
 }
@@ -1062,7 +1102,7 @@ update_SUI_VERSION_var() {
   # Take note that $SUI_BIN_DIR here is used to properly consider if the
   # context of the script is localnet, devnet, testnet, mainnet... (they
   # are not the same binaries and versions).
-  cd_sui_log_dir;
+  cd_sui_log_dir
 
   if $SUI_BASE_NET_MOCK; then
     SUI_VERSION=$SUI_BASE_NET_MOCK_VER
@@ -1079,7 +1119,7 @@ export -f update_SUI_VERSION_var
 stop_sui_process() {
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already stopped.
-  update_SUI_PROCESS_PID_var;
+  update_SUI_PROCESS_PID_var
   if [ -n "$SUI_PROCESS_PID" ]; then
     echo "Stopping $WORKDIR (process pid $SUI_PROCESS_PID)"
     if $SUI_BASE_NET_MOCK; then
@@ -1089,10 +1129,10 @@ stop_sui_process() {
     fi
 
     # Make sure it is dead.
-    end=$((SECONDS+15))
+    end=$((SECONDS + 15))
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
-      update_SUI_PROCESS_PID_var;
+      update_SUI_PROCESS_PID_var
       if [ -z "$SUI_PROCESS_PID" ]; then
         break
       else
@@ -1118,22 +1158,22 @@ start_sui_process() {
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already started.
 
-  exit_if_sui_binary_not_ok;
-  cd_sui_log_dir;
-  update_SUI_PROCESS_PID_var;
+  exit_if_sui_binary_not_ok
+  cd_sui_log_dir
+  update_SUI_PROCESS_PID_var
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
     if $SUI_BASE_NET_MOCK; then
       SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
-      "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >& "$CONFIG_DATA_DIR/sui-process.log" &
+      "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >&"$CONFIG_DATA_DIR/sui-process.log" &
     fi
     #NEW_PID=$!
 
-    # Loop until "sui client" confirms being able to talk to the sui process, or exit 
+    # Loop until "sui client" confirms being able to talk to the sui process, or exit
     # if that takes too long.
-    end=$((SECONDS+60))
-    (( _mid_message=30 ))
+    end=$((SECONDS + 60))
+    ((_mid_message = 30))
     ALIVE=false
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
@@ -1158,7 +1198,7 @@ start_sui_process() {
         if [ $_mid_message -eq 1 ]; then
           echo -n "(may take some time on slower system)"
         fi
-        (( --_mid_message ))
+        ((--_mid_message))
       fi
     done
 
@@ -1170,12 +1210,12 @@ start_sui_process() {
     # Act on success/failure of the sui process responding to "sui client".
     if [ "$ALIVE" = false ]; then
       echo "Sui process not responding. Try again? (may be the host is too slow?)."
-      exit;
+      exit
     fi
 
-    update_SUI_PROCESS_PID_var;
+    update_SUI_PROCESS_PID_var
     echo "localnet started (process pid $SUI_PROCESS_PID)"
-    update_SUI_VERSION_var;
+    update_SUI_VERSION_var
     echo "$SUI_VERSION"
   fi
 }
@@ -1184,16 +1224,16 @@ export -f start_sui_process
 ensure_client_OK() {
   # This is just in case the user switch the envs on the clients instead of simply using
   # the scripts... we have then to fix things up here. Not an error unless the fix fails.
-  cd_sui_log_dir;
+  cd_sui_log_dir
   # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
   #if [ "$CFG_network_type" = "local" ]; then
-    # Make sure localnet exists in sui envs (ignore errors because likely already exists)
-    #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
-    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc "$CFG_links_1_rpc" >& /dev/null
+  # Make sure localnet exists in sui envs (ignore errors because likely already exists)
+  #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
+  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc "$CFG_links_1_rpc" >&/dev/null
 
-    # Make localnet the active envs (should already be done, just in case, do it again here).
-    #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
-    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" switch --env "$WORKDIR" >& /dev/null
+  # Make localnet the active envs (should already be done, just in case, do it again here).
+  #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
+  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" switch --env "$WORKDIR" >&/dev/null
   #fi
 }
 export -f ensure_client_OK
@@ -1236,7 +1276,6 @@ update_MOVE_TOML_DIR_var() {
 }
 export -f update_MOVE_TOML_DIR_var
 
-
 # Verify if $SUI_REPO_DIR symlink is toward a user repo (not default).
 #
 # false if the symlink does not exist.
@@ -1247,21 +1286,25 @@ is_sui_repo_dir_override() {
   if [ -L "$SUI_REPO_DIR" ]; then
     RESOLVED_SUI_REPO_DIR=$(readlink "$SUI_REPO_DIR")
     if [ "$RESOLVED_SUI_REPO_DIR" != "$SUI_REPO_DIR_DEFAULT" ]; then
-      true; return;
+      true
+      return
     fi
   else
     unset RESOLVED_SUI_REPO_DIR
   fi
-  false; return;
+  false
+  return
 }
 export -f is_sui_repo_dir_override
 
 is_sui_repo_dir_default() {
   # Just negate is_sui_repo_dir_override
   if is_sui_repo_dir_override; then
-    false; return
+    false
+    return
   fi
-  true; return
+  true
+  return
 }
 export -f is_sui_repo_dir_default
 
@@ -1273,7 +1316,7 @@ set_sui_repo_dir_default() {
 
   # Link to the default directory if already exists.
   if [ -d "$SUI_REPO_DIR_DEFAULT" ]; then
-    set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT";
+    set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
   else
     # No default directory.
     # Still a success as long the symlink is gone.
@@ -1303,7 +1346,7 @@ set_sui_repo_dir() {
     if is_sui_repo_dir_override; then
       echo "$WORKDIR set-sui-repo is now [ $OPTIONAL_PATH ]"
     else
-      setup_error "$WORKDIR set-sui-repo failed [ $OPTIONAL_PATH ]";
+      setup_error "$WORKDIR set-sui-repo failed [ $OPTIONAL_PATH ]"
     fi
   fi
 }
@@ -1344,7 +1387,7 @@ exit_if_not_valid_sui_address() {
   local _SUI_ERR
   # Use the client itself to verify the string is a valid sui address.
   # Inefficient... but 100% sure the check will be compatible with *this* binary.
-  _SUI_ERR=$("$SUI_EXEC" client gas "$1" --json 2>&1 | grep -iE "error|invalid|help" )
+  _SUI_ERR=$("$SUI_EXEC" client gas "$1" --json 2>&1 | grep -iE "error|invalid|help")
   if [ -n "$_SUI_ERR" ]; then
     echo "Invalid hexadecimal Sui Address [$1]."
     exit 1
@@ -1354,8 +1397,8 @@ export -f exit_if_not_valid_sui_address
 
 add_test_addresses() {
 
-  if [[ "${CFG_auto_key_generation:?}" == 'false' ]]; then  
-    return;
+  if [[ "${CFG_auto_key_generation:?}" == 'false' ]]; then
+    return
   fi
 
   # Add 15 addresses to the specified client.yaml (sui.keystore)
@@ -1366,19 +1409,25 @@ add_test_addresses() {
 
   {
     for _ in {1..5}; do
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519;
-      echo ============================; echo; echo;
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256k1;
-      echo ============================; echo; echo;
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256r1;
-      echo ============================; echo; echo;
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519
+      echo ============================
+      echo
+      echo
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256k1
+      echo ============================
+      echo
+      echo
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256r1
+      echo ============================
+      echo
+      echo
     done
-  } >> "$_WORDS_FILE";
+  } >>"$_WORDS_FILE"
 
   # Set highest address as active. Best-effort... no major issue if fail (I assume).
   local _HIGH_ADDR
   _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
-   $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >& /dev/null
+  $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >&/dev/null
 }
 export -f add_test_addresses
 
@@ -1386,7 +1435,7 @@ check_is_valid_base64_keypair() {
   # Return true if the parameter is a valid base64 keypair format
   # (as stored in a sui.keystore).
   #
-  # Disable logs for additional "security" on all key related operations.  
+  # Disable logs for additional "security" on all key related operations.
   local _KEYPAIR="$1"
 
   # Use the Mysten Lab keytool to convert from Base64 to bytes.
@@ -1394,7 +1443,7 @@ check_is_valid_base64_keypair() {
   # Check if the output resolves to 33 bytes. If yes, then assume this is a key pair
   # in valid "sui.keystore" format, otherwise, move on to try something else.
   _bytes=$($NOLOG_KEYTOOL_BIN base64-to-bytes "$_keyvalue")
-  # Check that the string does not have the word "Invalid" or "Error" in it...      
+  # Check that the string does not have the word "Invalid" or "Error" in it...
   if [[ "${_bytes}" != *"nvalid"* && "${_bytes}" != *"rror"* ]]; then
     # Keep in the string only the values between the [] brackets.
     _bytes=${_bytes##*[}
@@ -1404,10 +1453,12 @@ check_is_valid_base64_keypair() {
     _comma_count=$(echo "$_bytes" | grep -o "," | wc -l)
     if [ "$_comma_count" -eq 32 ]; then
       # This is in a valid keypair sui.keystore format.
-      true; return
+      true
+      return
     fi
-  fi               
-  false; return
+  fi
+  false
+  return
 }
 export -f check_is_valid_base64_keypair
 
@@ -1415,12 +1466,12 @@ export ACTIVE_KEYSTORE=()
 load_ACTIVE_KEYSTORE() {
   # Set second parameter to true to enforce additional validation (slower).
   # If not set, then just do a quick check.
-  local _SRC="$1"  
+  local _SRC="$1"
   local _SLOW_VALIDATION="$2"
 
   ACTIVE_KEYSTORE=()
 
-  if [ ! -f "$_SRC" ]; then    
+  if [ ! -f "$_SRC" ]; then
     return
   fi
 
@@ -1439,10 +1490,9 @@ load_ACTIVE_KEYSTORE() {
   #   "AAYp6dagpe5U055xhXEFeAfvpg5CL37tJLbWd2TwsgIF",
   #   "APDKm1PElnKl8ho8uNhpM552kdJznTT+bg1UZCjANF+V",
   #   "AmTXXoiEVTdpy3pBWVAaAWx5baNanBN21NshmAiSPDWW",
-  #  ]  
-  #  
-  
-  # Load the file into a bash array.  
+  #  ]
+  #
+  # Load the file into a bash array.
   local _keyvalue
   while IFS= read -r _keyvalue; do
     # Validate the line is a valid input.
@@ -1474,24 +1524,24 @@ write_ACTIVE_KEYSTORE() {
   # JSON Format is:
   # [
   #    <element1>,
-  #    <element2>,  
+  #    <element2>,
   # ]
 
   # Overwrites if already exists.
-  echo -n "[" >| "$_DST"
+  echo -n "[" >|"$_DST"
   local _firstline=true
   local _keyvalue
   for _keyvalue in "${ACTIVE_KEYSTORE[@]}"; do
     if [ "$_firstline" = true ]; then
-      _firstline=false        
+      _firstline=false
     else
-      echo -n "," >> "$_DST"
+      echo -n "," >>"$_DST"
     fi
-    echo >> "$_DST"
-    echo -n "  \"$_keyvalue\"" >> "$_DST"
+    echo >>"$_DST"
+    echo -n "  \"$_keyvalue\"" >>"$_DST"
   done
-  echo >> "$_DST"
-  echo -n "]" >> "$_DST"  
+  echo >>"$_DST"
+  echo -n "]" >>"$_DST"
 }
 export -f write_ACTIVE_KEYSTORE
 
@@ -1508,40 +1558,44 @@ array_contains() {
 
   if [ -z "$_ELEMENT" ]; then
     # Array can't contain empty string, so can't be in the array.
-    false; return
+    false
+    return
   fi
 
   # Check if the array is empty.
   if [ ${#_ARRAY} -eq 0 ]; then
-    false; return
+    false
+    return
   fi
 
   # Linear search in the array.
   for _e in "${!_ARRAY}"; do
     if [[ "$_e" == "$_ELEMENT" ]]; then
-      true; return
+      true
+      return
     fi
   done
-  false; return
+  false
+  return
 }
 export -f array_contains
 
 copy_private_keys_yaml_to_keystore() {
   if [ "$WORKDIR" = "cargobin" ]; then
-    return;    
+    return
   fi
 
   # Load private keys from suibase.yaml into a sui.keystore
-  # Do not duplicate key.  
+  # Do not duplicate key.
   local _DST="$1"
-  
+
   # Do nothing if variable CFG_add_private_keys_ is not set
   if [ -z "${CFG_add_private_keys_:-}" ]; then
     return
   fi
 
   # TODO Protect the user. Enforce log disabling when using keytool.
- 
+
   # Do a fast load (assume the content is valid).
   load_ACTIVE_KEYSTORE "$_DST" false
 
@@ -1550,22 +1604,22 @@ copy_private_keys_yaml_to_keystore() {
   # add-private-keys:
   #  - 0x937273cdae34592736ab25dcad423a4adfae3a4d
   #  - AIFdx03sdsjEDFSSMakjdhyRuejiS
-  
-  # 
+
+  #
   # Do a first pass to parse/convert as much as possible from
   # the suibase.yaml.
   #
-  # Will put in an array all the private keys to be tentatively 
+  # Will put in an array all the private keys to be tentatively
   # added. Duplicate entries are silently dropped.
   #
   # If they are all good, then the new keys are imported to the
   # destination sui.keystore in a second pass.
-  # 
+  #
   # The second pass is slower, but more strict on validation.
   local _KEYS_TO_ADD=()
-  for _keyvar in ${CFG_add_private_keys_:?} ; do    
+  for _keyvar in ${CFG_add_private_keys_:?}; do
     local _original_keyvalue
-    local _keyvalue    
+    local _keyvalue
     local _word_count
     _original_keyvalue=${!_keyvar}
     _keyvalue=$_original_keyvalue
@@ -1578,7 +1632,7 @@ copy_private_keys_yaml_to_keystore() {
         error_exit "add_private_keys mnemonic should be exactly 24 words [$_keyvalue]"
       fi
     else
-      # Check if _keyvalue string has unexpectably more than one word.    
+      # Check if _keyvalue string has unexpectably more than one word.
       if [ "$_wordcount" -gt 1 ]; then
         error_exit "add_private_keys should not have more than one value per line in suibase.yaml [$_keyvalue]"
       fi
@@ -1587,20 +1641,20 @@ copy_private_keys_yaml_to_keystore() {
       if [[ "${_keyvalue}" == "0x"* ]]; then
         # Keep only the last line which should be the key pair translated to Base64.
         # Send to /dev/null the *successful* messages on stderr!
-        _keyvalue=$($NOLOG_KEYTOOL_BIN convert "$_keyvalue" 2> /dev/null | tail -n 1)
-      fi      
+        _keyvalue=$($NOLOG_KEYTOOL_BIN convert "$_keyvalue" 2>/dev/null | tail -n 1)
+      fi
 
-      # If the $_keyvalue is already in the sui.keystore, assume it is 
+      # If the $_keyvalue is already in the sui.keystore, assume it is
       # valid and skip it.
       if array_contains ACTIVE_KEYSTORE "$_keyvalue"; then
-        continue;
+        continue
       fi
 
       if check_is_valid_base64_keypair "$_keyvalue"; then
-          _KEYS_TO_ADD+=("$_keyvalue")
-          continue;
+        _KEYS_TO_ADD+=("$_keyvalue")
+        continue
       fi
-      
+
       error_exit Invalid private key format ["$_original_keyvalue"]
     fi
   done
@@ -1624,9 +1678,24 @@ copy_private_keys_yaml_to_keystore() {
   # Write the end result (if something changed).
   if [ "${#ACTIVE_KEYSTORE[@]}" -ne "${#_NEW_KEYSTORE[@]}" ]; then
     ACTIVE_KEYSTORE=("${_NEW_KEYSTORE[@]}")
-    mv "$_DST" "$_DST.bak"    
+    mv "$_DST" "$_DST.bak"
     echo "Updating $_DST"
     write_ACTIVE_KEYSTORE "$_DST"
   fi
 }
 export -f copy_private_keys_yaml_to_keystore
+
+update_client_yaml_active_address() {
+  # Update the client.yaml active address field if not set.
+  # (a client call switch to an address, using output of another client call picking a default).
+  STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
+  if [ -n "$STR_FOUND" ]; then
+    local _ACTIVE_ADDRESS
+    _ACTIVE_ADDRESS=$($SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" active-address)
+    # Check that _ACTIVE_ADDRESS does not contain "None"
+    if [ -n "$_ACTIVE_ADDRESS" ] && [[ "$_ACTIVE_ADDRESS" != *"None"* ]]; then
+      $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" switch --address "$_ACTIVE_ADDRESS"
+    fi
+  fi
+}
+export -f update_client_yaml_active_address
