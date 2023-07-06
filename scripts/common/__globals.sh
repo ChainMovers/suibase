@@ -1519,7 +1519,8 @@ load_ACTIVE_KEYSTORE() {
 export -f load_ACTIVE_KEYSTORE
 
 write_ACTIVE_KEYSTORE() {
-  local _DST="$1"
+  local _DST_FINAL="$1"
+
   # Write the ACTIVE_KEYSTORE array to _DST file.
   # JSON Format is:
   # [
@@ -1527,7 +1528,10 @@ write_ACTIVE_KEYSTORE() {
   #    <element2>,
   # ]
 
-  # Overwrites if already exists.
+  # Work with a temp file and make the write
+  # to the final file atomic with a "mv -f".
+  local _DST
+  _DST=$(mktemp)
   echo -n "[" >|"$_DST"
   local _firstline=true
   local _keyvalue
@@ -1542,8 +1546,25 @@ write_ACTIVE_KEYSTORE() {
   done
   echo >>"$_DST"
   echo -n "]" >>"$_DST"
+  mv -f "$_DST" "$_DST_FINAL"
 }
 export -f write_ACTIVE_KEYSTORE
+
+create_empty_keystore_file() {
+  # Call with care... will overwrite the existing keystore without blinking.
+  if [ "$#" -ne 1 ]; then
+    error_exit "create_empty_keystore_file() requires 1 parameter"
+  fi
+  if [ -z "$1" ]; then
+    error_exit "create_empty_keystore_file() requires a non-empty parameter"
+  fi
+  local _DIR=$1
+  local _DST_FILE="$_DIR/sui.keystore"
+  # Wipe out the keystore.
+  mkdir -p "$_DIR"
+  rm -rf "$_DST_FILE"
+  printf '[\n]' >|"$_DST_FILE"
+}
 
 array_contains() {
   # Check for coding errors.
@@ -1678,7 +1699,6 @@ copy_private_keys_yaml_to_keystore() {
   # Write the end result (if something changed).
   if [ "${#ACTIVE_KEYSTORE[@]}" -ne "${#_NEW_KEYSTORE[@]}" ]; then
     ACTIVE_KEYSTORE=("${_NEW_KEYSTORE[@]}")
-    mv "$_DST" "$_DST.bak"
     echo "Updating $_DST"
     write_ACTIVE_KEYSTORE "$_DST"
   fi

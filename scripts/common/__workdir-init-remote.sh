@@ -43,6 +43,9 @@ workdir_init_remote() {
   # Create client addresses, but only if there is no sui.keystore already (and allowed by suibase.yaml)
   if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then
     add_test_addresses "$SUI_BIN_DIR/sui" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" "$CONFIG_DATA_DIR_DEFAULT/recovery.txt"
+    if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then
+      create_empty_keystore_file "$CONFIG_DATA_DIR_DEFAULT"
+    fi
   fi
 
   # Allow user to custom insert its own private keys.

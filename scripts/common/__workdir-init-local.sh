@@ -61,14 +61,6 @@ apply_suibase_yaml_to_config_yaml() {
   fi
 }
 
-clear_keystore() {
-  local _DIR=$1
-  # Wipe out the keystore and the default in the client.yaml
-  rm -rf "$_DIR/sui.keystore"
-  echo "[" >"$_DIR/sui.keystore"
-  echo "]" >>"$_DIR/sui.keystore"
-}
-
 create_faucet_keystore() {
   local _SUI_BINARY=$1
   local _SRC_DIR=$2
@@ -165,13 +157,13 @@ workdir_init_local() {
     fi
 
     \cp -rf "$_STATIC_SOURCE_DIR/client.yaml" "$_GENDATA_DIR"
-    \cp -rf "$_STATIC_SOURCE_DIR/recovery.txt" "$_GENDATA_DIR"
 
     if [[ "${CFG_auto_key_generation:?}" == 'true' ]]; then
       \cp -rf "$_STATIC_SOURCE_DIR/sui.keystore" "$_GENDATA_DIR"
+      \cp -rf "$_STATIC_SOURCE_DIR/recovery.txt" "$_GENDATA_DIR"
     else
       # Create an empty sui.keystore and clear the active-address in client.yaml.
-      clear_keystore "$_GENDATA_DIR"
+      create_empty_keystore_file "$_GENDATA_DIR"
       # Replace everything after 'active_address: ' with a ~ in the file $_GENDATA_DIR/client.yaml
       sed -i.bak -e 's/active_address: .*/active_address: ~/' "$_GENDATA_DIR/client.yaml" && rm "$_GENDATA_DIR/client.yaml.bak"
     fi
@@ -187,7 +179,7 @@ workdir_init_local() {
       mkdir -p "$_GENDATA_DIR"
       # Generate the genesis data for the very first time.
       $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >&/dev/null
-      clear_keystore "$_GENDATA_DIR"
+      create_empty_keystore_file "$_GENDATA_DIR"
       add_test_addresses "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
       create_faucet_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR" "$_GENDATA_DIR/faucet"
 
