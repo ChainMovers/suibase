@@ -12,8 +12,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Scripts: (#62) Can disable auto-generations of the 15 private keys.
+- Scripts: (#62) Add more easily your own private keys to any workdir.
 - Scripts: (#57) New "build" command (e.g. "testnet build -p sui-node").
-- Transacction result options to cookbook
+- Transaction result options to cookbook
 - Python transactions to cookbook code-snippets
 
 ### Fixed
@@ -24,7 +26,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Transacction python cookbook entries
+- Transaction python cookbook entries
 
 ### Removed
 
