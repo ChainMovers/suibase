@@ -323,6 +323,10 @@ workdir_exec() {
 
   update_ACTIVE_WORKDIR_var
 
+  # shellcheck source=SCRIPTDIR/__suibase-daemon.sh
+  source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
+  update_SUIBASE_DAEMON_PID_var
+
   # First, take care of the easy "status" command that does not touch anything.
 
   if [ "$CMD_STATUS_REQ" = true ]; then
@@ -345,6 +349,14 @@ workdir_exec() {
         _SUPPORT_FAUCET=true
       fi
 
+      # Verify from suibase.yaml if proxy services are expected.
+      local _SUPPORT_PROXY
+      if [ "${CFG_proxy_enabled:?}" != "true" ]; then
+        _SUPPORT_PROXY=false
+      else
+        _SUPPORT_PROXY=true
+      fi
+
       # Overall status: STOPPED or OK/DEGRADED/DOWN
       echo -n "localnet "
       if [ "$_USER_REQUEST" = "stop" ]; then
@@ -353,7 +365,14 @@ workdir_exec() {
         if [ -z "$SUI_PROCESS_PID" ]; then
           echo_red "DOWN"
         else
+          local _DEGRADED=false
           if $_SUPPORT_FAUCET && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+            _DEGRADED=true
+          fi
+          if $_SUPPORT_PROXY && [ -z "$SUIBASE_DAEMON_PID" ]; then
+            _DEGRADED=true
+          fi
+          if [ "$_DEGRADED" = true ]; then
             echo_yellow "DEGRADED"
           else
             echo_green "OK"
@@ -378,7 +397,7 @@ workdir_exec() {
         echo "---"
         echo -n "localnet process : "
         if [ -z "$SUI_PROCESS_PID" ]; then
-          echo_red "DEAD"
+          echo_red "NOT RUNNING"
           echo
         else
           echo_blue "OK"
@@ -390,9 +409,10 @@ workdir_exec() {
         echo -n "faucet process   : "
         if ! $_SUPPORT_FAUCET; then
           echo_blue "DISABLED"
+          echo
         else
           if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-            echo_red "DEAD"
+            echo_red "NOT RUNNING"
             echo
           else
             echo_blue "OK"
@@ -401,6 +421,27 @@ workdir_exec() {
             echo " )"
           fi
         fi
+
+        echo -n "proxy server     : "
+        if ! $_SUPPORT_PROXY; then
+          echo_blue "DISABLED"
+          echo
+        else
+          if [ -z "$SUIBASE_DAEMON_PID" ]; then
+            echo_red "NOT RUNNING "
+            echo
+          else
+            echo_blue "OK"
+            echo -n " ( pid "
+            echo_blue "$SUIBASE_DAEMON_PID"
+            echo -n " ) http://"
+            echo_blue "0.0.0.0"
+            echo -n ":"
+            echo_blue "${CFG_proxy_port_number:?}"
+            echo
+          fi
+        fi
+
         echo "---"
       fi
     fi
@@ -786,6 +827,9 @@ stop_all_services() {
   #
   # Exit if fails to get ALL the process stopped.
   #
+  # The suibase-daemon is an exception to the rule... it
+  # "self-exit" when no longer needed.
+  #
   # Returns:
   #   0: Success (all process needed to be stopped were stopped)
   #   1: Everything already stopped. Call was NOOP (except for user_request writing)
@@ -834,6 +878,50 @@ start_all_services() {
   # A good time to double-check if some commands from the suibase.yaml need to be applied.
   copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
 
+  # Verify from suibase.yaml if the suibase daemon should be started.
+  local _SUPPORT_PROXY
+  if [ "${CFG_proxy_enabled:?}" != "true" ]; then
+    _SUPPORT_PROXY=false
+  else
+    _SUPPORT_PROXY=true
+  fi
+
+  if [ "$_SUPPORT_PROXY" = true ]; then
+    update_SUIBASE_DAEMON_VERSION_INSTALLED
+    update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
+    #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
+    #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
+    if need_suibase_daemon_upgrade; then
+      local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
+      build_suibase_daemon
+      update_SUIBASE_DAEMON_VERSION_INSTALLED
+      local _NEW_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
+      if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
+        if [ -n "$_OLD_VERSION" ]; then
+          echo "$SUIBASE_DAEMON_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
+        fi
+      fi
+      update_SUIBASE_DAEMON_PID_var
+      if [ -z "$SUIBASE_DAEMON_PID" ]; then
+        start_suibase_daemon
+      else
+        # Needed for the upgrade to take effect.
+        restart_suibase_daemon
+      fi
+    else
+      if [ -z "$SUIBASE_DAEMON_PID" ]; then
+        # There was no need for upgrade, but the process need to be started.
+        start_suibase_daemon
+      fi
+    fi
+
+    if [ -z "$SUIBASE_DAEMON_PID" ]; then
+      setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
+    fi
+  fi
+
+  # Verify if all other expected process are running.
+
   # Verify if the faucet is supported for this version.
   local _SUPPORT_FAUCET
   if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
@@ -842,18 +930,21 @@ start_all_services() {
     _SUPPORT_FAUCET=true
   fi
 
-  # Check if everything is healthy.
-  if $_SUPPORT_FAUCET; then
-    if [ -n "$SUI_PROCESS_PID" ] && [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
-      return 1
-    fi
-  else
-    if [ -n "$SUI_PROCESS_PID" ]; then
-      return 1
-    fi
+  local _ALL_RUNNING=true
+  if [ "$_SUPPORT_FAUCET" = true ] && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+    _ALL_RUNNING=false
   fi
 
-  # One or more process need to be started.
+  if [ -z "$SUI_PROCESS_PID" ]; then
+    _ALL_RUNNING=false
+  fi
+
+  if [ "$_ALL_RUNNING" = true ]; then
+    return 1
+  fi
+
+  # One or more other process need to be started.
+
   if [ -z "$SUI_PROCESS_PID" ]; then
     start_sui_process
   fi
@@ -878,6 +969,8 @@ start_all_services() {
 
 is_at_least_one_service_running() {
   # Keep this function cohesive with start/stop
+  #
+  # SUIBASE_DAEMON is an exception to the rule... it should always run!
   update_SUI_FAUCET_PROCESS_PID_var
   update_SUI_PROCESS_PID_var
   if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then

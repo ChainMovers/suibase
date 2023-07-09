@@ -39,13 +39,23 @@ SUIBASE_DIR="$HOME/suibase"
 WORKDIRS="$SUIBASE_DIR/workdirs"
 
 # Some other commonly used locations.
-LOCAL_BIN="$HOME/.local/bin"
+LOCAL_BIN_DIR="$HOME/.local/bin"
 SCRIPTS_DIR="$SUIBASE_DIR/scripts"
 SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
 CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
 FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
 SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+
+# Suibase binaries are common to all workdirs, therefore are
+# installed in a common location.
+SUIBASE_BIN_DIR="$WORKDIRS/common/bin"
+SUIBASE_LOGS_DIR="$WORKDIRS/common/logs"
+SUIBASE_TMP_DIR="/tmp/.suibase"
+
+SUIBASE_DAEMON_NAME="suibase-daemon"
+SUIBASE_DAEMON_BUILD_DIR="$SUIBASE_DIR/rust/suibase"
+SUIBASE_DAEMON_BIN="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME"
 
 # Prefix often used when calling sui client.
 SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
@@ -549,7 +559,7 @@ exit_if_not_installed() {
   # (which will cause some trouble with some script).
   case "$SCRIPT_NAME" in
   "asui" | "lsui" | "csui" | "dsui" | "tsui" | "localnet" | "devnet" | "testnet" | "mainnet" | "workdirs")
-    if [ ! -L "$LOCAL_BIN/$SCRIPT_NAME" ]; then
+    if [ ! -L "$LOCAL_BIN_DIR/$SCRIPT_NAME" ]; then
       echo
       echo "Some suibase files are missing. The installation was"
       echo "either not done or failed."
@@ -976,7 +986,29 @@ export -f create_state_as_needed
 repair_workdir_as_needed() {
   WORKDIR_PARAM="$1"
 
-  mkdir -p "$WORKDIRS"
+  if [ ! -d "$WORKDIRS" ]; then
+    if ! mkdir -p "$WORKDIRS"; then
+      setup_error "Unable to create $WORKDIRS"
+    fi
+  fi
+
+  if [ ! -d "$SUIBASE_BIN_DIR" ]; then
+    if ! mkdir -p "$SUIBASE_BIN_DIR"; then
+      setup_error "Unable to create $SUIBASE_BIN_DIR"
+    fi
+  fi
+
+  if [ ! -d "$SUIBASE_LOGS_DIR" ]; then
+    if ! mkdir -p "$SUIBASE_LOGS_DIR"; then
+      setup_error "Unable to create $SUIBASE_LOGS_DIR"
+    fi
+  fi
+
+  if [ ! -d "$SUIBASE_TMP_DIR" ]; then
+    if ! mkdir -p "$SUIBASE_TMP_DIR"; then
+      setup_error "Unable to create $SUIBASE_TMP_DIR"
+    fi
+  fi
 
   if [ "$WORKDIR_PARAM" = "active" ]; then
     update_ACTIVE_WORKDIR_var
