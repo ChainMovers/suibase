@@ -1,7 +1,5 @@
 use crate::basic_types::*;
-use crate::managed_vec::*;
-use crate::target_server::TargetServer;
-use crate::workdirs::*;
+use crate::shared_types::TargetServer;
 
 pub struct InputPort {
     managed_idx: Option<ManagedVecUSize>,
@@ -42,25 +40,26 @@ pub struct InputPort {
 }
 
 impl InputPort {
-    pub fn new(workdir_idx: WorkdirIdx, config: &WorkdirProxyConfig) -> Self {
+    pub fn new(workdir_idx: WorkdirIdx, proxy_port_number: u16) -> Self {
         let now = EpochTimestamp::now();
 
         // Iterate the links and add them to the target_servers list.
+        /*
         let mut target_servers = ManagedVec::new();
         for (_key, value) in config.links.iter() {
             if let Some(rpc) = &value.rpc {
                 target_servers.push(TargetServer::new(rpc.clone()));
             }
-        }
+        }*/
 
         Self {
             managed_idx: None,
             workdir_idx,
-            port_number: config.proxy_port_number,
+            port_number: proxy_port_number,
             deactivate_request: false,
             proxy_server_running: false,
             healthy: false,
-            target_servers,
+            target_servers: ManagedVec::new(),
             num_ok_req: 0,
             last_ok_req: now,
             num_failed_req: 0,
@@ -68,6 +67,10 @@ impl InputPort {
             last_down_transition: now,
             last_up_transition: now,
         }
+    }
+
+    pub fn add_target_server(&mut self, rpc: String) {
+        self.target_servers.push(TargetServer::new(rpc));
     }
 
     pub fn workdir_idx(&self) -> WorkdirIdx {

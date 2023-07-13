@@ -121,6 +121,12 @@ impl<T: ManagedElement> ManagedVec<T> {
     }
 }
 
+impl<T: ManagedElement> Default for ManagedVec<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[test]
 
 fn len() {

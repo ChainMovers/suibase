@@ -1,7 +1,6 @@
-//use crate::basic_types::*;
-use crate::managed_vec::*;
+use crate::basic_types::*;
 
-use crate::server_stats::ServerStats;
+use crate::shared_types::ServerStats;
 
 pub struct TargetServer {
     managed_idx: Option<ManagedVecUSize>,

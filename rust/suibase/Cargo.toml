@@ -7,17 +7,40 @@ version = "0.0.1"
 edition = "2021"
 
 [workspace.dependencies]
-sui-sdk = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
-sui-json-rpc-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
-sui-keys = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
-sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
-sui-adapter = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-adapter/" }
-shared-crypto = { path = "../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
 
 futures = "0.3.25"
 
+jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
+    "full",
+    "http-client",
+    "jsonrpsee-core",
+] }
+jsonrpsee-proc-macros = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
+schemars = { version = "0.8.10", features = ["either"] }
+serde_with = { version = "2.1.0", features = ["hex"] }
+serde_json = { version = "1.0.95", features = [
+    "preserve_order",
+    "arbitrary_precision",
+] }
+serde = { version = "1.0.144", features = ["derive", "rc"] }
+
 tokio = { version = "1.28.1", features = ["full"] }
 tokio-graceful-shutdown = "0.13"
+
+tower = { version = "0.4.12", features = [
+    "full",
+    "util",
+    "timeout",
+    "load-shed",
+    "limit",
+] }
+tower-http = { version = "0.3.4", features = [
+    "cors",
+    "full",
+    "trace",
+    "set-header",
+    "propagate-header",
+] }
 
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 thiserror = "1.0"

@@ -5,7 +5,7 @@
 use home::home_dir;
 use std::collections::HashMap;
 
-use crate::managed_vec::*;
+use crate::basic_types::*;
 
 use std::path::{Path, PathBuf};
 
@@ -121,12 +121,12 @@ impl Workdir {
 
     pub fn is_user_request_start(&self) -> bool {
         // Return true if suibase_state_file() exists, and if so, check if its text
-        // content is ""start".
+        // content is "start".
+        //
         // If there is any error, return false.
         //
-        // Must not panic.
         if let Ok(contents) = std::fs::read_to_string(self.suibase_state_file()) {
-            if contents == "start" {
+            if contents.starts_with("start") {
                 return true;
             }
         }
@@ -165,35 +165,25 @@ impl Workdirs {
         // Generate all the suibase paths for state and config files of each WORKDIRS_KEYS.
         let mut workdirs = ManagedVec::new();
 
-        let mut workdirs_path = home_dir.clone();
-        workdirs_path.push("suibase");
-        workdirs_path.push("workdirs");
+        let workdirs_path = home_dir.join("suibase").join("workdirs");
 
         for workdir in WORKDIRS_KEYS.iter() {
             // Paths
-            let mut path = home_dir.clone();
-            path.push("suibase");
-            path.push("workdirs");
-            path.push(workdir);
+            let path = workdirs_path.join(workdir);
 
-            let mut state_path = path.clone();
-            state_path.push(".state");
+            let state_path = path.join(".state");
 
             // Files
-            let mut state = state_path.clone();
-            state.set_file_name("user_request");
+            let state = state_path.join("user_request");
 
-            let mut user = path.clone();
-            user.set_file_name("suibase");
-            user.set_extension("yaml");
+            let user_yaml = path.join("suibase.yaml");
 
-            let mut default = home_dir.clone();
-            default.push("suibase");
-            default.push("scripts");
-            default.push("defaults");
-            default.push(workdir);
-            default.set_file_name("suibase");
-            default.set_extension("yaml");
+            let mut default_yaml = home_dir.clone();
+            default_yaml.push("suibase");
+            default_yaml.push("scripts");
+            default_yaml.push("defaults");
+            default_yaml.push(workdir);
+            default_yaml.push("suibase.yaml");
 
             workdirs.push(Workdir {
                 managed_idx: None,
@@ -201,13 +191,12 @@ impl Workdirs {
                 path,
                 state_path,
                 suibase_state_file: state,
-                suibase_yaml_user: user,
-                suibase_yaml_default: default,
+                suibase_yaml_user: user_yaml,
+                suibase_yaml_default: default_yaml,
             });
         }
 
-        let mut suibase_home = home_dir.clone();
-        suibase_home.push("suibase");
+        let suibase_home = home_dir.join("suibase");
 
         Self {
             suibase_home: suibase_home.to_string_lossy().to_string(),

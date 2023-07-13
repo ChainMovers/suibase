@@ -4,12 +4,11 @@ use std::sync::Arc;
 
 use crate::app_error::AppError;
 use crate::basic_types::*;
-use crate::managed_vec::*;
 
-use crate::globals::Globals;
 use crate::network_monitor::{
     NetMonTx, NetmonFlags, NetworkMonitor, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
 };
+use crate::shared_types::Globals;
 
 use anyhow::{anyhow, Result};
 use axum::{

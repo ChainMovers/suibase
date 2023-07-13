@@ -1,7 +1,7 @@
 use crate::basic_types::*;
 
-use crate::globals::Globals;
 use crate::request_worker::RequestWorker;
+use crate::shared_types::Globals;
 
 use bitflags::bitflags;
 

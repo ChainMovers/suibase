@@ -1,10 +1,8 @@
 use crate::basic_types::*;
-use crate::managed_vec::*;
 
-use crate::globals::Globals;
-use crate::input_port::InputPort;
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
+use crate::shared_types::{Globals, InputPort};
 use crate::workdirs::{WorkdirProxyConfig, Workdirs};
 use crate::workdirs_watcher::WorkdirsWatcher;
 
@@ -12,14 +10,14 @@ use anyhow::Result;
 
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-// Design (WIP)
+// Design
 //
-// Use configuration are hot-reloaded from the suibase.yaml into the Globals (RwLock).
-//
-// The AdminController will:
-//   - Hot-reload the Globals from the suibase.yaml (after proper validation and RwLock).
-//   - Start one "ProxyServer" per workdir (localnet, devnet, testnet ...)
-//   - Serve the JSON-RPC API.
+// The AdminController does:
+//   - Process all system/configuration-level events that are easier to handle when done sequentially
+//     (implemented by dequeing and processing one event at the time).
+//   - Handle events to hot-reload the suibase.yaml
+//   - Handle events for various user actions (e.g. from JSONRPCServer).
+//   - Responsible to keep one "ProxyServer" per workdir running (localnet, devnet, testnet ...)
 //
 // Globals: InputPort Instantiation
 // ================================
@@ -94,6 +92,7 @@ impl AdminController {
     }
 
     async fn send_notif_config_file_change(&mut self, path: String) {
+        log::info!("Sending config file change notification for {}", path);
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
         msg.data_string = Some(path);
@@ -131,8 +130,8 @@ impl AdminController {
         // For now, just load the default.
 
         let mut workdir_config = WorkdirProxyConfig::new();
-        let try_load = workdir_config
-            .load_from_file(&workdir.suibase_yaml_default().to_string_lossy().to_string());
+        let try_load =
+            workdir_config.load_from_file(&workdir.suibase_yaml_default().to_string_lossy());
         if try_load.is_err() {
             log::error!(
                 "Failed to load config file {:?}",
@@ -167,7 +166,13 @@ impl AdminController {
                 ManagedVecUSize::MAX
             } else {
                 // TODO Verify there is no conflicting port assigment.
-                let input_port = InputPort::new(workdir_idx, &workdir_config);
+                let mut input_port = InputPort::new(workdir_idx, workdir_config.proxy_port_number);
+                for (_key, value) in workdir_config.links.iter() {
+                    if let Some(rpc) = &value.rpc {
+                        input_port.add_target_server(rpc.clone());
+                    }
+                }
+
                 if let Some(port_id) = ports.push(input_port) {
                     port_id
                 } else {
@@ -192,7 +197,7 @@ impl AdminController {
             // Wait for a message.
             if let Some(msg) = self.admctrl_rx.recv().await {
                 // Process the message.
-                self.process_config_msg(msg, &subsys).await;
+                self.process_config_msg(msg, subsys).await;
             } else {
                 // Channel closed or shutdown requested.
                 return;
@@ -209,21 +214,21 @@ impl AdminController {
         // event into the queue to force the config to be loaded right now.
 
         let workdirs = Workdirs::new();
-        /*
         for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
+            log::info!("Checking if started for {}", workdir.name());
             if workdir.is_user_request_start() {
                 self.send_notif_config_file_change(
                     workdir.suibase_yaml_default().to_string_lossy().to_string(),
                 )
                 .await;
             }
-        }*/
+        }
 
         // Initialize a subsystem to watch workdirs files. Notifications are then send back
         // to this thread on the AdminController channel.
         {
             let admctrl_tx = self.admctrl_tx.clone();
-            let mut workdirs_watcher = WorkdirsWatcher::new(workdirs, admctrl_tx);
+            let workdirs_watcher = WorkdirsWatcher::new(workdirs, admctrl_tx);
             subsys.start("workdirs-watcher", move |a| workdirs_watcher.run(a));
         }
 

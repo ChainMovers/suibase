@@ -116,12 +116,16 @@ impl ServerStats {
     pub fn relative_health_score(&self) -> i8 {
         if self.is_healthy {
             100 // Ok
+        } else if self.failed_count > 0 {
+            -100 // Bad
         } else {
-            if self.failed_count > 0 {
-                -100 // Bad
-            } else {
-                0 // Neutral
-            }
+            0 // Neutral
         }
+    }
+}
+
+impl Default for ServerStats {
+    fn default() -> Self {
+        Self::new()
     }
 }

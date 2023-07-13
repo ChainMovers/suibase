@@ -11,11 +11,15 @@
 //
 //  - A thread can choose read/write access to that 'SafeGlobal'
 //
+//  - Although globals are not encouraged, they are carefully used here in a balanced way
+//    and as a stepping stone toward a more optimized design. Ask the dev for more details.
+//
+
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
-use crate::input_port::InputPort;
-use crate::managed_vec::ManagedVec;
+use crate::basic_types::ManagedVec;
+use crate::shared_types::InputPort;
 
 pub struct SafeGlobals {
     pub input_ports: ManagedVec<InputPort>,
@@ -26,6 +30,12 @@ impl SafeGlobals {
         Self {
             input_ports: ManagedVec::new(),
         }
+    }
+}
+
+impl Default for SafeGlobals {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

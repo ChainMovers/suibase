@@ -43,10 +43,13 @@ For remote network (testnet/devnet/mainnet) you need to modify the `<workdir nam
 You can apply the same default customization to **all** your workdir with a suibase.yaml located at `~/suibase/workdirs/common/suibase.yaml`.
 
 Everytime you run a suibase command, it loads up to 3 YAML files in a specific order:
-  (1) ~/suibase/scritps/defaults/\<workdir name>/suibase.yaml
+  (1) ~/suibase/scripts/defaults/\<workdir name>/suibase.yaml
   (2) ~/suibase/workdirs/common/suibase.yaml
   (3) ~/suibase/workdirs/\<workdir name>/suibase.yaml
 
-When a given variable is defined by more than one suibase.yaml, the last one takes effect.
+You should never modify the files under ~/suibase/scripts/defaults. They are overwritten when you update Suibase. Instead, always create/edit the files (2) and (3) for customization.
 
-In short... (1) is how suibase defines **every** default variables for every possible workdir, you then optionally create (2) for your own default customization for all workdir and optionally (3) for the final level of customization specific to a workdir.
+When the same variable is in more than one suibase.yaml, the last one loaded takes effect.
+
+In short... (1) is how suibase first initialize defaults for **every** variables, you then optionally create (2) to apply customization on all workdir and optionally edit (3) for the final level of customization specific to a workdir.
+

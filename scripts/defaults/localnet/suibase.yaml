@@ -11,9 +11,9 @@
 #
 network_type: local
 
-# Enable auto key generation. 
+# Enable auto key generation.
 #
-# These are the default addresses created to help for test automations. You can 
+# These are the default addresses created to help for test automations. You can
 # disable these initial key creation and start instead with an empty wallet (sui.keystore)
 # and/or optionally add your own with 'add_private_keys'. See docs for more details.
 auto_key_generation: true

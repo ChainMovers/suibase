@@ -21,6 +21,6 @@ pub fn duration_to_micros(value: std::time::Duration) -> u32 {
     }
 }
 
-pub type InputPortIdx = crate::managed_vec::ManagedVecUSize;
-pub type TargetServerIdx = crate::managed_vec::ManagedVecUSize;
-pub type WorkdirIdx = crate::managed_vec::ManagedVecUSize;
+pub type InputPortIdx = crate::basic_types::ManagedVecUSize;
+pub type TargetServerIdx = crate::basic_types::ManagedVecUSize;
+pub type WorkdirIdx = crate::basic_types::ManagedVecUSize;

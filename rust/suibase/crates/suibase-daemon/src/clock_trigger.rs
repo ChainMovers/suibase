@@ -1,4 +1,4 @@
-use crate::globals::Globals;
+use crate::shared_types::Globals;
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
