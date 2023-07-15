@@ -145,7 +145,7 @@ start_suibase_daemon() {
         CHECK_ALIVE="it's alive!"
       else
         # TODO: Actually implement that the assigned port for this workdir is responding!
-        CHECK_ALIVE=$(lsof "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock | grep "suibase")
+        CHECK_ALIVE=$(lsof "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock 2>/dev/null | grep "suibase")
       fi
       if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
@@ -265,7 +265,7 @@ update_SUIBASE_DAEMON_PID_var() {
   if $SUI_BASE_NET_MOCK; then return; fi
 
   local _PID
-  _PID=$(lsof -t -a -c suibase "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock)
+  _PID=$(lsof -t -a -c suibase "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock 2>/dev/null)
 
   #shellcheck disable=SC2181
   if [ $? -eq 0 ]; then
