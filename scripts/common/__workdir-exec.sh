@@ -361,6 +361,7 @@ workdir_exec() {
       echo -n "localnet "
       if [ "$_USER_REQUEST" = "stop" ]; then
         echo_red "STOPPED"
+
       else
         if [ -z "$SUI_PROCESS_PID" ]; then
           echo_red "DOWN"
@@ -473,6 +474,26 @@ workdir_exec() {
 
     if is_sui_repo_dir_override; then
       echo "set-sui-repo  : $RESOLVED_SUI_REPO_DIR"
+    fi
+
+    # Detect the situation where everything is NOT RUNNING, but
+    # yet the user_request is 'start'... and there are clear indication
+    # that the system was rebooted (because /tmp directories are missing).
+    if [ "$_USER_REQUEST" = "start" ]; then
+      # TODO Check if the last time the $_USER_REQUEST was written
+      #      prior to the last reboot time.
+      #
+      # Note "uptime -s" not working on macOS, otherwise just comparing the
+      # following would work great:
+      # date -r ~/suibase/workdirs/localnet/.state/user_request "+%Y-%m-%d %H:%M:%S"
+      # uptime -s
+      if [ -z "$SUI_PROCESS_PID" ] &&
+        [ -z "$FAUCET_PROCESS_PID" ] &&
+        [ -z "$SUIBASE_DAEMON_PID" ]; then
+        if [ ! -d "$SUIBASE_TMP_DIR" ]; then
+          warn_user "Looks like the system was rebooted. Please do '$WORKDIR start' to resume."
+        fi
+      fi
     fi
     exit
   fi
