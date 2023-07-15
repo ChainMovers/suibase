@@ -4,7 +4,10 @@ use crate::shared_types::TargetServer;
 pub struct InputPort {
     managed_idx: Option<ManagedVecUSize>,
 
-    // The related workdir (localnet, testnet, mainnet?). Set once at construction.
+    // The name of the workdir (e.g. localnet). Set once at contruction.
+    workdir_name: String,
+
+    // The workdir idx (from AdminController context). Set once at construction.
     workdir_idx: WorkdirIdx,
 
     // TCP/UDP port number. Set once at construction.
@@ -40,7 +43,7 @@ pub struct InputPort {
 }
 
 impl InputPort {
-    pub fn new(workdir_idx: WorkdirIdx, proxy_port_number: u16) -> Self {
+    pub fn new(workdir_idx: WorkdirIdx, workdir_name: String, proxy_port_number: u16) -> Self {
         let now = EpochTimestamp::now();
 
         // Iterate the links and add them to the target_servers list.
@@ -54,6 +57,7 @@ impl InputPort {
 
         Self {
             managed_idx: None,
+            workdir_name,
             workdir_idx,
             port_number: proxy_port_number,
             deactivate_request: false,
@@ -75,6 +79,10 @@ impl InputPort {
 
     pub fn workdir_idx(&self) -> WorkdirIdx {
         self.workdir_idx
+    }
+
+    pub fn workdir_name(&self) -> &str {
+        &self.workdir_name
     }
 
     pub fn port_number(&self) -> u16 {

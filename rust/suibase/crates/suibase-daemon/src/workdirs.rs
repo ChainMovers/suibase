@@ -214,6 +214,7 @@ impl Workdirs {
     }
 
     // Given a path string, find the corresponding workdir object.
+    // This also works if the string is simply the workdir name (e.g. "localnet").
     pub fn find_workdir(&self, path: &str) -> Option<(ManagedVecUSize, &Workdir)> {
         // Remove the home_dir from the path.
         let path = path.trim_start_matches(&self.suibase_home);

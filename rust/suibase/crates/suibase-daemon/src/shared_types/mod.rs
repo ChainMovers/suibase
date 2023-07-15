@@ -2,7 +2,7 @@
 //
 // This is a submodule specific to suibase-daemon.
 //
-// flatten everything under "api" module.
+// flatten everything under "shared_type" module.
 pub(crate) use self::globals::*;
 pub(crate) use self::input_port::*;
 pub(crate) use self::server_stats::*;

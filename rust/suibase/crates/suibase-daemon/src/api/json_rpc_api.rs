@@ -108,5 +108,5 @@ pub trait ProxyApi {
     /// By default fetch everything, but can reduce load
     /// with the options.
     #[method(name = "getLinks")]
-    async fn get_links(&self, workdir: Option<String>) -> RpcResult<LinksResponse>;
+    async fn get_links(&self, workdir: String) -> RpcResult<LinksResponse>;
 }

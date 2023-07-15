@@ -166,7 +166,11 @@ impl AdminController {
                 ManagedVecUSize::MAX
             } else {
                 // TODO Verify there is no conflicting port assigment.
-                let mut input_port = InputPort::new(workdir_idx, workdir_config.proxy_port_number);
+                let mut input_port = InputPort::new(
+                    workdir_idx,
+                    workdir.name().to_string(),
+                    workdir_config.proxy_port_number,
+                );
                 for (_key, value) in workdir_config.links.iter() {
                     if let Some(rpc) = &value.rpc {
                         input_port.add_target_server(rpc.clone());

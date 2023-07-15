@@ -31,6 +31,16 @@ impl SafeGlobals {
             input_ports: ManagedVec::new(),
         }
     }
+
+    pub fn find_input_port_by_name(&self, workdir_name: &str) -> Option<&InputPort> {
+        // Linear search in input_ports (vector size expected to remain small <5 elements)
+        for input_port in self.input_ports.iter() {
+            if input_port.1.workdir_name() == workdir_name {
+                return Some(input_port.1);
+            }
+        }
+        None
+    }
 }
 
 impl Default for SafeGlobals {
