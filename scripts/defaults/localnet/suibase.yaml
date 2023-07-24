@@ -47,6 +47,7 @@ default_repo_branch: "devnet"
 
 proxy_port_number: 44340
 proxy_enabled: false
+daemon_api_port_number: 44399
 
 links:
   - alias: "localnet"

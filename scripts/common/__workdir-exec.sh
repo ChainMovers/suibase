@@ -13,6 +13,7 @@ CMD_DELETE_REQ=false
 CMD_UPDATE_REQ=false
 CMD_REGEN_REQ=false
 CMD_PUBLISH_REQ=false
+CMD_LINKS_REQ=false
 CMD_SET_ACTIVE_REQ=false
 CMD_SET_SUI_REPO_REQ=false
 CMD_FAUCET_REQ=false
@@ -71,6 +72,9 @@ usage_local() {
   echo "   Get new coins toward any address."
   echo "            Do \"$WORKDIR faucet\" for more info"
   echo
+  echo_low_green "   links"
+  echo "   Get RPC server statistics."
+  echo
   echo_low_green "   set-active"
   echo
   echo "            Makes $WORKDIR the active context for many"
@@ -125,6 +129,9 @@ usage_remote() {
   echo "  Publish the module specified in the Move.toml found"
   echo "            in current directory or optional '--path <path>'"
   echo
+  echo_low_green "   links"
+  echo "    Get RPC server statistics."
+  echo
   echo_low_green "   set-active"
   echo
   echo "            Makes $WORKDIR the active context for many"
@@ -170,6 +177,7 @@ workdir_exec() {
   update) CMD_UPDATE_REQ=true ;;
   regen) CMD_REGEN_REQ=true ;;
   publish) CMD_PUBLISH_REQ=true ;;
+  links) CMD_LINKS_REQ=true ;;
   set-active) CMD_SET_ACTIVE_REQ=true ;;
   set-sui-repo) CMD_SET_SUI_REPO_REQ=true ;;
   faucet) CMD_FAUCET_REQ=true ;;
@@ -327,7 +335,7 @@ workdir_exec() {
   source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
   update_SUIBASE_DAEMON_PID_var
 
-  # First, take care of the easy "status" command that does not touch anything.
+  # First, take care of the easier "status" and "links" that are "read only" commands.
 
   if [ "$CMD_STATUS_REQ" = true ]; then
     exit_if_workdir_not_ok
@@ -351,7 +359,7 @@ workdir_exec() {
 
       # Verify from suibase.yaml if proxy services are expected.
       local _SUPPORT_PROXY
-      if [ "${CFG_proxy_enabled:?}" != "true" ]; then
+      if [ "${CFG_proxy_enabled:?}" == "false" ]; then
         _SUPPORT_PROXY=false
       else
         _SUPPORT_PROXY=true
@@ -479,7 +487,7 @@ workdir_exec() {
     # Detect the situation where everything is NOT RUNNING, but
     # yet the user_request is 'start'... and there are clear indication
     # that the system was rebooted (because /tmp directories are missing).
-    if [ "$_USER_REQUEST" = "start" ]; then
+    if [ "$is_local" == "true" ] && [ "$_USER_REQUEST" = "start" ]; then
       # TODO Check if the last time the $_USER_REQUEST was written
       #      prior to the last reboot time.
       #
@@ -498,8 +506,29 @@ workdir_exec() {
     exit
   fi
 
+  if [ "$CMD_LINKS_REQ" = true ]; then
+    exit_if_workdir_not_ok
+
+    if [ "${CFG_proxy_enabled:?}" == "false" ]; then
+      echo "You must enable monitoring of $WORKDIR RPC servers for this command to work."
+      echo
+      echo "Add 'proxy_enabled: true' to either:"
+      echo "      ~/suibase/workdirs/$WORKDIR/suibase.yaml"
+      echo "  or  ~/suibase/workdirs/common/suibase.yaml"
+      echo
+      echo "More info: https://suibase.io/how-to/proxy"
+      exit 1
+    fi
+
+    # Display the stats from the proxy server.
+    show_suibase_daemon_get_links "$DEBUG_RUN"
+
+    exit
+  fi
+
   # Second, take care of the case that just stop/start processes.
   if [ "$CMD_START_REQ" = true ]; then
+
     if is_workdir_ok && is_sui_binary_ok; then
 
       # A good time to check if the user did mess up with the
@@ -509,11 +538,6 @@ workdir_exec() {
       # Note: nobody should have tried to run the sui binary yet.
       # So this is why the update_SUI_VERSION_var need to be done here.
       update_SUI_VERSION_var
-
-      if ! $is_local; then
-        echo "$WORKDIR installed (no process needed to be started)"
-        exit
-      fi
 
       start_all_services
       _RES=$?
@@ -862,6 +886,11 @@ stop_all_services() {
     set_key_value "user_request" "stop"
   fi
 
+  if [ "${CFG_network_type:?}" = "remote" ]; then
+    # Nothing needed to be stop for remote network.
+    return 1
+  fi
+
   if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
     return 1
   fi
@@ -899,49 +928,18 @@ start_all_services() {
   # A good time to double-check if some commands from the suibase.yaml need to be applied.
   copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
 
-  # Verify from suibase.yaml if the suibase daemon should be started.
-  local _SUPPORT_PROXY
-  if [ "${CFG_proxy_enabled:?}" != "true" ]; then
-    _SUPPORT_PROXY=false
-  else
-    _SUPPORT_PROXY=true
-  fi
-
-  if [ "$_SUPPORT_PROXY" = true ]; then
-    update_SUIBASE_DAEMON_VERSION_INSTALLED
-    update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-    #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
-    #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
-    if need_suibase_daemon_upgrade; then
-      local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
-      build_suibase_daemon
-      update_SUIBASE_DAEMON_VERSION_INSTALLED
-      local _NEW_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
-      if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
-        if [ -n "$_OLD_VERSION" ]; then
-          echo "$SUIBASE_DAEMON_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
-        fi
-      fi
-      update_SUIBASE_DAEMON_PID_var
-      if [ -z "$SUIBASE_DAEMON_PID" ]; then
-        start_suibase_daemon
-      else
-        # Needed for the upgrade to take effect.
-        restart_suibase_daemon
-      fi
-    else
-      if [ -z "$SUIBASE_DAEMON_PID" ]; then
-        # There was no need for upgrade, but the process need to be started.
-        start_suibase_daemon
-      fi
-    fi
-
-    if [ -z "$SUIBASE_DAEMON_PID" ]; then
-      setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
-    fi
+  # Also a good time to double-check the suibase-daemon is running (if needed).
+  # (returns non-zero only if needed and failed to start).
+  if ! start_suibase_daemon_as_needed; then
+    setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
   fi
 
   # Verify if all other expected process are running.
+
+  if [ "${CFG_network_type:?}" = "remote" ]; then
+    # No other process expected for remote network.
+    return 0
+  fi
 
   # Verify if the faucet is supported for this version.
   local _SUPPORT_FAUCET

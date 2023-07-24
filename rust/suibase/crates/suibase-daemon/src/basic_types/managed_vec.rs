@@ -27,6 +27,8 @@
 // and be later used with get() and get_mut() for fast access.
 
 pub type ManagedVecUSize = u8;
+
+#[derive(Debug)]
 pub struct ManagedVec<T> {
     data: Vec<Option<T>>,
     some_len: ManagedVecUSize,
@@ -79,9 +81,7 @@ impl<T: ManagedElement> ManagedVec<T> {
     // might re-use that cell (the same index).
     pub fn remove(&mut self, index: ManagedVecUSize) -> Option<T> {
         let usize_index = usize::from(index);
-        if self.data.get(usize_index).is_none() {
-            return None;
-        }
+        self.data.get(usize_index)?;
         self.some_len -= 1;
         let ret_value = self.data.get_mut(usize_index).and_then(|v| v.take());
         // Shrink the vector by removing all empty last cells.

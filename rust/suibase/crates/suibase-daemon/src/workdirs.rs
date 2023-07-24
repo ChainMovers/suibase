@@ -74,11 +74,11 @@ impl WorkdirProxyConfig {
                 if let Some(alias) = link["alias"].as_str() {
                     // Purpose of "enabled" is actually to disable a link... so if not present, default
                     // to enabled.
-                    let enabled = link["enabled"].as_bool().unwrap_or_else(|| true);
+                    let enabled = link["enabled"].as_bool().unwrap_or(true);
                     let rpc = link["rpc"].as_str().map(|s| s.to_string()); // Optional
                     let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
                                                                          // Should instead remove all alpha, do absolute value, and clamp to 1-255.
-                    let priority = link["priority"].as_u64().unwrap_or_else(|| u64::MAX) as u8;
+                    let priority = link["priority"].as_u64().unwrap_or(u64::MAX) as u8;
                     let link = Link {
                         alias: alias.to_string(),
                         enabled,

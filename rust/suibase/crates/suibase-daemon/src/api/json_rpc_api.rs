@@ -19,31 +19,19 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkStats {
+    // The alias of the link, as specified in the config file.
     pub alias: String,
 
-    // -100.0 to +100.0 (sign and decimal always included)
     pub health_pct: String,
 
-    //    0 or 0.0 to 100.0
-    //
-    // Recommend display as-is, two exceptions:
-    //      0 is a true zero (e.g. display as "0.0")
-    //    0.0 should be displayed as "<0.1"
     pub load_pct: String,
 
-    //  0.00 to 999.99 (decimal always included)
-    //  999.99 should be displayed as ">1 secs"
     pub resp_time: String,
 
-    // 0 or 0.000 to 100.0
-    //
-    // Recommend display as-is, two exceptions:
-    //      0 is a true zero (e.g. display as "0")
-    //  0.000 should be displayed as "<0.001"
-    pub retry_pct: String,
+    pub success_pct: String,
 }
 
 impl LinkStats {
@@ -56,22 +44,21 @@ impl LinkStats {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LinksSummary {
     // Each request counted only once, even when retried.
-    pub success_on_first_attempt: u32,
-    pub success_on_retry: u32,
-    pub fail_retry: u32,
-    pub fail_network_down: u32,
-    pub fail_bad_request: u32,
+    pub success_on_first_attempt: u64,
+    pub success_on_retry: u64,
+    pub fail_network_down: u64,
+    pub fail_bad_request: u64,
+    pub fail_others: u64,
+}
 
-    // Same variables but for percent (and as string)
-    pub success_on_first_attempt_pct: String,
-    pub success_on_retry_pct: String,
-    pub fail_retry_pct: String,
-    pub fail_network_down_pct: String,
-    pub fail_bad_request_pct: String,
+impl LinksSummary {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 #[serde_as]
@@ -80,7 +67,7 @@ pub struct LinksSummary {
 pub struct LinksResponse {
     //#[schemars(with = "u32")]
     //#[serde_as(as = "u32")]
-    pub proxy_enabled: bool,
+    pub status: String, // This is the combined "Multi-Link status". One of "OK", "DOWN", "DISABLED", "DEGRADED"
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<LinksSummary>,
@@ -88,14 +75,26 @@ pub struct LinksResponse {
     // List of links
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<Vec<LinkStats>>,
+
+    // This is the output when the option 'display' is true.
+    // Will also change the default to false for the summary/links/display output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+
+    // This is the output when the option 'debug' is true.
+    // Will also change the default to true for the summary/links/display output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>,
 }
 
 impl LinksResponse {
     pub fn new() -> Self {
         Self {
-            proxy_enabled: false,
+            status: "DISABLED".to_string(),
             summary: None,
             links: None,
+            display: None,
+            debug: None,
         }
     }
 }
@@ -108,5 +107,13 @@ pub trait ProxyApi {
     /// By default fetch everything, but can reduce load
     /// with the options.
     #[method(name = "getLinks")]
-    async fn get_links(&self, workdir: String) -> RpcResult<LinksResponse>;
+    async fn get_links(
+        &self,
+        workdir: String,
+        summary: Option<bool>,
+        links: Option<bool>,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<LinksResponse>;
 }

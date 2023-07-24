@@ -46,13 +46,8 @@ main() {
   fi
 
   # Do nothing if proxy is not enabled.
-  if [ "${CFG_proxy_enabled:?}" != "true" ]; then
+  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
     return
-  fi
-
-  # Build the daemon if not already done.
-  if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
-    build_suibase_daemon
   fi
 
   if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
@@ -69,8 +64,16 @@ main() {
   local _LOG="$SUIBASE_LOGS_DIR/$SUIBASE_DAEMON_NAME.log"
   local _CMD_LINE="$SUIBASE_DAEMON_BIN run"
 
-  # shellcheck disable=SC2086,SC2016
-  locked_command "$_LOCKFILE" /bin/sh -uec 'while true; do "$@" > $0 2>&1; echo "Restarting process" > $0 2>&1; sleep 1; done' "$_LOG" $_CMD_LINE
+  if [ "${CFG_proxy_enabled:?}" == "dev" ]; then
+    # Run in foreground, with no restart on exit/panic.
+    # shellcheck disable=SC2086,SC2016
+    locked_command "$_LOCKFILE" /bin/sh -uec '"$@" 2>&1 | tee -a $0' "$_LOG" $_CMD_LINE
+  else
+    # Run in background, with auto-restart on exit/panic.
+    # shellcheck disable=SC2086,SC2016
+    locked_command "$_LOCKFILE" /bin/sh -uec 'while true; do "$@" > $0 2>&1; echo "Restarting process" > $0 2>&1; sleep 1; done' "$_LOG" $_CMD_LINE
+  fi
+
 }
 
 main "$@"

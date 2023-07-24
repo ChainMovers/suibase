@@ -2,48 +2,45 @@
 //
 // All errors are map into one of the jsonrpsee "CallError" (e.g. InvalidParams, Failed, Custom).
 //
-// Define RpcInputError that is to be map to CallError::InvalidParams.
-//
-use crate::basic_types::SuibaseError;
+// RpcInputError map to CallError::InvalidParams.
+// RpcServerError map to CallError::Failed.
+
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error(transparent)]
-    InternalError(#[from] anyhow::Error),
-
-    #[error(transparent)]
-    RPCServerError(#[from] jsonrpsee::core::Error),
-
-    #[error(transparent)]
-    SuibaseError(#[from] SuibaseError),
-
-    #[error(transparent)]
-    RpcInputError(#[from] RpcInputError),
-}
-
-impl From<Error> for RpcError {
-    fn from(e: Error) -> Self {
-        e.to_rpc_error()
+impl From<RpcInputError> for RpcError {
+    fn from(e: RpcInputError) -> Self {
+        e.rpc_error()
     }
 }
 
-impl Error {
-    pub fn to_rpc_error(self) -> RpcError {
-        // Convert any error to one of the few CallError supported.
-        match self {
-            Error::RpcInputError(json_rpc_input_error) => {
-                RpcError::Call(CallError::InvalidParams(json_rpc_input_error.into()))
-            }
-            _ => RpcError::Call(CallError::Failed(self.into())),
-        }
+impl From<RpcServerError> for RpcError {
+    fn from(e: RpcServerError) -> Self {
+        e.rpc_error()
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum RpcInputError {
-    #[error("Invalid workdir parameter {0}")]
-    InvalidWorkdirParameter(String),
+    #[error("params {0} has invalid value '{1}'")]
+    InvalidParams(String, String),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RpcServerError {
+    #[error("params {0} has invalid value '{1}'")]
+    InvalidParams(String, String),
+}
+
+impl RpcInputError {
+    pub fn rpc_error(self) -> RpcError {
+        jsonrpsee::core::Error::Call(CallError::InvalidParams(self.into()))
+    }
+}
+
+impl RpcServerError {
+    pub fn rpc_error(self) -> RpcError {
+        jsonrpsee::core::Error::Call(CallError::Failed(self.into()))
+    }
 }

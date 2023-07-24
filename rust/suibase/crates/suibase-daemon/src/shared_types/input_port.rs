@@ -1,6 +1,9 @@
 use crate::basic_types::*;
 use crate::shared_types::TargetServer;
 
+use super::ServerStats;
+
+#[derive(Debug)]
 pub struct InputPort {
     managed_idx: Option<ManagedVecUSize>,
 
@@ -24,37 +27,30 @@ pub struct InputPort {
     // Indicate if a proxy_server thread is started or not for this port.
     proxy_server_running: bool,
 
-    // Periodically updated by the NetworkMonitor.
-    pub healthy: bool,
-
     // Configuration. Can be change at runtime by the AdminController.
     pub target_servers: ManagedVec<TargetServer>,
 
-    // Statistics (updated by the NetwworkMonitor).
-    pub num_ok_req: u64,
-    pub last_ok_req: EpochTimestamp, // Ignore when num_ok_req == 0
+    // Periodically updated by the NetworkMonitor.
+    pub all_servers_stats: ServerStats,
 
-    pub num_failed_req: u64,
-    pub last_failed_req: EpochTimestamp, // Ignore when num_failed_req == 0
-
-    // Ignore when last_down_transition == last_up_transition
-    pub last_down_transition: EpochTimestamp,
-    pub last_up_transition: EpochTimestamp,
+    // The "TargetServer" selection vectors is updated periodically by
+    // the NetworkMonitor. They help the handler to very quicly pick
+    // a set of TargetServer to try.
+    //
+    // Design:
+    //  All TargetServers in same selection[n] level are considered of same
+    //  health quality even if their health score is slightly different.
+    //
+    //  The choice of one or another on same selection[n] level is related
+    //  to load distribution.
+    //
+    //  The size of selection relates to the number of priority level defined
+    //  by the user, and the real-time distribution of health_score.
+    pub selection: Vec<Vec<TargetServerIdx>>,
 }
 
 impl InputPort {
     pub fn new(workdir_idx: WorkdirIdx, workdir_name: String, proxy_port_number: u16) -> Self {
-        let now = EpochTimestamp::now();
-
-        // Iterate the links and add them to the target_servers list.
-        /*
-        let mut target_servers = ManagedVec::new();
-        for (_key, value) in config.links.iter() {
-            if let Some(rpc) = &value.rpc {
-                target_servers.push(TargetServer::new(rpc.clone()));
-            }
-        }*/
-
         Self {
             managed_idx: None,
             workdir_name,
@@ -62,19 +58,14 @@ impl InputPort {
             port_number: proxy_port_number,
             deactivate_request: false,
             proxy_server_running: false,
-            healthy: false,
             target_servers: ManagedVec::new(),
-            num_ok_req: 0,
-            last_ok_req: now,
-            num_failed_req: 0,
-            last_failed_req: now,
-            last_down_transition: now,
-            last_up_transition: now,
+            all_servers_stats: ServerStats::new("all".to_string()),
+            selection: Vec::new(),
         }
     }
 
-    pub fn add_target_server(&mut self, rpc: String) {
-        self.target_servers.push(TargetServer::new(rpc));
+    pub fn add_target_server(&mut self, rpc: String, alias: String) {
+        self.target_servers.push(TargetServer::new(rpc, alias));
     }
 
     pub fn workdir_idx(&self) -> WorkdirIdx {
@@ -105,23 +96,29 @@ impl InputPort {
         self.proxy_server_running = false;
     }
 
-    pub fn find_best_target_server(&self) -> Option<(TargetServerIdx, String)> {
-        let mut best_score = i8::MIN;
+    fn find_best_target_server(&self) -> Option<(TargetServerIdx, String)> {
+        let mut best_score: f64 = f64::MIN;
         let mut best_uri: String = String::new();
         let mut best_idx = None;
 
         for (i, target_server) in self.target_servers.iter() {
-            let score = target_server.relative_health_score();
+            let score = target_server.health_score();
             if score > best_score {
                 best_score = score;
                 best_idx = Some(i);
                 best_uri = target_server.uri();
             }
         }
-        if best_idx.is_none() {
-            return None;
+
+        Some((best_idx?, best_uri))
+    }
+
+    pub fn get_best_target_servers(&self, target_servers: &mut Vec<(TargetServerIdx, String)>) {
+        // Just leave target_servers untouch if there is any problem.
+        // TODO Not implemented yet, just use the best one.
+        if let Some(best) = self.find_best_target_server() {
+            target_servers.push(best);
         }
-        Some((best_idx.unwrap(), best_uri))
     }
 
     pub fn uri(&self, server_idx: TargetServerIdx) -> Option<String> {

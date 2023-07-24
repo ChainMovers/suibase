@@ -6,9 +6,14 @@ use crate::app_error::AppError;
 use crate::basic_types::*;
 
 use crate::network_monitor::{
-    NetMonTx, NetmonFlags, NetworkMonitor, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
+    NetMonTx, NetmonFlags, NetworkMonitor, ReportProxyHandler, HEADER_SBSD_SERVER_HC,
+    HEADER_SBSD_SERVER_IDX,
 };
-use crate::shared_types::Globals;
+use crate::shared_types::{
+    Globals, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_NO_SERVER_AVAILABLE,
+    REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
+    SEND_FAILED_UNSPECIFIED_ERROR,
+};
 
 use anyhow::{anyhow, Result};
 use axum::{
@@ -20,6 +25,7 @@ use axum::{
 };
 
 use tokio_graceful_shutdown::SubsystemHandle;
+use tower::retry;
 
 // An application target the localhost:port
 //
@@ -72,10 +78,11 @@ impl ProxyServer {
 
     fn process_header_server_idx(
         headers: &mut HeaderMap,
-        stats_flags: &mut NetmonFlags,
+        report: &mut ReportProxyHandler,
     ) -> Option<TargetServerIdx> {
         if let Some(server_idx) = headers.remove(HEADER_SBSD_SERVER_IDX) {
             if let Ok(server_idx) = server_idx.to_str().unwrap().parse::<u8>() {
+                let stats_flags = report.mut_flags();
                 stats_flags.insert(NetmonFlags::HEADER_SBSD_SERVER_IDX_SET);
                 return Some(server_idx);
             }
@@ -85,10 +92,11 @@ impl ProxyServer {
 
     fn process_header_server_health_check(
         headers: &mut HeaderMap,
-        stats_flags: &mut NetmonFlags,
+        report: &mut ReportProxyHandler,
     ) -> bool {
         if let Some(_prot_code) = headers.remove(HEADER_SBSD_SERVER_HC) {
             // TODO: validate the prot_code...
+            let stats_flags = report.mut_flags();
             stats_flags.insert(NetmonFlags::HEADER_SBSD_SERVER_HC_SET);
             return true;
         }
@@ -99,7 +107,29 @@ impl ProxyServer {
         State(states): State<Arc<SharedStates>>,
         req: Request<Body>,
     ) -> Result<Response<Body>, AppError> {
+        // Statistic Accumulation Design
+        //
+        // This function *must* call one of the following only once:
+        //   (1) report.req_resp_ok
+        //          OR
+        //   (2) report.req_fail
+        //          OR
+        //   (3) report.req_resp_err
+        //
+        // This will properly accumulate the statistics *once* per request.
+        //
+        // When to use each:
+        // (1) req_resp_ok is for when the request and response were both sucessful.
+        // (2) req_fail is when the request could not even be sent (after all retries).
+        // (3) req_resp_err is for all scenario where a response was received, but an
+        //     error was detected in the response.
+        //
+        // Now, there could be more than one failed send() attempt, and for
+        // these the following function can be called multiple times:
+        //    - report.send_failed
+
         let handler_start = EpochTimestamp::now();
+        let mut report = ReportProxyHandler::new(&states.netmon_tx, states.port_idx, handler_start);
 
         // Identify additional processing just by interpreting headers.
         // At same time:
@@ -107,87 +137,147 @@ impl ProxyServer {
         //  - Start building the flags used later for stats/debugging.
         //
         let mut headers = req.headers().clone();
-        let mut stats_flags: NetmonFlags = NetmonFlags::empty();
 
-        let do_http_body_extraction = ProxyServer::is_json_content_type(&headers);
+        //let do_http_body_extraction = ProxyServer::is_json_content_type(&headers);
         let do_force_target_server_idx =
-            ProxyServer::process_header_server_idx(&mut headers, &mut stats_flags);
+            ProxyServer::process_header_server_idx(&mut headers, &mut report);
 
-        let _ = ProxyServer::process_header_server_health_check(&mut headers, &mut stats_flags);
+        let _ = ProxyServer::process_header_server_health_check(&mut headers, &mut report);
 
-        // Find which target server to send to...
-        let best_target_found = {
+        // Find which target servers to send to...
+        let mut targets: Vec<(u8, String)> = Vec::new();
+        {
             let globals_read_guard = states.globals.read().await;
             let globals = &*globals_read_guard;
-
             if let Some(input_port) = globals.input_ports.get(states.port_idx) {
                 if let Some(target_server_idx) = do_force_target_server_idx {
                     if let Some(target_server) = input_port.target_servers.get(target_server_idx) {
-                        Some((target_server_idx, target_server.uri()))
-                    } else {
-                        None
+                        targets.push((target_server_idx, target_server.uri()));
                     }
                 } else {
-                    input_port.find_best_target_server()
+                    input_port.get_best_target_servers(&mut targets)
                 }
-            } else {
-                None
             }
-        };
-        if best_target_found.is_none() {
-            return Err(anyhow!("No server reacheable").into());
         }
-        // deconstruct best_target_found
-        let (target_idx, target_uri) = best_target_found.unwrap();
+        let targets = &targets; // Make immutable.
+
+        let mut retry_count = 0;
+
+        if targets.is_empty() {
+            let _perf_report = report
+                .req_fail(retry_count, REQUEST_FAILED_NO_SERVER_AVAILABLE)
+                .await;
+            return Err(anyhow!("No server available").into());
+        }
+
+        // Because can have to do potential retry, have to deserialize the body
+        // into bytes here (to keep a copy).
+        //
+        // TODO interpret the JSON to identify what is safe to retry.
+
+        // TODO Optimize (eliminate clone) when there is no retry possible?
 
         let method = req.method().clone();
+        let bytes = hyper::body::to_bytes(req.into_body()).await;
 
-        let req_builder = {
-            if do_http_body_extraction {
-                let bytes = hyper::body::to_bytes(req.into_body()).await?;
-
-                // TODO: Later we can interpret bytes for more advanced feature!!!
-
-                states
-                    .client
-                    .request(method, target_uri)
-                    .headers(headers)
-                    .body(bytes)
-            } else {
-                states
-                    .client
-                    .request(method, target_uri)
-                    .headers(headers)
-                    .body(req.into_body())
+        let bytes = match bytes {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                let _perf_report = report.req_fail(retry_count, REQUEST_FAILED_BODY_READ).await;
+                return Err(err.into());
             }
         };
 
-        // Build the request toward the best target server.
+        for (server_idx, target_uri) in targets.iter() {
+            // Build the request toward the current target server.
+            let req_builder = states
+                .client
+                .request(method.clone(), target_uri)
+                .headers(headers.clone())
+                .body(bytes.clone());
 
-        let req_initiation_time = EpochTimestamp::now();
+            // Following works also (if one day bytes and cloning won't be needed):
+            //       .body(req.into_body())
 
-        // Execute the request.
-        let resp = req_builder.send().await?;
+            let req_initiation_time = EpochTimestamp::now();
+            // Execute the request.
+            let resp = req_builder.send().await;
 
-        // Handle the http::response
-        let builder = Response::builder().body(Body::from(resp.bytes().await?));
-        let resp = builder.unwrap();
+            let resp = match resp {
+                Ok(resp) => resp,
+                Err(_err) => {
+                    // TODO Map _err to SendFailureReason for debugging.
 
-        let resp_received = EpochTimestamp::now();
+                    // Report a 'send' error, which is a failure to connect to a target server.
+                    // This is not intended to count in the total *request* count stats (because
+                    // may succeed on a retry on another server) but may affect the health score
+                    // of this target server.
+                    let _ = report
+                        .send_failed(
+                            *server_idx,
+                            req_initiation_time,
+                            SEND_FAILED_UNSPECIFIED_ERROR,
+                        )
+                        .await;
+                    // This is the only place where a "retry" is initiated with another server.
+                    retry_count += 1;
+                    continue;
+                }
+            };
 
-        // Log performance stats (ignore error).
-        let _perf_report = NetworkMonitor::report_proxy_handler_resp_ok(
-            &states.netmon_tx,
-            &mut stats_flags,
-            states.port_idx,
-            target_idx,
-            handler_start,
-            req_initiation_time,
-            resp_received,
-        )
-        .await;
+            let resp_bytes = resp.bytes().await;
+            let resp_received = EpochTimestamp::now();
+            let resp_bytes = match resp_bytes {
+                Ok(resp_bytes) => resp_bytes,
+                Err(err) => {
+                    let _ = report
+                        .req_resp_err(
+                            *server_idx,
+                            req_initiation_time,
+                            resp_received,
+                            retry_count,
+                            REQUEST_FAILED_RESP_BYTES_RX,
+                        )
+                        .await;
+                    // TODO worth logging a few of these.
+                    return Err(err.into());
+                }
+            };
 
-        Ok(resp)
+            let builder = Response::builder().body(Body::from(resp_bytes));
+
+            let resp = match builder {
+                Ok(resp) => resp,
+                Err(err) => {
+                    let _ = report
+                        .req_resp_err(
+                            *server_idx,
+                            req_initiation_time,
+                            resp_received,
+                            retry_count,
+                            REQUEST_FAILED_RESP_BUILDER,
+                        )
+                        .await;
+                    // TODO worth logging a few of these.
+                    return Err(err.into());
+                }
+            };
+
+            // TODO Parse the http::response, detect bad requests and call 'report_proxy_handler_req_resp_err'
+
+            let _ = report
+                .req_resp_ok(*server_idx, req_initiation_time, resp_received, retry_count)
+                .await;
+
+            return Ok(resp);
+        }
+
+        // If we get here, then all the retries failed.
+        let _ = report
+            .req_fail(retry_count, REQUEST_FAILED_NO_SERVER_RESPONDING)
+            .await;
+
+        Err(anyhow!("No server responding").into())
     }
 
     pub async fn run(

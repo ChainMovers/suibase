@@ -2,6 +2,7 @@ use crate::basic_types::*;
 
 use crate::shared_types::ServerStats;
 
+#[derive(Debug)]
 pub struct TargetServer {
     managed_idx: Option<ManagedVecUSize>,
     pub stats: ServerStats,
@@ -9,16 +10,16 @@ pub struct TargetServer {
 }
 
 impl TargetServer {
-    pub fn new(uri: String) -> Self {
+    pub fn new(uri: String, alias: String) -> Self {
         Self {
             managed_idx: None,
-            stats: ServerStats::new(),
+            stats: ServerStats::new(alias),
             uri,
         }
     }
 
-    pub fn relative_health_score(&self) -> i8 {
-        self.stats.relative_health_score()
+    pub fn health_score(&self) -> f64 {
+        self.stats.health_score()
     }
 
     pub fn uri(&self) -> String {

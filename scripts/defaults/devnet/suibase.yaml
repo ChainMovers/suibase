@@ -22,6 +22,7 @@ default_repo_branch: "devnet"
 
 proxy_port_number: 44341
 proxy_enabled: false
+daemon_api_port_number: 44399
 
 links:
   - alias: "sui.io"
@@ -32,4 +33,3 @@ links:
     rpc: "https://fullnode.devnet.vincagame.com:443"
     ws: "wss://fullnode.devnet.vincagame.com:443"
     priority: 1
-

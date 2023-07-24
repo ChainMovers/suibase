@@ -22,6 +22,7 @@ default_repo_branch: "main"
 
 proxy_port_number: 44343
 proxy_enabled: false
+daemon_api_port_number: 44399
 
 links:
   - alias: "sui.io"

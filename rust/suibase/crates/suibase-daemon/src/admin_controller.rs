@@ -171,9 +171,9 @@ impl AdminController {
                     workdir.name().to_string(),
                     workdir_config.proxy_port_number,
                 );
-                for (_key, value) in workdir_config.links.iter() {
+                for (key, value) in workdir_config.links.iter() {
                     if let Some(rpc) = &value.rpc {
-                        input_port.add_target_server(rpc.clone());
+                        input_port.add_target_server(rpc.clone(), key.clone());
                     }
                 }
 

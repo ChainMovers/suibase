@@ -1,7 +1,9 @@
-use crate::basic_types::*;
+use crate::{basic_types::*, shared_types::InputPort};
 
 use crate::request_worker::RequestWorker;
-use crate::shared_types::Globals;
+use crate::shared_types::{
+    Globals, RequestFailedReason, SendFailedReason, ServerStats, TargetServer,
+};
 
 use bitflags::bitflags;
 
@@ -23,6 +25,7 @@ pub struct NetmonMsg {
     // Interpretation depends on the event_id.
     timestamp: EpochTimestamp,
     para32: [u32; 2],
+    para8: [u8; 2],
 }
 
 impl NetmonMsg {
@@ -34,6 +37,7 @@ impl NetmonMsg {
             server_idx: u8::MAX,
             timestamp: Instant::now(),
             para32: [0; 2],
+            para8: [0; 2],
         }
     }
     pub fn server_idx(&self) -> u8 {
@@ -42,14 +46,19 @@ impl NetmonMsg {
     pub fn para32(&self) -> [u32; 2] {
         self.para32
     }
+    pub fn para8(&self) -> [u8; 2] {
+        self.para8
+    }
 }
 
 // Events ID
 pub type NetmonEvent = u8;
 pub const EVENT_GLOBALS_AUDIT: u8 = 1; // Periodic read-only audit of the globals. May trig other events.
-pub const EVENT_REPORT_TGT_REQ_OK: u8 = 2; // proxy_server reporting stats on a successul request/response.
-pub const EVENT_REPORT_TGT_REQ_FAIL: u8 = 3; // proxy_server reporting stats on a failed request/response.
-pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 4; // Start an async health check (a request/response test) for one server.
+pub const EVENT_REPORT_REQ_FAILED: u8 = 2; // proxy_server reporting stats on a request dropped (not sent after retries).
+pub const EVENT_REPORT_TGT_REQ_RESP_OK: u8 = 3; // proxy_server reporting stats on a successul request/response.
+pub const EVENT_REPORT_TGT_REQ_RESP_ERR: u8 = 4; // proxy_server reporting stats on a response indicating an error.
+pub const EVENT_REPORT_TGT_SEND_FAILED: u8 = 5; // proxy_server reporting stats on a failed send attempt.
+pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 6; // Start an async health check (a request/response test) for one server.
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -86,6 +95,131 @@ pub struct NetworkMonitor {
     netmon_rx: NetMonRx,
 }
 
+// This is how the ProxyHandler communicate with the NetworkMonitor.
+// It creates a ReportProxyHandler instance and call into it.
+pub struct ReportProxyHandler<'a> {
+    tx_channel: &'a NetMonTx,
+    flags: NetmonFlags,
+    port_idx: InputPortIdx,
+    handler_start: EpochTimestamp,
+}
+
+impl<'a> ReportProxyHandler<'a> {
+    pub fn new(
+        tx_channel: &'a NetMonTx,
+        port_idx: InputPortIdx,
+        handler_start: EpochTimestamp,
+    ) -> Self {
+        Self {
+            tx_channel,
+            flags: NetmonFlags::empty(),
+            port_idx,
+            handler_start,
+        }
+    }
+
+    pub fn mut_flags(&mut self) -> &mut NetmonFlags {
+        &mut self.flags
+    }
+
+    pub async fn req_resp_ok(
+        &mut self,
+        server_idx: TargetServerIdx,
+        req_initiation_time: EpochTimestamp,
+        resp_received: EpochTimestamp,
+        retry_count: u8,
+    ) -> Result<()> {
+        let mut msg = NetmonMsg::new();
+        msg.event_id = EVENT_REPORT_TGT_REQ_RESP_OK;
+        self.flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
+        msg.flags = self.flags;
+        msg.port_idx = self.port_idx;
+        msg.server_idx = server_idx;
+        msg.timestamp = req_initiation_time;
+        msg.para32[0] = duration_to_micros(req_initiation_time - self.handler_start);
+        msg.para32[1] = duration_to_micros(resp_received - req_initiation_time);
+        msg.para8[0] = retry_count;
+
+        // Send the message.
+        self.tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
+    pub async fn req_resp_err(
+        &mut self,
+        server_idx: TargetServerIdx,
+        req_initiation_time: EpochTimestamp,
+        resp_received: EpochTimestamp,
+        retry_count: u8,
+        reason: RequestFailedReason,
+    ) -> Result<()> {
+        let mut msg = NetmonMsg::new();
+        msg.event_id = EVENT_REPORT_TGT_REQ_RESP_ERR;
+        self.flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
+        msg.flags = self.flags;
+        msg.port_idx = self.port_idx;
+        msg.server_idx = server_idx;
+        msg.timestamp = req_initiation_time;
+        msg.para32[0] = duration_to_micros(req_initiation_time - self.handler_start);
+        msg.para32[1] = duration_to_micros(resp_received - req_initiation_time);
+        msg.para8[0] = retry_count;
+        msg.para8[1] = reason;
+
+        // Send the message.
+        self.tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
+    pub async fn req_fail(&mut self, retry_count: u8, reason: SendFailedReason) -> Result<()> {
+        let error_time = EpochTimestamp::now();
+        let mut msg = NetmonMsg::new();
+        msg.event_id = EVENT_REPORT_REQ_FAILED;
+        self.flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
+        msg.flags = self.flags;
+        msg.port_idx = self.port_idx;
+        msg.server_idx = 0; // Not used.
+        msg.timestamp = error_time;
+        msg.para32[0] = duration_to_micros(error_time - self.handler_start);
+        msg.para8[0] = retry_count;
+        msg.para8[1] = reason;
+
+        // Send the message.
+        self.tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
+    pub async fn send_failed(
+        &mut self,
+        server_idx: TargetServerIdx,
+        req_initiation_time: EpochTimestamp,
+        reason: SendFailedReason,
+    ) -> Result<()> {
+        let error_time = EpochTimestamp::now();
+        let mut msg = NetmonMsg::new();
+        msg.event_id = EVENT_REPORT_TGT_SEND_FAILED;
+        self.flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
+        msg.flags = self.flags;
+        msg.port_idx = self.port_idx;
+        msg.server_idx = server_idx;
+        msg.timestamp = req_initiation_time;
+        msg.para32[0] = duration_to_micros(req_initiation_time - self.handler_start);
+        msg.para32[1] = duration_to_micros(error_time - req_initiation_time);
+        msg.para8[1] = reason;
+
+        // Send the message.
+        self.tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+}
+
 impl NetworkMonitor {
     pub fn new(globals: Globals, netmon_rx: NetMonRx, _netmon_tx: NetMonTx) -> Self {
         Self { globals, netmon_rx }
@@ -95,32 +229,6 @@ impl NetworkMonitor {
         let mut msg = NetmonMsg::new();
         msg.event_id = EVENT_GLOBALS_AUDIT;
         msg.flags = NetmonFlags::NEED_GLOBAL_READ_MUTEX;
-        tx_channel.send(msg).await.map_err(|e| {
-            log::debug!("failed {}", e);
-            anyhow!("failed {}", e)
-        })
-    }
-
-    pub async fn report_proxy_handler_resp_ok(
-        tx_channel: &NetMonTx,
-        flags: &mut NetmonFlags,
-        port_idx: InputPortIdx,
-        server_idx: TargetServerIdx,
-        handler_start: EpochTimestamp,
-        req_initiation_time: EpochTimestamp,
-        resp_received: EpochTimestamp,
-    ) -> Result<()> {
-        let mut msg = NetmonMsg::new();
-        msg.event_id = EVENT_REPORT_TGT_REQ_OK;
-        flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
-        msg.flags = *flags;
-        msg.port_idx = port_idx;
-        msg.server_idx = server_idx;
-        msg.timestamp = req_initiation_time;
-        msg.para32[0] = duration_to_micros(req_initiation_time - handler_start);
-        msg.para32[1] = duration_to_micros(resp_received - req_initiation_time);
-
-        // Send the message.
         tx_channel.send(msg).await.map_err(|e| {
             log::debug!("failed {}", e);
             anyhow!("failed {}", e)
@@ -225,6 +333,41 @@ impl NetworkMonitor {
         }
     }
 
+    fn get_mut_all_servers_stats<'a>(
+        input_ports: &'a mut ManagedVec<InputPort>,
+        msg: &NetmonMsg,
+    ) -> Option<&'a mut ServerStats> {
+        if let Some(input_port) = input_ports.get_mut(msg.port_idx) {
+            return Some(&mut input_port.all_servers_stats);
+        }
+
+        log::debug!("input port {} not found", msg.port_idx);
+        None
+    }
+
+    fn get_mut_target_server<'a>(
+        input_ports: &'a mut ManagedVec<InputPort>,
+        msg: &NetmonMsg,
+    ) -> Option<&'a mut TargetServer> {
+        if let Some(input_port) = input_ports.get_mut(msg.port_idx) {
+            if let Some(target_server) = input_port.target_servers.get_mut(msg.server_idx) {
+                /*log::debug!(
+                    "found target_server {} with index {} found",
+                    target_server.stats.alias(),
+                    msg.server_idx
+                );*/
+                return Some(target_server);
+            }
+        }
+
+        log::debug!(
+            "input port {} target server {} not found",
+            msg.port_idx,
+            msg.server_idx
+        );
+        None
+    }
+
     async fn process_mut_globals(&mut self, msg: NetmonMsg) -> Option<NetmonMsg> {
         // Process messages that requires WRITE access to the globals.
         //
@@ -243,47 +386,128 @@ impl NetworkMonitor {
             let mut cur_msg = msg;
             loop {
                 match cur_msg.event_id {
-                    EVENT_REPORT_TGT_REQ_OK => {
-                        // Consume the message.
-                        log::info!("EVENT_REPORT_TGT_REQ_OK");
-                        if let Some(input_port) = input_ports.get_mut(cur_msg.port_idx) {
-                            let target_server =
-                                input_port.target_servers.get_mut(cur_msg.server_idx);
-                            if target_server.is_none() {
-                                // TODO This should log only once to avoid flooding.
-                                log::debug!(
-                                    "input port {} target server {} not found",
-                                    cur_msg.port_idx,
-                                    cur_msg.server_idx
+                    EVENT_REPORT_TGT_REQ_RESP_OK => {
+                        // Update the stats. Consume the message.
+                        if cur_msg
+                            .flags
+                            .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
+                        {
+                            // This is for the "controlled" latency test.
+                            if let Some(target_server) =
+                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
+                            {
+                                target_server
+                                    .stats
+                                    .report_latency(cur_msg.timestamp, cur_msg.para32[1]);
+                            }
+                        } else {
+                            // This is for the user traffic.
+                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
+                                input_ports,
+                                &cur_msg,
+                            ) {
+                                stats.report_resp_ok(
+                                    cur_msg.timestamp,
+                                    cur_msg.para8[0],
+                                    cur_msg.para32[0],
+                                    cur_msg.para32[1],
                                 );
-                            } else {
-                                let target_server = target_server.unwrap();
+                            }
 
-                                // Update the stats.
-                                target_server.stats.report_ok(cur_msg.timestamp);
-
-                                if cur_msg
-                                    .flags
-                                    .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
-                                {
-                                    target_server
-                                        .stats
-                                        .report_latency(cur_msg.timestamp, cur_msg.para32[1]);
-                                }
+                            if let Some(target_server) =
+                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
+                            {
+                                target_server.stats.report_resp_ok(
+                                    cur_msg.timestamp,
+                                    cur_msg.para8[0],
+                                    cur_msg.para32[0],
+                                    cur_msg.para32[1],
+                                );
                             }
                         }
                     }
-                    EVENT_REPORT_TGT_REQ_FAIL => {
-                        log::info!("EVENT_REPORT_TGT_REQ_FAIL");
+                    EVENT_REPORT_TGT_REQ_RESP_ERR => {
+                        // Update the stats.
+                        if cur_msg
+                            .flags
+                            .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
+                        {
+                            if let Some(target_server) =
+                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
+                            {
+                                // This is for the "controlled" latency test.
+                                // We do not want that failure to mix with the user
+                                // traffic so call report_req_failed_internal instead.
+                                target_server.stats.report_req_failed_internal(
+                                    cur_msg.timestamp,
+                                    cur_msg.para8[1],
+                                );
+                            }
+                        } else {
+                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
+                                input_ports,
+                                &cur_msg,
+                            ) {
+                                stats.report_resp_err(
+                                    cur_msg.timestamp,
+                                    cur_msg.para8[0],
+                                    cur_msg.para32[0],
+                                    cur_msg.para32[1],
+                                    cur_msg.para8[1],
+                                );
+                            }
+
+                            if let Some(target_server) =
+                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
+                            {
+                                target_server.stats.report_resp_err(
+                                    cur_msg.timestamp,
+                                    cur_msg.para8[0],
+                                    cur_msg.para32[0],
+                                    cur_msg.para32[1],
+                                    cur_msg.para8[1],
+                                );
+                            }
+                        }
+                    }
+                    EVENT_REPORT_TGT_SEND_FAILED => {
+                        // Update the stats.
+                        if let Some(target_server) =
+                            NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
+                        {
+                            target_server
+                                .stats
+                                .report_send_failed(cur_msg.timestamp, cur_msg.para8[1]);
+                        }
+                    }
+                    EVENT_REPORT_REQ_FAILED => {
+                        // Update the stats. Not related to a specific target server
+                        // so update only the all_servers stats.
+                        if let Some(stats) =
+                            crate::NetworkMonitor::get_mut_all_servers_stats(input_ports, &cur_msg)
+                        {
+                            if cur_msg
+                                .flags
+                                .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
+                            {
+                                stats.report_req_failed_internal(
+                                    cur_msg.timestamp,
+                                    cur_msg.para8[0],
+                                );
+                            } else {
+                                stats.report_req_failed(cur_msg.timestamp, cur_msg.para8[0]);
+                            }
+                        }
                     }
                     _ => {
-                        log::debug!(
+                        log::error!(
                             "process_mut_globals unexpected event id {}",
                             cur_msg.event_id
                         );
-                        return None; // Consume the bad message.
+                        // Do nothing. Consume the bad message.
                     }
                 }
+
                 // Check if more messages are available.
                 match self.netmon_rx.try_recv() {
                     Ok(next_msg) => {

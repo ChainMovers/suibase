@@ -682,14 +682,14 @@ is_sui_binary_ok() {
     return
   fi
 
-  if version_greater_equal "$_SUI_VERSION_ATTEMPT" "0.27"; then
-    if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
-      false
-      return
-    fi
-  fi
-
   if [ "$CFG_network_type" = "local" ]; then
+    if version_greater_equal "$_SUI_VERSION_ATTEMPT" "0.27"; then
+      if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
+        false
+        return
+      fi
+    fi
+
     if [ ! -f "$NETWORK_CONFIG" ] || [ ! -f "$CLIENT_CONFIG" ]; then
       false
       return
@@ -1751,3 +1751,32 @@ update_client_yaml_active_address() {
   fi
 }
 export -f update_client_yaml_active_address
+
+# Adaptation of https://stackoverflow.com/questions/1955505/parsing-json-with-unix-tools
+#
+# Can extract only a simple "key":"value" pair embedded anywhere within the json.
+#
+# Update global JSON_VALUE to return value... a bit hacky but works surprisingly well.
+#
+export JSON_VALUE=""
+update_JSON_VALUE() {
+  local key=$1
+  local json=$2
+
+  local string_regex='"([^"\]|\\.)*"'
+  local number_regex='-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?'
+  local value_regex="${string_regex}|${number_regex}|true|false|null"
+  local pair_regex="\"${key}\"[[:space:]]*:[[:space:]]*(${value_regex})"
+
+  if [[ ${json} =~ ${pair_regex} ]]; then
+    # Get the value from the regex.
+    JSON_VALUE="${BASH_REMATCH[1]}"
+    # Replace the escaped \" with single quote.
+    JSON_VALUE=${JSON_VALUE//\\\"/\'}
+    # Remove the surrounding double-quote
+    JSON_VALUE="${JSON_VALUE//\"/}"
+  else
+    JSON_VALUE=""
+  fi
+}
+export -f update_JSON_VALUE

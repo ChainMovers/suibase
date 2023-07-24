@@ -16,7 +16,7 @@ pub fn gen_id() -> usize {
 pub const MICROSECOND_LIMIT: u32 = 60000000; // 1 minute
 pub fn duration_to_micros(value: std::time::Duration) -> u32 {
     match value.as_micros().try_into() {
-        Ok(value) => std::cmp::max(value, MICROSECOND_LIMIT),
+        Ok(value) => std::cmp::min(value, MICROSECOND_LIMIT),
         Err(_) => MICROSECOND_LIMIT,
     }
 }

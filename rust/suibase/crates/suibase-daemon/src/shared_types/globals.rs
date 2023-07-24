@@ -21,6 +21,7 @@ use std::sync::Arc;
 use crate::basic_types::ManagedVec;
 use crate::shared_types::InputPort;
 
+#[derive(Debug)]
 pub struct SafeGlobals {
     pub input_ports: ManagedVec<InputPort>,
 }

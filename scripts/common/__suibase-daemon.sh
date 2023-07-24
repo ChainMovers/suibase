@@ -43,6 +43,7 @@ need_suibase_daemon_upgrade() {
   #      and
   #   update_SUIBASE_DAEMON_VERSION_INSTALLED
   # have been called before.
+
   if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
     true
     return
@@ -63,6 +64,21 @@ need_suibase_daemon_upgrade() {
     return
   fi
 
+  if [ "${CFG_proxy_enabled:?}" == "dev" ]; then
+    # fstat the binaries for differences (the target/debug should not be deleted).
+    local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
+    local _DST="$SUIBASE_DAEMON_BIN"
+    if [ ! -f "$_SRC" ]; then
+      true
+      return
+    fi
+    if ! cmp -s "$_SRC" "$_DST"; then
+      echo "$SUIBASE_DAEMON_NAME bin difference detected"
+      true
+      return
+    fi
+  fi
+
   false
   return
 }
@@ -70,34 +86,27 @@ export -f need_suibase_daemon_upgrade
 
 build_suibase_daemon() {
   #
-  # Check to (re)build the daemon as needed.
-  # Clean the directory after build. Remain silent if nothing to do.
+  # (re)build suibase-daemon and install it.
   #
-  # This function assumes that
-  #   update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-  #      and
-  #   update_SUIBASE_DAEMON_VERSION_INSTALLED
-  # have been called before.
-  #
-  if [ "${CFG_proxy_enabled:?}" != "true" ]; then
+  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
     return
   fi
 
-  if need_suibase_daemon_upgrade; then
-    echo "Building $SUIBASE_DAEMON_NAME"
-    rm -f "$SUIBASE_DAEMON_VERSION_FILE"
-    (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
-    # Copy the build result from target to $SUIBASE_BIN_DIR
-    local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
-    if [ ! -f "$_SRC" ]; then
-      setup_error "Fail to build $SUIBASE_DAEMON_NAME"
-    fi
-    # TODO Add a sanity test here before overwriting the installed binary.
-    mkdir -p "$SUIBASE_BIN_DIR"
-    \cp -f "$_SRC" "$SUIBASE_DAEMON_BIN"
-    # Update the installed version file.
-    echo "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" >|"$SUIBASE_DAEMON_VERSION_FILE"
+  echo "Building $SUIBASE_DAEMON_NAME"
+  rm -f "$SUIBASE_DAEMON_VERSION_FILE"
+  (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
+  # Copy the build result from target to $SUIBASE_BIN_DIR
+  local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
+  if [ ! -f "$_SRC" ]; then
+    setup_error "Fail to build $SUIBASE_DAEMON_NAME"
+  fi
+  # TODO Add a sanity test here before overwriting the installed binary.
+  mkdir -p "$SUIBASE_BIN_DIR"
+  \cp -f "$_SRC" "$SUIBASE_DAEMON_BIN"
+  # Update the installed version file.
+  echo "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" >|"$SUIBASE_DAEMON_VERSION_FILE"
 
+  if [ "${CFG_proxy_enabled:?}" != "dev" ]; then
     # Clean the build directory.
     rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target"
   fi
@@ -108,7 +117,7 @@ start_suibase_daemon() {
   # success/failure is reflected by the SUIBASE_DAEMON_PID var.
   # noop if the process is already started.
 
-  if [ "${CFG_proxy_enabled:?}" != "true" ]; then
+  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
     return
   fi
 
@@ -118,6 +127,12 @@ start_suibase_daemon() {
   fi
 
   echo "Starting $SUIBASE_DAEMON_NAME"
+
+  if [ "${CFG_proxy_enabled:?}" == "dev" ]; then
+    # Run it in the foreground and just exit when done.
+    "$HOME/suibase/scripts/common/run-suibase-daemon.sh"
+    exit
+  fi
 
   # Try until can confirm the suibase-daemon is running healthy, or exit
   # if takes too much time.
@@ -279,3 +294,129 @@ update_SUIBASE_DAEMON_PID_var() {
   SUIBASE_DAEMON_PID=""
 }
 export -f update_SUIBASE_DAEMON_PID_var
+
+start_suibase_daemon_as_needed() {
+  # Return 0 on success or not needed.
+
+  # Verify from suibase.yaml if the suibase daemon should be started.
+  local _SUPPORT_PROXY
+  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
+    _SUPPORT_PROXY=false
+  else
+    _SUPPORT_PROXY=true
+  fi
+
+  if [ "$_SUPPORT_PROXY" = true ]; then
+    update_SUIBASE_DAEMON_VERSION_INSTALLED
+    update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
+    #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
+    #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
+    if need_suibase_daemon_upgrade; then
+      local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
+      build_suibase_daemon
+      update_SUIBASE_DAEMON_VERSION_INSTALLED
+      local _NEW_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
+      if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
+        if [ -n "$_OLD_VERSION" ]; then
+          echo "$SUIBASE_DAEMON_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
+        fi
+      fi
+      update_SUIBASE_DAEMON_PID_var
+      if [ -z "$SUIBASE_DAEMON_PID" ]; then
+        start_suibase_daemon
+      else
+        # Needed for the upgrade to take effect.
+        restart_suibase_daemon
+      fi
+    else
+      if [ -z "$SUIBASE_DAEMON_PID" ]; then
+        # There was no need for upgrade, but the process need to be started.
+        start_suibase_daemon
+      fi
+    fi
+  fi
+
+  # The caller decide what to do if failed.
+  if [ "$_SUPPORT_PROXY" = true ] && [ -z "$SUIBASE_DAEMON_PID" ]; then
+    return 1
+  fi
+
+  return 0
+}
+export -f start_suibase_daemon_as_needed
+
+show_suibase_daemon_get_links() {
+  local _DEBUG_OPTION=$1
+  if ! start_suibase_daemon_as_needed; then
+    echo "Try '$WORKDIR start'"
+    error_exit "proxy server is not running."
+  fi
+
+  local _HEADERS="Content-Type: application/json"
+
+  local _DISP
+  if [ "$_DEBUG_OPTION" = "true" ]; then
+    _DISP="debug"
+  else
+    _DISP="display"
+  fi
+
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR\",\"$_DISP\":true}}"
+
+  JSON_RESP=$(curl -x "" -s --location -X POST "http://0.0.0.0:${CFG_daemon_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+
+  if [ -z "$JSON_RESP" ]; then
+    error_exit "proxy server not responding. Is it running? do '$WORKDIR status' to check."
+  fi
+
+  # We control the API and the "code":"value" and "message":"value" combination is sent
+  # only when there is an error...
+  update_JSON_VALUE "code" "$JSON_RESP"
+  if [ -n "$JSON_VALUE" ]; then
+    update_JSON_VALUE "message" "$JSON_RESP"
+    if [ -n "$JSON_VALUE" ]; then
+      echo "$JSON_RESP"
+      error_exit "Unexpected proxy server RPC response."
+    fi
+  fi
+
+  # We let the proxy server produce a pretty formating and just
+  # blindly display. The proxy server conveniently provide both
+  # a typical "JSON metrics" API and this optional alternative
+  # display for when the client has weak JSON and string formating
+  # capability... like bash.
+
+  update_JSON_VALUE "display" "$JSON_RESP"
+  echo -e "$JSON_VALUE"
+
+  if [ "$_DEBUG_OPTION" = true ]; then
+    update_JSON_VALUE "debug" "$JSON_RESP"
+    # Insert a few ****** between each InputPort
+    JSON_VALUE=$(echo "$JSON_VALUE" | sed -e 's/Some(InputPort/\n*****************************\nSome(InputPort/g')
+    # Insert a few ----- between each TargetServer
+    JSON_VALUE=$(echo "$JSON_VALUE" | sed -e 's/Some(TargetServer/\n------------\nSome(TargetServer/g')
+    # Insert "" before all_server_stats
+    JSON_VALUE=$(echo "$JSON_VALUE" | sed -e 's/all_servers_stats/\n--\nall_servers_stats/g')
+    echo -e "$JSON_VALUE"
+  fi
+
+  # Total Request Counts
+  #   Success first attempt      10291212   100 %
+  #   Success after retry                     0
+  #   Failure after retry                     0
+  #   Failure on network down                 0
+  #   Bad Request                             0
+  #
+  # alias    Health %   Load  %   RespT ms    Retry %
+  #            +100.1      98.1     102.12   >0.001
+  #               0.0       2.2    >1 secs       -
+
+  update_JSON_VALUE "proxyEnabled" "$JSON_RESP"
+  if [ -n "$JSON_VALUE" ] && [ "$JSON_VALUE" != "true" ]; then
+    echo "-----"
+    warn_user "proxy server still initializing for $WORKDIR"
+    echo "proxy server currently not monitoring $WORKDIR. This could"
+    echo "be normal if it was disabled/(re)enabled just a moment ago."
+  fi
+}
+export -f show_suibase_daemon_get_links

@@ -22,6 +22,7 @@ default_repo_branch: "testnet"
 
 proxy_port_number: 44342
 proxy_enabled: true
+daemon_api_port_number: 44399
 
 links:
   - alias: "sui.io"
