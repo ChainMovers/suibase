@@ -807,11 +807,9 @@ workdir_exec() {
   # went missing.
   repair_workdir_as_needed "$WORKDIR" # Create/repair as needed
 
-  if $is_local; then
-    # Start the local processes normally.
-    start_all_services
-    echo "========"
-  fi
+  # Start the local services (will be NOOP if already running).
+  start_all_services
+  echo "========"
 
   ensure_client_OK
 
@@ -882,13 +880,20 @@ stop_all_services() {
   # Note: Try hard to keep the dependency here low on $WORKDIR.
   #       We want to try to stop the processes even if most of
   #       the workdir content is in a bad state.
+  local _OLD_USER_REQUEST
   if [ -d "$WORKDIRS/$WORKDIR" ]; then
+    _OLD_USER_REQUEST=$(get_key_value "user_request")
     set_key_value "user_request" "stop"
   fi
 
   if [ "${CFG_network_type:?}" = "remote" ]; then
     # Nothing needed to be stop for remote network.
-    return 1
+    if [ "$_OLD_USER_REQUEST" = "stop" ]; then
+      # Was already stopped.
+      return 1
+    fi
+    # Transition to "stop" state successful.
+    return 0
   fi
 
   if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
@@ -922,14 +927,17 @@ start_all_services() {
   #
   # Returns:
   #   0: Success (all process needed to be started were started)
-  #   1: Everything was already running. Call was NOOP (except for user_request writing)
+  #   1: Everything needed particular to this workdir already running
+  #      (Note: suibase-daemon is not *particular* to a workdir)
+  local _OLD_USER_REQUEST
+  _OLD_USER_REQUEST=$(get_key_value "user_request")
+
   set_key_value "user_request" "start"
 
   # A good time to double-check if some commands from the suibase.yaml need to be applied.
   copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
 
   # Also a good time to double-check the suibase-daemon is running (if needed).
-  # (returns non-zero only if needed and failed to start).
   if ! start_suibase_daemon_as_needed; then
     setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
   fi
@@ -938,6 +946,11 @@ start_all_services() {
 
   if [ "${CFG_network_type:?}" = "remote" ]; then
     # No other process expected for remote network.
+    if [ "$_OLD_USER_REQUEST" = "start" ]; then
+      # Was already started.
+      return 1
+    fi
+    # Transition to "start" state successful.
     return 0
   fi
 

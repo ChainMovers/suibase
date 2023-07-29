@@ -4,7 +4,7 @@
 //
 // Simple design:
 //
-//  - A single "all encompassing" RwLock for all global variables shared between the subsystems/threads
+//  - A single "all encompassing" RwLock for most global variables shared between the subsystems/threads
 //    (AdminController, NetworkMonitor, ProxyServer etc...)
 //
 //  - Each thread get a reference count (Arc) on the same 'SafeGlobal' instance.

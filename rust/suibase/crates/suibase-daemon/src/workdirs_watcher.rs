@@ -1,8 +1,10 @@
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::admin_controller::{AdminControllerMsg, AdminControllerTx};
-use crate::workdirs::Workdirs;
+use crate::admin_controller::{
+    AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
+};
+use crate::shared_types::Workdirs;
 
 use notify::Watcher;
 use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
@@ -20,6 +22,16 @@ impl WorkdirsWatcher {
         }
     }
 
+    async fn send_notif_config_file_change(&self, path: String) {
+        log::info!("Sending config file change notification for {}", path);
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
+        msg.data_string = Some(path);
+        let _ = self.admctrl_tx.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+        });
+    }
+
     async fn watch_loop(
         &mut self,
         subsys: &SubsystemHandle,
@@ -30,6 +42,14 @@ impl WorkdirsWatcher {
             if let Some(msg) = local_rx.recv().await {
                 // Process the event from notify-rs
                 log::info!("watch_loop() msg {:?}", msg);
+                // Iterate the msg.paths and find the workdir string (using Workdirs::find_workdir) and filename portion for each.
+                // For each we will send_notif_config_file_change(workdir_name, filename) to the AdminController.
+
+                // Identify if the event is meaningful.
+
+                // Identify the related workdir.
+
+                // Send a message to the AdminController.
             } else {
                 // Channel closed or shutdown requested.
                 return;
@@ -39,6 +59,22 @@ impl WorkdirsWatcher {
 
     pub async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
         log::info!("started");
+
+        // Prime the AdminController with the current state of the workdirs.
+        {
+            let workdirs_guard = self.workdirs.read().await;
+            let workdirs = &*workdirs_guard;
+
+            for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
+                log::info!("Checking if started for {}", workdir.name());
+                if workdir.is_user_request_start() {
+                    self.send_notif_config_file_change(
+                        workdir.suibase_yaml_default().to_string_lossy().to_string(),
+                    )
+                    .await;
+                }
+            }
+        }
 
         // Use a local channel to process "raw" events from notify-rs and then watch_loop()
         // translate them into higher level messages toward the AdminController.
@@ -68,27 +104,32 @@ impl WorkdirsWatcher {
                 }
             })?;
 
-        // Watch directories: ~/suibase then add watches on sub-directories as they are discovered.
-        let path = self.workdirs.path();
-        if path.exists() {
-            let _ = watcher.watch(self.workdirs.path(), RecursiveMode::NonRecursive);
-        } else {
-            log::error!("implement watching above ~/suibase/workdirs for bad installation!");
-        }
+        {
+            let workdirs_guard = self.workdirs.read().await;
+            let workdirs = &*workdirs_guard;
 
-        for (_workdir_idx, workdir) in self.workdirs.workdirs.iter() {
-            let path = workdir.path();
-            // Check if path exists.
+            // Watch directories: ~/suibase then add watches on sub-directories as they are discovered.
+            let path = workdirs.path();
             if path.exists() {
-                let _ = watcher.watch(workdir.path(), RecursiveMode::NonRecursive);
+                let _ = watcher.watch(workdirs.path(), RecursiveMode::NonRecursive);
+            } else {
+                log::error!("implement watching above ~/suibase/workdirs for bad installation!");
             }
 
-            let path = workdir.state_path();
-            if path.exists() {
-                let _ = watcher.watch(workdir.state_path(), RecursiveMode::NonRecursive);
+            for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
+                let path = workdir.path();
+                // Check if path exists.
+                if path.exists() {
+                    let _ = watcher.watch(workdir.path(), RecursiveMode::NonRecursive);
+                }
+
+                let path = workdir.state_path();
+                if path.exists() {
+                    let _ = watcher.watch(workdir.state_path(), RecursiveMode::NonRecursive);
+                }
             }
-        }
-        log::info!("watcher {:?}", watcher);
+            log::info!("watcher {:?}", watcher);
+        } // Release workdirs read lock
 
         match self
             .watch_loop(&subsys, local_rx)

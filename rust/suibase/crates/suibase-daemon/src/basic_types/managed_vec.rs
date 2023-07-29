@@ -13,17 +13,17 @@
 // Stored elements should have a variable like this:
 //
 //   struct MyStruct {
-//      managed_idx: Option<ManagedVecUSize>, ...
+//      idx: Option<ManagedVecUSize>, ...
 //   }
 //   impl MyStruct {
-//      fn new() -> Self { managed_idx: None, ... }
+//      fn new() -> Self { idx: None, ... }
 //   }
 //
 // and implement the ManagedElement Trait.
 //
-// The managed_idx should be initialized only by the ManagedVec.
+// The 'idx' should be initialized only by the ManagedVec.
 //
-// This "managed_idx" can be copied in other data structure (like a "pointer")
+// This 'idx' can be copied in other data structure (like a "pointer")
 // and be later used with get() and get_mut() for fast access.
 
 pub type ManagedVecUSize = u8;
@@ -35,8 +35,8 @@ pub struct ManagedVec<T> {
 }
 
 pub trait ManagedElement {
-    fn managed_idx(&self) -> Option<ManagedVecUSize>;
-    fn set_managed_idx(&mut self, index: Option<ManagedVecUSize>);
+    fn idx(&self) -> Option<ManagedVecUSize>;
+    fn set_idx(&mut self, index: Option<ManagedVecUSize>);
 }
 
 impl<T: ManagedElement> ManagedVec<T> {
@@ -54,7 +54,7 @@ impl<T: ManagedElement> ManagedVec<T> {
         for (index, cell) in self.data.iter_mut().enumerate() {
             if cell.is_none() {
                 let managed_idx: ManagedVecUSize = index.try_into().unwrap();
-                value.set_managed_idx(Some(managed_idx));
+                value.set_idx(Some(managed_idx));
                 *cell = Some(value);
                 return Some(managed_idx);
             }
@@ -62,6 +62,7 @@ impl<T: ManagedElement> ManagedVec<T> {
 
         let index = self.data.len();
         let managed_idx: ManagedVecUSize = index.try_into().unwrap();
+        value.set_idx(Some(managed_idx));
         self.data.push(Some(value));
         Some(managed_idx)
     }
@@ -82,11 +83,14 @@ impl<T: ManagedElement> ManagedVec<T> {
     pub fn remove(&mut self, index: ManagedVecUSize) -> Option<T> {
         let usize_index = usize::from(index);
         self.data.get(usize_index)?;
-        self.some_len -= 1;
-        let ret_value = self.data.get_mut(usize_index).and_then(|v| v.take());
+        let mut ret_value = self.data.get_mut(usize_index).and_then(|v| v.take());
         // Shrink the vector by removing all empty last cells.
         while let Some(None) = self.data.last() {
             self.data.pop();
+        }
+        if let Some(value) = &mut ret_value {
+            self.some_len -= 1;
+            value.set_idx(None);
         }
         ret_value
     }
@@ -131,28 +135,26 @@ impl<T: ManagedElement> Default for ManagedVec<T> {
 
 fn len() {
     struct TS {
-        managed_idx: Option<ManagedVecUSize>,
+        idx: Option<ManagedVecUSize>,
         _value: u8,
     }
 
     impl TS {
         pub fn new(_value: u8) -> Self {
-            Self {
-                managed_idx: None,
-                _value,
-            }
+            Self { idx: None, _value }
         }
     }
 
     impl ManagedElement for TS {
-        fn managed_idx(&self) -> Option<ManagedVecUSize> {
-            self.managed_idx
+        fn idx(&self) -> Option<ManagedVecUSize> {
+            self.idx
         }
-        fn set_managed_idx(&mut self, index: Option<ManagedVecUSize>) {
-            self.managed_idx = index;
+        fn set_idx(&mut self, index: Option<ManagedVecUSize>) {
+            self.idx = index;
         }
     }
 
+    // Initial simple check.
     let mut v1 = ManagedVec::<TS>::new();
     assert_eq!(v1.len(), 0);
     v1.push(TS::new(1));
@@ -162,15 +164,36 @@ fn len() {
     v1.remove(0);
     assert_eq!(v1.len(), 1);
     v1.remove(0);
-    assert_eq!(v1.len(), 0);
-    v1.push(TS::new(1));
-    v1.push(TS::new(2));
-    v1.push(TS::new(3));
-    assert_eq!(v1.len(), 3);
-    v1.remove(1);
-    assert_eq!(v1.len(), 2);
-    v1.remove(1);
     assert_eq!(v1.len(), 1);
-    v1.push(TS::new(2));
-    assert_eq!(v1.len(), 2);
+    v1.remove(1);
+    assert_eq!(v1.len(), 0);
+
+    // Test removal of one element (test first, second, middle, before last and last case)
+    for i in 0..=4 {
+        let mut v1 = ManagedVec::<TS>::new();
+        for j in 0..=4 {
+            v1.push(TS::new(j));
+        }
+        assert_eq!(v1.len(), 5);
+        let elem_removed = v1.remove(i);
+        // Verify really removed (index in object should be None).
+        assert_eq!(v1.len(), 4);
+        assert!(elem_removed.is_some());
+        let elem_removed = elem_removed.unwrap();
+        assert!(elem_removed.idx().is_none());
+
+        // Removing again should have no effect.
+        let elem_removed2 = v1.remove(i);
+        assert_eq!(v1.len(), 4);
+        assert!(elem_removed2.is_none());
+        assert!(elem_removed.idx().is_none());
+
+        // Verify re-cycling of the index works.
+        let elem_recycling = TS::new(5);
+        let elem_recycling_idx = v1.push(elem_recycling);
+        assert_eq!(v1.len(), 5);
+        assert!(elem_recycling_idx.is_some());
+        let elem_recycling_idx = elem_recycling_idx.unwrap();
+        assert_eq!(elem_recycling_idx, i);
+    }
 }

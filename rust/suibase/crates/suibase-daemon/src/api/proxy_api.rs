@@ -3,9 +3,11 @@ use std::fmt::Display;
 
 use axum::async_trait;
 
+use clap::Indices;
 use jsonrpsee::core::RpcResult;
 
 use crate::admin_controller::AdminControllerTx;
+use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{Globals, ServerStats, TargetServer};
 
 use super::ProxyApiServer;
@@ -26,8 +28,8 @@ impl ProxyApiImpl {
 
     fn fmt_f64_api(input: f64) -> String {
         // This function is used to format f64 metrics for the API.
-        // Use empty string for NaN and infinite values.
-        if input.is_finite() {
+        // Use empty string for min/max, NaN and infinite values.
+        if input.is_finite() && input != f64::MAX && input != f64::MIN {
             format!("{:.2}", input)
         } else {
             "".to_string()
@@ -206,12 +208,13 @@ impl ProxyApiServer for ProxyApiImpl {
         let mut debug_out = String::new();
 
         // Variables initialized during the read lock.
-        let mut target_servers_stats: Option<Vec<ServerStats>> = None;
+        let mut target_servers_stats: Option<Vec<(TargetServerIdx, ServerStats)>> = None;
         let mut all_servers_stats: Option<ServerStats> = None;
+        let mut selection_vectors: Option<Vec<Vec<u8>>> = None;
         let mut input_port_found = false;
         {
             // Get read lock access to the globals and just quickly copy what is needed.
-            // All parsing and processing is done outside the lock.
+            // Most parsing and processing is done outside the lock.
             let globals_read_guard = self.globals.read().await;
             let globals = &*globals_read_guard;
 
@@ -224,34 +227,74 @@ impl ProxyApiServer for ProxyApiImpl {
                 target_servers_stats = Some(
                     target_servers
                         .iter()
-                        .map(|(_, target_server)| target_server.stats.clone())
+                        .map(|(idx, target_server)| (idx, target_server.stats.clone()))
                         .collect(),
                 );
+                selection_vectors = Some(input_port.selection_vectors.clone());
             }
 
             // If debug, then extensively add more info to the output.
+            // (take a potential performance hit here).
             if debug {
                 debug_out.push_str(&format!("{:?}", globals));
             }
         } // Release the read lock.
 
-        // We got all the needed data, now most of the response
-        // building is handled outside the mutex.
-
         // Map the target_servers_stats into the API LinkStats.
         let mut healthy_server_count = 0;
         let mut link_stats: Vec<LinkStats> = Vec::new();
+        let mut load_distribution_depth = 0;
         if let Some(target_servers_stats) = target_servers_stats {
             let mut total_request: u64 = 0;
             let mut link_n_request: Vec<u64> = Vec::with_capacity(target_servers_stats.len());
-            // Prepare LinkStats, which is the "metrics" portion f the API.
+            // Prepare LinkStats, which is the "metrics" portion of the API.
             //
             // The "display/debug" portion is built from the "metrics" portion.
             //
-            // That feel a bit innefficient (a few extra string conversion), but here the
-            // intention is to give more opportunity to catch bugs by starting to use (earlier
+            // The design seems a bit innefficient (extra string conversion), but the
+            // intention is to give more opportunity to catch bugs by using (earlier
             // than typical) the least visible (but crucial) metrics portion.
-            for (_, server_stats) in target_servers_stats.iter().enumerate() {
+
+            // Use a vector of indices to drive the display order.
+            // Also find which selections were assigned for load distribution (if any).
+            let mut indices: Vec<usize> = Vec::new();
+            if let Some(selection_vectors) = selection_vectors {
+                if !selection_vectors.is_empty() {
+                    load_distribution_depth = selection_vectors[0].len();
+                }
+
+                // Subtle transform. The selection_vectors managed idx are not the same as the "collect"
+                // indices.
+                let unmap_vec: Vec<u8> = selection_vectors.iter().flatten().map(|&i| i).collect();
+                for unmap_idx in unmap_vec {
+                    // Find unmap_idx in target_servers_stats (first element of tuple) and
+                    // remember the position of that element in target_servers_stats.
+                    let idx = target_servers_stats
+                        .iter()
+                        .position(|(i, _)| *i == unmap_idx);
+                    if let Some(idx) = idx {
+                        indices.push(idx);
+                    } else {
+                        // That would be a bad bug in the selection logic... report it to dev.
+                        log::error!("unmap_idx {} not found in target_servers_stats", unmap_idx);
+                    }
+                }
+            } else {
+                indices = Vec::with_capacity(target_servers_stats.len())
+            };
+
+            if indices.len() < target_servers_stats.len() {
+                // Find the missing elements in indices.
+                let mut missing_indices: Vec<usize> = (0..target_servers_stats.len()).collect();
+                missing_indices.retain(|&i| !indices.contains(&i));
+                // Sort the missing elements by alias.
+                missing_indices.sort_by_key(|&i| target_servers_stats[i].1.alias());
+                // Append to the final indices to be displayed.
+                indices.extend(missing_indices);
+            }
+
+            for i in indices {
+                let server_stats = &target_servers_stats[i].1;
                 let mut link_stat = LinkStats::new(server_stats.alias());
 
                 let mut n_request = 0u64;
@@ -270,6 +313,16 @@ impl ProxyApiServer for ProxyApiImpl {
                 link_stat.health_pct = Self::fmt_f64_api(health_score);
 
                 link_stat.resp_time = Self::fmt_f64_api(server_stats.avg_latency_ms());
+                link_stat.error_info = server_stats.error_info();
+
+                link_stat.status = if health_score == 0.0 {
+                    // The server has not yet "determine" its initial health state.
+                    String::new()
+                } else if server_stats.is_healthy() {
+                    "OK".to_string()
+                } else {
+                    "DOWN".to_string()
+                };
 
                 // Push always together for 1:1 index matching.
                 link_stats.push(link_stat);
@@ -300,7 +353,6 @@ impl ProxyApiServer for ProxyApiImpl {
         }
 
         if !input_port_found {
-            // TODO Return an error of workdir not found.
             return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into());
         }
 
@@ -332,51 +384,43 @@ impl ProxyApiServer for ProxyApiImpl {
                     "Multi-Link RPC status: {}\n\n\
                     Cummulative Request Stats\n\
   -------------------------\n\
-  Success first attempt {:>9}   ({:>5} %)\n\
-  Success after retry   {:>9}   ({:>5} %)\n\
-  Failure network down  {:>9}   ({:>5} %)\n\
-  Failure bad request   {:>9}   ({:>5} %)\n\
-  Failure others        {:>9}   ({:>5} %)\n\n",
+  Success first attempt {:>9}\n\
+  Success after retry   {:>9}\n\
+  Failure bad request   {:>9}\n\
+  Failure others        {:>9}\n\n",
                     resp.status,
                     summary_stats.success_on_first_attempt,
-                    Self::fmt_f64_pct(0.0f64),
                     summary_stats.success_on_retry,
-                    Self::fmt_f64_pct(0.0f64),
-                    summary_stats.fail_network_down,
-                    Self::fmt_f64_pct(0.0f64),
                     summary_stats.fail_bad_request,
-                    Self::fmt_f64_pct(0.0f64),
                     summary_stats.fail_others,
-                    Self::fmt_f64_pct(0.0f64),
                 ));
             }
 
             if links {
                 display_out.push_str(
-                    "alias                Health %    Load %    RespT ms   Success %\n---------------------------------------------------------------\n"
+                    "alias                Status  Health%   Load%   RespT ms  Success%\n--------------------------------------------------------------------\n"
                 );
+                let mut load_distributed = load_distribution_depth;
                 for link_stat in link_stats.iter() {
+                    let load_dist_marker = if load_distributed > 0 {
+                        load_distributed -= 1;
+                        "*"
+                    } else {
+                        ""
+                    };
                     display_out.push_str(&format!(
-                        "{:<20}   {:9}  {:9} {:9}     {:9}\n",
-                        link_stat.alias,
+                        "{:<21}{:^6}{:1}{:>7}{:>8}{:>11}{:>10}  {}\n",
+                        format!("{:.20}", link_stat.alias),
+                        link_stat.status,
+                        load_dist_marker,
                         Self::fmt_str_score(&link_stat.health_pct),
                         Self::fmt_str_pct(&link_stat.load_pct),
                         Self::fmt_str_ms(&link_stat.resp_time),
                         Self::fmt_str_pct(&link_stat.success_pct),
+                        link_stat.error_info,
                     ));
                 }
             }
-            // Total Request Counts
-            //   Success first attempt      10291212   100 %
-            //   Success after retry                     0
-            //   Failure after retry                     0
-            //   Failure on network down                 0
-            //   Bad Request                             0
-            //
-            // alias    Health %   Load  %   RespT ms    Retry %
-            //            +100.1      98.1     102.12   >0.001
-            //               0.0       2.2    >1 secs        -
-
             resp.display = Some(display_out);
         }
 

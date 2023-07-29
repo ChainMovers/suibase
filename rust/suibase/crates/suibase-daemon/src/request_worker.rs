@@ -27,22 +27,23 @@ impl RequestWorker {
     async fn do_request(&mut self, msg: NetmonMsg) {
         let server_idx = msg.server_idx().to_string();
 
-        let uri = format!("http://0.0.0.0:{}", msg.para32()[0]);
+        let uri = format!("http://0.0.0.0:{}", msg.para16()[0]);
         let _ = self
             .client
-            .request(Method::GET, uri)
+            .request(Method::POST, uri)
             .header(header::CONTENT_TYPE, "application/json")
+            .header(header::USER_AGENT, "curl/7.68.0")
+            .header(header::ACCEPT, "*/*")
             .header(HEADER_SBSD_SERVER_IDX, server_idx.as_str())
             .header(HEADER_SBSD_SERVER_HC, "1")
             .body(SERVER_CHECK_REQUEST_BODY)
             .send()
             .await;
 
-        // No error return here... never. Any failure of the request will
-        // be visible in other ways (e.g. the server will be reported as down because
-        // the healtch check are not happening on a regular basis).
+        //log::info!("do_request() msg {:?}", msg);
 
-        // TODO Consider emitting a stat failure to network monitor.
+        // No error return here... never. Any failure of the request already
+        // reflected by its execution by the proxy-server.
     }
 
     async fn event_loop(&mut self, subsys: &SubsystemHandle) {

@@ -2,8 +2,7 @@ use crate::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::shared_types::{Globals, InputPort};
-use crate::workdirs::{WorkdirProxyConfig, Workdirs};
+use crate::shared_types::{Globals, InputPort, SafeWorkdirs, WorkdirProxyConfig, Workdirs};
 use crate::workdirs_watcher::WorkdirsWatcher;
 
 use anyhow::Result;
@@ -30,7 +29,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 // if the workdir is deleted.
 
 pub struct AdminController {
-    managed_idx: Option<ManagedVecUSize>,
+    idx: Option<ManagedVecUSize>,
     globals: Globals,
     admctrl_rx: AdminControllerRx,
     admctrl_tx: AdminControllerTx,
@@ -43,9 +42,9 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 
 pub struct AdminControllerMsg {
     // Message sent toward the AdminController from various sources.
-    event_id: AdminControllerEventID,
-    workdir_idx: Option<WorkdirIdx>,
-    data_string: Option<String>,
+    pub event_id: AdminControllerEventID,
+    pub workdir_idx: Option<WorkdirIdx>,
+    pub data_string: Option<String>,
 }
 
 impl AdminControllerMsg {
@@ -77,32 +76,23 @@ pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 1;
 impl AdminController {
     pub fn new(
         globals: Globals,
+        workdirs: Workdirs,
         admctrl_rx: AdminControllerRx,
         admctrl_tx: AdminControllerTx,
         netmon_tx: NetMonTx,
     ) -> Self {
         Self {
-            managed_idx: None,
+            idx: None,
             globals,
+            workdirs,
             admctrl_rx,
             admctrl_tx,
             netmon_tx,
-            workdirs: Workdirs::new(),
         }
     }
 
-    async fn send_notif_config_file_change(&mut self, path: String) {
-        log::info!("Sending config file change notification for {}", path);
-        let mut msg = AdminControllerMsg::new();
-        msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
-        msg.data_string = Some(path);
-        let _ = self.admctrl_tx.send(msg).await.map_err(|e| {
-            log::debug!("failed {}", e);
-        });
-    }
-
     async fn process_config_msg(&mut self, msg: AdminControllerMsg, subsys: &SubsystemHandle) {
-        // This process always only one Workdir at a time.
+        // This process always process only one Workdir at a time.
         log::info!("Processing config file change notification {:?}", msg);
 
         if msg.event_id != EVENT_NOTIF_CONFIG_FILE_CHANGE {
@@ -117,33 +107,45 @@ impl AdminController {
         }
         let path = msg.data_string().unwrap();
 
-        let workdir_search_result = self.workdirs.find_workdir(&path);
-        if workdir_search_result.is_none() {
-            log::error!("Workdir not found for path {:?}", &msg.data_string());
-            // Do nothing. Consume the message.
-            return;
-        }
-        let (workdir_idx, workdir) = workdir_search_result.unwrap();
+        // TODO Trap here operation that requires a write lock on the workdirs.
 
-        // TODO Load the user config (if exists).
-        // TODO Load the default (unless the user config completely overides it).
-        // For now, just load the default.
-
+        // Load the configuration.
         let mut workdir_config = WorkdirProxyConfig::new();
-        let try_load =
-            workdir_config.load_from_file(&workdir.suibase_yaml_default().to_string_lossy());
-        if try_load.is_err() {
-            log::error!(
-                "Failed to load config file {:?}",
-                workdir.suibase_yaml_default()
-            );
-            // Do nothing. Consume the message.
-            return;
-        }
+        let workdir_idx: u8;
+        let workdir_name: String;
+        {
+            let workdirs_guard = self.workdirs.read().await;
+            let workdirs = &*workdirs_guard;
 
-        // TODO Optimization. Get a read lock and check if the config has changed before getting a write lock.
+            let workdir_search_result = workdirs.find_workdir(&path);
+            if workdir_search_result.is_none() {
+                log::error!("Workdir not found for path {:?}", &msg.data_string());
+                // Do nothing. Consume the message.
+                return;
+            }
+            let (found_workdir_idx, workdir) = workdir_search_result.unwrap();
+            workdir_idx = found_workdir_idx;
+            workdir_name = workdir.name().to_string();
 
-        // Need a write lock, so we need to modify the globals.
+            // TODO Load the user config (if exists).
+            // TODO Load the default (unless the user config completely overides it).
+            // For now, just load the default.
+
+            let try_load =
+                workdir_config.load_from_file(&workdir.suibase_yaml_default().to_string_lossy());
+            if try_load.is_err() {
+                log::error!(
+                    "Failed to load config file {:?}",
+                    workdir.suibase_yaml_default()
+                );
+                // Do nothing. Consume the message.
+                return;
+            }
+        } // Release Workdirs read lock
+
+        // TODO Optimization. Get a globals read lock and check if the config has changed before getting a write lock.
+
+        // Apply the configuration to the globals.
         let port_id = {
             // Get a write lock on the globals.
             let mut globals_guard = self.globals.write().await;
@@ -168,7 +170,7 @@ impl AdminController {
                 // TODO Verify there is no conflicting port assigment.
                 let mut input_port = InputPort::new(
                     workdir_idx,
-                    workdir.name().to_string(),
+                    workdir_name.clone(),
                     workdir_config.proxy_port_number,
                 );
                 for (key, value) in workdir_config.links.iter() {
@@ -210,29 +212,15 @@ impl AdminController {
     }
 
     pub async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        // This is going to be the API thread later... for now just "load" the config.
+        // This is the "master" thread that controls the changes to the
+        // configuration. It is responsible to start/stop other subsystems.
         log::info!("started");
 
-        // This is the point where the user configuration can be loaded into
-        // the globals. Do not rely on the file watcher, instead prime the
-        // event into the queue to force the config to be loaded right now.
-
-        let workdirs = Workdirs::new();
-        for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
-            log::info!("Checking if started for {}", workdir.name());
-            if workdir.is_user_request_start() {
-                self.send_notif_config_file_change(
-                    workdir.suibase_yaml_default().to_string_lossy().to_string(),
-                )
-                .await;
-            }
-        }
-
-        // Initialize a subsystem to watch workdirs files. Notifications are then send back
-        // to this thread on the AdminController channel.
+        // Initialize a subsystem to watch workdirs files. Notifications are then
+        // send back to this thread on the AdminController channel.
         {
             let admctrl_tx = self.admctrl_tx.clone();
-            let workdirs_watcher = WorkdirsWatcher::new(workdirs, admctrl_tx);
+            let workdirs_watcher = WorkdirsWatcher::new(self.workdirs.clone(), admctrl_tx);
             subsys.start("workdirs-watcher", move |a| workdirs_watcher.run(a));
         }
 
@@ -250,11 +238,11 @@ impl AdminController {
 }
 
 impl ManagedElement for AdminController {
-    fn managed_idx(&self) -> Option<ManagedVecUSize> {
-        self.managed_idx
+    fn idx(&self) -> Option<ManagedVecUSize> {
+        self.idx
     }
-    fn set_managed_idx(&mut self, idx: Option<ManagedVecUSize>) {
-        self.managed_idx = idx;
+    fn set_idx(&mut self, idx: Option<ManagedVecUSize>) {
+        self.idx = idx;
     }
 }
 
@@ -263,7 +251,7 @@ fn test_load_config_from_suibase_default() {
     // Note: More of a functional test. Suibase need to be installed.
 
     // Test a known "standard" localnet suibase.yaml
-    let workdirs = Workdirs::new();
+    let workdirs = SafeWorkdirs::new();
     let mut path = std::path::PathBuf::from(workdirs.suibase_home());
     path.push("scripts");
     path.push("defaults");

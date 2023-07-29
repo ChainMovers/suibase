@@ -43,7 +43,6 @@ mod network_monitor;
 mod proxy_server;
 mod request_worker;
 mod shared_types;
-mod workdirs;
 mod workdirs_watcher;
 
 use tokio::time::Duration;
@@ -53,7 +52,7 @@ use tokio_graceful_shutdown::Toplevel;
 use crate::admin_controller::AdminController;
 use crate::api::APIServer;
 use crate::network_monitor::NetworkMonitor;
-use crate::shared_types::{Globals, SafeGlobals};
+use crate::shared_types::{Globals, SafeGlobals, SafeWorkdirs, Workdirs};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -70,7 +69,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub async fn execute(self, globals: Globals) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, globals: Globals, workdirs: Workdirs) -> Result<(), anyhow::Error> {
         match self {
             Command::Run {} => {
                 // Create mpsc channels (internal messaging between threads).
@@ -85,6 +84,7 @@ impl Command {
                 // Instantiate and connect all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(
                     globals.clone(),
+                    workdirs.clone(),
                     admctrl_rx,
                     admctrl_tx.clone(),
                     netmon_tx.clone(),
@@ -117,9 +117,10 @@ async fn main() {
     //
     // Globals are cloned by reference count.
     //
-    // Keep a reference here at main level so it will never get "deleted" until the
+    // Keep a reference here at main level so they will never get "deleted" until the
     // end of the program.
     let main_globals = Arc::new(tokio::sync::RwLock::new(SafeGlobals::new()));
+    let main_workdirs = Arc::new(tokio::sync::RwLock::new(SafeWorkdirs::new()));
 
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
@@ -129,7 +130,10 @@ async fn main() {
 
     let cmd: Command = Command::parse();
 
-    match cmd.execute(main_globals.clone()).await {
+    match cmd
+        .execute(main_globals.clone(), main_workdirs.clone())
+        .await
+    {
         Ok(_) => (),
         Err(err) => {
             log::error!("error: {}", err.to_string().red());

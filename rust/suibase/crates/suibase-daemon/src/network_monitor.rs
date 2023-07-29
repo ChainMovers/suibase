@@ -1,13 +1,17 @@
+use std::collections::HashMap;
+
 use crate::{basic_types::*, shared_types::InputPort};
 
 use crate::request_worker::RequestWorker;
 use crate::shared_types::{
-    Globals, RequestFailedReason, SendFailedReason, ServerStats, TargetServer,
+    Globals, RequestFailedReason, SafeGlobals, SendFailedReason, ServerStats, TargetServer,
+    REQUEST_FAILED_BAD_REQUEST_HTTP, SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_STATUS,
 };
 
 use bitflags::bitflags;
 
 use anyhow::{anyhow, Result};
+use hyper::http;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use tokio::time::{Duration, Instant};
@@ -26,6 +30,7 @@ pub struct NetmonMsg {
     timestamp: EpochTimestamp,
     para32: [u32; 2],
     para8: [u8; 2],
+    para16: [u16; 1],
 }
 
 impl NetmonMsg {
@@ -38,16 +43,23 @@ impl NetmonMsg {
             timestamp: Instant::now(),
             para32: [0; 2],
             para8: [0; 2],
+            para16: [0; 1],
         }
     }
     pub fn server_idx(&self) -> u8 {
         self.server_idx
     }
-    pub fn para32(&self) -> [u32; 2] {
-        self.para32
+
+    pub fn para32(&self) -> &[u32; 2] {
+        &self.para32
     }
-    pub fn para8(&self) -> [u8; 2] {
-        self.para8
+
+    pub fn para16(&self) -> &[u16; 1] {
+        &self.para16
+    }
+
+    pub fn para8(&self) -> &[u8; 2] {
+        &self.para8
     }
 }
 
@@ -90,21 +102,34 @@ impl std::fmt::Debug for NetmonMsg {
 pub type NetMonTx = tokio::sync::mpsc::Sender<NetmonMsg>;
 pub type NetMonRx = tokio::sync::mpsc::Receiver<NetmonMsg>;
 
+struct MonitorData {
+    most_recent_latency_test_attempted: Option<EpochTimestamp>,
+}
+
+impl MonitorData {
+    pub fn new() -> Self {
+        Self {
+            most_recent_latency_test_attempted: None,
+        }
+    }
+}
+
 pub struct NetworkMonitor {
     globals: Globals,
     netmon_rx: NetMonRx,
+    mon_map: HashMap<(InputPortIdx, TargetServerIdx), MonitorData>,
 }
 
 // This is how the ProxyHandler communicate with the NetworkMonitor.
-// It creates a ReportProxyHandler instance and call into it.
-pub struct ReportProxyHandler<'a> {
+// It creates a ProxyHandlerReport instance and call into it.
+pub struct ProxyHandlerReport<'a> {
     tx_channel: &'a NetMonTx,
     flags: NetmonFlags,
     port_idx: InputPortIdx,
     handler_start: EpochTimestamp,
 }
 
-impl<'a> ReportProxyHandler<'a> {
+impl<'a> ProxyHandlerReport<'a> {
     pub fn new(
         tx_channel: &'a NetMonTx,
         port_idx: InputPortIdx,
@@ -174,7 +199,7 @@ impl<'a> ReportProxyHandler<'a> {
         })
     }
 
-    pub async fn req_fail(&mut self, retry_count: u8, reason: SendFailedReason) -> Result<()> {
+    pub async fn req_fail(&mut self, retry_count: u8, reason: RequestFailedReason) -> Result<()> {
         let error_time = EpochTimestamp::now();
         let mut msg = NetmonMsg::new();
         msg.event_id = EVENT_REPORT_REQ_FAILED;
@@ -199,6 +224,7 @@ impl<'a> ReportProxyHandler<'a> {
         server_idx: TargetServerIdx,
         req_initiation_time: EpochTimestamp,
         reason: SendFailedReason,
+        status: http::StatusCode,
     ) -> Result<()> {
         let error_time = EpochTimestamp::now();
         let mut msg = NetmonMsg::new();
@@ -211,6 +237,7 @@ impl<'a> ReportProxyHandler<'a> {
         msg.para32[0] = duration_to_micros(req_initiation_time - self.handler_start);
         msg.para32[1] = duration_to_micros(error_time - req_initiation_time);
         msg.para8[1] = reason;
+        msg.para16[0] = status.as_u16();
 
         // Send the message.
         self.tx_channel.send(msg).await.map_err(|e| {
@@ -218,11 +245,71 @@ impl<'a> ReportProxyHandler<'a> {
             anyhow!("failed {}", e)
         })
     }
+
+    // Return true if the cause of the error is
+    // the server and the request is likely
+    // to succeed with another server.
+    //
+    // Return false if these is clear indication
+    // that the request is bad and will fail
+    // with any server.
+    pub async fn http_response_error(
+        &mut self,
+        server_idx: &u8,
+        req_inititation_time: EpochTimestamp,
+        _resp_received: EpochTimestamp,
+        retry_count: u8,
+        err: &reqwest::Error,
+    ) -> bool {
+        if let Some(status) = err.status() {
+            // If the HTTP error is cause by a bad client request, then fail
+            // the request (client's fault, the server did nothing wrong...)
+            match status {
+                http::StatusCode::BAD_REQUEST
+                | http::StatusCode::METHOD_NOT_ALLOWED
+                | http::StatusCode::UNSUPPORTED_MEDIA_TYPE => {
+                    // These will not punish the server health score.
+                    let _ = self
+                        .req_fail(retry_count, REQUEST_FAILED_BAD_REQUEST_HTTP)
+                        .await;
+                    // Do not try another server.
+                    return false;
+                }
+                _ => {}
+            }
+            // Assume it is a server health problem (punish the server health score).
+            let _ = self
+                .send_failed(
+                    *server_idx,
+                    req_inititation_time,
+                    SEND_FAILED_RESP_HTTP_STATUS,
+                    status,
+                )
+                .await;
+        } else {
+            // Unspecified error (punish the server health score).
+            let _ = self
+                .send_failed(
+                    *server_idx,
+                    req_inititation_time,
+                    SEND_FAILED_UNSPECIFIED_STATUS,
+                    http::StatusCode::INTERNAL_SERVER_ERROR,
+                )
+                .await;
+        }
+
+        // Try another server.
+        true
+    }
 }
 
 impl NetworkMonitor {
     pub fn new(globals: Globals, netmon_rx: NetMonRx, _netmon_tx: NetMonTx) -> Self {
-        Self { globals, netmon_rx }
+        Self {
+            globals,
+            netmon_rx,
+            mon_map: HashMap::new(),
+        }
     }
 
     pub async fn send_event_globals_audit(tx_channel: &NetMonTx) -> Result<()> {
@@ -235,7 +322,11 @@ impl NetworkMonitor {
         })
     }
 
-    pub async fn send_do_server_health_check(
+    // Message that the NetworkManager sends to itself.
+    //
+    // A "ReadLock" section send this message to a "WriteLock" section.
+    //
+    async fn send_do_server_health_check(
         tx_channel: &NetMonTx,
         port_idx: InputPortIdx,
         server_idx: TargetServerIdx,
@@ -246,13 +337,41 @@ impl NetworkMonitor {
         msg.event_id = EVENT_DO_SERVER_HEALTH_CHECK;
         msg.port_idx = port_idx;
         msg.server_idx = server_idx;
-        msg.para32[0] = port_number as u32;
+        msg.para16[0] = port_number;
 
         // Send the message.
         tx_channel.send(msg).await.map_err(|e| {
             log::debug!("failed {}", e);
             anyhow!("failed {}", e)
         })
+    }
+
+    async fn process_latency_report_attempt_request(
+        mon_map: &mut HashMap<(u8, u8), MonitorData>,
+        request_worker_tx: &NetMonTx,
+        port_idx: InputPortIdx,
+        server_idx: TargetServerIdx,
+        port_number: u16,
+        now: EpochTimestamp,
+        force: bool,
+    ) {
+        let mon_data = mon_map
+            .entry((port_idx, server_idx))
+            .or_insert(MonitorData::new());
+
+        let ts = &mon_data.most_recent_latency_test_attempted;
+        if force || ts.is_none() || (now - ts.unwrap()) > Duration::from_secs(15) {
+            // Let the request worker take care of this.
+            let _ = NetworkMonitor::send_do_server_health_check(
+                request_worker_tx,
+                port_idx,
+                server_idx,
+                port_number,
+            )
+            .await;
+
+            mon_data.most_recent_latency_test_attempted = Some(now);
+        }
     }
 
     async fn process_read_only_globals(
@@ -280,23 +399,22 @@ impl NetworkMonitor {
             loop {
                 match cur_msg.event_id {
                     EVENT_GLOBALS_AUDIT => {
-                        log::info!("EVENT_GLOBALS_AUDIT");
-                        // Send a health check request for every server due for it.
-                        for (port_idx, input_port) in input_ports.iter() {
-                            // Iterate every target_servers.
-                            for (server_idx, target_server) in input_port.target_servers.iter() {
-                                if target_server.stats.most_recent_latency_report().is_none()
-                                    || (now
-                                        - target_server.stats.most_recent_latency_report().unwrap())
-                                        > Duration::from_secs(15)
-                                {
-                                    let _ = NetworkMonitor::send_do_server_health_check(
-                                        request_worker_tx,
-                                        port_idx,
-                                        server_idx,
-                                        input_port.port_number(),
-                                    )
-                                    .await;
+                        for (_, input_port) in input_ports.iter() {
+                            if let Some(port_idx) = input_port.idx() {
+                                // Iterate every target_servers.
+                                for (_, target_server) in input_port.target_servers.iter() {
+                                    if let Some(server_idx) = target_server.idx() {
+                                        Self::process_latency_report_attempt_request(
+                                            &mut self.mon_map,
+                                            &request_worker_tx,
+                                            port_idx,
+                                            server_idx,
+                                            input_port.port_number(),
+                                            now,
+                                            false,
+                                        )
+                                        .await;
+                                    }
                                 }
                             }
                         }
@@ -368,6 +486,106 @@ impl NetworkMonitor {
         None
     }
 
+    fn update_selection_vectors<'a>(input_ports: &'a mut ManagedVec<InputPort>, msg: &NetmonMsg) {
+        if let Some(input_port) = input_ports.get_mut(msg.port_idx) {
+            let target_servers = &mut input_port.target_servers;
+
+            input_port.selection_vectors.clear();
+            input_port.selection_worst.clear();
+
+            // Build a vector of idx() of the elements of target_servers.
+            // At same time, find one currently OK with the best latency_avg().
+            // Isolate immediatly all down target servers in selection_worst.
+            let mut ok_idx_vec: Vec<TargetServerIdx> = Vec::new();
+            let mut best_latency_avg: f64 = f64::MAX;
+            let mut best_latency_avg_idx: Option<TargetServerIdx> = None;
+            for (_, target_server) in target_servers.iter() {
+                if let Some(idx) = target_server.idx() {
+                    if target_server.stats.is_healthy() {
+                        if best_latency_avg_idx.is_none()
+                            || target_server.stats.avg_latency_ms() < best_latency_avg
+                        {
+                            best_latency_avg = target_server.stats.avg_latency_ms();
+                            best_latency_avg_idx = Some(idx);
+                        }
+                        ok_idx_vec.push(idx);
+                    } else {
+                        input_port.selection_worst.push(idx);
+                    }
+                }
+            }
+
+            // If there is a best_latency_avg_idx, then this is the first element
+            // in the first input_port.selection_vectors[0] to be created...
+            // ... then join to it all the ok_idx_vec elements that are within
+            // 25% of its latency avg.
+            //
+            // This is the *best* bunch of target servers to be used for load balancing.
+            //
+            // All other ok_idx_vec elements are put in the second vector.
+            if let Some(best_latency_avg_idx) = best_latency_avg_idx {
+                input_port
+                    .selection_vectors
+                    .push(Vec::with_capacity(ok_idx_vec.len()));
+                input_port
+                    .selection_vectors
+                    .push(Vec::with_capacity(ok_idx_vec.len()));
+
+                input_port.selection_vectors[0].push(best_latency_avg_idx);
+
+                let mut best_latency_avg = best_latency_avg;
+                best_latency_avg *= 1.25;
+                for idx in ok_idx_vec.iter() {
+                    if best_latency_avg_idx == *idx {
+                        continue;
+                    }
+                    if let Some(target_server) = target_servers.get(*idx) {
+                        if target_server.stats.avg_latency_ms() <= best_latency_avg {
+                            input_port.selection_vectors[0].push(*idx);
+                        } else {
+                            input_port.selection_vectors[1].push(*idx);
+                        }
+                    }
+                }
+            } else {
+                // This is for when there is not a single best_latency_avg_idx
+                // (happens only briefly on process initialization).
+                // TODO implement using user configuration priority instead to
+                //      make two bins.
+                input_port.selection_vectors.push(ok_idx_vec);
+            }
+
+            // Sort every selection_vectors by ascending latency.
+            for vector in input_port.selection_vectors.iter_mut() {
+                vector.sort_by(|a, b| {
+                    let a_server = target_servers.get(*a).unwrap();
+                    let b_server = target_servers.get(*b).unwrap();
+                    a_server
+                        .stats
+                        .avg_latency_ms()
+                        .partial_cmp(&b_server.stats.avg_latency_ms())
+                        .unwrap()
+                });
+            }
+
+            if !input_port.selection_worst.is_empty() {
+                // Sort input_port.selection_worst by increasing health_score()
+                // and alias.
+                input_port.selection_worst.sort_by(|a, b| {
+                    let a_server = target_servers.get(*a).unwrap();
+                    let b_server = target_servers.get(*b).unwrap();
+                    let a_score = a_server.health_score();
+                    let b_score = b_server.health_score();
+                    if a_score == b_score {
+                        a_server.stats.alias().cmp(&b_server.stats.alias())
+                    } else {
+                        a_score.partial_cmp(&b_score).unwrap()
+                    }
+                });
+            }
+        }
+    }
+
     async fn process_mut_globals(&mut self, msg: NetmonMsg) -> Option<NetmonMsg> {
         // Process messages that requires WRITE access to the globals.
         //
@@ -398,7 +616,11 @@ impl NetworkMonitor {
                             {
                                 target_server
                                     .stats
-                                    .report_latency(cur_msg.timestamp, cur_msg.para32[1]);
+                                    .handle_latency_report(cur_msg.timestamp, cur_msg.para32[1]);
+
+                                // Always update the selection_vectors on a good latency_report. This is
+                                // the periodic "audit" opportunity to refresh things up.
+                                Self::update_selection_vectors(input_ports, &cur_msg);
                             }
                         } else {
                             // This is for the user traffic.
@@ -406,7 +628,7 @@ impl NetworkMonitor {
                                 input_ports,
                                 &cur_msg,
                             ) {
-                                stats.report_resp_ok(
+                                stats.handle_resp_ok(
                                     cur_msg.timestamp,
                                     cur_msg.para8[0],
                                     cur_msg.para32[0],
@@ -417,7 +639,7 @@ impl NetworkMonitor {
                             if let Some(target_server) =
                                 NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
                             {
-                                target_server.stats.report_resp_ok(
+                                target_server.stats.handle_resp_ok(
                                     cur_msg.timestamp,
                                     cur_msg.para8[0],
                                     cur_msg.para32[0],
@@ -435,20 +657,30 @@ impl NetworkMonitor {
                             if let Some(target_server) =
                                 NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
                             {
+                                let was_healthy = target_server.stats.is_healthy();
+
                                 // This is for the "controlled" latency test.
                                 // We do not want that failure to mix with the user
-                                // traffic so call report_req_failed_internal instead.
-                                target_server.stats.report_req_failed_internal(
+                                // traffic stats so call report_req_failed_internal
+                                // instead.
+                                target_server.stats.handle_req_failed_internal(
                                     cur_msg.timestamp,
                                     cur_msg.para8[1],
                                 );
+
+                                // A bad latency report on a healthy target_server could affect
+                                // the selection of the target server.
+                                if was_healthy {
+                                    Self::update_selection_vectors(input_ports, &cur_msg);
+                                }
                             }
                         } else {
+                            // An error in the response for the user traffic.
                             if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
                                 input_ports,
                                 &cur_msg,
                             ) {
-                                stats.report_resp_err(
+                                stats.handle_resp_err(
                                     cur_msg.timestamp,
                                     cur_msg.para8[0],
                                     cur_msg.para32[0],
@@ -460,24 +692,45 @@ impl NetworkMonitor {
                             if let Some(target_server) =
                                 NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
                             {
-                                target_server.stats.report_resp_err(
+                                target_server.stats.handle_resp_err(
                                     cur_msg.timestamp,
                                     cur_msg.para8[0],
                                     cur_msg.para32[0],
                                     cur_msg.para32[1],
                                     cur_msg.para8[1],
                                 );
+                                // User traffic should not select that target again.
+                                // So always refresh the selection_vectors on every user
+                                // traffic error.
+                                Self::update_selection_vectors(input_ports, &cur_msg);
                             }
                         }
                     }
                     EVENT_REPORT_TGT_SEND_FAILED => {
-                        // Update the stats.
+                        // An error just sending a request.
                         if let Some(target_server) =
                             NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
                         {
-                            target_server
-                                .stats
-                                .report_send_failed(cur_msg.timestamp, cur_msg.para8[1]);
+                            let was_healthy = target_server.stats.is_healthy();
+
+                            target_server.stats.handle_send_failed(
+                                cur_msg.timestamp,
+                                cur_msg.para8[1],
+                                cur_msg.para16[0],
+                            );
+
+                            let update_selection_vectors = if cur_msg
+                                .flags
+                                .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
+                            {
+                                was_healthy
+                            } else {
+                                true
+                            };
+
+                            if update_selection_vectors {
+                                Self::update_selection_vectors(input_ports, &cur_msg);
+                            }
                         }
                     }
                     EVENT_REPORT_REQ_FAILED => {
@@ -490,12 +743,12 @@ impl NetworkMonitor {
                                 .flags
                                 .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
                             {
-                                stats.report_req_failed_internal(
+                                stats.handle_req_failed_internal(
                                     cur_msg.timestamp,
-                                    cur_msg.para8[0],
+                                    cur_msg.para8[1],
                                 );
                             } else {
-                                stats.report_req_failed(cur_msg.timestamp, cur_msg.para8[0]);
+                                stats.handle_req_failed(cur_msg.timestamp, cur_msg.para8[1]);
                             }
                         }
                     }
@@ -553,11 +806,17 @@ impl NetworkMonitor {
             loop {
                 match cur_msg.event_id {
                     EVENT_DO_SERVER_HEALTH_CHECK => {
-                        // Just forward to the request worker as-is.
-                        let _ = request_worker_tx.send(cur_msg).await.map_err(|e| {
-                            log::debug!("failed {}", e);
-                            // TODO Unlikely to happen, but should do some stats accumulation here.
-                        });
+                        // Forward to request worker.
+                        Self::process_latency_report_attempt_request(
+                            &mut self.mon_map,
+                            &request_worker_tx,
+                            cur_msg.port_idx,
+                            cur_msg.server_idx,
+                            cur_msg.para16[0],
+                            EpochTimestamp::now(),
+                            true,
+                        )
+                        .await;
                     }
                     _ => {
                         log::debug!("process_msg unexpected event id {}", cur_msg.event_id);
@@ -645,5 +904,3 @@ impl NetworkMonitor {
         }
     }
 }
-
-// TODO Add test to verify that every event_id are handled (otherwise will have an infinite loop right now).

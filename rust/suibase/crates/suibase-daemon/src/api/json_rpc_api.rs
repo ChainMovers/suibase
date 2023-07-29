@@ -25,13 +25,23 @@ pub struct LinkStats {
     // The alias of the link, as specified in the config file.
     pub alias: String,
 
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub status: String, // Empty string, "OK" or "DOWN"
+
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub health_pct: String,
 
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub load_pct: String,
 
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub resp_time: String,
 
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub success_pct: String,
+
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub error_info: String, // Sometime more info when DOWN.
 }
 
 impl LinkStats {

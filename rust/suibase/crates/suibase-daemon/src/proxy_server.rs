@@ -6,13 +6,13 @@ use crate::app_error::AppError;
 use crate::basic_types::*;
 
 use crate::network_monitor::{
-    NetMonTx, NetmonFlags, NetworkMonitor, ReportProxyHandler, HEADER_SBSD_SERVER_HC,
+    NetMonTx, NetmonFlags, NetworkMonitor, ProxyHandlerReport, HEADER_SBSD_SERVER_HC,
     HEADER_SBSD_SERVER_IDX,
 };
 use crate::shared_types::{
     Globals, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_NO_SERVER_AVAILABLE,
     REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
-    SEND_FAILED_UNSPECIFIED_ERROR,
+    SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_ERROR, SEND_FAILED_UNSPECIFIED_STATUS,
 };
 
 use anyhow::{anyhow, Result};
@@ -24,6 +24,7 @@ use axum::{
     Router,
 };
 
+use hyper::http;
 use tokio_graceful_shutdown::SubsystemHandle;
 use tower::retry;
 
@@ -78,7 +79,7 @@ impl ProxyServer {
 
     fn process_header_server_idx(
         headers: &mut HeaderMap,
-        report: &mut ReportProxyHandler,
+        report: &mut ProxyHandlerReport,
     ) -> Option<TargetServerIdx> {
         if let Some(server_idx) = headers.remove(HEADER_SBSD_SERVER_IDX) {
             if let Ok(server_idx) = server_idx.to_str().unwrap().parse::<u8>() {
@@ -92,7 +93,7 @@ impl ProxyServer {
 
     fn process_header_server_health_check(
         headers: &mut HeaderMap,
-        report: &mut ReportProxyHandler,
+        report: &mut ProxyHandlerReport,
     ) -> bool {
         if let Some(_prot_code) = headers.remove(HEADER_SBSD_SERVER_HC) {
             // TODO: validate the prot_code...
@@ -129,7 +130,7 @@ impl ProxyServer {
         //    - report.send_failed
 
         let handler_start = EpochTimestamp::now();
-        let mut report = ReportProxyHandler::new(&states.netmon_tx, states.port_idx, handler_start);
+        let mut report = ProxyHandlerReport::new(&states.netmon_tx, states.port_idx, handler_start);
 
         // Identify additional processing just by interpreting headers.
         // At same time:
@@ -138,11 +139,14 @@ impl ProxyServer {
         //
         let mut headers = req.headers().clone();
 
+        log::debug!("headers: {:?}", headers);
+
         //let do_http_body_extraction = ProxyServer::is_json_content_type(&headers);
         let do_force_target_server_idx =
             ProxyServer::process_header_server_idx(&mut headers, &mut report);
 
         let _ = ProxyServer::process_header_server_health_check(&mut headers, &mut report);
+        headers.remove(header::HOST); // Remove the host header (will be replace with the target server).
 
         // Find which target servers to send to...
         let mut targets: Vec<(u8, String)> = Vec::new();
@@ -155,7 +159,7 @@ impl ProxyServer {
                         targets.push((target_server_idx, target_server.uri()));
                     }
                 } else {
-                    input_port.get_best_target_servers(&mut targets)
+                    input_port.get_best_target_servers(&mut targets, &handler_start)
                 }
             }
         }
@@ -210,23 +214,53 @@ impl ProxyServer {
 
                     // Report a 'send' error, which is a failure to connect to a target server.
                     // This is not intended to count in the total *request* count stats (because
-                    // may succeed on a retry on another server) but may affect the health score
+                    // may succeed on a retry on another server) but will affect the health score
                     // of this target server.
                     let _ = report
                         .send_failed(
                             *server_idx,
                             req_initiation_time,
                             SEND_FAILED_UNSPECIFIED_ERROR,
+                            http::StatusCode::INTERNAL_SERVER_ERROR,
                         )
                         .await;
-                    // This is the only place where a "retry" is initiated with another server.
+                    // Try with another server.
                     retry_count += 1;
                     continue;
                 }
             };
 
-            let resp_bytes = resp.bytes().await;
             let resp_received = EpochTimestamp::now();
+
+            // Check HTTP errors
+            let resp = match resp.error_for_status() {
+                Ok(resp) => resp,
+                Err(err) => {
+                    // Decide if trying another server or not depending if the HTTP
+                    // problem is with the request or with the server.
+                    // When in doubt, this will assume a problem with the server.
+                    //
+                    // Note: http_response_err does a "req_fail" when returning false.
+                    let try_next_server = report
+                        .http_response_error(
+                            server_idx,
+                            req_initiation_time,
+                            resp_received,
+                            retry_count,
+                            &err,
+                        )
+                        .await;
+                    if try_next_server {
+                        retry_count += 1;
+                        continue;
+                    } else {
+                        return Err(err.into());
+                    }
+                }
+            };
+
+            let resp_bytes = resp.bytes().await;
+
             let resp_bytes = match resp_bytes {
                 Ok(resp_bytes) => resp_bytes,
                 Err(err) => {
@@ -263,7 +297,7 @@ impl ProxyServer {
                 }
             };
 
-            // TODO Parse the http::response, detect bad requests and call 'report_proxy_handler_req_resp_err'
+            // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
 
             let _ = report
                 .req_resp_ok(*server_idx, req_initiation_time, resp_received, retry_count)
@@ -277,7 +311,7 @@ impl ProxyServer {
             .req_fail(retry_count, REQUEST_FAILED_NO_SERVER_RESPONDING)
             .await;
 
-        Err(anyhow!("No server responding").into())
+        Err(anyhow!(format!("No server responding ({})", retry_count)).into())
     }
 
     pub async fn run(

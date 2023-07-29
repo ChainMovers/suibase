@@ -1,6 +1,14 @@
 // Maintains stats/health of a server (IP:Port).
 
+use hyper::http;
+
 use crate::basic_types::*;
+
+type UpScoreBonus = f64;
+const NORMAL_SCORE_UP: UpScoreBonus = 1.15;
+const WEAK_SCORE_UP: UpScoreBonus = 1.01;
+
+const SLOW_LATENCY_LIMIT_MICROSECONDS: u32 = 4_000_000; // 4 seconds
 
 // Request Failure Reasons
 // !!! Append new reasons at the end and update REQUEST_FAILED_LAST_REASON
@@ -11,10 +19,11 @@ pub const REQUEST_FAILED_NO_SERVER_AVAILABLE: u8 = 2;
 pub const REQUEST_FAILED_RESP_BYTES_RX: u8 = 3;
 pub const REQUEST_FAILED_RESP_BUILDER: u8 = 4;
 pub const REQUEST_FAILED_NETWORK_DOWN: u8 = 5; // Not implemented yet.
-pub const REQUEST_FAILED_BAD_REQUEST: u8 = 6; // Not implemented yet.
+pub const REQUEST_FAILED_BAD_REQUEST_HTTP: u8 = 6; // Got HTTP Bad Request (400), Bad Method (405), etc.
+pub const REQUEST_FAILED_BAD_REQUEST_JSON: u8 = 7; // Got a valid JSON-RPC response indicating an error.
 
 // !!! Update the following whenever you append a new reason above.
-pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_BAD_REQUEST;
+pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_BAD_REQUEST_JSON;
 
 // Do not touch this.
 pub const REQUEST_FAILED_VEC_SIZE: usize = REQUEST_FAILED_LAST_REASON as usize + 1;
@@ -23,9 +32,11 @@ pub const REQUEST_FAILED_VEC_SIZE: usize = REQUEST_FAILED_LAST_REASON as usize +
 // !!! Append new reasons at the end and update REQUEST_FAILED_LAST_REASON
 pub type SendFailedReason = u8;
 pub const SEND_FAILED_UNSPECIFIED_ERROR: u8 = 0;
+pub const SEND_FAILED_RESP_HTTP_STATUS: u8 = 1;
+pub const SEND_FAILED_UNSPECIFIED_STATUS: u8 = 2;
 
 // !!! Update the following whenever you append a new reason above.
-pub const SEND_FAILED_LAST_REASON: u8 = SEND_FAILED_UNSPECIFIED_ERROR;
+pub const SEND_FAILED_LAST_REASON: u8 = SEND_FAILED_UNSPECIFIED_STATUS;
 
 // Do not touch this.
 pub const SEND_FAILED_VEC_SIZE: usize = SEND_FAILED_LAST_REASON as usize + 1;
@@ -51,10 +62,8 @@ pub struct ServerStats {
     //
     // Like for is_healthy, if a reported latency is process out-of-order (from when
     // they were initiated), then the oldest one is ignored.
-    avg_latency: f64,
-    most_recent_latency_report: EpochTimestamp,
-
-    // Total counts (never cleared).
+    latency_report_avg: f64,
+    latency_report_most_recent: Option<EpochTimestamp>,
     latency_report_count: u64,
 
     success_on_first_attempt: u64,
@@ -84,6 +93,8 @@ pub struct ServerStats {
     // Value should be '0' for no-effect.
     up_score: f64,   // Value from 0 to 100
     down_score: f64, // Value from 0 to 100
+
+    error_info: Option<String>, // Info on most recent failure.
 }
 
 impl ServerStats {
@@ -95,8 +106,8 @@ impl ServerStats {
             is_healthy: false,
             most_recent_initiated_timestamp: now,
 
-            avg_latency: -1.0,
-            most_recent_latency_report: now,
+            latency_report_avg: f64::MAX,
+            latency_report_most_recent: None,
 
             latency_report_count: 0,
             success_on_first_attempt: 0,
@@ -113,6 +124,8 @@ impl ServerStats {
 
             up_score: 0.0,
             down_score: 0.0,
+
+            error_info: None,
         }
     }
 
@@ -120,12 +133,20 @@ impl ServerStats {
         self.alias.clone()
     }
 
+    pub fn error_info(&self) -> String {
+        if self.error_info.is_none() {
+            String::new()
+        } else {
+            self.error_info.as_ref().unwrap().clone()
+        }
+    }
+
     pub fn is_healthy(&self) -> bool {
         self.is_healthy
     }
 
     pub fn avg_latency_ms(&self) -> f64 {
-        self.avg_latency
+        self.latency_report_avg
     }
 
     pub fn success_on_first_attempt(&self) -> u64 {
@@ -162,25 +183,31 @@ impl ServerStats {
 
         // Now isolate a few noteable one for the caller.
         *network_down = self.req_failure_reasons[REQUEST_FAILED_NETWORK_DOWN as usize];
-        *bad_request = self.req_failure_reasons[REQUEST_FAILED_BAD_REQUEST as usize];
+        *bad_request = self.req_failure_reasons[REQUEST_FAILED_BAD_REQUEST_HTTP as usize];
         *other_failures = total - (*network_down + *bad_request);
     }
 
-    pub fn most_recent_latency_report(&self) -> Option<EpochTimestamp> {
-        if self.latency_report_count == 0 {
-            return None;
-        }
-        Some(self.most_recent_latency_report)
+    pub fn latency_report_most_recent(&self) -> Option<EpochTimestamp> {
+        return self.latency_report_most_recent;
     }
 
-    pub fn report_resp_ok(
+    fn is_client_fault(reason: RequestFailedReason) -> bool {
+        // Identify reason for which the failure can be
+        // attributed to the client doing a bad request.
+        match reason {
+            REQUEST_FAILED_BAD_REQUEST_HTTP => true,
+            _ => false,
+        }
+    }
+
+    pub fn handle_resp_ok(
         &mut self,
         initiation_time: EpochTimestamp,
         retry_count: u8,
         _prep_microsecs: u32,
         _latency_microsecs: u32,
     ) {
-        self.inc_up_score(initiation_time);
+        self.inc_up_score(initiation_time, NORMAL_SCORE_UP);
         if retry_count == 0 {
             self.success_on_first_attempt += 1;
         } else {
@@ -188,7 +215,7 @@ impl ServerStats {
         }
     }
 
-    pub fn report_resp_err(
+    pub fn handle_resp_err(
         &mut self,
         initiation_time: EpochTimestamp,
         retry_count: u8,
@@ -198,18 +225,21 @@ impl ServerStats {
     ) {
         // Do first like report_req_failed() and then handle some
         // additional information related to the response.
-        self.report_req_failed(initiation_time, reason);
+        self.handle_req_failed(initiation_time, reason);
         if retry_count != 0 {
             self.retry_count += retry_count as u64;
         }
     }
 
-    pub fn report_req_failed(
+    pub fn handle_req_failed(
         &mut self,
         initiation_time: EpochTimestamp,
         reason: RequestFailedReason,
     ) {
-        self.inc_down_score(initiation_time);
+        if !Self::is_client_fault(reason) {
+            self.inc_down_score(initiation_time);
+        }
+
         if reason >= self.req_failure_reasons.len() as u8 {
             log::debug!("internal error oob array access: {}", reason);
             self.req_unknown_reason += 1;
@@ -218,23 +248,27 @@ impl ServerStats {
         }
     }
 
-    pub fn report_req_failed_internal(
+    pub fn handle_req_failed_internal(
         &mut self,
         initiation_time: EpochTimestamp,
-        _reason: RequestFailedReason,
+        reason: RequestFailedReason,
     ) {
         // An example of internal request is the health check.
         //
         // A failure of it would end up here and transition
         // the server to unhealthy.
-        self.inc_down_score(initiation_time);
+        if !Self::is_client_fault(reason) {
+            self.inc_down_score(initiation_time);
+        }
+
         self.req_failure_internal += 1;
     }
 
-    pub fn report_send_failed(
+    pub fn handle_send_failed(
         &mut self,
         initiation_time: EpochTimestamp,
         reason: SendFailedReason,
+        status: u16,
     ) {
         self.inc_down_score(initiation_time);
         if reason >= self.send_failure_reasons.len() as u8 {
@@ -242,10 +276,36 @@ impl ServerStats {
             self.send_unknown_reason += 1;
         } else {
             self.send_failure_reasons[reason as usize] += 1;
+            match reason {
+                SEND_FAILED_UNSPECIFIED_ERROR => {
+                    self.error_info = Some("Server Unreacheable".to_string())
+                }
+                SEND_FAILED_RESP_HTTP_STATUS => {
+                    let status_code = http::StatusCode::from_u16(status);
+                    match status_code {
+                        Ok(status_code) => {
+                            if let Some(reason) = status_code.canonical_reason() {
+                                self.error_info =
+                                    Some(format!("({}){}", status, reason.to_string()));
+                            } else {
+                                self.error_info = Some(format!("{}-HTTP-StatusCode", status));
+                            }
+                        }
+                        Err(_) => {
+                            self.error_info = Some(format!("{}-HTTP-StatusCode", status));
+                        }
+                    };
+                }
+                _ => self.error_info = Some("".to_string()),
+            }
         }
     }
 
-    pub fn report_latency(&mut self, initiation_time: EpochTimestamp, latency_microsecs: u32) {
+    pub fn handle_latency_report(
+        &mut self,
+        initiation_time: EpochTimestamp,
+        latency_microsecs: u32,
+    ) {
         log::debug!(
             "ServerStats::report_latency() for {} with latency_microsecs: {}",
             self.alias,
@@ -259,34 +319,42 @@ impl ServerStats {
             log::error!("ServerStats::report_latency() clamped");
         }
 
-        if self.latency_report_count == 0 {
+        let bonus = if latency_microsecs >= SLOW_LATENCY_LIMIT_MICROSECONDS {
+            WEAK_SCORE_UP
+        } else {
+            NORMAL_SCORE_UP
+        };
+
+        if self.latency_report_most_recent.is_none() {
             // One-time initialization
-            self.most_recent_latency_report = initiation_time;
-            self.avg_latency = latency_microsecs as f64 / 1000.0; // to milliseconds.
+            self.latency_report_most_recent = Some(initiation_time);
+            self.latency_report_avg = latency_microsecs as f64 / 1000.0; // to milliseconds.
             self.latency_report_count = 1;
-            // Reflect that the server is healthy.
-            self.inc_up_score(initiation_time);
+            // Reflect that the server is healthy, but do not give too
+            // much of a bonus if extremely slow (>4 secs).
+            self.inc_up_score(initiation_time, bonus);
             return;
         }
 
-        if initiation_time < self.most_recent_latency_report {
-            // Out-of-order report, so no effect on the average.
+        if initiation_time < self.latency_report_most_recent.unwrap() {
+            // Unexpected out-of-order reception of this report. Avoid using
+            // it for further effect.
             return;
         }
 
         // This is a valid latency report.
+        self.latency_report_most_recent = Some(initiation_time);
         self.latency_report_count += 1;
-        self.most_recent_latency_report = initiation_time;
 
-        // Reflect that the server is healthy.
-        self.inc_up_score(initiation_time);
+        // Reflect that the server was healthy (at least at the moment the request was initiated).
+        self.inc_up_score(initiation_time, bonus);
 
         // Use a 20 measurements exponential moving average to smooth out the latency.
         const ALPHA_AND_CONV: f64 = 0.00005; // 0.05 / 1000 (1000 is for microsecs to millisecs)
         const ONE_MINUS_ALPHA: f64 = 0.95; // 1.0 - 0.05
 
-        self.avg_latency =
-            self.avg_latency * ONE_MINUS_ALPHA + latency_microsecs as f64 * ALPHA_AND_CONV;
+        self.latency_report_avg =
+            self.latency_report_avg * ONE_MINUS_ALPHA + latency_microsecs as f64 * ALPHA_AND_CONV;
     }
 
     // A score from -100 to 100 about the health of this server.
@@ -314,7 +382,7 @@ impl ServerStats {
         }
     }
 
-    fn inc_up_score(&mut self, initiation_time: EpochTimestamp) {
+    fn inc_up_score(&mut self, initiation_time: EpochTimestamp, bonus: UpScoreBonus) {
         // Note: There is no 'dec_up_score()'. See 'inc_down_score()' for how
         //       the up_score is slowly reduced.
         if initiation_time > self.most_recent_initiated_timestamp {
@@ -322,11 +390,16 @@ impl ServerStats {
             self.is_healthy = true;
             self.most_recent_initiated_timestamp = initiation_time;
 
-            // Every subsequent healthy report gives a ~15% bonus...
+            // Clear any potential previous error info.
+            if self.error_info.is_some() {
+                self.error_info = None;
+            }
+
+            // Every subsequent healthy report gives a bonus...
             if self.up_score < 1.0 {
                 self.up_score = 1.0;
             } else if self.up_score < 100.0 {
-                let new_value = self.up_score * 1.15;
+                let new_value = self.up_score * bonus;
                 self.up_score = new_value.min(100.0);
             }
 
