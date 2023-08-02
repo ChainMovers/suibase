@@ -18,6 +18,7 @@ use anyhow::Result;
 // List of workdir planned to be always supported.
 pub const WORKDIRS_KEYS: [&str; 4] = ["mainnet", "testnet", "devnet", "localnet"];
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct Link {
     // A link in a suibase.yaml file.
     pub alias: String,
@@ -27,63 +28,140 @@ pub struct Link {
     pub ws: Option<String>,
     pub priority: u8,
 }
+
+#[derive(Debug, Eq, PartialEq)]
 pub struct WorkdirProxyConfig {
-    // Created from parsing/merging suibase.yaml file(s) for a single workdir.
-    pub proxy_enabled: bool,
-    pub links: HashMap<String, Link>, // alias is also the key. TODO Look into Hashset?
-    pub links_overrides: bool,
-    pub proxy_port_number: u16,
+    // Created from parsing/merging suibase.yaml file(s) for a single workdir,
+    // except for 'user_request' which is loaded from '.state/user_request'.
+    user_request: Option<String>,
+    user_request_start: bool, // true when user_request == "start"
+    proxy_enabled: bool,
+    proxy_port_number: u16,
+    links_overrides: bool,
+    links: HashMap<String, Link>,
 }
 
 impl WorkdirProxyConfig {
     pub fn new() -> Self {
         Self {
+            user_request: None,
+            user_request_start: false,
             proxy_enabled: false,
-            links: HashMap::new(),
-            links_overrides: false,
             proxy_port_number: 0,
+            links_overrides: false,
+            links: HashMap::new(),
         }
+    }
+
+    pub fn user_request(&self) -> Option<&String> {
+        self.user_request.as_ref()
+    }
+
+    pub fn is_user_request_start(&self) -> bool {
+        self.user_request_start
+    }
+
+    pub fn is_proxy_enabled(&self) -> bool {
+        self.proxy_enabled
+    }
+
+    pub fn proxy_port_number(&self) -> u16 {
+        self.proxy_port_number
     }
 
     pub fn links_overrides(&self) -> bool {
         self.links_overrides
     }
 
-    pub fn load_from_file(&mut self, path: &str) -> Result<()> {
+    pub fn links(&self) -> &HashMap<String, Link> {
+        &self.links
+    }
+
+    pub fn load_state_file(&mut self, path: &str) -> Result<()> {
+        if let Ok(contents) = std::fs::read_to_string(path) {
+            // Trim trailing newline.
+            let contents = contents.trim_end().to_string();
+            self.user_request_start = contents == "start";
+            self.user_request = Some(contents);
+        } else {
+            // This means the workdir directory is not fully initialized.
+            self.user_request = None;
+            self.user_request_start = false;
+        }
+        Ok(())
+    }
+
+    pub fn load_and_merge_from_file(&mut self, path: &str) -> Result<()> {
+        self.load_and_merge_from_file_internal(path, false)
+    }
+
+    pub fn load_and_merge_from_common_file(&mut self, path: &str) -> Result<()> {
+        self.load_and_merge_from_file_internal(path, true)
+    }
+
+    fn load_and_merge_from_file_internal(&mut self, path: &str, common: bool) -> Result<()> {
+        // This merge the config of the file with the current
+        // configuration.
+        //
+        // For most variables, if a new value is defined in the
+        // file it will overwrite.
+        //
+        // For most lists (e.g. links), they are merged.
+        //
+        // =====
+        //
         // Example of suibase.yaml:
+        //
+        // proxy_enabled: false
         //
         // links:
         //  - alias: "localnet"
         //    rpc: "http://0.0.0.0:9000"
         //    ws: "ws://0.0.0.0:9000"
-        //    priority: 1
+        //    priority: 12
         //  - alias: "localnet"
+        //    enabled: false
         //    rpc: "http://0.0.0.0:9000"
-        //    ws: "ws://0.0.0.0:9000"
-        //    priority: 2
         let contents = std::fs::read_to_string(path)?;
         let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
 
-        // TODO: Lots of robustness needed to be added here...
+        // TODO: Lots of robustness could be added here...
+
+        if let Some(proxy_enabled) = yaml["proxy_enabled"].as_str() {
+            // proxy_enabled can be "true", "false" or "dev" for testing.
+            //
+            // "dev" is similar to "true" but allows for foreground execution
+            // of the suibase-daemon... only the bash scripts care for this.
+            self.proxy_enabled = proxy_enabled != "false"
+        }
+
+        if let Some(links_overrides) = yaml["links_overrides"].as_bool() {
+            // Clear all the previous links!
+            self.links.clear();
+            self.links_overrides = links_overrides;
+        }
+
+        // Remaining variables do not make sense in common files, so ignore them.
+        // TODO: Implement warning user for bad useage...
+        if common {
+            return Ok(());
+        }
+
         if let Some(proxy_port_number) = yaml["proxy_port_number"].as_u64() {
             self.proxy_port_number = proxy_port_number as u16;
         }
 
-        if let Some(links_overrides) = yaml["links_overrides"].as_bool() {
-            self.links_overrides = links_overrides;
-        }
-
         if let Some(links) = yaml["links"].as_sequence() {
             for link in links {
-                // TODO: Lots of robustness needed to be added here...
                 if let Some(alias) = link["alias"].as_str() {
-                    // Purpose of "enabled" is actually to disable a link... so if not present, default
-                    // to enabled.
+                    // TODO: Consider implementing link level member merging.
+
+                    // Purpose of "enabled" is actually to disable a link... so if not
+                    // present, default to enabled.
                     let enabled = link["enabled"].as_bool().unwrap_or(true);
                     let rpc = link["rpc"].as_str().map(|s| s.to_string()); // Optional
                     let metrics = link["metrics"].as_str().map(|s| s.to_string()); // Optional
                     let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
-                                                                         // Should instead remove all alpha, do absolute value, and clamp to 1-255.
                     let priority = link["priority"].as_u64().unwrap_or(u64::MAX) as u8;
                     let link = Link {
                         alias: alias.to_string(),
@@ -93,13 +171,19 @@ impl WorkdirProxyConfig {
                         ws,
                         priority,
                     };
-
+                    // Replace if already present.
                     self.links.insert(alias.to_string(), link);
                 }
             }
         }
 
         Ok(())
+    }
+}
+
+impl Default for WorkdirProxyConfig {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -114,6 +198,10 @@ pub struct Workdir {
 }
 
 impl Workdir {
+    pub fn idx(&self) -> Option<ManagedVecUSize> {
+        self.idx
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -157,6 +245,7 @@ pub struct SafeWorkdirs {
     pub workdirs: ManagedVec<Workdir>,
     suibase_home: String,
     path: PathBuf,
+    suibase_yaml_common: PathBuf,
 }
 
 impl SafeWorkdirs {
@@ -169,10 +258,12 @@ impl SafeWorkdirs {
             PathBuf::from("/tmp")
         };
 
+        let suibase_home = home_dir.join("suibase");
+
         // Generate all the suibase paths for state and config files of each WORKDIRS_KEYS.
         let mut workdirs = ManagedVec::new();
 
-        let workdirs_path = home_dir.join("suibase").join("workdirs");
+        let workdirs_path = suibase_home.join("workdirs");
 
         for workdir in WORKDIRS_KEYS.iter() {
             // Paths
@@ -185,9 +276,7 @@ impl SafeWorkdirs {
 
             let user_yaml = path.join("suibase.yaml");
 
-            let mut default_yaml = home_dir.clone();
-            default_yaml.push("suibase");
-            default_yaml.push("scripts");
+            let mut default_yaml = suibase_home.join("scripts");
             default_yaml.push("defaults");
             default_yaml.push(workdir);
             default_yaml.push("suibase.yaml");
@@ -203,12 +292,13 @@ impl SafeWorkdirs {
             });
         }
 
-        let suibase_home = home_dir.join("suibase");
+        let suibase_yaml_common = workdirs_path.join("common").join("suibase.yaml");
 
         Self {
             suibase_home: suibase_home.to_string_lossy().to_string(),
             workdirs,
             path: workdirs_path,
+            suibase_yaml_common,
         }
     }
 
@@ -218,6 +308,10 @@ impl SafeWorkdirs {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn suibase_yaml_common(&self) -> &Path {
+        &self.suibase_yaml_common
     }
 
     // Given a path string, find the corresponding workdir object.
@@ -233,6 +327,12 @@ impl SafeWorkdirs {
             }
         }
         None
+    }
+}
+
+impl Default for SafeWorkdirs {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

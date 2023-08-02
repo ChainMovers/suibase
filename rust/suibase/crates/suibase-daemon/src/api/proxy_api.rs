@@ -6,7 +6,7 @@ use axum::async_trait;
 use clap::Indices;
 use jsonrpsee::core::RpcResult;
 
-use crate::admin_controller::AdminControllerTx;
+use crate::admin_controller::{AdminControllerMsg, AdminControllerTx};
 use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{Globals, ServerStats, TargetServer};
 
@@ -265,7 +265,7 @@ impl ProxyApiServer for ProxyApiImpl {
 
                 // Subtle transform. The selection_vectors managed idx are not the same as the "collect"
                 // indices.
-                let unmap_vec: Vec<u8> = selection_vectors.iter().flatten().map(|&i| i).collect();
+                let unmap_vec: Vec<u8> = selection_vectors.iter().flatten().copied().collect();
                 for unmap_idx in unmap_vec {
                     // Find unmap_idx in target_servers_stats (first element of tuple) and
                     // remember the position of that element in target_servers_stats.
@@ -425,6 +425,22 @@ impl ProxyApiServer for ProxyApiImpl {
         }
 
         if debug {
+            // Communicate with AdminController to append its own debug state.
+            let mut msg = AdminControllerMsg::new();
+            msg.event_id = crate::admin_controller::EVENT_DEBUG_PRINT;
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            msg.resp_channel = Some(tx);
+            if (self.admctrl_tx.send(msg).await).is_ok() {
+                match rx.await {
+                    Ok(resp_str) => {
+                        debug_out.push_str(&format!("\nAdminController: {}", resp_str));
+                    }
+                    Err(e) => {
+                        debug_out.push_str(&format!("\nAdminController: {:?}", e));
+                    }
+                }
+            }
+
             resp.debug = Some(debug_out);
         }
 

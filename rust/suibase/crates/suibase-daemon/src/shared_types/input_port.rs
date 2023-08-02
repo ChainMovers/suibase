@@ -1,7 +1,7 @@
 use crate::basic_types::*;
 use crate::shared_types::TargetServer;
 
-use super::ServerStats;
+use super::{ServerStats, WorkdirProxyConfig};
 
 use std::hash::Hasher;
 use twox_hash::XxHash32;
@@ -30,7 +30,12 @@ pub struct InputPort {
     // Indicate if a proxy_server thread is started or not for this port.
     proxy_server_running: bool,
 
-    // Configuration. Can be change at runtime by the AdminController.
+    // Active Configuration.
+    user_request_start: bool, // true when user_request == "start"
+    proxy_enabled: bool,
+
+    // Maintained by the AdminController such that the runtime idx remain the
+    // same for a given alias ("forever", even when deleted from file config).
     pub target_servers: ManagedVec<TargetServer>,
 
     // Periodically updated by the NetworkMonitor.
@@ -55,14 +60,20 @@ pub struct InputPort {
 }
 
 impl InputPort {
-    pub fn new(workdir_idx: WorkdirIdx, workdir_name: String, proxy_port_number: u16) -> Self {
+    pub fn new(
+        workdir_idx: WorkdirIdx,
+        workdir_name: String,
+        workdir_config: &WorkdirProxyConfig,
+    ) -> Self {
         Self {
             idx: None,
             workdir_name,
             workdir_idx,
-            port_number: proxy_port_number,
+            port_number: workdir_config.proxy_port_number(),
             deactivate_request: false,
             proxy_server_running: false,
+            user_request_start: workdir_config.is_user_request_start(),
+            proxy_enabled: workdir_config.is_proxy_enabled(),
             target_servers: ManagedVec::new(),
             all_servers_stats: ServerStats::new("all".to_string()),
             selection_vectors: Vec::new(),
@@ -92,6 +103,22 @@ impl InputPort {
 
     pub fn is_deactivated(&self) -> bool {
         self.deactivate_request
+    }
+
+    pub fn is_user_request_start(&self) -> bool {
+        self.user_request_start
+    }
+
+    pub fn is_proxy_enabled(&self) -> bool {
+        self.proxy_enabled
+    }
+
+    pub fn set_user_request_start(&mut self, value: bool) {
+        self.user_request_start = value;
+    }
+
+    pub fn set_proxy_enabled(&mut self, value: bool) {
+        self.proxy_enabled = value;
     }
 
     pub fn report_proxy_server_starting(&mut self) {

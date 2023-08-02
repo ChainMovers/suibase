@@ -1,10 +1,13 @@
+use crate::basic_types::{AutoSizeVec, WorkdirIdx};
+use std::path::Path;
+
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::shared_types::Workdirs;
+use crate::shared_types::{Workdir, Workdirs};
 
 use notify::Watcher;
 use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
@@ -12,6 +15,14 @@ use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
 pub struct WorkdirsWatcher {
     workdirs: Workdirs,
     admctrl_tx: AdminControllerTx,
+    tracking: AutoSizeVec<WorkdirTracking>,
+}
+
+#[derive(Default)]
+struct WorkdirTracking {
+    // Data private to the WorkdirsWatcher. One tracking per WorkdirIdx.
+    is_workdir_watched: bool,
+    is_state_watched: bool,
 }
 
 impl WorkdirsWatcher {
@@ -19,11 +30,12 @@ impl WorkdirsWatcher {
         Self {
             workdirs,
             admctrl_tx,
+            tracking: AutoSizeVec::new(),
         }
     }
 
     async fn send_notif_config_file_change(&self, path: String) {
-        log::info!("Sending config file change notification for {}", path);
+        log::info!("Sending notif {}", path);
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
         msg.data_string = Some(path);
@@ -32,24 +44,208 @@ impl WorkdirsWatcher {
         });
     }
 
+    // Return true if something newly watched/unwatched.
+    fn update_workdir_watch(
+        tracking: &mut AutoSizeVec<WorkdirTracking>,
+        watcher: &mut RecommendedWatcher,
+        workdir: &Workdir,
+        target_path: &str,
+    ) -> bool {
+        if workdir.idx().is_none() {
+            return false;
+        }
+
+        // React only to change for two target_path: the workdir itself and its ".state"
+        let path = workdir.path();
+        let state_path = workdir.state_path();
+        if target_path != path.to_string_lossy() && target_path != state_path.to_string_lossy() {
+            return false;
+        }
+
+        let mut at_least_one_modif: bool = false;
+
+        let workdir_idx = workdir.idx().unwrap();
+
+        // Synchronize the watcher with the states on the filesystem.
+        let tracking = tracking.get_mut(workdir_idx);
+
+        // Check if the path really exists.
+        if !path.exists() {
+            // If the path does not exist, then remove the watch.
+            if tracking.is_workdir_watched {
+                log::info!("unwatching {}", workdir.path().display());
+                let _ = watcher.unwatch(path);
+                tracking.is_workdir_watched = false;
+                at_least_one_modif = true;
+            }
+        } else {
+            // The path exists, so add the watch (if not already done).
+            // TODO Enhance this with FD tracking.
+            if !tracking.is_workdir_watched {
+                log::info!("watching {}", workdir.path().display());
+                let _ = watcher.watch(path, RecursiveMode::NonRecursive);
+                tracking.is_workdir_watched = true;
+                at_least_one_modif = true;
+            }
+        }
+
+        if !state_path.exists() {
+            // If the path does not exist, then remove the watch.
+            if tracking.is_state_watched {
+                log::info!("unwatching {}", workdir.state_path().display());
+                let _ = watcher.unwatch(state_path);
+                tracking.is_state_watched = false;
+                at_least_one_modif = true;
+            }
+        } else {
+            // The path exists, so add the watch (if not already done).
+            // TODO Enhance this with FD tracking?
+            if !tracking.is_state_watched {
+                log::info!("watching {}", workdir.state_path().display());
+                let _ = watcher.watch(state_path, RecursiveMode::NonRecursive);
+                tracking.is_state_watched = true;
+                at_least_one_modif = true;
+            }
+        }
+
+        at_least_one_modif
+    }
+
+    fn remove_workdir_watch(
+        tracking: &mut AutoSizeVec<WorkdirTracking>,
+        watcher: &mut RecommendedWatcher,
+        workdir: &Workdir,
+        target_path: &str,
+    ) -> bool {
+        if workdir.idx().is_none() {
+            return false;
+        }
+
+        let workdir_idx = workdir.idx().unwrap();
+
+        let mut at_least_one_modif: bool = false;
+
+        // Synchronize the watcher with the states on the filesystem.
+        let tracking = tracking.get_mut(workdir_idx);
+
+        // React only to change for two target_path: the workdir itself and its ".state"
+        let path = workdir.path();
+        let state_path = workdir.state_path();
+        if target_path != path.to_string_lossy() && target_path != state_path.to_string_lossy() {
+            return false;
+        }
+
+        // Check if the path really exists.
+        if !path.exists() {
+            // If the path does not exist, then remove the watch.
+            if tracking.is_workdir_watched {
+                log::info!("unwatching {}", workdir.path().display());
+                let _ = watcher.unwatch(path);
+                tracking.is_workdir_watched = false;
+                at_least_one_modif = true;
+            }
+        }
+
+        if !state_path.exists() {
+            // If the path does not exist, then remove the watch.
+            if tracking.is_state_watched {
+                log::info!("unwatching {}", workdir.state_path().display());
+                let _ = watcher.unwatch(state_path);
+                tracking.is_state_watched = false;
+                at_least_one_modif = true;
+            }
+        }
+
+        at_least_one_modif
+    }
+
     async fn watch_loop(
         &mut self,
         subsys: &SubsystemHandle,
+        mut watcher: RecommendedWatcher,
         mut local_rx: tokio::sync::mpsc::Receiver<notify::event::Event>,
     ) {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = local_rx.recv().await {
                 // Process the event from notify-rs
-                log::info!("watch_loop() msg {:?}", msg);
+                //log::info!("watch_loop() msg {:?}", msg);
                 // Iterate the msg.paths and find the workdir string (using Workdirs::find_workdir) and filename portion for each.
-                // For each we will send_notif_config_file_change(workdir_name, filename) to the AdminController.
+                match msg.kind {
+                    notify::event::EventKind::Modify(_) => {
+                        for path in msg.paths {
+                            // Ignore everything except for user_request and suibase.yaml files.
+                            if !path.ends_with("user_request") && !path.ends_with("suibase.yaml") {
+                                continue;
+                            }
+                            self.send_notif_config_file_change(path.to_string_lossy().to_string())
+                                .await
+                        }
+                    }
+                    // notify::event::EventKind::Any()
 
-                // Identify if the event is meaningful.
+                    // Meta-events about notifier itself (can be ignored).
+                    // notify::event::EventKind::Other =>
 
-                // Identify the related workdir.
+                    // File creation, but not "writing" (can be ignored)
+                    notify::event::EventKind::Create(create_kind) => {
+                        // If creating one of the "suibase" standard workdir, then
+                        // start watching it.
+                        if create_kind == notify::event::CreateKind::Folder {
+                            let workdirs_guard = self.workdirs.read().await;
+                            let workdirs = &*workdirs_guard;
+                            log::info!("CreateKind {:?}", msg);
+                            for path in msg.paths {
+                                let path = &path.to_string_lossy();
+                                if let Some((_, workdir)) = workdirs.find_workdir(path) {
+                                    if Self::update_workdir_watch(
+                                        &mut self.tracking,
+                                        &mut watcher,
+                                        workdir,
+                                        path,
+                                    ) {
+                                        // TODO Need to track creation of a few key file from here
+                                        //      to make sure they are notified... for now always
+                                        //      notified once after a delay with assumption the file
+                                        //      were created after 1 second...
+                                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                        self.send_notif_config_file_change(path.to_string()).await
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                // Send a message to the AdminController.
+                    notify::event::EventKind::Remove(remove_kind) => {
+                        if remove_kind == notify::event::RemoveKind::Folder {
+                            let workdirs_guard = self.workdirs.read().await;
+                            let workdirs = &*workdirs_guard;
+                            for path in msg.paths {
+                                if let Some((_, workdir)) =
+                                    workdirs.find_workdir(&path.to_string_lossy())
+                                {
+                                    if Self::remove_workdir_watch(
+                                        &mut self.tracking,
+                                        &mut watcher,
+                                        workdir,
+                                        &path.to_string_lossy(),
+                                    ) {
+                                        self.send_notif_config_file_change(
+                                            path.to_string_lossy().to_string(),
+                                        )
+                                        .await
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Access is for non-mutating operations (can be ignored)
+                    // notify::event::EventKind::Access(_)
+
+                    // notify::event::EventKind::Any
+                    _ => {}
+                }
             } else {
                 // Channel closed or shutdown requested.
                 return;
@@ -60,25 +256,9 @@ impl WorkdirsWatcher {
     pub async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
         log::info!("started");
 
-        // Prime the AdminController with the current state of the workdirs.
-        {
-            let workdirs_guard = self.workdirs.read().await;
-            let workdirs = &*workdirs_guard;
-
-            for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
-                log::info!("Checking if started for {}", workdir.name());
-                if workdir.is_user_request_start() {
-                    self.send_notif_config_file_change(
-                        workdir.suibase_yaml_default().to_string_lossy().to_string(),
-                    )
-                    .await;
-                }
-            }
-        }
-
         // Use a local channel to process "raw" events from notify-rs and then watch_loop()
         // translate them into higher level messages toward the AdminController.
-        let (local_tx, local_rx) = tokio::sync::mpsc::channel::<notify::event::Event>(100);
+        let (local_tx, local_rx) = tokio::sync::mpsc::channel::<notify::event::Event>(1000);
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
@@ -109,6 +289,7 @@ impl WorkdirsWatcher {
             let workdirs = &*workdirs_guard;
 
             // Watch directories: ~/suibase then add watches on sub-directories as they are discovered.
+            // TODO if suibase is deleted... then need to find a solution to recover gracefully (exit?).
             let path = workdirs.path();
             if path.exists() {
                 let _ = watcher.watch(workdirs.path(), RecursiveMode::NonRecursive);
@@ -117,22 +298,23 @@ impl WorkdirsWatcher {
             }
 
             for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
-                let path = workdir.path();
-                // Check if path exists.
-                if path.exists() {
-                    let _ = watcher.watch(workdir.path(), RecursiveMode::NonRecursive);
-                }
-
-                let path = workdir.state_path();
-                if path.exists() {
-                    let _ = watcher.watch(workdir.state_path(), RecursiveMode::NonRecursive);
+                if Self::update_workdir_watch(
+                    &mut self.tracking,
+                    &mut watcher,
+                    workdir,
+                    &workdir.path().to_string_lossy(),
+                ) {
+                    self.send_notif_config_file_change(
+                        workdir.path().to_string_lossy().to_string(),
+                    )
+                    .await;
                 }
             }
             log::info!("watcher {:?}", watcher);
         } // Release workdirs read lock
 
         match self
-            .watch_loop(&subsys, local_rx)
+            .watch_loop(&subsys, watcher, local_rx)
             .cancel_on_shutdown(&subsys)
             .await
         {

@@ -10,9 +10,10 @@ use crate::network_monitor::{
     HEADER_SBSD_SERVER_IDX,
 };
 use crate::shared_types::{
-    Globals, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_NO_SERVER_AVAILABLE,
-    REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
-    SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_ERROR, SEND_FAILED_UNSPECIFIED_STATUS,
+    Globals, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_CONFIG_DISABLED, REQUEST_FAILED_NOT_STARTED,
+    REQUEST_FAILED_NO_SERVER_AVAILABLE, REQUEST_FAILED_NO_SERVER_RESPONDING,
+    REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX, SEND_FAILED_RESP_HTTP_STATUS,
+    SEND_FAILED_UNSPECIFIED_ERROR, SEND_FAILED_UNSPECIFIED_STATUS,
 };
 
 use anyhow::{anyhow, Result};
@@ -139,7 +140,7 @@ impl ProxyServer {
         //
         let mut headers = req.headers().clone();
 
-        log::debug!("headers: {:?}", headers);
+        // log::debug!("headers: {:?}", headers);
 
         //let do_http_body_extraction = ProxyServer::is_json_content_type(&headers);
         let do_force_target_server_idx =
@@ -148,12 +149,37 @@ impl ProxyServer {
         let _ = ProxyServer::process_header_server_health_check(&mut headers, &mut report);
         headers.remove(header::HOST); // Remove the host header (will be replace with the target server).
 
+        let mut retry_count = 0;
+
         // Find which target servers to send to...
         let mut targets: Vec<(u8, String)> = Vec::new();
         {
             let globals_read_guard = states.globals.read().await;
             let globals = &*globals_read_guard;
+
             if let Some(input_port) = globals.input_ports.get(states.port_idx) {
+                // Check that the proxy is still enabled/running.
+                if !input_port.is_proxy_enabled() {
+                    let _perf_report = report
+                        .req_fail(retry_count, REQUEST_FAILED_CONFIG_DISABLED)
+                        .await;
+                    return Err(anyhow!(format!(
+                        "{} proxy disabled with suibase.yaml (check proxy_enabled settings)",
+                        input_port.workdir_name()
+                    ))
+                    .into());
+                }
+                if !input_port.is_user_request_start() {
+                    let _perf_report = report
+                        .req_fail(retry_count, REQUEST_FAILED_NOT_STARTED)
+                        .await;
+                    return Err(anyhow!(format!(
+                        "{0} not started (did you forget to do '{0} start'?)",
+                        input_port.workdir_name()
+                    ))
+                    .into());
+                }
+
                 if let Some(target_server_idx) = do_force_target_server_idx {
                     if let Some(target_server) = input_port.target_servers.get(target_server_idx) {
                         targets.push((target_server_idx, target_server.uri()));
@@ -164,8 +190,6 @@ impl ProxyServer {
             }
         }
         let targets = &targets; // Make immutable.
-
-        let mut retry_count = 0;
 
         if targets.is_empty() {
             let _perf_report = report

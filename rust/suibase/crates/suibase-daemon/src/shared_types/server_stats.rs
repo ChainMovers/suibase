@@ -21,9 +21,11 @@ pub const REQUEST_FAILED_RESP_BUILDER: u8 = 4;
 pub const REQUEST_FAILED_NETWORK_DOWN: u8 = 5; // Not implemented yet.
 pub const REQUEST_FAILED_BAD_REQUEST_HTTP: u8 = 6; // Got HTTP Bad Request (400), Bad Method (405), etc.
 pub const REQUEST_FAILED_BAD_REQUEST_JSON: u8 = 7; // Got a valid JSON-RPC response indicating an error.
+pub const REQUEST_FAILED_CONFIG_DISABLED: u8 = 8;
+pub const REQUEST_FAILED_NOT_STARTED: u8 = 9;
 
 // !!! Update the following whenever you append a new reason above.
-pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_BAD_REQUEST_JSON;
+pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_NOT_STARTED;
 
 // Do not touch this.
 pub const REQUEST_FAILED_VEC_SIZE: usize = REQUEST_FAILED_LAST_REASON as usize + 1;
@@ -188,16 +190,13 @@ impl ServerStats {
     }
 
     pub fn latency_report_most_recent(&self) -> Option<EpochTimestamp> {
-        return self.latency_report_most_recent;
+        self.latency_report_most_recent
     }
 
     fn is_client_fault(reason: RequestFailedReason) -> bool {
         // Identify reason for which the failure can be
         // attributed to the client doing a bad request.
-        match reason {
-            REQUEST_FAILED_BAD_REQUEST_HTTP => true,
-            _ => false,
-        }
+        matches!(reason, REQUEST_FAILED_BAD_REQUEST_HTTP)
     }
 
     pub fn handle_resp_ok(
@@ -285,8 +284,7 @@ impl ServerStats {
                     match status_code {
                         Ok(status_code) => {
                             if let Some(reason) = status_code.canonical_reason() {
-                                self.error_info =
-                                    Some(format!("({}){}", status, reason.to_string()));
+                                self.error_info = Some(format!("({}){}", status, reason));
                             } else {
                                 self.error_info = Some(format!("{}-HTTP-StatusCode", status));
                             }

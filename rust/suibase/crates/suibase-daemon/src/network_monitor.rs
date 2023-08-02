@@ -406,7 +406,7 @@ impl NetworkMonitor {
                                     if let Some(server_idx) = target_server.idx() {
                                         Self::process_latency_report_attempt_request(
                                             &mut self.mon_map,
-                                            &request_worker_tx,
+                                            request_worker_tx,
                                             port_idx,
                                             server_idx,
                                             input_port.port_number(),
@@ -486,7 +486,7 @@ impl NetworkMonitor {
         None
     }
 
-    fn update_selection_vectors<'a>(input_ports: &'a mut ManagedVec<InputPort>, msg: &NetmonMsg) {
+    fn update_selection_vectors(input_ports: &mut ManagedVec<InputPort>, msg: &NetmonMsg) {
         if let Some(input_port) = input_ports.get_mut(msg.port_idx) {
             let target_servers = &mut input_port.target_servers;
 
@@ -809,7 +809,7 @@ impl NetworkMonitor {
                         // Forward to request worker.
                         Self::process_latency_report_attempt_request(
                             &mut self.mon_map,
-                            &request_worker_tx,
+                            request_worker_tx,
                             cur_msg.port_idx,
                             cur_msg.server_idx,
                             cur_msg.para16[0],

@@ -58,7 +58,7 @@ use crate::shared_types::{Globals, SafeGlobals, SafeWorkdirs, Workdirs};
 #[derive(Parser)]
 #[clap(
     name = "suibase-daemon",
-    about = "RPC and websockets proxy for more reliable access to Sui networks and other local services",
+    about = "RPC proxy for more reliable access to Sui networks and other local services",
     rename_all = "kebab-case",
     author,
     version
@@ -126,7 +126,7 @@ async fn main() {
     colored::control::set_virtual_terminal(true).unwrap();
 
     //pretty_env_logger::init();
-    Builder::from_env(Env::default().default_filter_or("debug")).init();
+    Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let cmd: Command = Command::parse();
 
