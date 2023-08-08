@@ -20,6 +20,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Scripts: (#71) Sui v1.7.0 keytool changes.
 - Scripts: (#60) "localnet start" now works even when suibase.yaml is deleted.
 - Scripts: (#43) Ignore http_proxy envs when trying to use the sui-faucet.
 - Typos in Keypair cookbook code-snippets

@@ -1466,25 +1466,14 @@ export -f add_test_addresses
 check_is_valid_base64_keypair() {
   # Return true if the parameter is a valid base64 keypair format
   # (as stored in a sui.keystore).
-  #
-  # Disable logs for additional "security" on all key related operations.
   local _KEYPAIR="$1"
 
-  # Use the Mysten Lab keytool to convert from Base64 to bytes.
-  #
-  # Check if the output resolves to 33 bytes. If yes, then assume this is a key pair
-  # in valid "sui.keystore" format, otherwise, move on to try something else.
-  _bytes=$($NOLOG_KEYTOOL_BIN base64-to-bytes "$_keyvalue")
+  # Convert from Base64 to hexadecimal string.
+  _bytes=$(echo -n "$_KEYPAIR" | base64 -d | xxd -p -c33 | tr -d '[:space:]')
   # Check that the string does not have the word "Invalid" or "Error" in it...
   if [[ "${_bytes}" != *"nvalid"* && "${_bytes}" != *"rror"* ]]; then
-    # Keep in the string only the values between the [] brackets.
-    _bytes=${_bytes##*[}
-    _bytes=${_bytes%%]*}
-    # Further confirm that bytes is a string that contains 33 bytes (that's 32 comma).
-    # TODO Is such check really needed after a successful base64-to-bytes conversion?
-    _comma_count=$(echo "$_bytes" | grep -o "," | wc -l)
-    if [ "$_comma_count" -eq 32 ]; then
-      # This is in a valid keypair sui.keystore format.
+    # Check that the string is exactly 33 bytes (66 characters)
+    if [ ${#_bytes} -eq 66 ]; then
       true
       return
     fi
@@ -1647,14 +1636,12 @@ copy_private_keys_yaml_to_keystore() {
     return
   fi
 
-  # TODO Protect the user. Enforce log disabling when using keytool.
-
   # Do a fast load (assume the content is valid).
   load_ACTIVE_KEYSTORE "$_DST" false
 
   # Example of suibase.yaml:
   #
-  # add-private-keys:
+  # add_private_keys:
   #  - 0x937273cdae34592736ab25dcad423a4adfae3a4d
   #  - AIFdx03sdsjEDFSSMakjdhyRuejiS
 
