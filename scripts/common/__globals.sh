@@ -1463,13 +1463,46 @@ add_test_addresses() {
 }
 export -f add_test_addresses
 
+is_base16() {
+  local _INPUT="$1"
+  # Return true if is a valid hexadecimal string.
+  # Ignore leading "0x" if any
+  _INPUT="${_INPUT#0x}"
+  if [[ "$_INPUT" =~ ^[0-9a-fA-F]+$ ]]; then
+    true
+    return
+  fi
+  false
+}
+export -f is_base16
+
 check_is_valid_base64_keypair() {
   # Return true if the parameter is a valid base64 keypair format
   # (as stored in a sui.keystore).
   local _KEYPAIR="$1"
 
   # Convert from Base64 to hexadecimal string.
-  _bytes=$(echo -n "$_KEYPAIR" | base64 -d | xxd -p -c33 | tr -d '[:space:]')
+  _bytes=$(echo -n "$_KEYPAIR" | base64 -d 2>&1 | xxd -p -c33 | tr -d '[:space:]')
+  # Check that the string does not have the word "Invalid" or "Error" in it...
+  if [[ "${_bytes}" != *"nvalid"* && "${_bytes}" != *"rror"* ]]; then
+    # Check that the string is exactly 33 bytes (66 characters)
+    if [ ${#_bytes} -eq 66 ]; then
+      true
+      return
+    fi
+  fi
+  false
+  return
+}
+export -f check_is_valid_base64_keypair
+
+check_is_valid_base16_keypair() {
+  # Return true if the parameter is a valid base64 keypair format
+  # (as stored in a sui.keystore).
+  local _KEYPAIR="$1"
+
+  # Convert from Base64 to hexadecimal string.
+  _bytes=$(echo -n "$_KEYPAIR" | xxd -p -c33 | tr -d '[:space:]')
   # Check that the string does not have the word "Invalid" or "Error" in it...
   if [[ "${_bytes}" != *"nvalid"* && "${_bytes}" != *"rror"* ]]; then
     # Check that the string is exactly 33 bytes (66 characters)
@@ -1679,9 +1712,38 @@ copy_private_keys_yaml_to_keystore() {
 
       # If start with 0x, then try first with converting directly with keytool.
       if [[ "${_keyvalue}" == "0x"* ]]; then
-        # Keep only the last line which should be the key pair translated to Base64.
-        # Send to /dev/null the *successful* messages on stderr!
-        _keyvalue=$($NOLOG_KEYTOOL_BIN convert "$_keyvalue" 2>/dev/null | tail -n 1)
+        _cnvt_attempt=$($NOLOG_KEYTOOL_BIN --json convert "$_keyvalue" 2>&1)
+        # Check if --json supported, if not, try with older version of keytool.
+        if [[ $_cnvt_attempt == *"json"* && $_cnvt_attempt == *"rror"* ]]; then
+          # Keep only the last line which should be the key pair translated to Base64.
+          # Send to /dev/null the *successful* messages on stderr!
+          _keyvalue=$($NOLOG_KEYTOOL_BIN convert "$_keyvalue" 2>/dev/null | tail -n 1)
+        else
+          # Extract key from JSON
+          _keyvalue=$_cnvt_attempt
+          update_JSON_VALUE "base64" "$_keyvalue"
+          if [ -z "$_keyvalue" ]; then
+            update_JSON_VALUE "base16" "$_keyvalue"
+            if [ -z "$_keyvalue" ]; then
+              error_exit "could not extract key from json [$_cnvt_attempt]"
+            fi
+          fi
+          _keyvalue=$JSON_VALUE
+        fi
+
+        # Some version of the Sui client returns in hex with missing leading
+        # zeroes... (but the client help shows base64!). Just compensate for
+        # the inconsistency here and fix things up with a few assumptions.
+        if is_base16 "$_keyvalue"; then
+          # Remove leading 0x if somehow any.
+          _keyvalue=${_keyvalue#0x}
+          # Add missing leading zeroes if less than 66 characters.
+          while [ ${#_keyvalue} -lt 66 ]; do
+            _keyvalue="0${_keyvalue}"
+          done
+          # Convert _keyvalue to base64.
+          _keyvalue=$(echo "$_keyvalue" | xxd -r -p | base64)
+        fi
       fi
 
       # If the $_keyvalue is already in the sui.keystore, assume it is
