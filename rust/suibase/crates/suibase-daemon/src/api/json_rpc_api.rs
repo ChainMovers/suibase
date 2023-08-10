@@ -75,9 +75,9 @@ impl LinksSummary {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LinksResponse {
-    //#[schemars(with = "u32")]
-    //#[serde_as(as = "u32")]
-    pub status: String, // This is the combined "Multi-Link status". One of "OK", "DOWN", "DISABLED", "DEGRADED"
+    pub status: String, // This is a single word combined "Multi-Link status". Either "OK" or "DOWN".
+
+    pub info: String, // More details about the status (e.g. '50% degraded', 'all servers down', etc...)
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<LinksSummary>,
@@ -101,6 +101,7 @@ impl LinksResponse {
     pub fn new() -> Self {
         Self {
             status: "DISABLED".to_string(),
+            info: "INITIALIZING".to_string(),
             summary: None,
             links: None,
             display: None,

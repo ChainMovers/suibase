@@ -127,12 +127,15 @@ impl WorkdirProxyConfig {
 
         // TODO: Lots of robustness could be added here...
 
+        // proxy_enabled can be "true", "false" or "dev" for testing.
+        //
+        // "dev" is similar to "true" but allows for foreground execution
+        // of the suibase-daemon... only the bash scripts care for this.
+        if let Some(proxy_enabled) = yaml["proxy_enabled"].as_bool() {
+            self.proxy_enabled = proxy_enabled != false;
+        }
         if let Some(proxy_enabled) = yaml["proxy_enabled"].as_str() {
-            // proxy_enabled can be "true", "false" or "dev" for testing.
-            //
-            // "dev" is similar to "true" but allows for foreground execution
-            // of the suibase-daemon... only the bash scripts care for this.
-            self.proxy_enabled = proxy_enabled != "false"
+            self.proxy_enabled = proxy_enabled != "false";
         }
 
         if let Some(links_overrides) = yaml["links_overrides"].as_bool() {

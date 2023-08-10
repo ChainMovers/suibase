@@ -345,8 +345,22 @@ start_suibase_daemon_as_needed() {
 }
 export -f start_suibase_daemon_as_needed
 
+# The response is written in global JSON_RESP
+get_suibase_daemon_status() {
+  local _DISP=$1 # one of "data", "debug" or "display"
+
+  local _HEADERS="Content-Type: application/json"
+
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR\",\"$_DISP\":true}}"
+
+  JSON_RESP=$(curl -x "" -s --location -X POST "http://0.0.0.0:${CFG_daemon_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+}
+export -f get_suibase_daemon_status
+
 show_suibase_daemon_get_links() {
   local _DEBUG_OPTION=$1
+  local _JSON_PARAM=$2
+
   local _USER_REQUEST
   _USER_REQUEST=$(get_key_value "user_request")
 
@@ -358,19 +372,20 @@ show_suibase_daemon_get_links() {
     error_exit "proxy server is not running. Do '$WORKDIR start'."
   fi
 
-  local _HEADERS="Content-Type: application/json"
-
   local _DISP
   if [ "$_DEBUG_OPTION" = "true" ]; then
     _DISP="debug"
   else
-    _DISP="display"
+    if [ "$_JSON_PARAM" = "true" ]; then
+      _DISP="data"
+    else
+      _DISP="display"
+    fi
   fi
 
-  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR\",\"$_DISP\":true}}"
-
-  JSON_RESP=$(curl -x "" -s --location -X POST "http://0.0.0.0:${CFG_daemon_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
-
+  # Output, if any, will be in JSON_RESP
+  unset JSON_RESP
+  get_suibase_daemon_status "$_DISP"
   if [ -z "$JSON_RESP" ]; then
     error_exit "proxy server not responding. Is it running? do '$WORKDIR status' to check."
   fi
@@ -392,8 +407,12 @@ show_suibase_daemon_get_links() {
   # display for when the client has weak JSON and string formating
   # capability... like bash.
 
-  update_JSON_VALUE "display" "$JSON_RESP"
-  echo -e "$JSON_VALUE"
+  if [ "$_DISP" == "data" ]; then
+    echo "$JSON_RESP"
+  else
+    update_JSON_VALUE "display" "$JSON_RESP"
+    echo -e "$JSON_VALUE"
+  fi
 
   if [ "$_DEBUG_OPTION" = true ]; then
     update_JSON_VALUE "debug" "$JSON_RESP"

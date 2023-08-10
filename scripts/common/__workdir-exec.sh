@@ -187,6 +187,7 @@ workdir_exec() {
   # Optional params (the "debug" and "nobinary" are purposely not documented).
   DEBUG_RUN=false
   NOBINARY=false
+  JSON_PARAM=false
 
   # Parsing the command line shifting "rule":
   #   -t|--target) target="$2"; shift ;; That's an example with a parameter
@@ -255,6 +256,19 @@ workdir_exec() {
       shift
     done
     ;; # End parsing build
+  links)
+    while [[ "$#" -gt 0 ]]; do
+      case $1 in
+      --debug) DEBUG_RUN=true ;;
+      --json) JSON_PARAM=true ;;
+      *)
+        echo "Unknown parameter passed: $1"
+        exit 1
+        ;;
+      esac
+      shift
+    done
+    ;; # End parsing links
   *)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
@@ -346,6 +360,37 @@ workdir_exec() {
 
     update_SUI_VERSION_var
 
+    # Verify from suibase.yaml if proxy services are expected.
+    # If yes, then populate STATUS/INFO.
+    local _SUPPORT_PROXY
+    local _MLINK_STATUS
+    local _MLINK_INFO
+    if [ "${CFG_proxy_enabled:?}" == "false" ]; then
+      _SUPPORT_PROXY=false
+    else
+      _SUPPORT_PROXY=true
+      unset JSON_RESP
+      get_suibase_daemon_status "data"
+      update_JSON_VALUE "code" "$JSON_RESP"
+      if [ -n "$JSON_VALUE" ]; then
+        update_JSON_VALUE "message" "$JSON_RESP"
+        if [ -n "$JSON_VALUE" ]; then
+          _MLINK_STATUS="DOWN"
+          _MLINK_INFO="$JSON_RESP"
+        fi
+      fi
+      if [ -z "$_MLINK_STATUS" ]; then
+        update_JSON_VALUE "status" "$JSON_RESP"
+        if [ -n "$JSON_VALUE" ]; then
+          _MLINK_STATUS="$JSON_VALUE"
+        fi
+        update_JSON_VALUE "info" "$JSON_RESP"
+        if [ -n "$JSON_VALUE" ]; then
+          _MLINK_INFO="$JSON_VALUE"
+        fi
+      fi
+    fi
+
     if $is_local; then
       update_SUI_FAUCET_VERSION_var
 
@@ -355,14 +400,6 @@ workdir_exec() {
         _SUPPORT_FAUCET=false
       else
         _SUPPORT_FAUCET=true
-      fi
-
-      # Verify from suibase.yaml if proxy services are expected.
-      local _SUPPORT_PROXY
-      if [ "${CFG_proxy_enabled:?}" == "false" ]; then
-        _SUPPORT_PROXY=false
-      else
-        _SUPPORT_PROXY=true
       fi
 
       # Overall status: STOPPED or OK/DEGRADED/DOWN
@@ -404,57 +441,49 @@ workdir_exec() {
         fi
       else
         echo "---"
-        echo -n "localnet process : "
-        if [ -z "$SUI_PROCESS_PID" ]; then
-          echo_red "NOT RUNNING"
-          echo
-        else
-          echo_blue "OK"
-          echo -n " ( pid "
-          echo_blue "$SUI_PROCESS_PID"
-          echo " )"
-        fi
+        echo_process "localnet process" true "$SUI_PROCESS_PID"
+        echo_process "faucet process" "$_SUPPORT_FAUCET" "$SUI_FAUCET_PROCESS_PID"
+      fi
+    fi
 
-        echo -n "faucet process   : "
-        if ! $_SUPPORT_FAUCET; then
-          echo_blue "DISABLED"
-          echo
-        else
-          if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-            echo_red "NOT RUNNING"
-            echo
-          else
-            echo_blue "OK"
-            echo -n " ( pid "
-            echo_blue "$SUI_FAUCET_PROCESS_PID"
-            echo " )"
-          fi
-        fi
-
-        echo -n "proxy server     : "
-        if ! $_SUPPORT_PROXY; then
-          echo_blue "DISABLED"
-          echo
-        else
-          if [ -z "$SUIBASE_DAEMON_PID" ]; then
-            echo_red "NOT RUNNING "
-            echo
-          else
-            echo_blue "OK"
-            echo -n " ( pid "
-            echo_blue "$SUIBASE_DAEMON_PID"
-            echo -n " ) http://"
-            echo_blue "0.0.0.0"
-            echo -n ":"
-            echo_blue "${CFG_proxy_port_number:?}"
-            echo
-          fi
-        fi
-
+    if ! $is_local; then
+      # Overall status: STOPPED or OK/DEGRADED/DOWN
+      echo -n "$WORKDIR "
+      if [ "$_USER_REQUEST" = "stop" ]; then
+        echo -n "services "
+        echo_red "STOPPED"
+        echo
+      else
+        echo_green "OK"
+        echo
         echo "---"
       fi
     fi
 
+    # Append the information common to all.
+    if [ ! "$_USER_REQUEST" = "stop" ]; then
+      _INFO=$(
+        echo -n "http://"
+        echo_blue "0.0.0.0"
+        echo -n ":"
+        echo_blue "${CFG_proxy_port_number:?}"
+      )
+      echo_process "proxy server" "$_SUPPORT_PROXY" "$SUIBASE_DAEMON_PID" "$_INFO"
+    fi
+
+    if [ "$_SUPPORT_PROXY" = true ]; then
+      echo -n "multi-link RPC   : "
+      case $_MLINK_STATUS in
+      "OK")
+        echo_blue "OK"
+        ;;
+      "DOWN")
+        echo_red "DOWN"
+        ;;
+      esac
+      echo " ( $_MLINK_INFO )"
+    fi
+    echo "---"
     echo -n "client version: "
     echo_blue "$SUI_VERSION"
     echo
@@ -521,7 +550,7 @@ workdir_exec() {
     fi
 
     # Display the stats from the proxy server.
-    show_suibase_daemon_get_links "$DEBUG_RUN"
+    show_suibase_daemon_get_links "$DEBUG_RUN" "$JSON_PARAM"
 
     exit
   fi
@@ -542,8 +571,22 @@ workdir_exec() {
       start_all_services
       _RES=$?
       if [ "$_RES" -eq 1 ]; then
-        echo "$WORKDIR already running"
+        if [ "$is_local" == "true" ]; then
+          echo "$WORKDIR already running"
+        else
+          echo "$WORKDIR services already running"
+        fi
+
         echo "$SUI_VERSION"
+      fi
+
+      if [ "$_RES" -eq 0 ]; then
+        if [ "$is_local" == "false" ]; then
+          # Remote networks do not have any local process to start (the
+          # effect is only within the suibase-daemon), so put a little
+          # feedback to acknowledge the user action.
+          echo "$WORKDIR services started"
+        fi
       fi
 
       exit
@@ -552,15 +595,22 @@ workdir_exec() {
   fi
 
   if [ "$CMD_STOP_REQ" = true ]; then
-    if ! $is_local; then
-      echo "This will eventually stop the network monitoring for $WORKDIR (feature is work in progress)"
-      exit
-    fi
-
     stop_all_services
     _RES=$?
     if [ "$_RES" -eq 1 ]; then
-      echo "$WORKDIR already stopped"
+      if [ "$is_local" == "true" ]; then
+        echo "$WORKDIR already stopped"
+      else
+        echo "$WORKDIR services already stopped"
+      fi
+    fi
+    if [ "$_RES" -eq 0 ]; then
+      if [ "$is_local" == "false" ]; then
+        # Remote networks do not have any local process to stop (the
+        # effect is only within the suibase-daemon), so put a little
+        # feedback to acknowledge the user action.
+        echo "$WORKDIR services stopped"
+      fi
     fi
 
     exit
@@ -1013,3 +1063,29 @@ is_at_least_one_service_running() {
   return
 }
 export -f is_at_least_one_service_running
+
+echo_process() {
+  local _LABEL=$1
+  local _IS_SUPPORTED=$2
+  local _PID=$3
+  local _INFO=$4
+
+  # Put the label in a 17 character field left aligned and padded with spaces.
+  printf "%-17s: " "$_LABEL"
+
+  if ! $_IS_SUPPORTED; then
+    echo_blue "DISABLED"
+    echo
+  else
+    if [ -z "$_PID" ]; then
+      echo_red "NOT RUNNING"
+    else
+      echo_blue "OK"
+      echo -n " ( pid "
+      echo_blue "$_PID"
+      echo -n " ) $_INFO"
+    fi
+    echo
+  fi
+}
+export -f echo_process

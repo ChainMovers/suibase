@@ -212,6 +212,8 @@ impl ProxyApiServer for ProxyApiImpl {
         let mut all_servers_stats: Option<ServerStats> = None;
         let mut selection_vectors: Option<Vec<Vec<u8>>> = None;
         let mut input_port_found = false;
+        let mut proxy_enabled = false;
+        let mut user_request_start = false;
         {
             // Get read lock access to the globals and just quickly copy what is needed.
             // Most parsing and processing is done outside the lock.
@@ -220,6 +222,9 @@ impl ProxyApiServer for ProxyApiImpl {
 
             if let Some(input_port) = globals.find_input_port_by_name(&workdir) {
                 input_port_found = true;
+                proxy_enabled = input_port.is_proxy_enabled();
+                user_request_start = input_port.is_user_request_start();
+
                 all_servers_stats = Some(input_port.all_servers_stats.clone());
 
                 let target_servers = &input_port.target_servers;
@@ -241,7 +246,8 @@ impl ProxyApiServer for ProxyApiImpl {
         } // Release the read lock.
 
         // Map the target_servers_stats into the API LinkStats.
-        let mut healthy_server_count = 0;
+        let mut healthy_server_count: usize = 0;
+        let mut neutral_health_count: usize = 0;
         let mut link_stats: Vec<LinkStats> = Vec::new();
         let mut load_distribution_depth = 0;
         if let Some(target_servers_stats) = target_servers_stats {
@@ -317,6 +323,7 @@ impl ProxyApiServer for ProxyApiImpl {
 
                 link_stat.status = if health_score == 0.0 {
                     // The server has not yet "determine" its initial health state.
+                    neutral_health_count += 1;
                     String::new()
                 } else if server_stats.is_healthy() {
                     "OK".to_string()
@@ -356,23 +363,31 @@ impl ProxyApiServer for ProxyApiImpl {
             return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into());
         }
 
-        // Identify the status with the following rule:
-        //   DISABLED: Disabled by user (either disabled in config or not started)
-        //   NO CONFIG: No servers specified in the config.
-        //   OK: More than 50% of the servers are healthy.
-        //   DEGRADED: Less than 50% of the servers are healthy.
-        //   DOWN: Not a single healthy server found.
-        let server_count = link_stats.len();
-        resp.status = if !input_port_found {
-            "DISABLED".to_string()
-        } else if server_count == 0 {
-            "NO CONFIG".to_string()
-        } else if healthy_server_count == 0 {
-            "DOWN".to_string()
-        } else if (healthy_server_count * 100 / server_count) > 50 {
-            "OK".to_string()
+        // Identify the multi-link RPC status.
+        let load_balance_str = if load_distribution_depth > 1 {
+            ", load-balanced".to_string()
         } else {
-            "DEGRADED".to_string()
+            String::new()
+        };
+
+        let server_count = link_stats.len();
+        (resp.status, resp.info) = if !proxy_enabled {
+            ("DOWN".to_string(), "proxy not enabled".to_string())
+        } else if !user_request_start {
+            ("DOWN".to_string(), format!("{} not started", workdir))
+        } else if server_count == 0 {
+            ("DOWN".to_string(), "no links in suibase.yaml".to_string())
+        } else if neutral_health_count == link_stats.len() {
+            ("DOWN".to_string(), "initializing".to_string())
+        } else if healthy_server_count == 0 {
+            ("DOWN".to_string(), "no servers available".to_string())
+        } else if healthy_server_count * 100 / server_count > 50 {
+            ("OK".to_string(), format!("protected{}", load_balance_str))
+        } else {
+            (
+                "OK".to_string(),
+                format!(">50% degraded{}", load_balance_str),
+            )
         };
 
         let mut display_out = String::new();
@@ -381,7 +396,7 @@ impl ProxyApiServer for ProxyApiImpl {
             // User requested human-friendly display.
             if summary {
                 display_out.push_str(&format!(
-                    "Multi-Link RPC status: {}\n\n\
+                    "multi-link RPC: {} ( {} )\n\n\
                     Cummulative Request Stats\n\
   -------------------------\n\
   Success first attempt {:>9}\n\
@@ -389,6 +404,7 @@ impl ProxyApiServer for ProxyApiImpl {
   Failure bad request   {:>9}\n\
   Failure others        {:>9}\n\n",
                     resp.status,
+                    resp.info,
                     summary_stats.success_on_first_attempt,
                     summary_stats.success_on_retry,
                     summary_stats.fail_bad_request,
