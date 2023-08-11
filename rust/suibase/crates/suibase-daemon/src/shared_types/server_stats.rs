@@ -131,6 +131,10 @@ impl ServerStats {
         }
     }
 
+    pub fn clear(&mut self) {
+        *self = Self::new(self.alias.clone());
+    }
+
     pub fn alias(&self) -> String {
         self.alias.clone()
     }

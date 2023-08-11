@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::vec;
 
 use crate::basic_types::*;
 
@@ -130,6 +131,56 @@ impl AdminController {
             .unwrap();
     }
 
+    fn apply_workdir_config(input_port: &mut InputPort, workdir_config: &WorkdirProxyConfig) {
+        let mut at_least_one_change = false;
+        if input_port.is_proxy_enabled() != workdir_config.is_proxy_enabled() {
+            input_port.set_proxy_enabled(workdir_config.is_proxy_enabled());
+            at_least_one_change = true;
+        }
+        if input_port.is_user_request_start() != workdir_config.is_user_request_start() {
+            input_port.set_user_request_start(workdir_config.is_user_request_start());
+            at_least_one_change = true;
+        }
+        if input_port.target_servers.is_empty() {
+            // Do a fast push of all. No need to check for TargetServer differences.
+            for (_, config) in workdir_config.links().iter() {
+                if config.rpc.is_some() {
+                    input_port.add_target_server(config);
+                }
+            }
+            if !input_port.target_servers.is_empty() {
+                at_least_one_change = true;
+            }
+        } else {
+            // Some TargetServer exists, so do a slower upsert.
+            for (_, config) in workdir_config.links().iter() {
+                if config.rpc.is_some() && input_port.upsert_target_server(config) {
+                    at_least_one_change = true;
+                }
+            }
+            // Handle excess TargetServers to remove.
+            if input_port.target_servers.len() as usize > workdir_config.links().len() {
+                // Iterate target_servers and take out the ones not in config.
+                let mut to_remove: Vec<ManagedVecUSize> = Vec::new();
+                for (idx, target_server) in input_port.target_servers.iter_mut() {
+                    let alias = target_server.alias();
+                    if !workdir_config.links().contains_key(&alias) {
+                        log::info!("Removing server {}", alias);
+                        to_remove.push(idx);
+                        at_least_one_change = true;
+                    }
+                }
+                for idx in to_remove {
+                    input_port.target_servers.remove(idx);
+                }
+            }
+        }
+
+        if at_least_one_change {
+            input_port.update_selection_vectors();
+        }
+    }
+
     async fn process_config_msg(&mut self, msg: AdminControllerMsg, subsys: &SubsystemHandle) {
         // This process always process only one Workdir at a time.
 
@@ -223,24 +274,21 @@ impl AdminController {
             let ports = &mut globals.input_ports;
 
             // Find the InputPort with a matching workdir_idx.
+
             let input_port_search = ports.iter_mut().find(|p| p.1.workdir_idx() == workdir_idx);
+
+            // Create the InputPort if does not exists.
             if let Some((port_idx, input_port)) = input_port_search {
-                if input_port.is_proxy_enabled() != workdir_config.is_proxy_enabled() {
-                    input_port.set_proxy_enabled(workdir_config.is_proxy_enabled());
-                }
-                if input_port.is_user_request_start() != workdir_config.is_user_request_start() {
-                    input_port.set_user_request_start(workdir_config.is_user_request_start());
-                }
+                // Modifying an existing InputPort.
+                Self::apply_workdir_config(input_port, &workdir_config);
                 Some((port_idx, input_port.port_number()))
             } else {
                 // TODO Verify there is no conflicting port assigment.
+
+                // No InputPort yet for that workdir... so create it.
                 let mut input_port =
                     InputPort::new(workdir_idx, workdir_name.clone(), &workdir_config);
-                for (key, value) in workdir_config.links().iter() {
-                    if let Some(rpc) = &value.rpc {
-                        input_port.add_target_server(rpc.clone(), key.clone());
-                    }
-                }
+                Self::apply_workdir_config(&mut input_port, &workdir_config);
                 let port_number = input_port.port_number();
                 ports
                     .push(input_port)

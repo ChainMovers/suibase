@@ -18,15 +18,30 @@ use anyhow::Result;
 // List of workdir planned to be always supported.
 pub const WORKDIRS_KEYS: [&str; 4] = ["mainnet", "testnet", "devnet", "localnet"];
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Link {
     // A link in a suibase.yaml file.
     pub alias: String,
-    pub enabled: bool,
+    pub selectable: bool,
+    pub monitored: bool,
     pub rpc: Option<String>,
     pub metrics: Option<String>,
     pub ws: Option<String>,
     pub priority: u8,
+}
+
+impl Link {
+    pub fn new(alias: String, rpc: String) -> Self {
+        Self {
+            alias,
+            selectable: true,
+            monitored: true,
+            rpc: Some(rpc),
+            metrics: None,
+            ws: None,
+            priority: u8::MAX,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -132,7 +147,7 @@ impl WorkdirProxyConfig {
         // "dev" is similar to "true" but allows for foreground execution
         // of the suibase-daemon... only the bash scripts care for this.
         if let Some(proxy_enabled) = yaml["proxy_enabled"].as_bool() {
-            self.proxy_enabled = proxy_enabled != false;
+            self.proxy_enabled = proxy_enabled;
         }
         if let Some(proxy_enabled) = yaml["proxy_enabled"].as_str() {
             self.proxy_enabled = proxy_enabled != "false";
@@ -159,16 +174,21 @@ impl WorkdirProxyConfig {
                 if let Some(alias) = link["alias"].as_str() {
                     // TODO: Consider implementing link level member merging.
 
-                    // Purpose of "enabled" is actually to disable a link... so if not
-                    // present, default to enabled.
+                    // Default of "enabled" is true. Allow the user to disable a single link.
+                    //
+                    // May allow later user finer control with "selectable" and "monitored".
                     let enabled = link["enabled"].as_bool().unwrap_or(true);
+                    let selectable = enabled;
+                    let monitored = enabled;
+
                     let rpc = link["rpc"].as_str().map(|s| s.to_string()); // Optional
                     let metrics = link["metrics"].as_str().map(|s| s.to_string()); // Optional
                     let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
                     let priority = link["priority"].as_u64().unwrap_or(u64::MAX) as u8;
                     let link = Link {
                         alias: alias.to_string(),
-                        enabled,
+                        selectable,
+                        monitored,
                         rpc,
                         metrics,
                         ws,

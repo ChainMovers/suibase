@@ -29,8 +29,8 @@ impl ClockTrigger {
                 return;
             }
 
-            if (tick % 10) == 0 {
-                // Every 10 seconds
+            if (tick % 10) == 4 {
+                // Every 10 seconds, with first one ~4 seconds after start.
                 let result = NetworkMonitor::send_event_globals_audit(&self.netmon_tx).await;
                 if let Err(e) = result {
                     log::error!("send_event_globals_audit {}", e);

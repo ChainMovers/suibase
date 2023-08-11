@@ -21,7 +21,7 @@ default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "main"
 
 proxy_port_number: 44343
-proxy_enabled: false
+proxy_enabled: true
 daemon_api_port_number: 44399
 
 links:
@@ -29,15 +29,22 @@ links:
     rpc: "https://fullnode.mainnet.sui.io:443"
     ws: "wss://fullnode.mainnet.sui.io:443"
     priority: 10
+  - alias: "allnodes.com"
+    rpc: "https://sui-rpc.publicnode.com:443"
+    priority: 20
+  - alias: "allthatnode.com"
+    rpc: "https://sui-mainnet-rpc.allthatnode.com:443"
+    priority: 20
+  - alias: "blastapi.io"
+    rpc: "https://sui-mainnet.public.blastapi.io:443"
+    ws: "wss://sui-mainnet.public.blastapi.io:443"
+    priority: 20
   - alias: "suiscan.xyz"
     rpc: "https://rpc-mainnet.suiscan.xyz:443"
     metrics: "https://rpc-mainnet.suiscan.xyz/metrics"
     ws: "wss://rpc-mainnet.suiscan.xyz/websocket"
     priority: 20
-  - alias: "allthatnode.com"
-    rpc: "https://sui-mainnet-rpc.allthatnode.com:443"
-    priority: 20
-  - alias: "vincagame.com"
-    rpc: "https://fullnode.mainnet.vincagame.com:443"
-    ws: "wss://fullnode.mainnet.vincagame.com:443"
-    priority: 20
+# - alias: "vincagame.com"
+#   rpc: "https://fullnode.mainnet.vincagame.com:443"
+#   ws: "wss://fullnode.mainnet.vincagame.com:443"
+#   priority: 30

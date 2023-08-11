@@ -48,6 +48,7 @@ impl<T: ManagedElement> ManagedVec<T> {
     }
 
     // That is the only time the index is set and returned.
+    // TODO Verify handling of out of range index.
     pub fn push(&mut self, mut value: T) -> Option<ManagedVecUSize> {
         self.some_len += 1;
         // Iterate to find a free cell before creating a new one.
@@ -67,11 +68,13 @@ impl<T: ManagedElement> ManagedVec<T> {
         Some(managed_idx)
     }
 
+    // TODO Verify getting OOB have no effect.
     pub fn get(&self, index: ManagedVecUSize) -> Option<&T> {
         let usize_index = usize::from(index);
         self.data.get(usize_index).and_then(|v| v.as_ref())
     }
 
+    // TODO Verify getting OOB have no effect.
     pub fn get_mut(&mut self, index: ManagedVecUSize) -> Option<&mut T> {
         self.data
             .get_mut(usize::from(index))
@@ -80,6 +83,8 @@ impl<T: ManagedElement> ManagedVec<T> {
 
     // This free the cells for re-use. If a push is done, it
     // might re-use that cell (the same index).
+    //
+    // TODO Verify remove OOB have no effect.
     pub fn remove(&mut self, index: ManagedVecUSize) -> Option<T> {
         let usize_index = usize::from(index);
         self.data.get(usize_index)?;
@@ -97,6 +102,10 @@ impl<T: ManagedElement> ManagedVec<T> {
 
     pub fn len(&self) -> ManagedVecUSize {
         self.some_len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.some_len == 0
     }
 
     // Implement Iter and IterMut to iterate over the used cells.

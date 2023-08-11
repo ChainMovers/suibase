@@ -21,10 +21,14 @@ default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
 
 proxy_port_number: 44341
-proxy_enabled: false
+proxy_enabled: true
 daemon_api_port_number: 44399
 
 links:
+  - alias: "blastapi.io"
+    rpc: "https://sui-devnet.public.blastapi.io:443"
+    ws: "wss://sui-devnet.public.blastapi.io:443"
+    priority: 20
   - alias: "sui.io"
     rpc: "https://fullnode.devnet.sui.io:443"
     ws: "wss://fullnode.devnet.sui.io:443"
@@ -34,7 +38,7 @@ links:
     metrics: "https://rpc-ws-devnet.suiscan.xyz/metrics"
     ws: "wss://rpc-ws-devnet.suiscan.xyz/websocket"
     priority: 20
-  - alias: "vincagame.com"
-    rpc: "https://fullnode.devnet.vincagame.com:443"
-    ws: "wss://fullnode.devnet.vincagame.com:443"
-    priority: 30
+# - alias: "vincagame.com"
+#   rpc: "https://fullnode.devnet.vincagame.com:443"
+#   ws: "wss://fullnode.devnet.vincagame.com:443"
+#   priority: 30

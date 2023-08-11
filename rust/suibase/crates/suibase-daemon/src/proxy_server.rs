@@ -182,7 +182,7 @@ impl ProxyServer {
 
                 if let Some(target_server_idx) = do_force_target_server_idx {
                     if let Some(target_server) = input_port.target_servers.get(target_server_idx) {
-                        targets.push((target_server_idx, target_server.uri()));
+                        targets.push((target_server_idx, target_server.rpc()));
                     }
                 } else {
                     input_port.get_best_target_servers(&mut targets, &handler_start)

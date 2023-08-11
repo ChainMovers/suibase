@@ -1,4 +1,5 @@
 use crate::basic_types::*;
+use crate::shared_types::Link;
 use crate::shared_types::TargetServer;
 
 use super::{ServerStats, WorkdirProxyConfig};
@@ -81,8 +82,55 @@ impl InputPort {
         }
     }
 
-    pub fn add_target_server(&mut self, rpc: String, alias: String) {
-        self.target_servers.push(TargetServer::new(rpc, alias));
+    pub fn add_target_server(&mut self, config: &Link) {
+        // Note: caller must make sure the alias does not exist already.
+        self.target_servers.push(TargetServer::new(config.clone()));
+    }
+
+    pub fn upsert_target_server(&mut self, config: &Link) -> bool {
+        // return true on any change.
+        let mut at_least_one_change = false;
+
+        // Linear search by alias among existing target servers.
+        for (_, target_server) in self.target_servers.iter_mut() {
+            if target_server.alias() == config.alias {
+                // Handle modifications.
+                if let Some(rpc) = config.rpc.as_ref() {
+                    if &target_server.rpc() != rpc {
+                        log::info!(
+                            "{} modify server {} rpc from {} to {}",
+                            self.workdir_name,
+                            config.alias,
+                            target_server.rpc(),
+                            rpc
+                        );
+                        target_server.set_rpc(rpc.clone());
+                        target_server.stats_clear();
+                        at_least_one_change = true;
+                    }
+
+                    // Handle all other config changes in same way
+                    // (without clearing the stats).
+                    if target_server.get_config() != config {
+                        log::info!(
+                            "{} modify server {} params from {:?} to {:?}",
+                            self.workdir_name,
+                            config.alias,
+                            target_server.get_config(),
+                            config
+                        );
+                        target_server.set_config(config.clone());
+                        at_least_one_change = true;
+                    }
+                }
+
+                return at_least_one_change;
+            }
+        }
+        // Does not exists... add it.
+        log::info!("{} adding server {}", self.workdir_name, config.alias);
+        self.add_target_server(config);
+        true
     }
 
     pub fn workdir_idx(&self) -> WorkdirIdx {
@@ -141,7 +189,7 @@ impl InputPort {
             if score > best_score {
                 best_score = score;
                 best_idx = Some(i);
-                best_uri = target_server.uri();
+                best_uri = target_server.rpc();
             }
         }
 
@@ -227,7 +275,107 @@ impl InputPort {
     }
 
     pub fn uri(&self, server_idx: TargetServerIdx) -> Option<String> {
-        self.target_servers.get(server_idx).map(|ts| ts.uri())
+        self.target_servers.get(server_idx).map(|ts| ts.rpc())
+    }
+
+    pub fn update_selection_vectors(&mut self) {
+        let target_servers = &mut self.target_servers;
+
+        self.selection_vectors.clear();
+        self.selection_worst.clear();
+
+        // Build a vector of idx() of the elements of target_servers.
+        // At same time, find one currently OK with the best latency_avg().
+        // Isolate immediatly all down target servers in selection_worst.
+        let mut ok_idx_vec: Vec<TargetServerIdx> = Vec::new();
+        let mut best_latency_avg: f64 = f64::MAX;
+        let mut best_latency_avg_idx: Option<TargetServerIdx> = None;
+        for (_, target_server) in target_servers.iter() {
+            if let Some(idx) = target_server.idx() {
+                if target_server.stats.is_healthy() {
+                    if best_latency_avg_idx.is_none()
+                        || target_server.stats.avg_latency_ms() < best_latency_avg
+                    {
+                        best_latency_avg = target_server.stats.avg_latency_ms();
+                        best_latency_avg_idx = Some(idx);
+                    }
+                    ok_idx_vec.push(idx);
+                } else {
+                    self.selection_worst.push(idx);
+                }
+            }
+        }
+
+        // If there is a best_latency_avg_idx, then this is the first element
+        // in the first input_port.selection_vectors[0] to be created...
+        // ... then join to it all the ok_idx_vec elements that are no more than
+        // twice its latency avg (when below 250ms). Otherwise no more than 25%.
+        //
+        // This is the *best* bunch of target servers to be used for load balancing.
+        //
+        // All other ok_idx_vec elements are put in the second vector.
+        if let Some(best_latency_avg_idx) = best_latency_avg_idx {
+            self.selection_vectors
+                .push(Vec::with_capacity(ok_idx_vec.len()));
+            self.selection_vectors
+                .push(Vec::with_capacity(ok_idx_vec.len()));
+
+            self.selection_vectors[0].push(best_latency_avg_idx);
+
+            let mut best_latency_avg = best_latency_avg;
+            if best_latency_avg < 250.0 {
+                best_latency_avg *= 2.0;
+            } else {
+                best_latency_avg *= 1.25;
+            }
+            for idx in ok_idx_vec.iter() {
+                if best_latency_avg_idx == *idx {
+                    continue;
+                }
+                if let Some(target_server) = target_servers.get(*idx) {
+                    if target_server.stats.avg_latency_ms() <= best_latency_avg {
+                        self.selection_vectors[0].push(*idx);
+                    } else {
+                        self.selection_vectors[1].push(*idx);
+                    }
+                }
+            }
+        } else {
+            // This is for when there is not a single best_latency_avg_idx
+            // (happens only briefly on process initialization).
+            // TODO implement using user configuration priority instead to
+            //      make two bins.
+            self.selection_vectors.push(ok_idx_vec);
+        }
+
+        // Sort every selection_vectors by ascending latency.
+        for vector in self.selection_vectors.iter_mut() {
+            vector.sort_by(|a, b| {
+                let a_server = target_servers.get(*a).unwrap();
+                let b_server = target_servers.get(*b).unwrap();
+                a_server
+                    .stats
+                    .avg_latency_ms()
+                    .partial_cmp(&b_server.stats.avg_latency_ms())
+                    .unwrap()
+            });
+        }
+
+        if !self.selection_worst.is_empty() {
+            // Sort input_port.selection_worst by increasing health_score()
+            // and alias.
+            self.selection_worst.sort_by(|a, b| {
+                let a_server = target_servers.get(*a).unwrap();
+                let b_server = target_servers.get(*b).unwrap();
+                let a_score = a_server.health_score();
+                let b_score = b_server.health_score();
+                if a_score == b_score {
+                    a_server.stats.alias().cmp(&b_server.stats.alias())
+                } else {
+                    a_score.partial_cmp(&b_score).unwrap()
+                }
+            });
+        }
     }
 }
 
