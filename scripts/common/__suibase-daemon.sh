@@ -411,6 +411,20 @@ show_suibase_daemon_get_links() {
     echo "$JSON_RESP"
   else
     update_JSON_VALUE "display" "$JSON_RESP"
+
+    # Append help to the display.
+    JSON_VALUE="$JSON_VALUE\n* is the load-balanced range on first attempt.\nOn retry, another OK server is selected in order shown in table."
+
+    if [[ "${CFG_terminal_color:?}" == 'true' ]]; then
+      # Color OK in blue in tables (have two spaces after)
+      JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/OK  /\x1B[1;34mOK\x1B[0m  /g')
+      # Color OK in green in top satus (have a space and parenthesis after)
+      JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/OK (/\x1B[1;32mOK\x1B[0m (/g')
+      # Color DOWN in red.
+      JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/DOWN/\x1B[1;31mDOWN\x1B[0m/g')
+      # Color the load balancing bar.
+      JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/*/\x1B[42;37m*\x1B[0m/g')
+    fi
     echo -e "$JSON_VALUE"
   fi
 

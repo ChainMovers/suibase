@@ -30,7 +30,7 @@ features:
   - title: Multi-Link RPC
     icon: map
     details: Reduce timeout failures with automatic fallback to alternative RPC servers.
-    link: /intro.md
+    link: /how-to/proxy.md
 
   - title:  Version Matching
     icon: api

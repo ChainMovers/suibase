@@ -34,6 +34,10 @@ export const enSidebar = sidebar({
           link: "how-to/scripts.md",
         },
         {
+          text: "Proxy Server",
+          link: "how-to/proxy.md",
+        },
+        {
           text: "Suibase Helpers",
           link: "helpers.md",
         },

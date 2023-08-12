@@ -3,8 +3,8 @@ title: Suibase Helpers Overview
 ---
 
 This page is an introduction. For more details... follow the arrow:<br>
-[<i class="iconfont icon-arrow"></i> Rust Suibase Helper API](../rust/helper.md)<br>
-[<i class="iconfont icon-arrow"></i> Python Suibase Helper API](../python/helper.md)<br>
+[<i class="iconfont icon-arrow"></i> Rust Suibase Helper API](./rust/helper.md)<br>
+[<i class="iconfont icon-arrow"></i> Python Suibase Helper API](./python/helper.md)<br>
 
 ## What is a Suibase Helper?
 An API providing what is needed to initialize Sui Network SDKs.
