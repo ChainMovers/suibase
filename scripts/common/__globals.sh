@@ -1103,7 +1103,7 @@ get_process_pid() {
   #   word on the first/head line.
   #
   if [[ $(uname) == "Darwin" ]]; then
-    _PID=$(ps x -o pid,comm | grep "$_PROC" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+    _PID=$(ps x -o pid,comm | grep "$_PROC" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   else
     _PID=$(ps x -o pid,cmd | grep "$_PROC $_ARGS" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   fi
