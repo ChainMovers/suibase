@@ -17,9 +17,9 @@ update_bin_path() {
       ln -s "$UBP_TARGET" "$_OS_DIR_ON_PATH/$1"
     else
       # Verify link is as intended, if not replace it.
-      UBP_READLINK=$( readlink -f "$_OS_DIR_ON_PATH/$1" )
+      UBP_READLINK=$(readlink -f "$_OS_DIR_ON_PATH/$1")
       if [[ "$UBP_READLINK" != "$UBP_TARGET" ]]; then
-         ln -sf "$UBP_TARGET" "$_OS_DIR_ON_PATH/$1"
+        ln -sf "$UBP_TARGET" "$_OS_DIR_ON_PATH/$1"
       fi
     fi
   fi
@@ -35,7 +35,13 @@ fix_suibase_rename_dir_symlink() {
   local _SYMLINK_TARGET_NEW
   # Notice '-m' to allow for unresolved portion in the path.
   # (which is expected when sui-base no longer exists).
-  _SYMLINK_TARGET=$(readlink -m "$_SYMLINK")
+  if [[ $(uname) == "Darwin" ]]; then
+    # Will blindly return the target. Good enough for now.
+    _SYMLINK_TARGET=$(readlink "$_SYMLINK")
+  else
+    # Will resolve intermediate symlinks (if any) in target.
+    _SYMLINK_TARGET=$(readlink -m "$_SYMLINK")
+  fi
   _SYMLINK_TARGET_NEW="${_SYMLINK_TARGET//sui-base/suibase}"
   #echo "symlink $_SYMLINK_TARGET_NEW $_SYMLINK_TARGET"
   if [[ "$_SYMLINK_TARGET" != "$_SYMLINK_TARGET_NEW" ]]; then
@@ -52,8 +58,8 @@ fix_suibase_rename_file() {
   local _SEARCH_STRING="sui-base"
   local _REPLACE_STRING="suibase"
   sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" \
-             "$_PATHNAME" && \
-             rm "$_PATHNAME.bak"
+    "$_PATHNAME" &&
+    rm "$_PATHNAME.bak"
 }
 
 suibase_repair() {
@@ -85,7 +91,7 @@ suibase_repair() {
 
   # Build the list of scripts (e.g. "localnet, devnet, tsui...")
   local script_list=()
-  for dir_entry in "$REPAIR_SB_DIR/"scripts/* ; do
+  for dir_entry in "$REPAIR_SB_DIR/"scripts/*; do
     if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
       script_list+=("$(basename "$dir_entry")")
     fi
@@ -97,7 +103,7 @@ suibase_repair() {
 
   # Iterate directory in $REPAIR_SB_DIR/workdirs/
   local _DIR_ENTRIES=("$REPAIR_SB_DIR"/workdirs/*)
-  for dir_entry in "${_DIR_ENTRIES[@]}" ; do
+  for dir_entry in "${_DIR_ENTRIES[@]}"; do
     if [ -L "$dir_entry" ]; then
       # This is a directory symlink (probably "active"). Check it.
       fix_suibase_rename_dir_symlink "$dir_entry"
@@ -119,7 +125,7 @@ suibase_repair() {
       if [ "$_DO_SUI_BASE_RENAME_REPAIR" = true ]; then
         # Iterate one level deeper to fix symlinks in workdir.
         local _DIR_DIR_ENTRIES=("$dir_entry"/*)
-        for dir_dir_entry in "${_DIR_DIR_ENTRIES[@]}" ; do
+        for dir_dir_entry in "${_DIR_DIR_ENTRIES[@]}"; do
           if [ -L "$dir_dir_entry" ]; then
             # This is a directory symlink. Fix it.
             fix_suibase_rename_dir_symlink "$dir_dir_entry"
@@ -127,7 +133,7 @@ suibase_repair() {
         done
         # Copy suibase.yaml from templates (when does not exists).
         if [ ! -f "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml" ] &&
-           [ -f "$REPAIR_SB_DIR/scripts/templates/$workdir/suibase.yaml" ]; then
+          [ -f "$REPAIR_SB_DIR/scripts/templates/$workdir/suibase.yaml" ]; then
 
           # Fix client.yaml path (as needed).
           fix_suibase_rename_file "$REPAIR_SB_DIR/workdirs/$workdir/config-default/client.yaml"
@@ -143,12 +149,12 @@ suibase_repair() {
           # Append user content from sui-base.yaml to suibase.yaml
           # (all non-blank lines not starting with #).
           if [ -f "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml" ] &&
-             [ -f "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml" ]; then
-            { sed '/^$/d;/^#/d' "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml"; } >> "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml"
+            [ -f "$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml" ]; then
+            { sed '/^$/d;/^#/d' "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml"; } >>"$REPAIR_SB_DIR/workdirs/$workdir/suibase.yaml"
             rm "$REPAIR_SB_DIR/workdirs/$workdir/sui-base.yaml"
             # Force rebuild because of problems with custom builds sometimes refering to old path.
             echo "Cleaning up $workdir sui repo"
-            cd "$REPAIR_SB_DIR/workdirs/$workdir/sui-repo-default" && (cargo clean);
+            cd "$REPAIR_SB_DIR/workdirs/$workdir/sui-repo-default" && (cargo clean)
           fi
         fi
       fi
@@ -158,9 +164,9 @@ suibase_repair() {
   if [ "$_RENAME_DIRECTORY_REPAIR" = true ]; then
     # Force rebuild because of problems with custom builds sometimes refering to old path.
     echo "Cleaning up local sui-base repos"
-    cd "$REPAIR_SB_DIR/rust/demo-app/" && (cargo clean);
-    cd "$REPAIR_SB_DIR/rust/helper" && (cargo clean);
-    cd "$REPAIR_SB_DIR/rust/helper-uniffi" && (cargo clean);
+    cd "$REPAIR_SB_DIR/rust/demo-app/" && (cargo clean)
+    cd "$REPAIR_SB_DIR/rust/helper" && (cargo clean)
+    cd "$REPAIR_SB_DIR/rust/helper-uniffi" && (cargo clean)
   fi
 
   local _EXIT=false
@@ -187,4 +193,4 @@ suibase_repair() {
   fi
 }
 
-suibase_repair;
+suibase_repair
