@@ -4,13 +4,16 @@ use std::fmt::Display;
 use axum::async_trait;
 
 use clap::Indices;
+use futures::future::ok;
 use jsonrpsee::core::RpcResult;
 
-use crate::admin_controller::{AdminControllerMsg, AdminControllerTx};
+use crate::admin_controller::{
+    AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
+};
 use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{Globals, ServerStats, TargetServer};
 
-use super::ProxyApiServer;
+use super::{InfoResponse, ProxyApiServer};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
 
 pub struct ProxyApiImpl {
@@ -470,6 +473,21 @@ impl ProxyApiServer for ProxyApiImpl {
             }
         }
 
+        Ok(resp)
+    }
+
+    async fn fs_change(&self, path: String) -> RpcResult<InfoResponse> {
+        let mut resp = InfoResponse::new();
+
+        // Inform the AdminController that something changed...
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
+        msg.data_string = Some(path);
+
+        // TODO: Implement response to handle errors... but is it really needed here?
+        let _ = self.admctrl_tx.send(msg).await;
+
+        resp.info = "Success".to_string();
         Ok(resp)
     }
 }

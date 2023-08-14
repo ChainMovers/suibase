@@ -9,7 +9,7 @@ use crate::admin_controller::{
 };
 use crate::shared_types::{Workdir, Workdirs};
 
-use notify::Watcher;
+use notify::{Watcher, PollWatcher};
 use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
 
 pub struct WorkdirsWatcher {
@@ -47,7 +47,7 @@ impl WorkdirsWatcher {
     // Return true if something newly watched/unwatched.
     fn update_workdir_watch(
         tracking: &mut AutoSizeVec<WorkdirTracking>,
-        watcher: &mut RecommendedWatcher,
+        poll_watcher: &mut PollWatcher,
         workdir: &Workdir,
         target_path: &str,
     ) -> bool {
@@ -74,7 +74,7 @@ impl WorkdirsWatcher {
             // If the path does not exist, then remove the watch.
             if tracking.is_workdir_watched {
                 log::info!("unwatching {}", workdir.path().display());
-                let _ = watcher.unwatch(path);
+                let _ = poll_watcher.unwatch(path);
                 tracking.is_workdir_watched = false;
                 at_least_one_modif = true;
             }
@@ -83,7 +83,7 @@ impl WorkdirsWatcher {
             // TODO Enhance this with FD tracking.
             if !tracking.is_workdir_watched {
                 log::info!("watching {}", workdir.path().display());
-                let _ = watcher.watch(path, RecursiveMode::NonRecursive);
+                let _ = poll_watcher.watch(path, RecursiveMode::NonRecursive);
                 tracking.is_workdir_watched = true;
                 at_least_one_modif = true;
             }
@@ -93,7 +93,7 @@ impl WorkdirsWatcher {
             // If the path does not exist, then remove the watch.
             if tracking.is_state_watched {
                 log::info!("unwatching {}", workdir.state_path().display());
-                let _ = watcher.unwatch(state_path);
+                let _ = poll_watcher.unwatch(state_path);
                 tracking.is_state_watched = false;
                 at_least_one_modif = true;
             }
@@ -102,7 +102,7 @@ impl WorkdirsWatcher {
             // TODO Enhance this with FD tracking?
             if !tracking.is_state_watched {
                 log::info!("watching {}", workdir.state_path().display());
-                let _ = watcher.watch(state_path, RecursiveMode::NonRecursive);
+                let _ = poll_watcher.watch(state_path, RecursiveMode::NonRecursive);
                 tracking.is_state_watched = true;
                 at_least_one_modif = true;
             }
@@ -113,7 +113,7 @@ impl WorkdirsWatcher {
 
     fn remove_workdir_watch(
         tracking: &mut AutoSizeVec<WorkdirTracking>,
-        watcher: &mut RecommendedWatcher,
+        poll_watcher: &mut PollWatcher,
         workdir: &Workdir,
         target_path: &str,
     ) -> bool {
@@ -140,7 +140,7 @@ impl WorkdirsWatcher {
             // If the path does not exist, then remove the watch.
             if tracking.is_workdir_watched {
                 log::info!("unwatching {}", workdir.path().display());
-                let _ = watcher.unwatch(path);
+                let _ = poll_watcher.unwatch(path);
                 tracking.is_workdir_watched = false;
                 at_least_one_modif = true;
             }
@@ -150,7 +150,7 @@ impl WorkdirsWatcher {
             // If the path does not exist, then remove the watch.
             if tracking.is_state_watched {
                 log::info!("unwatching {}", workdir.state_path().display());
-                let _ = watcher.unwatch(state_path);
+                let _ = poll_watcher.unwatch(state_path);
                 tracking.is_state_watched = false;
                 at_least_one_modif = true;
             }
@@ -162,12 +162,17 @@ impl WorkdirsWatcher {
     async fn watch_loop(
         &mut self,
         subsys: &SubsystemHandle,
-        mut watcher: RecommendedWatcher,
+        mut poll_watcher: PollWatcher,
         mut local_rx: tokio::sync::mpsc::Receiver<notify::event::Event>,
     ) {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = local_rx.recv().await {
+                if msg.need_rescan() {
+                    // TODO Implement rescan of all workdirs (assume events were missed).
+                    log::error!("watch_loop() need_rescan (not implemented!)");
+                }
+
                 // Process the event from notify-rs
                 //log::info!("watch_loop() msg {:?}", msg);
                 // Iterate the msg.paths and find the workdir string (using Workdirs::find_workdir) and filename portion for each.
@@ -200,7 +205,7 @@ impl WorkdirsWatcher {
                                 if let Some((_, workdir)) = workdirs.find_workdir(path) {
                                     if Self::update_workdir_watch(
                                         &mut self.tracking,
-                                        &mut watcher,
+                                        &mut poll_watcher,
                                         workdir,
                                         path,
                                     ) {
@@ -226,7 +231,7 @@ impl WorkdirsWatcher {
                                 {
                                     if Self::remove_workdir_watch(
                                         &mut self.tracking,
-                                        &mut watcher,
+                                        &mut poll_watcher,
                                         workdir,
                                         &path.to_string_lossy(),
                                     ) {
@@ -266,8 +271,11 @@ impl WorkdirsWatcher {
             .build()
             .unwrap();
 
-        let mut watcher =
-            notify::recommended_watcher(move |res: Result<notify::Event, _>| match res {
+        let poll_watcher_config = notify::Config::default();
+        
+        let mut poll_watcher =
+            // notify::recommended_watcher(move |res: Result<notify::Event, _>| match res {
+            PollWatcher::new(move |res: Result<notify::Event, _>| match res {                
                 Ok(event) => {
                     //log::info!("watcher step 1 event {:?}", event);
                     let event_to_spawned_fn = event; //.clone();
@@ -282,7 +290,7 @@ impl WorkdirsWatcher {
                 Err(e) => {
                     log::error!("watcher error: {:?}", e);
                 }
-            })?;
+            }, poll_watcher_config.with_poll_interval(std::time::Duration::from_secs(15)) )?;
 
         {
             let workdirs_guard = self.workdirs.read().await;
@@ -292,7 +300,7 @@ impl WorkdirsWatcher {
             // TODO if suibase is deleted... then need to find a solution to recover gracefully (exit?).
             let path = workdirs.path();
             if path.exists() {
-                let _ = watcher.watch(workdirs.path(), RecursiveMode::NonRecursive);
+                let _ = poll_watcher.watch(workdirs.path(), RecursiveMode::NonRecursive);
             } else {
                 log::error!("implement watching above ~/suibase/workdirs for bad installation!");
             }
@@ -300,7 +308,7 @@ impl WorkdirsWatcher {
             for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
                 if Self::update_workdir_watch(
                     &mut self.tracking,
-                    &mut watcher,
+                    &mut poll_watcher,
                     workdir,
                     &workdir.path().to_string_lossy(),
                 ) {
@@ -310,11 +318,11 @@ impl WorkdirsWatcher {
                     .await;
                 }
             }
-            log::info!("watcher {:?}", watcher);
+            log::info!("watcher {:?}", poll_watcher);
         } // Release workdirs read lock
 
         match self
-            .watch_loop(&subsys, watcher, local_rx)
+            .watch_loop(&subsys, poll_watcher, local_rx)
             .cancel_on_shutdown(&subsys)
             .await
         {

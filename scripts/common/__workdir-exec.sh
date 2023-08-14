@@ -943,6 +943,7 @@ stop_all_services() {
       return 1
     fi
     # Transition to "stop" state successful.
+    notify_suibase_daemon_fs_change
     return 0
   fi
 
@@ -967,6 +968,7 @@ stop_all_services() {
   fi
 
   # Success. All process that needed to be stopped were stopped.
+  notify_suibase_daemon_fs_change
   return 0
 }
 export -f stop_all_services
@@ -990,6 +992,10 @@ start_all_services() {
   # Also a good time to double-check the suibase-daemon is running (if needed).
   if ! start_suibase_daemon_as_needed; then
     setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
+  fi
+
+  if [ ! "$_OLD_USER_REQUEST" = "start" ]; then
+    notify_suibase_daemon_fs_change
   fi
 
   # Verify if all other expected process are running.

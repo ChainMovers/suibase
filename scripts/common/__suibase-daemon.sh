@@ -472,3 +472,15 @@ show_suibase_daemon_get_links() {
   fi
 }
 export -f show_suibase_daemon_get_links
+
+notify_suibase_daemon_fs_change() {
+  # Best-effort notification to the suibase-daemon that a state/config changed on
+  # the filesystem for that workdir. Purposely leave the "path" parameter vague
+  # so that the daemon can audit/check *everything*.
+  local _HEADERS="Content-Type: application/json"
+
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"fsChange\",\"params\":{\"path\":\"$WORKDIR\"}}"
+
+  curl --max-time 5 -x "" -s --location -X POST "http://0.0.0.0:${CFG_daemon_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
+}
+export -f notify_suibase_daemon_fs_change

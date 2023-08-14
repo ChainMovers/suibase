@@ -110,6 +110,21 @@ impl LinksResponse {
     }
 }
 
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct InfoResponse {
+    pub info: String, // "Success" or info on failure.
+}
+
+impl InfoResponse {
+    pub fn new() -> Self {
+        Self {
+            info: "Unknown Error".to_string(),
+        }
+    }
+}
+
 #[rpc(server)]
 pub trait ProxyApi {
     /// Returns data about all the RPC/Websocket links
@@ -127,4 +142,7 @@ pub trait ProxyApi {
         display: Option<bool>,
         debug: Option<bool>,
     ) -> RpcResult<LinksResponse>;
+
+    #[method(name = "fsChange")]
+    async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
 }
