@@ -5,11 +5,11 @@ order: 2
 
 Makes your JSON-RPC queries more reliable with:
   - Selection of fastest RPC server currently available.
-  - Automatic retry on failure (when 100% safe from double transactions).
+  - Automatic retry on failure (when safe against transaction execution repetition).
   - Load balancing across multiple RPC servers (to minimize rate-limiting).
   
 ## How to use it?
-Simply have your applications perform query toward the following address of the local proxy server:
+Have your applications query toward the addresses of the local proxy server:
 |  Network    |      Proxy Link           |
 | :---------: | :-----------------------: |
 | localnet    | ```http://localhost:44340```    |
@@ -17,19 +17,18 @@ Simply have your applications perform query toward the following address of the 
 | testnet     | ```http://localhost:44342```    |
 | mainnet     | ```http://localhost:44343```    |
 
-The proxy server will then forward/retry/distribute automatically your queries among all the healthy RPC nodes configured.
+The proxy forward/retry/distribute automatically your queries among all the healthy RPC nodes configured.
 
-Related workdir commands are start/stop/status and links (e.g. "devnet start", "testnet links" etc...).
+All suibase scripts (and the corresponding client.yaml) are already configured to use the proxy server by default.
 
+Useful related workdir commands are start/stop/status and links (e.g. "devnet start", "testnet links" etc...).
 
 ## Monitoring RPC Links
-The suibase proxy server runs in background automatically when you start one of localnet, devnet, testnet or mainnet workdir (e.g. 'devnet start').
+The proxy server runs in background automatically when you start one of localnet, devnet, testnet or mainnet (e.g. 'devnet start').
 
-A workdir link command (e.g. ```testnet links```) shows the health of all its configured RPC nodes.
+The workdir ```links``` command (e.g. ```testnet links```) shows the health of all its configured RPC nodes.
 
-The table shows the current "retry" order (most healthy RPC node on top).
-
-The first attempt for every query is randomly distributed in the shown load-balanced range.
+<img :src="$withBase('/assets/testnet-links.png')" alt="testnet links"><br>
 
 ::: details Details on perfomance monitoring
 The success/failure of every query affects a health score for the RPC node. Every 15 seconds the suibase daemon will do a "health check" test query toward every node to keep a fresh view of their availability.
