@@ -35,7 +35,7 @@ fix_suibase_rename_dir_symlink() {
   local _SYMLINK_TARGET_NEW
   # Notice '-m' to allow for unresolved portion in the path.
   # (which is expected when sui-base no longer exists).
-  if [[ $(uname) == "Darwin" ]]; then
+  if [[ $(uname) = "Darwin" ]]; then
     # Will blindly return the target. Good enough for now.
     _SYMLINK_TARGET=$(readlink "$_SYMLINK")
   else
@@ -65,7 +65,8 @@ fix_suibase_rename_file() {
 suibase_repair() {
 
   # Check if there is additional variable that we can use
-  # from __globals.sh. This may happen when this script is sourced.
+  # from __globals.sh. This may happen when this script was
+  # sourced for a particular workdir.
   local _SCRIPT_SOURCED=false
   if [ -n "$SUI_BASE_VERSION" ] && [ -n "$USER_CWD" ]; then
     _SCRIPT_SOURCED=true
@@ -163,12 +164,35 @@ suibase_repair() {
 
   if [ "$_RENAME_DIRECTORY_REPAIR" = true ]; then
     # Force rebuild because of problems with custom builds sometimes refering to old path.
-    echo "Cleaning up local sui-base repos"
+    echo "Cleaning up local suibase repos"
     cd "$REPAIR_SB_DIR/rust/demo-app/" && (cargo clean)
     cd "$REPAIR_SB_DIR/rust/helper" && (cargo clean)
     cd "$REPAIR_SB_DIR/rust/helper-uniffi" && (cargo clean)
+    cd "$REPAIR_SB_DIR/rust/suibase" && (cargo clean)
+    # Force a rebuild and restart of the suibase-daemon.
+    rm -rf "$REPAIR_SB_DIR/workdirs/common/bin/suibase-daemon"
   fi
 
+  # Basic repairs should be done by now.
+
+  # Source more scripts for calling into more advanced repairs/update.
+  if [ "$_SCRIPT_SOURCED" = false ]; then
+    # If not sourced, then default to run in active context.
+    SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+    WORKDIR="active"
+    # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
+    source "$REPAIR_SB_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+  fi
+
+  if [ -z "$SUIBASE_DAEMON_VERSION_FILE" ]; then
+    # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
+    source "$REPAIR_SB_DIR/scripts/common/__suibase-daemon.sh"
+  fi
+
+  # Check for a suibase-daemon update and restart.
+  update_suibase_daemon_as_needed
+
+  # Exit instruction to the user.
   local _EXIT=false
   if [ "$_RENAME_DIRECTORY_REPAIR" = true ]; then
     echo "The directory ~/sui-base has been renamed to ~/suibase."

@@ -13,14 +13,14 @@
 # Source '__globals.sh'.
 SUIBASE_DIR="$HOME/suibase"
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="active"
+WORKDIR="localnet"
 # shellcheck source=SCRIPTDIR/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 # shellcheck source=SCRIPTDIR/__suibase-daemon.sh
 source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
-# Check what is available, prefer lockf over flock.
+# Check what is available, prefer flock over lockf.
 # Reference: https://github.com/Freaky/run-one/blob/master/run-one
 if which flock >/dev/null 2>&1; then
   _LOCK_CMD="flock -xn"
@@ -38,16 +38,14 @@ locked_command() {
 }
 
 main() {
+  # Only command supported is "foreground" for special execution
+  # when developing/debugging.
+  local _CMD="$1"
 
   # Detect if suibase is not installed!
   if [ ! -d "$SUIBASE_DIR" ]; then
     echo "ERROR: suibase is not installed! Check https://suibase.io/how-to/install"
     exit 1
-  fi
-
-  # Do nothing if proxy is not enabled.
-  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
-    return
   fi
 
   if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
@@ -64,7 +62,7 @@ main() {
   local _LOG="$SUIBASE_LOGS_DIR/$SUIBASE_DAEMON_NAME.log"
   local _CMD_LINE="$SUIBASE_DAEMON_BIN run"
 
-  if [ "${CFG_proxy_enabled:?}" == "dev" ]; then
+  if [ "$_CMD" == "foreground" ]; then
     # Run in foreground, with no restart on exit/panic.
     # shellcheck disable=SC2086,SC2016
     locked_command "$_LOCKFILE" /bin/sh -uec '"$@" 2>&1 | tee -a $0' "$_LOG" $_CMD_LINE

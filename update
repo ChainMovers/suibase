@@ -2,10 +2,13 @@
 
 SUIBASE_DIR="$HOME/suibase"
 if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
-   ("$HOME/sui-base/repair")
+  ("$HOME/sui-base/repair")
 fi
 
-cd "$SUIBASE_DIR" || { echo "suibase not found. Please install it first."; exit 1; }
+cd "$SUIBASE_DIR" || {
+  echo "suibase not found. Please install it first."
+  exit 1
+}
 
 _CUR_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
 
@@ -16,25 +19,24 @@ if [ ! "$(git status --porcelain | wc -l)" -eq "0" ]; then
     echo "Current version $_CUR_VER"
     echo
   fi
-  echo "Changes detected to local files."
+  echo "Git changes detected in ~/suibase."
   echo
   echo "Please commit or stash them before updating suibase."
   echo
-  echo "Do 'git status' to see changes."
+  echo "Do 'git status' in ~/suibase to see changes."
   exit 1
 fi
 
-
 # Check if there is actually a new version
-git remote update >& /dev/null
+git remote update >&/dev/null
 V1=$(git rev-parse HEAD)
 V2=$(git rev-parse '@{u}')
 if [ "$V1" != "$V2" ]; then
   echo "Updating..."
   # Does more than needed, but should recover from most operator errors...
-  (cd "$SUI_REPO_DIR" && git fetch > /dev/null)
-  (cd "$SUI_REPO_DIR" && git reset --hard origin/main > /dev/null)
-  (cd "$SUI_REPO_DIR" && git merge '@{u}' > /dev/null)
+  (cd "$SUI_REPO_DIR" && git fetch >/dev/null)
+  (cd "$SUI_REPO_DIR" && git reset --hard origin/main >/dev/null)
+  (cd "$SUI_REPO_DIR" && git merge '@{u}' >/dev/null)
 
   # TODO Should stop services while update and restart only the ones that were running.
 

@@ -59,13 +59,13 @@ need_suibase_daemon_upgrade() {
     return
   fi
 
-  if [ ! "$_SOURCE_VERSION" = "$_INSTALLED_VERSION" ]; then
+  if [ ! "$SUIBASE_DAEMON_VERSION_INSTALLED" = "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" ]; then
     true
     return
   fi
 
-  if [ "${CFG_proxy_enabled:?}" == "dev" ]; then
-    # fstat the binaries for differences (the target/debug should not be deleted).
+  if [ "${CFG_proxy_enabled:?}" = "dev" ]; then
+    # fstat the binaries for differences (target/debug is normally not deleted while "dev").
     local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
     local _DST="$SUIBASE_DAEMON_BIN"
     if [ ! -f "$_SRC" ]; then
@@ -88,10 +88,6 @@ build_suibase_daemon() {
   #
   # (re)build suibase-daemon and install it.
   #
-  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
-    return
-  fi
-
   echo "Building $SUIBASE_DAEMON_NAME"
   rm -f "$SUIBASE_DAEMON_VERSION_FILE"
   (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
@@ -117,10 +113,6 @@ start_suibase_daemon() {
   # success/failure is reflected by the SUIBASE_DAEMON_PID var.
   # noop if the process is already started.
 
-  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
-    return
-  fi
-
   update_SUIBASE_DAEMON_PID_var
   if [ -n "$SUIBASE_DAEMON_PID" ]; then
     return
@@ -141,9 +133,9 @@ start_suibase_daemon() {
 
   echo "Starting $SUIBASE_DAEMON_NAME"
 
-  if [ "${CFG_proxy_enabled:?}" == "dev" ]; then
+  if [ "${CFG_proxy_enabled:?}" = "dev" ]; then
     # Run it in the foreground and just exit when done.
-    "$HOME/suibase/scripts/common/run-suibase-daemon.sh"
+    "$HOME"/suibase/scripts/common/run-suibase-daemon.sh foreground
     exit
   fi
 
@@ -308,16 +300,36 @@ update_SUIBASE_DAEMON_PID_var() {
 }
 export -f update_SUIBASE_DAEMON_PID_var
 
-start_suibase_daemon_as_needed() {
-  # Return 0 on success or not needed.
+update_suibase_daemon_as_needed() {
+  start_suibase_daemon_as_needed "force-update"
+}
+export -f update_suibase_daemon_as_needed
 
-  # Verify from suibase.yaml if the suibase daemon should be started.
+start_suibase_daemon_as_needed() {
+
+  # When _UPGRADE_ONLY=true:
+  #  - Always check to upgrade the daemon.
+  #  - Do not start, but restart if *already* running.
+  # else:
+  #  - if 'proxy_enabled' is true, then check to
+  #    upgrade and (re)starts.
+  #
+  local _UPGRADE_ONLY
   local _SUPPORT_PROXY
-  if [ "${CFG_proxy_enabled:?}" == "false" ]; then
-    _SUPPORT_PROXY=false
-  else
+  if [ "$1" = "force-update" ]; then
+    _UPGRADE_ONLY=true
     _SUPPORT_PROXY=true
+  else
+    # Verify from suibase.yaml if the suibase daemon should be started.
+    _UPGRADE_ONLY=false
+    if [ "${CFG_proxy_enabled:?}" = "false" ]; then
+      _SUPPORT_PROXY=false
+    else
+      _SUPPORT_PROXY=true
+    fi
   fi
+
+  # Return 0 on success or not needed.
 
   if [ "$_SUPPORT_PROXY" = true ]; then
     update_SUIBASE_DAEMON_VERSION_INSTALLED
@@ -335,15 +347,23 @@ start_suibase_daemon_as_needed() {
         fi
       fi
       update_SUIBASE_DAEMON_PID_var
-      if [ -z "$SUIBASE_DAEMON_PID" ]; then
-        start_suibase_daemon
+      if [ "$_UPGRADE_ONLY" = true ]; then
+        # Restart only if already running.
+        if [ -n "$SUIBASE_DAEMON_PID" ]; then
+          restart_suibase_daemon
+        fi
       else
-        # Needed for the upgrade to take effect.
-        restart_suibase_daemon
+        # (re)start
+        if [ -z "$SUIBASE_DAEMON_PID" ]; then
+          start_suibase_daemon
+        else
+          # Needed for the upgrade to take effect.
+          restart_suibase_daemon
+        fi
       fi
     else
-      if [ -z "$SUIBASE_DAEMON_PID" ]; then
-        # There was no need for upgrade, but the process need to be started.
+      if [ -z "$SUIBASE_DAEMON_PID" ] && [ "$_UPGRADE_ONLY" = false ]; then
+        # There was no upgrade, but the process need to be started.
         start_suibase_daemon
       fi
     fi

@@ -25,7 +25,10 @@ use axum::{
     Router,
 };
 
+use hyper::body::Bytes;
 use hyper::http;
+use memchr::memmem;
+use serde::{Deserialize, Serialize};
 use tokio_graceful_shutdown::SubsystemHandle;
 use tower::retry;
 
@@ -72,6 +75,7 @@ impl ProxyServer {
             return false;
         };
 
+        // TODO https://www.jsonrpc.org/historical/json-rpc-over-http.html Check for json-rpc and jsonrequest?
         let is_json_content_type = mime.type_() == "application"
             && (mime.subtype() == "json" || mime.suffix().map_or(false, |name| name == "json"));
 
@@ -142,7 +146,7 @@ impl ProxyServer {
 
         // log::debug!("headers: {:?}", headers);
 
-        //let do_http_body_extraction = ProxyServer::is_json_content_type(&headers);
+        //let is_request_json = ProxyServer::is_json_content_type(&headers);
         let do_force_target_server_idx =
             ProxyServer::process_header_server_idx(&mut headers, &mut report);
 
@@ -302,7 +306,37 @@ impl ProxyServer {
                 }
             };
 
-            let builder = Response::builder().body(Body::from(resp_bytes));
+            // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
+
+            // if the response is a JSON error then add proxy specific 'data' to it to help
+            // find the problem.
+            //
+            // Do first a "weak" but "very fast" check before starting to do costly JSON serde.
+            let mut modified_resp_bytes: Option<Bytes> = None;
+            let mut find_json_error = memmem::find_iter(&resp_bytes, "\"error\":");
+            if find_json_error.next().is_some() {
+                // Deserialize resp_bytes into a JSON-RPC response structure.
+                if let Ok(json_resp) = serde_json::from_slice::<serde_json::Value>(&resp_bytes) {
+                    if let Some(err_obj) = json_resp["error"].as_object() {
+                        if !err_obj.contains_key("data") {
+                            // Insert our own "data" field.
+                            let data = JsonRpcErrorDataObject::new(target_uri.clone(), retry_count);
+                            let mut json_resp = json_resp.clone();
+                            if let Ok(data_obj) = serde_json::to_value(data) {
+                                json_resp["data"] = data_obj;
+                                modified_resp_bytes =
+                                    Some(serde_json::to_vec(&json_resp).unwrap().into());
+                            }
+                        }
+                    }
+                }
+            }
+
+            let builder = if let Some(modified_resp_bytes) = modified_resp_bytes {
+                Response::builder().body(Body::from(modified_resp_bytes))
+            } else {
+                Response::builder().body(Body::from(resp_bytes))
+            };
 
             let resp = match builder {
                 Ok(resp) => resp,
@@ -320,8 +354,6 @@ impl ProxyServer {
                     return Err(err.into());
                 }
             };
-
-            // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
 
             let _ = report
                 .req_resp_ok(*server_idx, req_initiation_time, resp_received, retry_count)
@@ -400,5 +432,17 @@ impl ProxyServer {
         }
 
         return_value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct JsonRpcErrorDataObject {
+    origin: String,
+    retry: u8,
+}
+
+impl JsonRpcErrorDataObject {
+    fn new(origin: String, retry: u8) -> Self {
+        Self { origin, retry }
     }
 }
