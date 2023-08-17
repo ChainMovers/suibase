@@ -20,9 +20,11 @@ sui_faucet_client_timeout_secs: 10
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "main"
 
-proxy_port_number: 44343
 proxy_enabled: true
-daemon_api_port_number: 44399
+proxy_host_ip: "0.0.0.0"
+proxy_port_number: 44343
+
+suibase_api_port_number: 44399
 
 links:
   - alias: "sui.io"

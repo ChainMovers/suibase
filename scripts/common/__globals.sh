@@ -5,20 +5,24 @@
 # It initializes a bunch of environment variable, verify that some initialization took
 # place, identify some common user errors etc...
 
-USER_CWD=$(pwd -P)
+# shellcheck disable=SC2155
+export USER_CWD=$(pwd -P)
 
-SUI_BASE_VERSION="0.1.4"
+export SUI_BASE_VERSION="0.1.4"
 
 # Suibase does not work with version below these.
-MIN_SUI_VERSION="sui 0.27.0"
-MIN_RUST_VERSION="rustc 1.65.0"
+export MIN_SUI_VERSION="sui 0.27.0"
+export MIN_RUST_VERSION="rustc 1.65.0"
 
 # Mandatory command line:
 #    $1 : Should be the "$0" of the caller script.
 #    $2 : Should be the workdir string (e.g. "active", "localnet"... )
-SCRIPT_PATH="$(dirname "$1")"
-SCRIPT_NAME="$(basename "$1")"
-WORKDIR="$2"
+# shellcheck disable=SC2155
+export SCRIPT_PATH="$(dirname "$1")"
+export SCRIPT_NAME
+# shellcheck disable=SC2155
+export SCRIPT_NAME="$(basename "$1")"
+export WORKDIR="$2"
 
 # Detect if the script is called from an unexpected symlink.
 if [[ "$SCRIPT_PATH" = *"sui-base"* ]]; then
@@ -35,31 +39,33 @@ if [[ "$SCRIPT_PATH" = *"sui-base"* ]]; then
 fi
 
 # Two key directories location.
-SUIBASE_DIR="$HOME/suibase"
-WORKDIRS="$SUIBASE_DIR/workdirs"
+export SUIBASE_DIR="$HOME/suibase"
+export WORKDIRS="$SUIBASE_DIR/workdirs"
 
 # Some other commonly used locations.
-LOCAL_BIN_DIR="$HOME/.local/bin"
-SCRIPTS_DIR="$SUIBASE_DIR/scripts"
-SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
-CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
-PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
-FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
-SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+export LOCAL_BIN_DIR="$HOME/.local/bin"
+export SCRIPTS_DIR="$SUIBASE_DIR/scripts"
+export SUI_REPO_DIR="$WORKDIRS/$WORKDIR/sui-repo"
+export CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
+export PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
+export FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
+export SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 
 # Suibase binaries are common to all workdirs, therefore are
 # installed in a common location.
-SUIBASE_BIN_DIR="$WORKDIRS/common/bin"
-SUIBASE_LOGS_DIR="$WORKDIRS/common/logs"
-SUIBASE_TMP_DIR="/tmp/.suibase"
+export SUIBASE_BIN_DIR="$WORKDIRS/common/bin"
+export SUIBASE_LOGS_DIR="$WORKDIRS/common/logs"
+export SUIBASE_TMP_DIR="/tmp/.suibase"
 
-SUIBASE_DAEMON_NAME="suibase-daemon"
-SUIBASE_DAEMON_BUILD_DIR="$SUIBASE_DIR/rust/suibase"
-SUIBASE_DAEMON_BIN="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME"
+export SUIBASE_DAEMON_NAME="suibase-daemon"
+export SUIBASE_DAEMON_BUILD_DIR="$SUIBASE_DIR/rust/suibase"
+export SUIBASE_DAEMON_BIN="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME"
 
 # Prefix often used when calling sui client.
 SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 
+export WORKDIR_NAME="$WORKDIR"
+export SUI_SCRIPT
 case $WORKDIR in
 localnet)
   SUI_SCRIPT="lsui"
@@ -75,6 +81,11 @@ mainnet)
   ;;
 active)
   SUI_SCRIPT="asui"
+  if [ -f "$WORKDIRS/$WORKDIR/.state/name" ]; then
+    # Resolve the 'active' workdir link into its target name.
+    # Empty string on error.
+    WORKDIR_NAME=$(cat "$WORKDIRS/$WORKDIR/.state/name 2> /dev/null")
+  fi
   ;;
 cargobin)
   SUI_SCRIPT="csui"
@@ -82,45 +93,46 @@ cargobin)
   ;;
 *)
   SUI_SCRIPT="sui-exec"
+  WORKDIR_NAME=""
   ;;
 esac
 
 # Configuration files (often needed for sui CLI calls)
-NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
-CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
+export NETWORK_CONFIG="$CONFIG_DATA_DIR/network.yaml"
+export CLIENT_CONFIG="$CONFIG_DATA_DIR/client.yaml"
 
 # This is the default repo for localnet/devnet/testnet/mainnet scripts.
 # Normally $SUI_REPO_DIR will symlink to $SUI_REPO_DIR_DEFAULT
-SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
+export SUI_REPO_DIR_DEFAULT="$WORKDIRS/$WORKDIR/sui-repo-default"
 
 # This is the default config for localnet/devnet/testnet/mainnet scripts.
 # Normally $CONFIG_DATA_DIR will symlink to CONFIG_DATA_DIR_DEFAULT
-CONFIG_DATA_DIR_DEFAULT="$WORKDIRS/$WORKDIR/config-default"
+export CONFIG_DATA_DIR_DEFAULT="$WORKDIRS/$WORKDIR/config-default"
 
 # Location for genesis data for "default" repo.
-DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
+export DEFAULT_GENESIS_DATA_DIR="$SCRIPTS_DIR/genesis_data"
 
 # Location for generated genesis data (on first start after set-sui-repo)
-GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$WORKDIR/genesis-data"
+export GENERATED_GENESIS_DATA_DIR="$WORKDIRS/$WORKDIR/genesis-data"
 
 # The two shims find in each $WORKDIR
-SUI_EXEC="$WORKDIRS/$WORKDIR/sui-exec"
-WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
+export SUI_EXEC="$WORKDIRS/$WORKDIR/sui-exec"
+export WORKDIR_EXEC="$WORKDIRS/$WORKDIR/workdir-exec"
 
 # Where all the sui.log of the sui client go to die.
-SUI_CLIENT_LOG_DIR="$WORKDIRS/$WORKDIR/logs/sui.log"
+export SUI_CLIENT_LOG_DIR="$WORKDIRS/$WORKDIR/logs/sui.log"
 
 # Control if network execution, interaction and
 # publication are to be mock.
 #
 # Intended for limited CI tests (github action).
-SUI_BASE_NET_MOCK=false
-SUI_BASE_NET_MOCK_VER="sui 0.99.99-abcdef"
-SUI_BASE_NET_MOCK_PID="999999"
+export SUI_BASE_NET_MOCK=false
+export SUI_BASE_NET_MOCK_VER="sui 0.99.99-abcdef"
+export SUI_BASE_NET_MOCK_PID="999999"
 
 # Utility macro specific to calling the keytool in a safer manner
 # such that no "key" information gets actually log.
-NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF $SUI_BIN_DIR/sui keytool"
+export NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF $SUI_BIN_DIR/sui keytool"
 
 # Add color
 function __echo_color() {
@@ -430,7 +442,7 @@ build_sui_repo_branch() {
   PASSTHRU_OPTIONS="$3"
 
   local _BUILD_DESC
-  if [ "$CFG_network_type" = "local" ]; then
+  if [ "${CFG_network_type:?}" = "local" ]; then
     is_local=true
     _BUILD_DESC="binaries"
   else
@@ -1103,8 +1115,10 @@ get_process_pid() {
   #   word on the first/head line.
   #
   if [[ $(uname) == "Darwin" ]]; then
+    # shellcheck disable=SC2009
     _PID=$(ps x -o pid,comm | grep "$_PROC" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   else
+    # shellcheck disable=SC2009
     _PID=$(ps x -o pid,cmd | grep "$_PROC $_ARGS" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   fi
 
@@ -1195,6 +1209,7 @@ start_sui_process() {
   update_SUI_PROCESS_PID_var
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
+    sync_client_yaml no-proxy
     if $SUI_BASE_NET_MOCK; then
       SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
@@ -1249,26 +1264,12 @@ start_sui_process() {
     echo "localnet started (process pid $SUI_PROCESS_PID)"
     update_SUI_VERSION_var
     echo "$SUI_VERSION"
+
+    # Apply the proper proxy settings (if any)
+    sync_client_yaml
   fi
 }
 export -f start_sui_process
-
-ensure_client_OK() {
-  # This is just in case the user switch the envs on the clients instead of simply using
-  # the scripts... we have then to fix things up here. Not an error unless the fix fails.
-  cd_sui_log_dir
-  # TODO Add paranoiac validation, fix the URL part, for now this is used only for localnet.
-  #if [ "$CFG_network_type" = "local" ]; then
-  # Make sure localnet exists in sui envs (ignore errors because likely already exists)
-  #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" new-env --alias $WORKDIR --rpc http://0.0.0.0:9000
-  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" new-env --alias "$WORKDIR" --rpc "$CFG_links_1_rpc" >&/dev/null
-
-  # Make localnet the active envs (should already be done, just in case, do it again here).
-  #echo $SUI_BIN_DIR/sui client --client.config "$CLIENT_CONFIG" switch --env $WORKDIR
-  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" switch --env "$WORKDIR" >&/dev/null
-  #fi
-}
-export -f ensure_client_OK
 
 publish_clear_output() {
   local _DIR=$1
@@ -1288,6 +1289,7 @@ export -f publish_clear_output
 #
 # When found, while at it, update also the following variable:
 #   MOVE_TOML_PACKAGE_NAME
+export MOVE_TOML_PACKAGE_NAME
 update_MOVE_TOML_DIR_var() {
   unset MOVE_TOML_DIR
   unset MOVE_TOML_PACKAGE_NAME
@@ -1359,26 +1361,26 @@ export -f set_sui_repo_dir_default
 
 set_sui_repo_dir() {
 
-  OPTIONAL_PATH="$@"
+  local _OPTIONAL_PATH="$1"
 
   # User errors?
-  if [ ! -d "$OPTIONAL_PATH" ]; then
-    setup_error "Path [ $OPTIONAL_PATH ] not found"
+  if [ ! -d "$_OPTIONAL_PATH" ]; then
+    setup_error "Path [ $_OPTIONAL_PATH ] not found"
   fi
 
   # The -n is important because target is a directory and without it
   # the command line arguments would be interpreted in the 3rd form
   # described in "man ln".
-  ln -nsf "$OPTIONAL_PATH" "$SUI_REPO_DIR"
+  ln -nsf "$_OPTIONAL_PATH" "$SUI_REPO_DIR"
 
   # Verify success.
   if is_sui_repo_dir_default; then
-    echo "$WORKDIR using default sui repo [ $OPTIONAL_PATH ]"
+    echo "$WORKDIR using default sui repo [ $_OPTIONAL_PATH ]"
   else
     if is_sui_repo_dir_override; then
-      echo "$WORKDIR set-sui-repo is now [ $OPTIONAL_PATH ]"
+      echo "$WORKDIR set-sui-repo is now [ $_OPTIONAL_PATH ]"
     else
-      setup_error "$WORKDIR set-sui-repo failed [ $OPTIONAL_PATH ]"
+      setup_error "$WORKDIR set-sui-repo failed [ $_OPTIONAL_PATH ]"
     fi
   fi
 }
@@ -1829,3 +1831,66 @@ update_JSON_VALUE() {
   fi
 }
 export -f update_JSON_VALUE
+
+sync_client_yaml() {
+
+  # unset for normal call
+  #
+  # "no-proxy" when proxy must not be used.
+  local _CMD="$1"
+
+  # Generally synchronize client.yaml using the suibase.yaml proxy settings.
+  #
+  # This check and potentially switch the client.yaml 'env' depending
+  # of the proxy being enabled or not.
+  #
+  local _TARGET_YAML="$WORKDIRS/$WORKDIR_NAME/config/client.yaml"
+  if [ -z "$WORKDIR_NAME" ] || [ ! -f "$_TARGET_YAML" ]; then
+    return
+  fi
+
+  local _ACTIVE_ENV
+  _ACTIVE_ENV=$(grep active_env "$_TARGET_YAML" | tr -d '[:space:]')
+  _ACTIVE_ENV=${_ACTIVE_ENV#*:} # Remove the "active_env:" prefix
+
+  local _EXPECTED_ENV
+  _EXPECTED_ENV=$WORKDIR_NAME
+  if [ "$_CMD" != "no-proxy" ] && [ "${CFG_proxy_enabled:?}" != "false" ]; then
+    local _USER_REQUEST
+    _USER_REQUEST=$(get_key_value "user_request")
+    if [ "$_USER_REQUEST" != "stop" ]; then
+      # Proxy is enabled and workdir is running, so
+      # the client env should be toward the proxy.
+      _EXPECTED_ENV=$_EXPECTED_ENV"_proxy"
+    fi
+  fi
+
+  if [ "$_ACTIVE_ENV" != "$_EXPECTED_ENV" ]; then
+    echo "Switching sui client env from [$_ACTIVE_ENV] to [$_EXPECTED_ENV]"
+    $SUI_EXEC client switch --env "$_EXPECTED_ENV" >&/dev/null
+    # Verify if successful. If not and the _EXPECTED_ENV is for the
+    # proxy, then try to "fix" the client.yaml.
+    _ACTIVE_ENV=$(grep active_env "$_TARGET_YAML" | tr -d '[:space:]')
+    _ACTIVE_ENV=${_ACTIVE_ENV#*:} # Remove the "active_env:" prefix
+    if [ "$_ACTIVE_ENV" != "$_EXPECTED_ENV" ]; then
+      # Repair if the _proxy" is missing in client.yaml
+      local _PROXY_IN
+      _PROXY_IN=$(grep "$_EXPECTED_ENV" "$_TARGET_YAML" | tr -d '[:space:]')
+      if [ -z "$_PROXY_IN" ]; then
+        # Note: it is important to escape the first two space for the sed /a command to work.
+        _NEW_ENV="\ \ - alias: $_EXPECTED_ENV\n    rpc: \"http://${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}\"\n    ws: ~"
+        # Insert _NEW_ENV after the line starting with "envs:" in client.yaml
+        sed -i.bak "/^envs:/a $_NEW_ENV" "$_TARGET_YAML" && rm "$_TARGET_YAML.bak"
+        echo "[$_EXPECTED_ENV] added to client.yaml"
+      fi
+      # Try again.
+      $SUI_EXEC client switch --env "$_EXPECTED_ENV" >&/dev/null
+      _ACTIVE_ENV=$(grep active_env "$_TARGET_YAML" | tr -d '[:space:]')
+      _ACTIVE_ENV=${_ACTIVE_ENV#*:} # Remove the "active_env:" prefix
+      if [ "$_ACTIVE_ENV" != "$_EXPECTED_ENV" ]; then
+        warn_user "Failed to switch sui client env to [$_EXPECTED_ENV]."
+      fi
+    fi
+  fi
+}
+export -f sync_client_yaml

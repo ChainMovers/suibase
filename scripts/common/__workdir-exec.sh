@@ -23,7 +23,12 @@ usage_local() {
   echo "  suibase $SUI_BASE_VERSION"
   echo
   echo "  Workdir to simulate a Sui network running fully on this machine"
-  echo "  Accessible from $CFG_links_1_rpc"
+  echo -n "  JSON-RPC API at http://"
+  if [ "${CFG_proxy_enabled:?}" != "false" ]; then
+    echo "${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}"
+  else
+    echo "0.0.0.0:9000"
+  fi
   echo
   echo "  If not sure what to do, then type '$WORKDIR start' and all that is"
   echo "  needed will be downloaded, built and started for you."
@@ -93,6 +98,10 @@ usage_remote() {
   echo "  suibase $SUI_BASE_VERSION"
   echo
   echo "  Workdir to interact with a remote Sui network"
+  if [ "${CFG_proxy_enabled:?}" != "false" ]; then
+    echo -n "  JSON-RPC API at http://"
+    echo "${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}"
+  fi
   echo
   echo_low_yellow "USAGE: "
   echo
@@ -174,7 +183,10 @@ workdir_exec() {
   create) CMD_CREATE_REQ=true ;;
   build) CMD_BUILD_REQ=true ;;
   delete) CMD_DELETE_REQ=true ;;
-  update) CMD_UPDATE_REQ=true ;;
+  update)
+    # shellcheck disable=SC2034 # CMD_UPDATE_REQ not used for now.
+    CMD_UPDATE_REQ=true
+    ;;
   regen) CMD_REGEN_REQ=true ;;
   publish) CMD_PUBLISH_REQ=true ;;
   links) CMD_LINKS_REQ=true ;;
@@ -306,6 +318,7 @@ workdir_exec() {
   #  (this should be removed pass mid-2024 or so...)
   #
   ####################################################################
+  # shellcheck disable=SC2153
   if [ -f "$WORKDIRS/$WORKDIR/sui-base.yaml" ]; then
     # shellcheck source=SCRIPTDIR/../../repair
     source "$SUIBASE_DIR"/repair
@@ -464,7 +477,7 @@ workdir_exec() {
     if [ ! "$_USER_REQUEST" = "stop" ]; then
       _INFO=$(
         echo -n "http://"
-        echo_blue "0.0.0.0"
+        echo_blue "${CFG_proxy_host_ip:?}"
         echo -n ":"
         echo_blue "${CFG_proxy_port_number:?}"
       )
@@ -861,12 +874,11 @@ workdir_exec() {
   start_all_services
   echo "========"
 
-  ensure_client_OK
-
   # print sui envs to help debugging (if someone else is using this script).
 
-  CLIENT_YAML_ENVS=$($SUI_EXEC client envs | grep $WORKDIR)
-  echo "SUI envs: $CLIENT_YAML_ENVS"
+  CLIENT_YAML_ENVS=$($SUI_EXEC client envs | grep "$WORKDIR")
+  echo "SUI envs:"
+  echo "$CLIENT_YAML_ENVS"
   echo "========"
 
   echo "All client addresses:"
@@ -933,7 +945,12 @@ stop_all_services() {
   local _OLD_USER_REQUEST
   if [ -d "$WORKDIRS/$WORKDIR" ]; then
     _OLD_USER_REQUEST=$(get_key_value "user_request")
+    # Always write to "touch" the file and possibly cause
+    # downstream resynch/fixing.
     set_key_value "user_request" "stop"
+    if [ "$_OLD_USER_REQUEST" != "stop" ]; then
+      sync_client_yaml
+    fi
   fi
 
   if [ "${CFG_network_type:?}" = "remote" ]; then
@@ -994,7 +1011,7 @@ start_all_services() {
     setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
   fi
 
-  if [ ! "$_OLD_USER_REQUEST" = "start" ]; then
+  if [ "$_OLD_USER_REQUEST" != "start" ]; then
     notify_suibase_daemon_fs_change
   fi
 
@@ -1002,6 +1019,7 @@ start_all_services() {
 
   if [ "${CFG_network_type:?}" = "remote" ]; then
     # No other process expected for remote network.
+    sync_client_yaml
     if [ "$_OLD_USER_REQUEST" = "start" ]; then
       # Was already started.
       return 1
@@ -1028,12 +1046,16 @@ start_all_services() {
   fi
 
   if [ "$_ALL_RUNNING" = true ]; then
+    sync_client_yaml
     return 1
   fi
 
   # One or more other process need to be started.
 
   if [ -z "$SUI_PROCESS_PID" ]; then
+    # Note: start_sui_process has to call sync_client_yaml itself to remove the
+    #       use of the proxy. This explains why start_sui_process is called on
+    #       the exit of this function and not before.
     start_sui_process
   fi
 
@@ -1052,6 +1074,7 @@ start_all_services() {
   fi
 
   # Success. All process that needed to be started were started.
+  sync_client_yaml
   return 0
 }
 

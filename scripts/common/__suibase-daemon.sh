@@ -43,7 +43,7 @@ need_suibase_daemon_upgrade() {
   #      and
   #   update_SUIBASE_DAEMON_VERSION_INSTALLED
   # have been called before.
-
+  # shellcheck disable=SC2153
   if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
     true
     return
@@ -109,12 +109,24 @@ build_suibase_daemon() {
 }
 export -f build_suibase_daemon
 
+is_suibase_daemon_running() {
+  # Quickly determine if the daemon is running, does not check if responding.
+  # Has the side effect of updating the SUIBASE_DAEMON_PID variable.
+  update_SUIBASE_DAEMON_PID_var
+
+  if [ -n "$SUIBASE_DAEMON_PID" ]; then
+    true
+    return
+  fi
+
+  false
+  return
+}
+
 start_suibase_daemon() {
   # success/failure is reflected by the SUIBASE_DAEMON_PID var.
   # noop if the process is already started.
-
-  update_SUIBASE_DAEMON_PID_var
-  if [ -n "$SUIBASE_DAEMON_PID" ]; then
+  if is_suibase_daemon_running; then
     return
   fi
 
@@ -145,29 +157,18 @@ start_suibase_daemon() {
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
   for _i in {1..3}; do
-    if $SUI_BASE_NET_MOCK; then
-      export SUIBASE_DAEMON_PID=$SUI_BASE_NET_MOCK_PID
-    else
-      # Try to start a script that keeps alive the suibase-daemon.
-      #
-      # Will not try if there is already another instance running.
-      #
-      # run-suibase-daemon.sh is design to be flock protected and be silent.
-      # All errors will be visible through the suibase-daemon own logs or by observing
-      # which PID owns the flock file. So all output of the script (if any) can
-      # safely be ignored to /dev/null.
-      nohup "$HOME/suibase/scripts/common/run-suibase-daemon.sh" >/dev/null 2>&1 &
-    fi
+    # Try to start a script that keeps alive the suibase-daemon.
+    #
+    # Will not try if there is already another instance running.
+    #
+    # run-suibase-daemon.sh is design to be flock protected and be silent.
+    # All errors will be visible through the suibase-daemon own logs or by observing
+    # which PID owns the flock file. So all output of the script (if any) can
+    # safely be ignored to /dev/null.
+    nohup "$HOME/suibase/scripts/common/run-suibase-daemon.sh" >/dev/null 2>&1 &
 
     while [ $SECONDS -lt $end ]; do
-      # If CHECK_ALIVE is anything but empty string... then it is alive!
-      if $SUI_BASE_NET_MOCK; then
-        CHECK_ALIVE="it's alive!"
-      else
-        # TODO: Actually implement that the assigned port for this workdir is responding!
-        CHECK_ALIVE=$(lsof "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock 2>/dev/null | grep "suibase")
-      fi
-      if [ -n "$CHECK_ALIVE" ]; then
+      if is_suibase_daemon_running; then
         ALIVE=true
         break
       else
@@ -204,7 +205,6 @@ start_suibase_daemon() {
     exit 1
   fi
 
-  update_SUIBASE_DAEMON_PID_var
   echo "$SUIBASE_DAEMON_NAME started (process pid $SUIBASE_DAEMON_PID)"
 }
 export -f start_suibase_daemon
@@ -233,18 +233,16 @@ restart_suibase_daemon() {
 export -f restart_suibase_daemon
 
 stop_suibase_daemon() {
+  # TODO currently unused. Revisit if needed versus a self-exit design.
+
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already stopped.
   update_SUIBASE_DAEMON_PID_var
   if [ -n "$SUIBASE_DAEMON_PID" ]; then
     echo "Stopping $SUIBASE_DAEMON_NAME (process pid $SUIBASE_DAEMON_PID)"
 
-    if $SUI_BASE_NET_MOCK; then
-      unset SUIBASE_DAEMON_PID
-    else
-      # TODO This will just restart the daemon... need to actually kill the parents as well!
-      kill -s SIGTERM "$SUIBASE_DAEMON_PID"
-    fi
+    # TODO This will just restart the daemon... need to actually kill the parents as well!
+    kill -s SIGTERM "$SUIBASE_DAEMON_PID"
 
     # Make sure it is dead.
     end=$((SECONDS + 15))
@@ -282,7 +280,6 @@ export -f update_SUIBASE_DAEMON_VERSION_var
 
 export SUIBASE_DAEMON_PID=""
 update_SUIBASE_DAEMON_PID_var() {
-  if $SUI_BASE_NET_MOCK; then return; fi
 
   local _PID
   _PID=$(lsof -t -a -c suibase "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock 2>/dev/null)
@@ -384,9 +381,9 @@ get_suibase_daemon_status() {
 
   local _HEADERS="Content-Type: application/json"
 
-  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR\",\"$_DISP\":true}}"
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR_NAME\",\"$_DISP\":true}}"
 
-  JSON_RESP=$(curl -x "" -s --location -X POST "http://0.0.0.0:${CFG_daemon_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+  JSON_RESP=$(curl -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
 }
 export -f get_suibase_daemon_status
 
@@ -464,10 +461,13 @@ show_suibase_daemon_get_links() {
   if [ "$_DEBUG_OPTION" = true ]; then
     update_JSON_VALUE "debug" "$JSON_RESP"
     # Insert a few ****** between each InputPort
+    # shellcheck disable=SC2001
     JSON_VALUE=$(echo "$JSON_VALUE" | sed -e 's/Some(InputPort/\n*****************************\nSome(InputPort/g')
     # Insert a few ----- between each TargetServer
+    # shellcheck disable=SC2001
     JSON_VALUE=$(echo "$JSON_VALUE" | sed -e 's/Some(TargetServer/\n------------\nSome(TargetServer/g')
     # Insert "" before all_server_stats
+    # shellcheck disable=SC2001
     JSON_VALUE=$(echo "$JSON_VALUE" | sed -e 's/all_servers_stats/\n--\nall_servers_stats/g')
     echo -e "$JSON_VALUE"
   fi
@@ -486,8 +486,8 @@ show_suibase_daemon_get_links() {
   update_JSON_VALUE "proxyEnabled" "$JSON_RESP"
   if [ -n "$JSON_VALUE" ] && [ "$JSON_VALUE" != "true" ]; then
     echo "-----"
-    warn_user "proxy server still initializing for $WORKDIR"
-    echo "proxy server currently not monitoring $WORKDIR. This could"
+    warn_user "proxy server still initializing for $WORKDIR_NAME"
+    echo "proxy server currently not monitoring $WORKDIR_NAME. This could"
     echo "be normal if it was disabled/(re)enabled just a moment ago."
   fi
 }
@@ -497,10 +497,19 @@ notify_suibase_daemon_fs_change() {
   # Best-effort notification to the suibase-daemon that a state/config changed on
   # the filesystem for that workdir. Purposely leave the "path" parameter vague
   # so that the daemon can audit/check *everything*.
+
+  if ! is_suibase_daemon_running; then
+    return
+  fi
+
+  if [ -z "$WORKDIR_NAME" ]; then
+    return
+  fi
+
   local _HEADERS="Content-Type: application/json"
 
-  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"fsChange\",\"params\":{\"path\":\"$WORKDIR\"}}"
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"fsChange\",\"params\":{\"path\":\"$WORKDIR_NAME\"}}"
 
-  curl --max-time 5 -x "" -s --location -X POST "http://0.0.0.0:${CFG_daemon_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
+  curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
 }
 export -f notify_suibase_daemon_fs_change
