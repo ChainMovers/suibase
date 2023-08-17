@@ -1878,9 +1878,9 @@ sync_client_yaml() {
       _PROXY_IN=$(grep "$_EXPECTED_ENV" "$_TARGET_YAML" | tr -d '[:space:]')
       if [ -z "$_PROXY_IN" ]; then
         # Note: it is important to escape the first two space for the sed /a command to work.
-        _NEW_ENV="\ \ - alias: $_EXPECTED_ENV\n    rpc: \"http://${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}\"\n    ws: ~"
-        # Insert _NEW_ENV after the line starting with "envs:" in client.yaml
-        sed -i.bak "/^envs:/a $_NEW_ENV" "$_TARGET_YAML" && rm "$_TARGET_YAML.bak"
+        _NEW_ENV="envs:\n  - alias: $_EXPECTED_ENV\n    rpc: \"http://${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}\"\n    ws: ~"
+        # Insert the new links after the line starting with "envs:" in client.yaml
+        sed -i.bak "s+^envs:+$_NEW_ENV+g" "$_TARGET_YAML" && rm "$_TARGET_YAML.bak"
         echo "[$_EXPECTED_ENV] added to client.yaml"
       fi
       # Try again.
