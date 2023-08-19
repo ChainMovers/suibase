@@ -19,12 +19,7 @@ publish_local() {
   #echo "Build location=[$INSTALL_DIR]"
   mkdir -p "$INSTALL_DIR"
 
-  # Set the output for the "script_cmd"
-  export SCRIPT_OUTPUT="$INSTALL_DIR/publish-output.txt"
   publish_clear_output "$INSTALL_DIR"
-
-  # Run unit tests.
-  #script_cmd "lsui move test --install-dir \"$INSTALL_DIR\" -p \"$MOVE_TOML_DIR\""
 
   sync_client_yaml
 
@@ -34,7 +29,8 @@ publish_local() {
 
   echo "$CMD"
   echo "suibase: Publishing..."
-  script_cmd "$CMD"
+  # Execute $CMD
+  eval "$CMD"
 
   #  TODO Investigate problem with exit status here...
 
@@ -103,7 +99,6 @@ publish_local() {
 
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
-  script_cmd "$SUI_EXEC client object $_ID_PACKAGE"
   echo "suibase: Verifying new package is on network..."
   validation=$($SUI_EXEC client object "$_ID_PACKAGE" | grep -i "package")
   if [ -z "$validation" ]; then

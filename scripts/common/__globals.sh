@@ -247,8 +247,6 @@ version_less_than() {
 }
 export -f version_less_than
 
-script_cmd() { script -efqa "$SCRIPT_OUTPUT" -c "$*"; }
-export -f script_cmd
 beginswith() { case $2 in "$1"*) true ;; *) false ;; esac }
 export -f beginswith
 
