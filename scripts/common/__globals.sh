@@ -84,7 +84,7 @@ active)
   if [ -f "$WORKDIRS/$WORKDIR/.state/name" ]; then
     # Resolve the 'active' workdir link into its target name.
     # Empty string on error.
-    WORKDIR_NAME=$(cat "$WORKDIRS/$WORKDIR/.state/name 2> /dev/null")
+    WORKDIR_NAME=$(cat "$WORKDIRS/$WORKDIR/.state/name" 2>/dev/null)
   fi
   ;;
 cargobin)
