@@ -8,10 +8,9 @@ editLink: true
 External resources for Sui developers
 
 ::: details How to add a link?
-Either [edit it yourself]( ../community/editors.html ) or request someone else on our [Discord #cookbook channel]( https://discord.com/invite/Erb6SwsVbH ).<br><br>
-All links are reviewed and could be edited for brevity.<br><br>
-
-No blatant and competitive marketing in description. The target audience is developers. Not the right place for NFT marketplaces or exchanges.
+Either [edit it yourself]( ../community/editors.html ) or request someone else on our [Discord #cookbook channel]( https://discord.com/invite/Erb6SwsVbH ).<br>
+All links are reviewed and could be edited for brevity.<br>
+Please, no blatant competitive marketing in description. The target audience are developers. Not the right place for NFT marketplaces or exchanges.
 :::
 
 ## Official Sui Websites

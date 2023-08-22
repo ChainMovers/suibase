@@ -17,8 +17,8 @@ Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites)
 Skip installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config).<br>
 
 ::: details How will suibase get the Sui binaries?
-Suibase automatically download the code and builds a sui client for each workdir. One binary to properly match each network.<br><br>
-For faster build your Rust app can also later change its dependencies to the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
+Suibase automatically download the code and builds a sui client for each workdir. One binary to properly match each network.<br>
+For faster build your Rust app can optionally have their dependencies set to the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
 :::
 
 ## Installation Steps

@@ -1,5 +1,5 @@
 ---
-title: "Multi-Link RPC ( Proxy Server )"
+title: "Proxy Server ( Multi-Link RPC )"
 order: 2
 ---
 
@@ -17,29 +17,42 @@ Have your applications query toward the addresses of the local proxy server:
 | testnet     | ```http://localhost:44342```    |
 | mainnet     | ```http://localhost:44343```    |
 
-The proxy forward/retry/distribute automatically your queries among all the healthy RPC nodes configured.
+The proxy forward/retry/distribute your queries among all the healthy RPC nodes configured.
 
 All suibase scripts (and the corresponding client.yaml) are already configured to use the proxy server by default.
 
-Useful related workdir commands are start/stop/status and links (e.g. "devnet start", "testnet links" etc...).
+Useful related workdir commands are start/stop/status and links (e.g. ```devnet start```, ```testnet links``` etc...).
 
 ## Monitoring RPC Links
-The proxy server runs in background automatically when you start one of localnet, devnet, testnet or mainnet (e.g. 'devnet start').
+The proxy runs in background when you start one of localnet, devnet, testnet or mainnet (e.g. ```devnet start```).
 
-The workdir ```links``` command (e.g. ```testnet links```) shows the health of all its configured RPC nodes.
+The workdir ```links``` command (e.g. ```testnet links```) shows status for all configured RPC servers.
 
 <img :src="$withBase('/assets/testnet-links.png')" alt="testnet links"><br>
 
-::: details Details on perfomance monitoring
-The success/failure of every query affects a health score for the RPC node. Every 15 seconds the suibase daemon will do a "health check" test query toward every node to keep a fresh view of their availability.
-**RespT** measure the time between the health check query and the response time. The average is an exponential moving average of the last 20 queries (the result from the most recent query has more weight).
-**Load** is the percent of the user queries that were handled by this node. The health check query are not included in this stat.
+::: details Details on cummulative request stats
+Each **user query** is counted only once in one of the following metric depending of its outcome.<br>
+**Success first attempt**: One healthy RPC node was selected and the request succeeded immediatly.<br>
+**Success after retry**: One healthy RPC node was selected but failed, the request eventually succeeded after retries with one or more other servers (when safe to retry). From a user perspective, the request succeeded as if a single RPC node was used.<br>
+**Failure bad request**: It was determine that the request was malformed and would not succeed with any RPC nodes. Therefore the request is not retried and the failure is reported immediatly. Check the response for hint on how to fix the request.<br>
+**Failure others**: All other scenarios when the response was not a JSON-RPC success. The proxy response will have more information.<br>
 :::
 
-## RPC links configuration
-You can customize your own RPC links by editing your workdir's suibase.yaml file.
+::: details Details on individual server stats
+**Status**: Either OK or DOWN. Goes DOWN on any failure related to the server not responding. Every 15 seconds the proxy does a health check toward every nodes to verify availability and measure response time.<br>
+**Health%**: Varies from -100% (most unealthy) to 100% (healthiest). This is intended for  relative comparison between all servers. The score factors duration of healthy state or failures, frequency of retries and rate limitation etc... any positive value is considered healthy (Status OK).<br>
+**Load%**: Distribution of the **user** request among all nodes. The sum of the load% is 100%. Health check queries are not included in this stat.<br>
+**RespT**: The time between the health check query and the response time. Average of the last 20 queries (the result from the most recent query has more weight).<br>
+**Success%**: Ratio of **user** request that were successful after the server was selected and considered healthy. Will typically be 100%, a value below 100% signify the server did unexpectadly fails on a user query (Note: the query might have been retried on another server and succeeded from a user perspective).<br>
+:::
 
-By default, suibase come with a set of links. You can add more links by adding a 'links' section. Example with two RPC nodes:
+
+## RPC links configuration
+Out of the box, suibase come with a set of public RPC links known to be operating. This is maintained by the community and updated whenever you do ```~/suibase/update```.
+
+You can add your own RPC links by editing your workdir's suibase.yaml file.
+Example with two RPC nodes:
+
 ``` yaml
 links:
   - alias: "sui.io"
@@ -73,10 +86,10 @@ A preference order when selecting between multiple servers. It is used, as an ex
 :::
 
 ## Upgrade
-The proxy server update and restart as needed when you do '~/suibase/update'.
+The proxy server update and restart as needed when you do ```~/suibase/update```.
 
 ## Stopping and Disabling
-Use the ```workdir stop``` command (e.g. ```devnet stop```) to stop the proxy services (also the daemon will no longuer monitor the health of the RPC nodes).
-Disabling is also configureable by adding 'proxy_enabled: false' to a suibase.yaml in a specific workdir.
+Use the workdir ```stop``` command (e.g. ```devnet stop```) to disable the proxy services (Note: the background suibase daemon will keep running but will no longuer monitor the health of the RPC nodes).
+Disabling is also configureable by adding ```proxy_enabled: false``` to a suibase.yaml in a specific workdir.
 You can disable for all workdirs at once by adding it to ```~/suibase/workdirs/common/suibase.yaml```
 

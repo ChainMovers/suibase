@@ -24,14 +24,13 @@ $ dsui client active-address
 You no longer have to "switch env". You can assume ```dsui``` always transparently execute with its proper ```sui``` client and keystore for devnet (in same way, ```tsui``` for testnet, ```msui`` for mainnet. Each have their own keystore).
 
 Type ```devnet``` for help.
-<br>
+
 
 ## Status
-You can check the client version with ```devnet status```<br>
+You can check the client version and devnet services status with ```devnet status```.
 
-::: warning Work-In-Progress
-Status will eventually show the health of the network and your RPC connections.
-:::
+You can monitor the RPC node servers with ```devnet links``` ([More Info]( ./proxy.md#monitoring-rpc-links)).
+
 
 ## Upgrading Sui Client
 Do ```devnet update``` to download/rebuild to the latest client.

@@ -27,7 +27,7 @@ features:
     details: Faster edit/publish/test cycles with Rust and Python helpers
     link: /intro.md
 
-  - title: Multi-Link RPC
+  - title: Proxy Server
     icon: map
     details: Reduce timeout failures with automatic fallback to alternative RPC servers.
     link: /how-to/proxy.md
