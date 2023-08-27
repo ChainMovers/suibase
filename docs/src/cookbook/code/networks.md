@@ -37,14 +37,11 @@ sui client new-env --alias <ENVIRONMENT> --rpc <RPC-URL>
 @tab:active TypeScript
 
 ```ts
-import { JsonRpcProvider, Connection } from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
-const localnetConnection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
-  faucet: "http://127.0.0.1:9123/gas", // optional
-});
+// create a client object connected to localnet
+const client = new SuiClient({ url: getFullnodeUrl('localnet') });
 
-const provider = new JsonRpcProvider(localnetConnection);
 ```
 
 :::

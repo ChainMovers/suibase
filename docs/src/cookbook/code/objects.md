@@ -63,18 +63,15 @@ else:
 @tab TypeScript
 
 ```ts
-import { JsonRpcProvider, Connection } from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
 });
 
-// Connect to provider
-const provider = new JsonRpcProvider();
-
 // Fetch object details
-const txn = await provider.getObject({
+const txn = await client.getObject({
   id: "0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231",
   // fetch the object content field
   options: { showContent: true },
@@ -127,18 +124,15 @@ else:
 @tab TypeScript
 
 ```ts
-import { JsonRpcProvider, Connection } from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
 });
 
-// Connect to provider
-const provider = new JsonRpcProvider(connection);
-
 // Get owned objects by an address
-const ownedObjects = await provider.getOwnedObjects({
+const ownedObjects = await client.getOwnedObjects({
   owner: "0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231",
 });
 
@@ -202,18 +196,16 @@ else:
 @tab TypeScript
 
 ```ts
-import { JsonRpcProvider, Connection } from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
+
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
 });
 
-// Connect to provider
-const provider = new JsonRpcProvider();
 
 // Fetch multiple object details in one request
-const txns = await provider.multiGetObjects({
+const txns = await client.multiGetObjects({
   ids: [
     "0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231",
     "0x9ad3de788483877fe348aef7f6ba3e52b9cfee5f52de0694d36b16a6b50c1429",

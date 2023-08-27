@@ -9,13 +9,6 @@ editLink: true
 ::: tip Fact Sheet
 :::
 
-Suggested subjects:
-
-- How to transfer an object
-- How to transfer Sui
-- How to merge coins
-- How to publish a module
-
 ## How to transfer an object
 
 ::: code-tabs
@@ -32,11 +25,11 @@ sui client transfer --to <ADDRESS> --object-id <OBJECT_ID> --gas-budget <GAS_BUD
 ```python
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 from pysui.sui.sui_types.address import SuiAddress
 
 def test_tb_transfer_obj(client: SuiClient = None):
-    """Use Transaction Buider to transfer object."""
+    """Use Synchronous Transaction Builder to transfer object."""
     # Setup client
     client = client if client else SuiClient(SuiConfig.default_config())
     # Instantiate transaction block builder
@@ -65,27 +58,15 @@ def test_tb_transfer_obj(client: SuiClient = None):
 @tab TS
 
 ```ts
-import {
-  Ed25519Keypair,
-  Connection,
-  JsonRpcProvider,
-  RawSigner,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
-});
+// create a client object connected to testnet
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
-
-// Connect to the provider
-const provider = new JsonRpcProvider(connection);
-
-// Instantiate RawSigner object
-const signer = new RawSigner(keypair, provider);
 
 // Instantiate TransactionBlock object
 const tx = new TransactionBlock();
@@ -101,7 +82,8 @@ tx.transferObjects(
 );
 
 // Perform the object transfer
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+  signer: keypair,
   transactionBlock: tx,
 });
 
@@ -130,11 +112,11 @@ sui client transfer-sui --to <ADDRESS> --sui-coin-object-id <SUI_COIN_OBJECT_ID>
 ```python
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 from pysui.sui.sui_types.address import SuiAddress
 
 def test_tb_transfer_sui(client: SuiClient = None):
-    """Use Transaction Buider to transfer Sui object."""
+    """Use Synchronous Transaction Builder to transfer Sui object."""
     # Setup client
     client = client if client else SuiClient(SuiConfig.default_config())
     # Instantiate transaction block builder
@@ -158,27 +140,15 @@ def test_tb_transfer_sui(client: SuiClient = None):
 @tab TS
 
 ```ts
-import {
-  Ed25519Keypair,
-  Connection,
-  JsonRpcProvider,
-  RawSigner,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+
+// create a client object connected to testnet
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
-
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
-});
-
-// Connect to provider
-const provider = new JsonRpcProvider(connection);
-
-// Instantiate RawSigner object
-const signer = new RawSigner(keypair, provider);
 
 // Instantiate TransactionBlock object
 const tx = new TransactionBlock();
@@ -192,7 +162,8 @@ tx.transferObjects(
 );
 
 // Perform SUI transfer
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+  signer: keypair,
   transactionBlock: tx,
 });
 
@@ -218,7 +189,7 @@ sui client merge-coin --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MER
 ```python
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 from pysui.sui.sui_types.address import SuiAddress
 from pysui.sui.sui_txresults.single_tx import SuiCoinObjects
 
@@ -251,27 +222,15 @@ def test_tb_merge_to_gas(client: SuiClient = None):
 @tab TS
 
 ```ts
-import {
-  Ed25519Keypair,
-  Connection,
-  JsonRpcProvider,
-  RawSigner,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+
+// create a client object connected to testnet
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
-
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
-});
-
-// Connect to provider
-const provider = new JsonRpcProvider(connection);
-
-// Instantiate RawSigner object
-const signer = new RawSigner(keypair, provider);
 
 // Instantiate TransactionBlock object
 const tx = new TransactionBlock();
@@ -289,7 +248,8 @@ tx.mergeCoins(
 );
 
 // Perform the merge
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+  signer: keypair,
   transactionBlock: tx,
 });
 
@@ -316,7 +276,7 @@ sui client split-coin --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> --amounts <A
 ```python
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 from pysui.sui.sui_types.address import SuiAddress
 
 def test_tb_split_from_gas(client: SuiClient = None):
@@ -343,30 +303,18 @@ def test_tb_split_from_gas(client: SuiClient = None):
 @tab TS
 
 ```ts
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
-// Set a provider
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
-});
+// create a client object connected to testnet
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // Set a MMENONIC
 const MNEMONIC = "";
 
 // Get keypair from deriving mnemonic phassphrase
 const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
-
-// Connect to specified provider
-const provider = new JsonRpcProvider(connection);
-
-// Get signer object
-const signer = new RawSigner(keypair, provider);
 
 // Instantiate TransactionBlock() object
 const tx = new TransactionBlock();
@@ -378,7 +326,8 @@ const [coin] = tx.splitCoins(tx.gas, [tx.pure(1_000_000)]);
 tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
 
 // Perform the split
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+  signer: keypair,
   transactionBlock: tx,
 });
 
@@ -403,7 +352,7 @@ sui client publish --gas-budget <GAS_BUDGET> --path <PACKAGE_PATH>
 ```python
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 from pysui.sui.sui_types.address import SuiAddress
 
 def test_tb_publish(client: SuiClient = None):
@@ -428,27 +377,20 @@ def test_tb_publish(client: SuiClient = None):
 @tab TS
 
 ```ts
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  devnetConnection,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { execSync } from "child_process";
+
+// create a client object connected to testnet
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // Set a mnemonic passphrase
 const MNEMONIC = "";
 
 // Generate Ed25519 keypair from MNEMONIC
 const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
-
-// Set a provider
-const provider = new JsonRpcProvider(devnetConnection);
-
-// Get signer object
-const signer = new RawSigner(keypair, provider);
 
 // Set the package path
 const packagePath = "";
@@ -477,7 +419,8 @@ const [upgradeCap] = tx.publish({
 tx.transferObjects([upgradeCap], tx.pure(await signer.getAddress()));
 
 // Perform the package deployment
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+  signer: keypair,
   transactionBlock: tx,
 });
 
@@ -506,7 +449,7 @@ sui client call --function function --module module --package <PACKAGE_ID> --gas
 from pysui.sui.sui_types.scalars import ObjectID
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 
 def test_tb_move_call(client: SuiClient = None):
     """Call a sui contract function."""
@@ -534,30 +477,18 @@ def test_tb_move_call(client: SuiClient = None):
 @tab TS
 
 ```ts
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Connection,
-  devnetConnection,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
-const connection = new Connection({
-  fullnode: "http://127.0.0.1:9000",
-});
+// create a client object connected to testnet
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 // Set a mnemonic passphrase
 const MNEMONIC = "";
 
 // Generate Ed25519 keypair from MNEMONIC
 const keypair = Ed25519Keypair.deriveKeypair(MNEMONIC, "m/44'/784'/0'/0'/0'");
-
-// Set a provider
-const provider = new JsonRpcProvider(connection);
-
-// Get signer object
-const signer = new RawSigner(keypair, provider);
 
 // Set a package object ID
 const packageObjectId = "";
@@ -587,7 +518,8 @@ tx.moveCall({
 });
 
 // Perform the move call
-const result = await signer.signAndExecuteTransactionBlock({
+const result = await client.signAndExecuteTransactionBlock({
+  signer: keypair,
   transactionBlock: tx,
 });
 
@@ -623,7 +555,7 @@ However; you can choose individual flags individually or in combination.
 ```python
 from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.transaction import SuiTransaction
+from pysui.sui.sui_txn.sync_transaction import SuiTransaction
 from pysui.sui.sui_clients.common import handle_result
 from pysui.sui.sui_builders.get_builders import GetTx
 
