@@ -12,6 +12,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+
+## [0.1.5] 2023-08-28
+
+### Added
+
+- (#59,#52) Multi-Link RPC (proxy server) major feature
 - Scripts: (#62) Can disable auto-generations of the 15 private keys.
 - Scripts: (#62) Add more easily your own private keys to any workdir.
 - Scripts: (#57) New "build" command (e.g. "testnet build -p sui-node").
