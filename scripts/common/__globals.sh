@@ -8,7 +8,7 @@
 # shellcheck disable=SC2155
 export USER_CWD=$(pwd -P)
 
-export SUI_BASE_VERSION="0.1.4"
+export SUI_BASE_VERSION="0.1.5"
 
 # Suibase does not work with version below these.
 export MIN_SUI_VERSION="sui 0.27.0"
