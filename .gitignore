@@ -34,6 +34,7 @@ tmp
 
 # Move build files
 *.mv
+output.bpl
 
 # Move build output (specific to suibase repo)
 **/move/build

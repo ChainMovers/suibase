@@ -49,9 +49,9 @@ default_repo_branch: "devnet"
 #
 # When true, the binary is downloaded from default_repo_url (not built
 # from the local repo). Suibase still download the corresponding source
-# code in the local repo (in case you build/depend on it from your app).
+# code in the local repo (in case user app dependency on it).
 #
-# If false, then the binaries are instead built from the lo-cal repo.
+# If false, then the binaries are instead built from the local repo.
 #
 # ********************************************************************
 # NOTE: This is WORK-IN-PROGRESS. Only dev should enable this for now.
