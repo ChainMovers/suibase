@@ -8,7 +8,10 @@
 # shellcheck disable=SC2155
 export USER_CWD=$(pwd -P)
 
-export SUI_BASE_VERSION="0.1.5"
+# Format is: "major.minor.patch-build"
+#
+# The build hash is best-effort appended later.
+export SUIBASE_VERSION="0.1.5"
 
 # Suibase does not work with version below these.
 export MIN_SUI_VERSION="sui 0.27.0"
@@ -358,18 +361,16 @@ export -f update_suibase_yaml
 
 update_suibase_yaml
 
-update_suibase_version() {
+update_SUIBASE_VERSION_var() {
   # Best effort to add the build number to the version.
   # If no success, just use the hard coded major.minor.patch info.
   local _BUILD
   _BUILD=$(if cd "$SCRIPTS_DIR"; then git rev-parse --short HEAD; else echo "-"; fi)
   if [ -n "$_BUILD" ] && [ "$_BUILD" != "-" ]; then
-    SUI_BASE_VERSION="$SUI_BASE_VERSION-$_BUILD"
+    SUIBASE_VERSION="$SUIBASE_VERSION-$_BUILD"
   fi
 }
-export -f update_suibase_version
-
-update_suibase_version
+export -f update_SUIBASE_VERSION_var
 
 cd_sui_log_dir() {
   if [ -d "$WORKDIRS/$WORKDIR" ]; then
@@ -436,8 +437,9 @@ export -f check_yaml_parsed
 
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1"
-  ALLOW_BUILD="$2"
-  PASSTHRU_OPTIONS="$3"
+  ALLOW_BINARY="$2"
+  USE_PRECOMPILED="$3"
+  PASSTHRU_OPTIONS="$4"
 
   local _BUILD_DESC
   if [ "${CFG_network_type:?}" = "local" ]; then
@@ -451,12 +453,14 @@ build_sui_repo_branch() {
   # Verify Sui pre-requisites are installed.
   which curl &>/dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
   which git &>/dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
-  which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
-  which rustc &>/dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
-  which cargo &>/dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+  if [ "$USE_PRECOMPILED" = "false" ]; then
+    which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
+    which rustc &>/dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
+    which cargo &>/dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
 
-  # Verify Rust is recent enough.
-  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
+    # Verify Rust is recent enough.
+    version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
+  fi
 
   if [ "$ALLOW_DOWNLOAD" = "false" ]; then
     if is_sui_repo_dir_override; then
@@ -474,6 +478,18 @@ build_sui_repo_branch() {
     if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ] ||
       [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
       echo "suibase.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
+    fi
+
+    if [ "$USE_PRECOMPILED" = true ]; then
+      # Identify the latest remote tag with binaries.
+      update_PRECOMP_REMOTE_var
+      if [ -z "$PRECOMP_REMOTE" ]; then
+        setup_error "Could not retreive latest precompiled binaries for this platform"
+      fi
+      # Download the binary asset for this host.
+      #
+      # It will be "installed" later after the matching repo
+      # is initialized/updated.
     fi
 
     # If not already done, initialize the default repo.
@@ -534,7 +550,7 @@ build_sui_repo_branch() {
     exit 1
   fi
 
-  if [ "$ALLOW_BUILD" = false ]; then
+  if [ "$ALLOW_BINARY" = false ]; then
     return
   fi
 
@@ -560,7 +576,6 @@ build_sui_repo_branch() {
     (if cd "$SUI_REPO_DIR"; then cargo build $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
   fi
 }
-
 export -f build_sui_repo_branch
 
 exit_if_not_installed() {
@@ -1892,3 +1907,107 @@ sync_client_yaml() {
   fi
 }
 export -f sync_client_yaml
+
+# Functions to get the "pre-compiled binary" release assets information from github.
+#
+# PRECOMP_REMOTE is a boolean indicating if the repo has a binary.
+#
+# When true other variables are set to show:
+#  - Latest binary "x.y.z" version at the repo.
+#  - Complete URL of the binary file to download for the host platform.
+#  - Filename of the binary.
+#
+# Exit on errors.
+#
+# For now the only supported repo is github.
+export PRECOMP_REMOTE=""
+export PRECOMP_REMOTE_VERSION=""
+export PRECOMP_REMOTE_TAG_NAME=""
+export PRECOMP_REMOTE_DOWNLOAD_URL=""
+update_PRECOMP_REMOTE_var() {
+  PRECOMP_REMOTE="false"
+  PRECOMP_REMOTE_VERSION=""
+  PRECOMP_REMOTE_TAG_NAME=""
+  PRECOMP_REMOTE_DOWNLOAD_URL=""
+
+  local _REPO_URL="${CFG_default_repo_url:?}"
+  local _BRANCH="${CFG_default_repo_branch:?}"
+
+  # Make sure _REPO is github (start with "https://github.com")
+  if [[ "$_REPO_URL" != "https://github.com"* ]]; then
+    setup_error "repo [$_REPO_URL] not supported for pre-compiled binaries"
+  fi
+
+  # Change the URL to the API URL (prepend 'api.' before github.com and '/repos' after)
+  _REPO_URL="${_REPO_URL/https:\/\/github.com/https:\/\/api.github.com\/repos}"
+  # Remove the trailing .git in the URL
+  # _REPO_URL is now the URL prefix for all github API call.
+  _REPO_URL="${_REPO_URL%.git}"
+
+  local _OUT
+  _OUT=$(curl -s "$_REPO_URL/releases")
+  if [ -z "$_OUT" ]; then
+    setup_error "Failed to get release information from [$_REPO_URL]"
+  fi
+
+  # Identify the platform substring in the asset to download.
+  # One of "ubuntu", "macos" or "windows.
+  local _BIN_PLATFORM="unknown"
+  local _UNAME="$(uname -s)"
+  if [ "$_UNAME" = "Linux" ]; then
+    _BIN_PLATFORM="ubuntu"
+  else
+    if [ "$_UNAME" = "Darwin" ]; then
+      _BIN_PLATFORM="macos"
+    else
+      # Unsupported platform.
+      # _BIN_PLATFORM="windows" presumably...
+      setup_error "Unsupported platform [$_UNAME]"
+    fi
+  fi
+  echo "$_OUT"
+  # Find latest release with a binary asset.
+  local _TAG_VERSION
+  local _TAG_NAME
+  local _DOWNLOAD_URL
+  while read -r line < <(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -r); do
+    echo "Processsing $line"
+    # Return something like: "tag_name": "testnet-v1.8.2",
+    _TAG_NAME="${line#*\:}"      # Remove the ":" and everything before
+    _TAG_NAME="${_TAG_NAME#*\"}" # Remove the first '"' and everything before
+    _TAG_NAME="${_TAG_NAME%\"*}" # Remove the last '"' and everything after
+
+    # Find the binary asset for that release.
+    local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-x86_64"
+
+    _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | head -1)
+    _DOWNLOAD_URL="${_DOWNLOAD_URL#*\:}" # Remove the ":" and everything before
+    _DOWNLOAD_URL="${_DOWNLOAD_URL#*\"}" # Remove the first '"' and everything before
+    _DOWNLOAD_URL="${_DOWNLOAD_URL%\"*}" # Remove the last '"' and everything after
+
+    # Stop looping if _DOWNLOAD_URL looks valid.
+    if [ -n "$_DOWNLOAD_URL" ]; then
+      break
+    fi
+
+  done # while read line
+
+  if [ -z "$_DOWNLOAD_URL" ]; then
+    setup_error "Could not find a '$_BIN_PLATFORM' binary asset for $_BRANCH in [$_REPO_URL]"
+  fi
+
+  _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
+  echo "_OUT=$_OUT"
+  echo "_TAG_NAME=$_TAG_NAME"
+  echo "_TAG_VERSION=$_TAG_VERSION"
+  echo _DOWNLOAD_URL="$_DOWNLOAD_URL"
+
+  # All good. Return success.
+  PRECOMP_REMOTE="true"
+  PRECOMP_REMOTE_VERSION="$_TAG_VERSION"
+  PRECOMP_REMOTE_TAG_NAME="$_TAG_NAME"
+  PRECOMP_REMOTE_DOWNLOAD_URL="$_DOWNLOAD_URL"
+
+  return
+}
+export -f update_PRECOMP_REMOTE_var

@@ -242,7 +242,7 @@ workdir_init_local() {
   sed -i.bak -e "s+<PUT_CONFIG_DEFAULT_PATH_HERE>+$CONFIG_DATA_DIR_DEFAULT+g" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" && rm "$CONFIG_DATA_DIR_DEFAULT/client.yaml.bak"
 
   # "regen" from the genesis config.yaml
-  if [ "$DEBUG_RUN" = true ]; then
+  if [ "$DEBUG_PARAM" = true ]; then
     $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT"
   else
     $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT" >&/dev/null
@@ -268,7 +268,7 @@ workdir_init_local() {
   sed -i.bak -e "s+<PUT_FAUCET_PATH_HERE>+$WORKDIRS/$WORKDIR/faucet+g" "$WORKDIRS/$WORKDIR/faucet/client.yaml" && rm "$WORKDIRS/$WORKDIR/faucet/client.yaml.bak"
 
   # When need to start in foreground to debug.
-  if [ "$DEBUG_RUN" = true ]; then
+  if [ "$DEBUG_PARAM" = true ]; then
     echo "Starting localnet process (foreground for debug)"
     $SUI_BIN_ENV "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG"
     exit

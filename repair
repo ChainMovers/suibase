@@ -68,7 +68,7 @@ suibase_repair() {
   # from __globals.sh. This may happen when this script was
   # sourced for a particular workdir.
   local _SCRIPT_SOURCED=false
-  if [ -n "$SUI_BASE_VERSION" ] && [ -n "$USER_CWD" ]; then
+  if [ -n "$SUIBASE_VERSION" ] && [ -n "$USER_CWD" ]; then
     _SCRIPT_SOURCED=true
   fi
 

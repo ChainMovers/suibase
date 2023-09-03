@@ -20,6 +20,8 @@ sui_faucet_client_timeout_secs: 10
 default_repo_url: ~
 default_repo_branch: ~
 
+precompiled_bin: false
+
 # proxy not applicable to cargobin
 proxy_enabled: false
 proxy_host_ip: "0.0.0.0"

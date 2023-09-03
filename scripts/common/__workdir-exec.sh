@@ -5,22 +5,24 @@
 # workdir_exec() is the key "public" function of this file.
 
 # One command always expected from the user.
-CMD_START_REQ=false
-CMD_STOP_REQ=false
-CMD_STATUS_REQ=false
+CMD_BUILD_REQ=false
 CMD_CREATE_REQ=false
 CMD_DELETE_REQ=false
-CMD_UPDATE_REQ=false
-CMD_REGEN_REQ=false
-CMD_PUBLISH_REQ=false
+CMD_FAUCET_REQ=false
 CMD_LINKS_REQ=false
+CMD_PUBLISH_REQ=false
+CMD_REGEN_REQ=false
 CMD_SET_ACTIVE_REQ=false
 CMD_SET_SUI_REPO_REQ=false
-CMD_FAUCET_REQ=false
+CMD_STOP_REQ=false
+CMD_START_REQ=false
+CMD_STATUS_REQ=false
+CMD_UPDATE_REQ=false
 
 usage_local() {
+  update_SUIBASE_VERSION_var
   echo_low_green "$WORKDIR"
-  echo "  suibase $SUI_BASE_VERSION"
+  echo "  suibase $SUIBASE_VERSION"
   echo
   echo "  Workdir to simulate a Sui network running fully on this machine"
   echo -n "  JSON-RPC API at http://"
@@ -95,7 +97,7 @@ usage_local() {
 
 usage_remote() {
   echo_low_green "$WORKDIR"
-  echo "  suibase $SUI_BASE_VERSION"
+  echo "  suibase $SUIBASE_VERSION"
   echo
   echo "  Workdir to interact with a remote Sui network"
   if [ "${CFG_proxy_enabled:?}" != "false" ]; then
@@ -196,9 +198,14 @@ workdir_exec() {
   *) usage ;;
   esac
 
-  # Optional params (the "debug" and "nobinary" are purposely not documented).
-  DEBUG_RUN=false
-  NOBINARY=false
+  # Optional params
+  # "debug", "nobinary" and "precompiled" are for developnent testing and
+  # are purposely not documented
+  DEBUG_PARAM=false
+  NOBINARY_PARAM=false
+  PRECOMPILED_PARAM=false
+
+  # This is for the --json parameter
   JSON_PARAM=false
 
   # Parsing the command line shifting "rule":
@@ -209,7 +216,11 @@ workdir_exec() {
   faucet)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
-      --debug) DEBUG_RUN=true ;;
+      --debug) DEBUG_PARAM=true ;;
+      --precompiled | --nobinary)
+        echo "Option '$1' not compatible with '$CMD_REQ' command"
+        exit 1
+        ;;
       *) PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1" ;;
       esac
       shift
@@ -218,7 +229,11 @@ workdir_exec() {
   set-sui-repo)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
-      --debug) DEBUG_RUN=true ;;
+      --debug) DEBUG_PARAM=true ;;
+      --precompiled | --nobinary)
+        echo "Option '$1' not compatible with '$CMD_REQ' command"
+        exit 1
+        ;;
       -p | --path)
         # see: https://stackoverflow.com/questions/9018723/what-is-the-simplest-way-to-remove-a-trailing-slash-from-each-parameter
         OPTIONAL_PATH="${2%/}"
@@ -239,8 +254,11 @@ workdir_exec() {
   publish)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
-      --debug) DEBUG_RUN=true ;;
-      --nobinary) NOBINARY=true ;;
+      --debug) DEBUG_PARAM=true ;;
+      --precompiled | --nobinary)
+        echo "Option '$1' not compatible with '$CMD_REQ' command"
+        exit 1
+        ;;
       -p | --path)
         OPTIONAL_PATH="${2%/}"
         shift
@@ -259,10 +277,9 @@ workdir_exec() {
   build)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
-      --debug | --nobinary)
-        echo "Option '$1' not compatible with build command"
-        exit 1
-        ;;
+      --debug) DEBUG_PARAM=true ;;
+      --nobinary) NOBINARY_PARAM=true ;; # Will just update the repo.
+      --precompiled) PRECOMPILED_PARAM=true ;;
       *) PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1" ;;
       esac
       shift
@@ -271,8 +288,12 @@ workdir_exec() {
   links)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
-      --debug) DEBUG_RUN=true ;;
+      --debug) DEBUG_PARAM=true ;;
       --json) JSON_PARAM=true ;;
+      --precompiled | --nobinary)
+        echo "Option '$1' not compatible with '$CMD_REQ' command"
+        exit 1
+        ;;
       *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -284,8 +305,11 @@ workdir_exec() {
   *)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
-      --debug) DEBUG_RUN=true ;;
-      --nobinary) NOBINARY=true ;;
+      --debug) DEBUG_PARAM=true ;;
+      --precompiled | --nobinary)
+        echo "Option '$1' not compatible with '$CMD_REQ' command"
+        exit 1
+        ;;
       *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -296,12 +320,21 @@ workdir_exec() {
     ;; # End parsing default cases
   esac
 
-  if [ "$DEBUG_RUN" = true ]; then
-    echo "Debug flag set. May run in foreground Ctrl-C to Exit"
+  # Check for conflicting parameters --precompiled and --nobinary
+  if [ "$PRECOMPILED_PARAM" = "true" ] && [ "$NOBINARY_PARAM" = "true" ]; then
+    setup_error "Options '--precompiled' and '--nobinary' are conflicting"
   fi
 
-  if [ "$NOBINARY" = true ]; then
+  if [ "$DEBUG_PARAM" = true ]; then
+    echo "debug flag set. May run in foreground Ctrl-C to Exit"
+  fi
+
+  if [ "$NOBINARY_PARAM" = true ]; then
     echo "nobinary flag set. Will not build sui binaries from the repo."
+  fi
+
+  if [ "$PRECOMPILED_PARAM" = true ]; then
+    echo "precompiled flag set. Will download binaries from the repo."
   fi
 
   # Validate if the path exists.
@@ -563,7 +596,7 @@ workdir_exec() {
     fi
 
     # Display the stats from the proxy server.
-    show_suibase_daemon_get_links "$DEBUG_RUN" "$JSON_PARAM"
+    show_suibase_daemon_get_links "$DEBUG_PARAM" "$JSON_PARAM"
 
     exit
   fi
@@ -824,12 +857,25 @@ workdir_exec() {
     ALLOW_DOWNLOAD="false"
   fi
 
-  ALLOW_BUILD="true"
-  if [ "$NOBINARY" = true ]; then
-    ALLOW_BUILD="false"
+  ALLOW_BINARY="true"
+  if [ "$NOBINARY_PARAM" = true ]; then
+    ALLOW_BINARY="false"
   fi
 
-  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BUILD" "$PASSTHRU_OPTIONS"
+  USE_PRECOMPILED="false"
+  if [ "$CMD_BUILD_REQ" = true ]; then
+    # Use the --precompiled flag only when 'build' command.
+    if [ "$PRECOMPILED_PARAM" = "true" ]; then
+      USE_PRECOMPILED="true"
+    fi
+  else
+    # Use the suibase.yaml with all other commands.
+    if [ "${CFG_precompiled_bin:?}" = "true" ]; then
+      USE_PRECOMPILED="true"
+    fi
+  fi
+
+  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BINARY" "$USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
 
   if [ "$CMD_BUILD_REQ" = true ]; then
     # No further action needed when "build" command.
@@ -850,7 +896,7 @@ workdir_exec() {
     fi
   fi
 
-  if [ "$ALLOW_BUILD" = false ]; then
+  if [ "$ALLOW_BINARY" = false ]; then
     # Can't do anything more than getting the repo.
     return
   fi
