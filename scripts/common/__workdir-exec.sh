@@ -862,20 +862,30 @@ workdir_exec() {
     ALLOW_BINARY="false"
   fi
 
-  USE_PRECOMPILED="false"
+  local _USE_PRECOMPILED="false"
   if [ "$CMD_BUILD_REQ" = true ]; then
     # Use the --precompiled flag only when 'build' command.
     if [ "$PRECOMPILED_PARAM" = "true" ]; then
-      USE_PRECOMPILED="true"
+      _USE_PRECOMPILED="true"
     fi
   else
     # Use the suibase.yaml with all other commands.
     if [ "${CFG_precompiled_bin:?}" = "true" ]; then
-      USE_PRECOMPILED="true"
+      _USE_PRECOMPILED="true"
     fi
   fi
 
-  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BINARY" "$USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
+  # Just ignore the precompiled if not a x86_64 machine.
+  if [ "$_USE_PRECOMPILED" = "true" ]; then
+    local _PLATFORM
+    _PLATFORM="$(uname -m)"
+    if [ "$_PLATFORM" != "x86_64" ]; then
+      warn_user "Precompiled binaries not available for '$_PLATFORM'. Will build from source instead."
+      _USE_PRECOMPILED="false"
+    fi
+  fi
+
+  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BINARY" "$_USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
 
   if [ "$CMD_BUILD_REQ" = true ]; then
     # No further action needed when "build" command.

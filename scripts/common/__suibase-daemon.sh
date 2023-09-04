@@ -72,7 +72,7 @@ need_suibase_daemon_upgrade() {
       true
       return
     fi
-    if ! cmp -s "$_SRC" "$_DST"; then
+    if ! cmp --silent "$_SRC" "$_DST"; then
       echo "$SUIBASE_DAEMON_NAME bin difference detected"
       true
       return

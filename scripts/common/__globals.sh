@@ -450,6 +450,10 @@ build_sui_repo_branch() {
     _BUILD_DESC="client"
   fi
 
+  # If there is no checkout, no build etc... then still want to display
+  # some feedback of the branch/tag in use before exiting the function.
+  local _FEEDBACK_BEFORE_RETURN=true
+
   # Verify Sui pre-requisites are installed.
   which curl &>/dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
   which git &>/dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
@@ -474,22 +478,9 @@ build_sui_repo_branch() {
       fi
     fi
   else
-
     if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ] ||
       [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
       echo "suibase.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
-    fi
-
-    if [ "$USE_PRECOMPILED" = true ]; then
-      # Identify the latest remote tag with binaries.
-      update_PRECOMP_REMOTE_var
-      if [ -z "$PRECOMP_REMOTE" ]; then
-        setup_error "Could not retreive latest precompiled binaries for this platform"
-      fi
-      # Download the binary asset for this host.
-      #
-      # It will be "installed" later after the matching repo
-      # is initialized/updated.
     fi
 
     # If not already done, initialize the default repo.
@@ -514,27 +505,30 @@ build_sui_repo_branch() {
     # Update sui devnet local repo (if needed)
     #(cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
 
-    local _BRANCH
-    _BRANCH=$(cd "$SUI_REPO_DIR" && git branch --show-current)
-    if [ "$_BRANCH" != "$CFG_default_repo_branch" ]; then
-      (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >&/dev/null)
-    fi
-    (cd "$SUI_REPO_DIR" && git remote update >&/dev/null)
-    V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
-    V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
-    if [ "$V1" != "$V2" ]; then
-      _FORCE_GIT_RESET=true
-    fi
+    if [ "$USE_PRECOMPILED" = "false" ]; then
+      local _BRANCH
+      _BRANCH=$(cd "$SUI_REPO_DIR" && git branch --show-current)
 
-    if $_FORCE_GIT_RESET; then
-      # Does a bit more than needed, but should allow to recover
-      # from most operator error...
-      echo "Updating sui $WORKDIR in ~/suibase/workdirs/$WORKDIR/sui-config..."
-      (cd "$SUI_REPO_DIR" && git fetch >/dev/null)
-      (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null)
-      (cd "$SUI_REPO_DIR" && git merge '@{u}' >/dev/null)
+      if [ "$_BRANCH" != "$CFG_default_repo_branch" ]; then
+        (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >&/dev/null)
+      fi
+
+      (cd "$SUI_REPO_DIR" && git remote update >&/dev/null)
+      V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+      V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+      if [ "$V1" != "$V2" ]; then
+        _FORCE_GIT_RESET=true
+      fi
+
+      if $_FORCE_GIT_RESET; then
+        # Does a bit more than needed, but should allow to recover
+        # from most operator error...
+        echo "Updating sui $WORKDIR in ~/suibase/workdirs/$WORKDIR/sui-config..."
+        (cd "$SUI_REPO_DIR" && git fetch >/dev/null)
+        (cd "$SUI_REPO_DIR" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null)
+        (cd "$SUI_REPO_DIR" && git merge '@{u}' >/dev/null)
+      fi
     fi
-    echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
   fi
 
   # TODO do an 'integrity/version check' of the repo here...
@@ -554,14 +548,55 @@ build_sui_repo_branch() {
     return
   fi
 
-  # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
-  if [ -z "$PASSTHRU_OPTIONS" ]; then
-    if [ $is_local = true ]; then
-      (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
-    else
-      (if cd "$SUI_REPO_DIR"; then cargo build -p sui; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  # repo should now be initialized.
+  # Either download precompiled or build from source.
+  local _DO_FINAL_SUI_SANITY_CHECK=false
+
+  if [ "$USE_PRECOMPILED" = "true" ]; then
+    # Identify the latest remote tag with binaries.
+    update_PRECOMP_REMOTE_var
+    if [ "$PRECOMP_REMOTE" != "true" ]; then
+      setup_error "Could not retreive latest precompiled binaries for this platform"
+    fi
+    # Download the latest binary asset for this host.
+    #
+    # It will be "installed" later after the matching repo
+    # is initialized/updated.
+    download_PRECOMP_REMOTE "$WORKDIR"
+
+    local _DETACHED_INFO
+    _DETACHED_INFO=$(cd "$SUI_REPO_DIR" && git branch | grep detached)
+    # Checkout if _DETACHED_INFO does NOT contain the PRECOMP_REMOTE_TAG_NAME substring.
+    if [[ "$_DETACHED_INFO" != *"$PRECOMP_REMOTE_TAG_NAME"* ]]; then
+      # Simply checkout the tag that match the precompiled binary.
+      (cd "$SUI_REPO_DIR_DEFAULT" && git checkout -f "$PRECOMP_REMOTE_TAG_NAME" >&/dev/null)
+      echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+      _FEEDBACK_BEFORE_RETURN=false
     fi
 
+    # Install the precompiled binary.
+    install_PRECOMP_REMOTE "$WORKDIR"
+    _DO_FINAL_SUI_SANITY_CHECK=true
+  else
+    # Build from source.
+    echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+
+    if [ -z "$PASSTHRU_OPTIONS" ]; then
+      # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
+      if [ $is_local = true ]; then
+        (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+      else
+        (if cd "$SUI_REPO_DIR"; then cargo build -p sui; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+      fi
+      _DO_FINAL_SUI_SANITY_CHECK=true
+    else
+      # This is for when build was called for a specific binary.
+      #shellcheck disable=SC2086 # Don't want to double quote $PASSTHRU_OPTIONS
+      (if cd "$SUI_REPO_DIR"; then cargo build $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    fi
+  fi
+
+  if [ "$_DO_FINAL_SUI_SANITY_CHECK" = "true" ]; then
     # Sanity test that the sui binary works
     if [ ! -f "$SUI_BIN_DIR/sui" ]; then
       setup_error "$SUI_BIN_DIR/sui binary not found"
@@ -571,9 +606,15 @@ build_sui_repo_branch() {
 
     # Check if sui is recent enough.
     version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
-  else
-    #shellcheck disable=SC2086 # Don't want to double quote $PASSTHRU_OPTIONS
-    (if cd "$SUI_REPO_DIR"; then cargo build $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+  fi
+
+  # Still show some info to the user for when there was no git checkout to tag or build done...
+  if [ "$_FEEDBACK_BEFORE_RETURN" = "true" ]; then
+    if [ "$USE_PRECOMPILED" = "true" ]; then
+      echo "Using precompiled binaries from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+    else
+      echo "Using binaries built from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+    fi
   fi
 }
 export -f build_sui_repo_branch
@@ -1008,6 +1049,57 @@ create_state_as_needed() {
 }
 export -f create_state_as_needed
 
+cleanup_cache_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  # Create/repair
+  if [ ! -d "$WORKDIRS/$WORKDIR_PARAM/.cache" ]; then
+    mkdir -p "$WORKDIRS/$WORKDIR_PARAM/.cache"
+    return
+  fi
+
+  if [ "$WORKDIR_PARAM" = "active" ]; then
+    return
+  fi
+
+  # Only keep last 2 releases for each branch.
+  local _PRECOMP_DOWNLOAD="$WORKDIRS/$WORKDIR_PARAM/.cache/precompiled_downloads"
+  if [ -d "$_PRECOMP_DOWNLOAD" ]; then
+    # Delete recursively every directory and files in $_PRECOMP_DOWNLOAD with a name
+    # that does not match _BRANCH.
+    local _BRANCH="${CFG_default_repo_branch:?}"
+    for item in "$_PRECOMP_DOWNLOAD"/*; do
+      if [ -z "$item" ] || [ "$item" = "." ] || [ "$item" = ".." ] || [ "$item" = "/" ]; then
+        continue
+      fi
+      if [ -d "$item" ]; then
+        if [ "$(basename "$item")" != "$_BRANCH" ]; then
+          rm -rf "$item"
+        else
+          # Keep in the cache only the last 2 releases files and latest untar directories (up to 4 items),
+          # delete all the rest.
+          local _RELEASES
+          # shellcheck disable=SC2012 # ls -1 is safe here. find is more risky for portability.
+          _RELEASES=$(ls -1 "$item" | sort -r)
+          local _KEEP=4
+          for release in $_RELEASES; do
+            if [ -z "$release" ] || [ "$release" = "." ] || [ "$release" = ".." ] || [ "$release" = "/" ]; then
+              continue
+            fi
+            if [ $_KEEP -gt 0 ]; then
+              ((_KEEP--))
+            else
+              # shellcheck disable=SC2115 # $item and $release validated to not be empty string.
+              rm -rf "$item/$release"
+            fi
+          done
+        fi
+      fi
+    done
+  fi
+}
+export -f cleanup_cache_as_needed
+
 repair_workdir_as_needed() {
   WORKDIR_PARAM="$1"
 
@@ -1053,6 +1145,7 @@ repair_workdir_as_needed() {
 
   create_exec_shims_as_needed "$WORKDIR_PARAM"
   create_state_as_needed "$WORKDIR_PARAM"
+  cleanup_cache_as_needed "$WORKDIR_PARAM"
 
   if [ "$WORKDIR_PARAM" = "cargobin" ]; then
     # Create as needed, but do not change a user override.
@@ -1912,23 +2005,25 @@ export -f sync_client_yaml
 #
 # PRECOMP_REMOTE is a boolean indicating if the repo has a binary.
 #
-# When true other variables are set to show:
-#  - Latest binary "x.y.z" version at the repo.
-#  - Complete URL of the binary file to download for the host platform.
-#  - Filename of the binary.
+# When true other PRECOMP_REMOTE_XXXXXX variables are set with related
+# information.
 #
 # Exit on errors.
 #
 # For now the only supported repo is github.
 export PRECOMP_REMOTE=""
+export PRECOMP_REMOTE_PLATFORM=""
 export PRECOMP_REMOTE_VERSION=""
 export PRECOMP_REMOTE_TAG_NAME=""
 export PRECOMP_REMOTE_DOWNLOAD_URL=""
+export PRECOMP_REMOTE_DOWNLOAD_DIR=""
 update_PRECOMP_REMOTE_var() {
   PRECOMP_REMOTE="false"
+  PRECOMP_REMOTE_PLATFORM=""
   PRECOMP_REMOTE_VERSION=""
   PRECOMP_REMOTE_TAG_NAME=""
   PRECOMP_REMOTE_DOWNLOAD_URL=""
+  PRECOMP_REMOTE_DOWNLOAD_DIR=""
 
   local _REPO_URL="${CFG_default_repo_url:?}"
   local _BRANCH="${CFG_default_repo_branch:?}"
@@ -1965,13 +2060,13 @@ update_PRECOMP_REMOTE_var() {
       setup_error "Unsupported platform [$_UNAME]"
     fi
   fi
-  echo "$_OUT"
+
   # Find latest release with a binary asset.
   local _TAG_VERSION
   local _TAG_NAME
   local _DOWNLOAD_URL
   while read -r line < <(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -r); do
-    echo "Processsing $line"
+    # echo "Processsing $line"
     # Return something like: "tag_name": "testnet-v1.8.2",
     _TAG_NAME="${line#*\:}"      # Remove the ":" and everything before
     _TAG_NAME="${_TAG_NAME#*\"}" # Remove the first '"' and everything before
@@ -1997,13 +2092,14 @@ update_PRECOMP_REMOTE_var() {
   fi
 
   _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
-  echo "_OUT=$_OUT"
-  echo "_TAG_NAME=$_TAG_NAME"
-  echo "_TAG_VERSION=$_TAG_VERSION"
-  echo _DOWNLOAD_URL="$_DOWNLOAD_URL"
+  # echo "_OUT=$_OUT"
+  # echo "_TAG_NAME=$_TAG_NAME"
+  # echo "_TAG_VERSION=$_TAG_VERSION"
+  # echo _DOWNLOAD_URL="$_DOWNLOAD_URL"
 
   # All good. Return success.
   PRECOMP_REMOTE="true"
+  PRECOMP_REMOTE_PLATFORM="$_BIN_PLATFORM"
   PRECOMP_REMOTE_VERSION="$_TAG_VERSION"
   PRECOMP_REMOTE_TAG_NAME="$_TAG_NAME"
   PRECOMP_REMOTE_DOWNLOAD_URL="$_DOWNLOAD_URL"
@@ -2011,3 +2107,126 @@ update_PRECOMP_REMOTE_var() {
   return
 }
 export -f update_PRECOMP_REMOTE_var
+
+download_PRECOMP_REMOTE() {
+  local _WORKDIR="$1"
+  PRECOMP_REMOTE_DOWNLOAD_DIR=""
+
+  # It is assumed update_PRECOMP_REMOTE_var() was successfully called before
+  # and there is indeed something to download and install.
+  if [ "$PRECOMP_REMOTE" != "true" ]; then
+    return
+  fi
+
+  # Download the $PRECOMP_REMOTE_DOWNLOAD_URL into .cache/precompiled_downloads/<branch name>
+  local _BRANCH="${CFG_default_repo_branch:?}"
+  local _DOWNLOAD_DIR="$WORKDIRS/$_WORKDIR/.cache/precompiled_downloads/$_BRANCH"
+  mkdir -p "$_DOWNLOAD_DIR"
+  local _DOWNLOAD_FILENAME="${PRECOMP_REMOTE_DOWNLOAD_URL##*/}"
+  local _DOWNLOAD_FILENAME_WITHOUT_TGZ="${_DOWNLOAD_FILENAME%.tgz}"
+  local _DOWNLOAD_FILEPATH="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME"
+  local _EXTRACT_DIR="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME_WITHOUT_TGZ" # Where the .tgz content will be placed.
+  local _EXTRACT_DIR_INNER="$_EXTRACT_DIR/target/release"             # The inner directory produced by the .tgz file.
+  local _EXTRACTED_TEST_FILE="$_EXTRACT_DIR_INNER/sui-$PRECOMP_REMOTE_PLATFORM-x86_64"
+
+  # TODO validate here the local file is really matching the remote in case of republishing?
+  # Try twice before giving up.
+  for i in 1 2; do
+    # Download if not already done.
+    local _DO_EXTRACTION="false"
+    if [ -f "$_DOWNLOAD_FILEPATH" ]; then
+      if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
+        _DO_EXTRACTION="true"
+      fi
+    else
+      echo "Downloading precompiled $_DOWNLOAD_FILENAME"
+      curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL"
+      # Extract if not already done. This is an indirect validation that the downloaded file is OK.
+      # If not OK, delete and try download again.
+      _DO_EXTRACTION="true"
+    fi
+
+    if [ "$_DO_EXTRACTION" = "true" ]; then
+      # echo "Extracting into $_EXTRACT_DIR"
+      rm -rf "$_EXTRACT_DIR"
+      mkdir -p "$_EXTRACT_DIR"
+      tar -xzf "$_DOWNLOAD_FILEPATH" -C "$_EXTRACT_DIR"
+    fi
+
+    # If extraction is not valid, then delete the downloaded file so it can be tried again.
+    if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
+      if [ $i -lt 2 ]; then
+        warn_user "Failed to extract binary. trying to re-download again"
+      fi
+      rm -rf "$_EXTRACT_DIR"
+      rm -rf "$_DOWNLOAD_FILEPATH"
+    else
+      # Cleanup cache now that we have likely an older version to get rid of.
+      cleanup_cache_as_needed "$_WORKDIR"
+      break # Exit the retry loop.
+    fi
+  done
+
+  # Do a final check that the extracted files are OK.
+  if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
+    setup_error "Failed to download or extract precompiled binary for $_BRANCH"
+  fi
+
+  # Success
+  PRECOMP_REMOTE_DOWNLOAD_DIR="$_EXTRACT_DIR_INNER"
+}
+export -f download_PRECOMP_REMOTE
+
+install_PRECOMP_REMOTE() {
+  local _WORKDIR="$1"
+
+  # This assume download_PRECOMP_REMOTE() was successfully completed before.
+  if [ "$PRECOMP_REMOTE" != "true" ] || [ -z "$PRECOMP_REMOTE_DOWNLOAD_DIR" ]; then
+    echo "PRECOMP_REMOTE=$PRECOMP_REMOTE"
+    echo "PRECOMP_REMOTE_DOWNLOAD_DIR=$PRECOMP_REMOTE_DOWNLOAD_DIR"
+    setup_error "Could not install precompiled binary for $_WORKDIR"
+  fi
+
+  # Detect if a previous build was done, if yes then "cargo clean".
+  if [ -d "$SUI_REPO_DIR/target/debug/build" ] || [ -d "$SUI_REPO_DIR/target/release/build" ]; then
+    (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
+  fi
+
+  # Create an array of "sui", "sui-tool"
+  local _BINARIES=("sui" "sui-tool" "sui-faucet" "sui-node" "sui-test-validator" "sui-indexer")
+
+  # Iterate the BINARIES array and copy/install the binaries.
+  # Note: Although the binaries are 'release' we install also
+  #       in the debug directory to make it 'easier' to find
+  #       for any app.
+  for _BIN in "${_BINARIES[@]}"; do
+    local _SRC="$PRECOMP_REMOTE_DOWNLOAD_DIR/$_BIN-$PRECOMP_REMOTE_PLATFORM-x86_64"
+    local _DST="$WORKDIRS/$_WORKDIR/sui-repo/target/debug/$_BIN"
+    # Copy/install files when difference detected.
+    copy_on_bin_diff "$_SRC" "$_DST"
+    _DST="$WORKDIRS/$_WORKDIR/sui-repo/target/release/$_BIN"
+    copy_on_bin_diff "$_SRC" "$_DST"
+  done
+}
+export -f install_PRECOMP_REMOTE
+
+copy_on_bin_diff() {
+  local _SRC="$1"
+  local _DST="$2"
+  # Copy the file _SRC to _DST if the files are binary different.
+  # If _DST does not exist, then copy to create it.
+  local _DO_COPY=false
+  if [ ! -f "$_DST" ]; then
+    _DO_COPY=true
+  else
+    if ! cmp --silent "$_SRC" "$_DST"; then
+      _DO_COPY=true
+    fi
+  fi
+  if [ "$_DO_COPY" = "true" ]; then
+    # Create the path/directories of the _DST as needed.
+    mkdir -p "$(dirname "$_DST")"
+    cp "$_SRC" "$_DST"
+  fi
+}
+export -f copy_on_bin_diff
