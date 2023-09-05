@@ -1541,8 +1541,7 @@ exit_if_not_valid_sui_address() {
   # Inefficient... but 100% sure the check will be compatible with *this* binary.
   _SUI_ERR=$("$SUI_EXEC" client gas "$1" --json 2>&1 | grep -iE "error|invalid|help")
   if [ -n "$_SUI_ERR" ]; then
-    echo "Invalid hexadecimal Sui Address [$1]."
-    exit 1
+    error_exit "Invalid hexadecimal Sui address [$1]."
   fi
 }
 export -f exit_if_not_valid_sui_address

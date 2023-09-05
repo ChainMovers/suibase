@@ -666,14 +666,18 @@ workdir_exec() {
     exit_if_workdir_not_ok
     exit_if_sui_binary_not_ok
 
+    if [ "$is_local" == "false" ]; then
+      error_exit "faucet command not supported for remote network"
+    fi
+
     # Verify that the faucet is supported for this version.
     if version_less_than "$SUI_VERSION" "sui 0.27"; then
-      setup_error "faucet not supported for this older sui version"
+      error_exit "faucet not supported for this older sui version"
     fi
 
     # Verify that the faucet is enabled and running.
     if [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
-      setup_error "faucet feature disabled (see suibase.yaml )"
+      error_exit "faucet feature disabled (see suibase.yaml )"
     fi
 
     start_all_services # Start the faucet as needed (and exit if fails).

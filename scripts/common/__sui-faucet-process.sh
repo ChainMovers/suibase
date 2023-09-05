@@ -157,14 +157,18 @@ faucet_command() {
 
   _OPT_JSON=false
   _OPT_ALL=false
+  _OPT_HELP=false
 
   local _ALL_ADDRS=()
 
   for option in $1; do
     case $option in
     -j | --json)
-      if $_OPT_JSON; then setup_error "error: Option '$option' specified more than once"; fi
+      if $_OPT_JSON; then error_exit "Option '$option' specified more than once"; fi
       _OPT_JSON=true
+      ;;
+    -h | --help | help | -help | --h | -\?)
+      _OPT_HELP=true
       ;;
     *)
       # It has to be either one or more "0x" or a single "all"
@@ -172,22 +176,31 @@ faucet_command() {
       _ADDR=$(echo "$option" | tr '[:upper:]' '[:lower:]' | tr -d "[:blank:]")
       case $_ADDR in
       all | -all | --all)
-        if ((${#_ALL_ADDRS[@]})); then setup_error "error: Can't mix option 'all' with enumerating address"; fi
-        if $_OPT_ALL; then setup_error "error: Option '$_ADDR' specified more than once"; fi
+        if ((${#_ALL_ADDRS[@]})); then error_exit "Can't mix option 'all' with enumerating address"; fi
+        if $_OPT_ALL; then error_exit "Option '$_ADDR' specified more than once"; fi
         _OPT_ALL=true
         ;;
       0x*)
-        if $_OPT_ALL; then setup_error "error: Can't mix option 'all' with enumerating address"; fi
+        if $_OPT_ALL; then error_exit "Can't mix option 'all' with enumerating address"; fi
         exit_if_not_valid_sui_address "$_ADDR"
         _ALL_ADDRS+=("$_ADDR")
         ;;
-      *) setup_error "Invalid hexadecimal address [$_ADDR]" ;;
+      *) error_exit "Invalid hexadecimal address [$option]" ;;
       esac
       ;; # address field parsing
     esac # outer options parsing
   done
 
-  if [ $_OPT_ALL = false ] && [ ${#_ALL_ADDRS[@]} -eq 0 ]; then
+  local _SHOW_USEAGE=false
+  if [ $_OPT_HELP = true ]; then
+    _SHOW_USEAGE=true
+  else
+    if [ $_OPT_ALL = false ] && [ ${#_ALL_ADDRS[@]} -eq 0 ]; then
+      _SHOW_USEAGE=true
+    fi
+  fi
+
+  if [ $_SHOW_USEAGE = true ]; then
     cd_sui_log_dir
     echo "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}"
     local _FAUCET_ADDR
@@ -209,18 +222,26 @@ faucet_command() {
 
   if $_OPT_ALL; then
     local _RESP
-    _RESP=$($SUI_EXEC client addresses | grep "0x" | awk '{print $1}')
+    # TODO Replace this with --json once there is a bash script way to parse JSON arrays.
+    _RESP=$($SUI_EXEC client addresses | grep -v "activeAddress" | grep "0x")
 
     while IFS= read -r line; do
-      exit_if_not_valid_sui_address "$line"
-      _ALL_ADDRS+=("$line")
+      if [[ "$line" =~ 0x[[:xdigit:]]+ ]]; then
+        local _HEX_ADDR="${BASH_REMATCH[0]}"
+        # No need to do: exit_if_not_valid_sui_address "$_HEX_ADDR"
+        # The output was from the sui binary and very likely valid.
+        # shelcheck disable=SC2076
+        if ! [[ " ${_ALL_ADDRS[*]} " == *" ${_HEX_ADDR} "* ]]; then
+          _ALL_ADDRS+=("$_HEX_ADDR")
+        fi
+      fi
     done < <(printf '%s\n' "$_RESP")
 
     echo "${#_ALL_ADDRS[@]} addresses found."
   fi
 
   if ! [ -x "$(command -v curl)" ]; then
-    setup_error 'error: RPC to faucet requires curl to be installed.'
+    setup_error 'RPC to faucet requires curl to be installed.'
   fi
 
   for _addr in "${_ALL_ADDRS[@]}"; do
@@ -256,9 +277,9 @@ faucet_command() {
         echo "Sent $_N_COINS coins to $_addr"
       fi
     else
-      echo "Error ($_ERROR_ID): Sending coins to $_addr failed. Details:"
+      echo "Error ($_ERROR_ID). Details:"
       echo "$_RESP"
-      exit 1
+      error_exit "Sending coins to $_addr failed."
     fi
   done
 }
