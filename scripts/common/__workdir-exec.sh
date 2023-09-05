@@ -853,8 +853,11 @@ workdir_exec() {
   if [ "$CMD_REGEN_REQ" = true ]; then
     ALLOW_DOWNLOAD="false"
   fi
+
+  local _IS_SET_SUI_REPO="false"
   if is_sui_repo_dir_override; then
     ALLOW_DOWNLOAD="false"
+    _IS_SET_SUI_REPO="true"
   fi
 
   ALLOW_BINARY="true"
@@ -875,25 +878,31 @@ workdir_exec() {
     fi
   fi
 
-  # Just ignore the precompiled if not a x86_64 machine.
+  # Handle case where precompiled is not compatible.
   if [ "$_USE_PRECOMPILED" = "true" ]; then
-    local _UNAME_OS
-    _UNAME_OS="$(uname -s)"
-    if [ "$_UNAME_OS" = "Linux" ]; then
-      local _UNAME_MACHINE
-      _UNAME_MACHINE="$(uname -m)"
-      if [ "$_UNAME_MACHINE" != "x86_64" ]; then
-        warn_user "Precompiled binaries not available for '$_UNAME_MACHINE'. Will build from source instead."
-        _USE_PRECOMPILED="false"
-      fi
+    # Ignore precompiled request when set-sui-repo is set.
+    if [ $_IS_SET_SUI_REPO = "true" ]; then
+      _USE_PRECOMPILED="false"
     else
-      if [ "$_UNAME_OS" = "Darwin" ]; then
-        warn_user "Precompiled binaries not available for MacOS (work in progress). Will build from source instead."
-        _USE_PRECOMPILED="false"
+      # Ignore precompiled request if not a x86_64 machine.
+      local _UNAME_OS
+      _UNAME_OS="$(uname -s)"
+      if [ "$_UNAME_OS" = "Linux" ]; then
+        local _UNAME_MACHINE
+        _UNAME_MACHINE="$(uname -m)"
+        if [ "$_UNAME_MACHINE" != "x86_64" ]; then
+          warn_user "Precompiled binaries not available for '$_UNAME_MACHINE'. Will build from source instead."
+          _USE_PRECOMPILED="false"
+        fi
       else
-        # Unsupported OS
-        # _UNAME_OS="windows" presumably...
-        setup_error "Unsupported OS [$_UNAME_OS]"
+        if [ "$_UNAME_OS" = "Darwin" ]; then
+          warn_user "Precompiled binaries not available for MacOS (work in progress). Will build from source instead."
+          _USE_PRECOMPILED="false"
+        else
+          # Unsupported OS
+          # _UNAME_OS="windows" presumably...
+          setup_error "Unsupported OS [$_UNAME_OS]"
+        fi
       fi
     fi
   fi

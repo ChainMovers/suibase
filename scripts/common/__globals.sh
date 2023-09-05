@@ -466,14 +466,18 @@ build_sui_repo_branch() {
     version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
   fi
 
+  local _IS_SET_SUI_REPO="false"
+  if is_sui_repo_dir_override; then
+    _IS_SET_SUI_REPO="true"
+  fi
+
   if [ "$ALLOW_DOWNLOAD" = "false" ]; then
-    if is_sui_repo_dir_override; then
+    if [ "$_IS_SET_SUI_REPO" = true ]; then
       echo "Skipping git clone/fetch/pull because set-sui-repo is set."
-      echo "Building $WORKDIR $_BUILD_DESC at [$RESOLVED_SUI_REPO_DIR]"
       if [ ! -d "$RESOLVED_SUI_REPO_DIR" ]; then
         echo "Error: repo not found at [$RESOLVED_SUI_REPO_DIR]"
-        echo "Either create this repo, or revert localnet to work with"
-        echo "the default repo by typing \"localnet set-sui-repo\"".
+        echo "Either create this repo, or revert $WORKDIR_NAME to work with"
+        echo "the default repo by typing \"$WORKDIR_NAME set-sui-repo\"".
         exit
       fi
     fi
@@ -579,7 +583,11 @@ build_sui_repo_branch() {
     _DO_FINAL_SUI_SANITY_CHECK=true
   else
     # Build from source.
-    echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+    if [ "$_IS_SET_SUI_REPO" = true ]; then
+      echo "Building $WORKDIR $_BUILD_DESC at [$RESOLVED_SUI_REPO_DIR]"
+    else
+      echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+    fi
 
     if [ -z "$PASSTHRU_OPTIONS" ]; then
       # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
@@ -608,12 +616,16 @@ build_sui_repo_branch() {
     version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
   fi
 
-  # Still show some info to the user for when there was no git checkout to tag or build done...
+  # Help user by reminding the origin of the binaries.
   if [ "$_FEEDBACK_BEFORE_RETURN" = "true" ]; then
     if [ "$USE_PRECOMPILED" = "true" ]; then
       echo "Using precompiled binaries from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
     else
-      echo "Using binaries built from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+      if [ "$_IS_SET_SUI_REPO" = true ]; then
+        echo "Using binaries built from repo [$RESOLVED_SUI_REPO_DIR]"
+      else
+        echo "Using binaries built from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
+      fi
     fi
   fi
 }
