@@ -877,11 +877,24 @@ workdir_exec() {
 
   # Just ignore the precompiled if not a x86_64 machine.
   if [ "$_USE_PRECOMPILED" = "true" ]; then
-    local _PLATFORM
-    _PLATFORM="$(uname -m)"
-    if [ "$_PLATFORM" != "x86_64" ]; then
-      warn_user "Precompiled binaries not available for '$_PLATFORM'. Will build from source instead."
-      _USE_PRECOMPILED="false"
+    local _UNAME_OS
+    _UNAME_OS="$(uname -s)"
+    if [ "$_UNAME_OS" = "Linux" ]; then
+      local _UNAME_MACHINE
+      _UNAME_MACHINE="$(uname -m)"
+      if [ "$_UNAME_MACHINE" != "x86_64" ]; then
+        warn_user "Precompiled binaries not available for '$_UNAME_MACHINE'. Will build from source instead."
+        _USE_PRECOMPILED="false"
+      fi
+    else
+      if [ "$_UNAME_OS" = "Darwin" ]; then
+        warn_user "Precompiled binaries not available for MacOS (work in progress). Will build from source instead."
+        _USE_PRECOMPILED="false"
+      else
+        # Unsupported OS
+        # _UNAME_OS="windows" presumably...
+        setup_error "Unsupported OS [$_UNAME_OS]"
+      fi
     fi
   fi
 

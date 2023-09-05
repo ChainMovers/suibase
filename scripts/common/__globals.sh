@@ -2034,7 +2034,8 @@ update_PRECOMP_REMOTE_var() {
   fi
 
   # Change the URL to the API URL (prepend 'api.' before github.com and '/repos' after)
-  _REPO_URL="${_REPO_URL/https:\/\/github.com/https:\/\/api.github.com\/repos}"
+  _REPO_URL="${_REPO_URL/github.com/api.github.com/repos}"
+
   # Remove the trailing .git in the URL
   # _REPO_URL is now the URL prefix for all github API call.
   _REPO_URL="${_REPO_URL%.git}"
