@@ -899,7 +899,7 @@ workdir_exec() {
           _USE_PRECOMPILED="false"
         fi
         # Disable if on WSL (not yet supported because of occasional "illegal instruction").
-        if [[ "$(</proc/version)" == *@(Microsoft|WSL)* ]]; then
+        if [[ -f "/proc/sys/fs/binfmt_misc/WSLInterop" ]] || [[ -n "$WSL_DISTRO_NAME" ]]; then
           _USE_PRECOMPILED="false"
         fi
       else
