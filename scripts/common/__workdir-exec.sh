@@ -898,6 +898,10 @@ workdir_exec() {
           warn_user "Precompiled binaries not available for '$_UNAME_MACHINE'. Will build from source instead."
           _USE_PRECOMPILED="false"
         fi
+        # Disable if on WSL (not yet supported because of occasional "illegal instruction").
+        if [[ "$(</proc/version)" == *@(Microsoft|WSL)* ]]; then
+          _USE_PRECOMPILED="false"
+        fi
       else
         if [ "$_UNAME_OS" = "Darwin" ]; then
           # echo "Precompiled binaries not available for MacOS. Building from source."

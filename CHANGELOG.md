@@ -11,17 +11,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unpublished]
 
 ### Added
-
-### Fixed
-  
-### Changed
-
-### Removed
-
-## [0.1.6] 2023-09-07
-
-### Added
-- (#68) precompiled binaries for Linux and Windows WSL2.
+- (#68) precompiled binaries for Linux Ubuntu (x86 64 bits only).
 
 ### Fixed
 - (#65) Fix support for 'sui client publish' and 'sui move' when path and/or install-dir are not specified.
