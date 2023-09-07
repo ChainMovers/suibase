@@ -900,7 +900,7 @@ workdir_exec() {
         fi
       else
         if [ "$_UNAME_OS" = "Darwin" ]; then
-          warn_user "Precompiled binaries not available for MacOS (work in progress). Will build from source instead."
+          # echo "Precompiled binaries not available for MacOS. Building from source."
           _USE_PRECOMPILED="false"
         else
           # Unsupported OS

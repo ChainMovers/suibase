@@ -52,11 +52,7 @@ default_repo_branch: "devnet"
 # code in the local repo (in case user app dependency on it).
 #
 # If false, then the binaries are instead built from the local repo.
-#
-# ********************************************************************
-# NOTE: This is WORK-IN-PROGRESS. Only dev should enable this for now.
-# ********************************************************************
-precompiled_bin: false
+precompiled_bin: true
 
 # Proxy server related configurations. See https://suibase.io/how-to/proxy
 proxy_enabled: true

@@ -13,7 +13,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 ### Fixed
+  
+### Changed
 
+### Removed
+
+## [0.1.6] 2023-09-07
+
+### Added
+- (#68) precompiled binaries for Linux and Windows WSL2.
+
+### Fixed
+- (#65) Fix support for 'sui client publish' and 'sui move' when path and/or install-dir are not specified.
+- (#24) Fix help for faucet.
+- Misc fix to support sui client v1.10.x changes to CLI related to new output format (tables).
+  
 ### Changed
 
 ### Removed
