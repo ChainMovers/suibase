@@ -885,7 +885,7 @@ workdir_exec() {
   # Handle case where precompiled is not compatible.
   if [ "$_USE_PRECOMPILED" = "true" ]; then
     # Ignore precompiled request when set-sui-repo is set.
-    if [ $_IS_SET_SUI_REPO = "true" ]; then
+    if [ "$_IS_SET_SUI_REPO" = "true" ]; then
       _USE_PRECOMPILED="false"
     else
       # Ignore precompiled request if not a x86_64 machine.
@@ -970,8 +970,9 @@ workdir_exec() {
 
   local _ADV="Try it by typing \"$SUI_SCRIPT client gas\""
 
-  WALLET_ADDR=$($SUI_EXEC client active-address)
-  if [[ "$WALLET_ADDR" == *"None"* ]]; then
+  update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$CLIENT_CONFIG"
+  WALLET_ADDR=$ACTIVE_ADDRESS
+  if [ -z "$WALLET_ADDR" ]; then
     echo "There are no addresses in the wallet."
     _ADV="You can create the first wallet address with \"$SUI_SCRIPT client new-address ed25519\""
   else

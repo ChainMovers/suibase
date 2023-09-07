@@ -1546,6 +1546,35 @@ exit_if_not_valid_sui_address() {
 }
 export -f exit_if_not_valid_sui_address
 
+export ACTIVE_ADDRESS=""
+update_ACTIVE_ADDRESS_var() {
+  local _SUI_BINARY="$1"
+  local _CLIENT_FILE="$2"
+  ACTIVE_ADDRESS=""
+  # Get the active address by querying the client.
+  local _ADDR
+  _ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" active-address | grep "0x")
+  if [[ "$_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
+    _ADDR="${BASH_REMATCH[0]}"
+  fi
+  # TODO Better validation that the address is valid!?
+  if [ -n "$_ADDR" ]; then
+    ACTIVE_ADDRESS="$_ADDR"
+  else
+    warn_user "Unable to get active address from [$_CLIENT_FILE]"
+  fi
+}
+export -f update_ACTIVE_ADDRESS_var
+
+clear_active_address_field() {
+  local _CLIENT_FILE="$1"
+  # Unset the active_address, to force the default.
+  if [ -f "$_CLIENT_FILE" ]; then
+    sed -i.bak -e 's/active_address:.*/active_address: ~/' "$_CLIENT_FILE" && rm "$_CLIENT_FILE.bak"
+  fi
+}
+export -f clear_active_address_field
+
 add_test_addresses() {
 
   if [[ "${CFG_auto_key_generation:?}" == 'false' ]]; then
@@ -1575,10 +1604,36 @@ add_test_addresses() {
     done
   } >>"$_WORDS_FILE"
 
-  # Set highest address as active. Best-effort... no major issue if fail (I assume).
+  # Set highest address as active. Best-effort... just warn if fails.
   local _HIGH_ADDR
-  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep "0x" | sort -r | head -n 1 | awk '{print $1}')
-  $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >&/dev/null
+  local _SET_ACTIVE_SUCCESS=false
+  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep -v "activeAddress" | grep "0x" | sort -r | head -n 1)
+  if [[ "$_HIGH_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
+    _HIGH_ADDR="${BASH_REMATCH[0]}"
+
+    $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >&/dev/null
+
+    # Test that it succeeded.
+    update_ACTIVE_ADDRESS_var "$_SUI_BINARY" "$_CLIENT_FILE"
+    if [ -n "$ACTIVE_ADDRESS" ]; then
+      if [ "$ACTIVE_ADDRESS" == "$_HIGH_ADDR" ]; then
+        _SET_ACTIVE_SUCCESS=true
+      else
+        echo "Getting [$ACTIVE_ADDRESS] instead of [$_HIGH_ADDR]"
+        warn_user "Unable to confirm active address set (1)."
+      fi
+    else
+      echo "Trying to set active address to [$_HIGH_ADDR]"
+      warn_user "Unable to confirm active address set (2)."
+    fi
+  else
+    warn_user "Unable to find highest address in [$_CLIENT_FILE]"
+  fi
+
+  if [ "$_SET_ACTIVE_SUCCESS" = false ]; then
+    # Unset the active_address, to force the default.
+    clear_active_address_field "$_CLIENT_FILE"
+  fi
 }
 export -f add_test_addresses
 
@@ -1910,11 +1965,9 @@ update_client_yaml_active_address() {
   # (a client call switch to an address, using output of another client call picking a default).
   STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
   if [ -n "$STR_FOUND" ]; then
-    local _ACTIVE_ADDRESS
-    _ACTIVE_ADDRESS=$($SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" active-address)
-    # Check that _ACTIVE_ADDRESS does not contain "None"
-    if [ -n "$_ACTIVE_ADDRESS" ] && [[ "$_ACTIVE_ADDRESS" != *"None"* ]]; then
-      $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CONFIG_DATA_DIR_DEFAULT/client.yaml" switch --address "$_ACTIVE_ADDRESS"
+    update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$CLIENT_CONFIG"
+    if [ -n "$ACTIVE_ADDRESS" ]; then
+      $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CLIENT_CONFIG" switch --address "$ACTIVE_ADDRESS"
     fi
   fi
 }

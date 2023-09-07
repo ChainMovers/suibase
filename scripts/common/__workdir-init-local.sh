@@ -102,8 +102,8 @@ create_faucet_keystore() {
 
   # Verify that this client.yaml/sui.keystore has
   # that keypair as the active-address.
-  local _CHECK_ACTIVE
-  _CHECK_ACTIVE=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_DEST_DIR/client.yaml" active-address)
+  update_ACTIVE_ADDRESS_var "$_SUI_BINARY" "$_DEST_DIR/client.yaml"
+  local _CHECK_ACTIVE=$ACTIVE_ADDRESS
 
   if [ "$_CHECK_ACTIVE" != "$_PUBKEY" ]; then
     setup_error "Could not set active the faucet key [$_PUBKEY], got [$_CHECK_ACTIVE]"
@@ -165,7 +165,7 @@ workdir_init_local() {
       # Create an empty sui.keystore and clear the active-address in client.yaml.
       create_empty_keystore_file "$_GENDATA_DIR"
       # Replace everything after 'active_address: ' with a ~ in the file $_GENDATA_DIR/client.yaml
-      sed -i.bak -e 's/active_address: .*/active_address: ~/' "$_GENDATA_DIR/client.yaml" && rm "$_GENDATA_DIR/client.yaml.bak"
+      clear_active_address_field "$_GENDATA_DIR/client.yaml"
     fi
 
     mkdir -p "$_GENDATA_DIR/faucet"
