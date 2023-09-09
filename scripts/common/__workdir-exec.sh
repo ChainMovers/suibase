@@ -901,10 +901,10 @@ workdir_exec() {
         fi
       else
         if [ "$HOST_PLATFORM" = "Darwin" ]; then
-          #if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "arm64" ]; then
-          #  warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
-          _USE_PRECOMPILED="false"
-          #fi
+          if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "arm64" ]; then
+            warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
+            _USE_PRECOMPILED="false"
+          fi
         else
           # Unsupported OS... "windows" presumably...
           setup_error "Unsupported OS [$HOST_PLATFORM]"
