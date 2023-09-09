@@ -1232,7 +1232,8 @@ get_process_pid() {
   #   not be more than one) the 1st sed remove leading space, the 2nd sed split words into line and finally the pid is the
   #   word on the first/head line.
   #
-  if [[ $(uname) == "Darwin" ]]; then
+  update_HOST_vars
+  if [[ $HOST_PLATFORM == "Darwin" ]]; then
     # shellcheck disable=SC2009
     _PID=$(ps x -o pid,comm | grep "$_PROC" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   else
@@ -2077,6 +2078,7 @@ export -f sync_client_yaml
 # For now the only supported repo is github.
 export PRECOMP_REMOTE=""
 export PRECOMP_REMOTE_PLATFORM=""
+export PRECOMP_REMOTE_ARCH=""
 export PRECOMP_REMOTE_VERSION=""
 export PRECOMP_REMOTE_TAG_NAME=""
 export PRECOMP_REMOTE_DOWNLOAD_URL=""
@@ -2084,6 +2086,7 @@ export PRECOMP_REMOTE_DOWNLOAD_DIR=""
 update_PRECOMP_REMOTE_var() {
   PRECOMP_REMOTE="false"
   PRECOMP_REMOTE_PLATFORM=""
+  PRECOMP_REMOTE_ARCH=""
   PRECOMP_REMOTE_VERSION=""
   PRECOMP_REMOTE_TAG_NAME=""
   PRECOMP_REMOTE_DOWNLOAD_URL=""
@@ -2110,19 +2113,20 @@ update_PRECOMP_REMOTE_var() {
     setup_error "Failed to get release information from [$_REPO_URL]"
   fi
 
-  # Identify the platform substring in the asset to download.
-  # One of "ubuntu", "macos" or "windows.
-  local _BIN_PLATFORM="unknown"
-  local _UNAME="$(uname -s)"
-  if [ "$_UNAME" = "Linux" ]; then
+  # Identify the platform and arch substrings in the asset to download.
+  local _BIN_PLATFORM # "ubuntu", "macos" or "windows".
+  local _BIN_ARCH     # "arm64" or "x86_64"
+  update_HOST_vars
+  if [ "$HOST_PLATFORM" = "Linux" ]; then
     _BIN_PLATFORM="ubuntu"
+    _BIN_ARCH="$HOST_ARCH"
   else
-    if [ "$_UNAME" = "Darwin" ]; then
+    if [ "$HOST_PLATFORM" = "Darwin" ]; then
       _BIN_PLATFORM="macos"
+      _BIN_ARCH="$HOST_ARCH"
     else
       # Unsupported platform.
-      # _BIN_PLATFORM="windows" presumably...
-      setup_error "Unsupported platform [$_UNAME]"
+      setup_error "Unsupported platform [$HOST_PLATFORM]"
     fi
   fi
 
@@ -2138,7 +2142,7 @@ update_PRECOMP_REMOTE_var() {
     _TAG_NAME="${_TAG_NAME%\"*}" # Remove the last '"' and everything after
 
     # Find the binary asset for that release.
-    local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-x86_64"
+    local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-$_BIN_ARCH"
 
     _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | head -1)
     _DOWNLOAD_URL="${_DOWNLOAD_URL#*\:}" # Remove the ":" and everything before
@@ -2165,6 +2169,7 @@ update_PRECOMP_REMOTE_var() {
   # All good. Return success.
   PRECOMP_REMOTE="true"
   PRECOMP_REMOTE_PLATFORM="$_BIN_PLATFORM"
+  PRECOMP_REMOTE_ARCH="$_BIN_ARCH"
   PRECOMP_REMOTE_VERSION="$_TAG_VERSION"
   PRECOMP_REMOTE_TAG_NAME="$_TAG_NAME"
   PRECOMP_REMOTE_DOWNLOAD_URL="$_DOWNLOAD_URL"
@@ -2192,7 +2197,7 @@ download_PRECOMP_REMOTE() {
   local _DOWNLOAD_FILEPATH="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME"
   local _EXTRACT_DIR="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME_WITHOUT_TGZ" # Where the .tgz content will be placed.
   local _EXTRACT_DIR_INNER="$_EXTRACT_DIR/target/release"             # The inner directory produced by the .tgz file.
-  local _EXTRACTED_TEST_FILE="$_EXTRACT_DIR_INNER/sui-$PRECOMP_REMOTE_PLATFORM-x86_64"
+  local _EXTRACTED_TEST_FILE="$_EXTRACT_DIR_INNER/sui-$PRECOMP_REMOTE_PLATFORM-$PRECOMP_REMOTE_ARCH"
 
   # TODO validate here the local file is really matching the remote in case of republishing?
   # Try twice before giving up.
@@ -2221,7 +2226,7 @@ download_PRECOMP_REMOTE() {
     # If extraction is not valid, then delete the downloaded file so it can be tried again.
     if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
       if [ $i -lt 2 ]; then
-        warn_user "Failed to extract binary. trying to re-download again"
+        warn_user "Failed to extract binary. Trying to re-download again"
       fi
       rm -rf "$_EXTRACT_DIR"
       rm -rf "$_DOWNLOAD_FILEPATH"
@@ -2255,6 +2260,7 @@ install_PRECOMP_REMOTE() {
   # Detect if a previous build was done, if yes then "cargo clean".
   if [ -d "$SUI_REPO_DIR/target/debug/build" ] || [ -d "$SUI_REPO_DIR/target/release/build" ]; then
     (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
+    cd_sui_log_dir
   fi
 
   # Create an array of "sui", "sui-tool"
@@ -2265,7 +2271,7 @@ install_PRECOMP_REMOTE() {
   #       in the debug directory to make it 'easier' to find
   #       for any app.
   for _BIN in "${_BINARIES[@]}"; do
-    local _SRC="$PRECOMP_REMOTE_DOWNLOAD_DIR/$_BIN-$PRECOMP_REMOTE_PLATFORM-x86_64"
+    local _SRC="$PRECOMP_REMOTE_DOWNLOAD_DIR/$_BIN-$PRECOMP_REMOTE_PLATFORM-$PRECOMP_REMOTE_ARCH"
     local _DST="$WORKDIRS/$_WORKDIR/sui-repo/target/debug/$_BIN"
     # Copy/install files when difference detected.
     copy_on_bin_diff "$_SRC" "$_DST"
@@ -2295,3 +2301,37 @@ copy_on_bin_diff() {
   fi
 }
 export -f copy_on_bin_diff
+
+export HOST_PLATFORM="" # "uname -s" like output e.g. "Linux", "Darwin"...
+export HOST_ARCH=""     # "uname -m" like output e.g. x86_64, arm64...
+update_HOST_vars() {
+  # Can be called multiple time and will cache the results.
+  if [ -z "$HOST_PLATFORM" ]; then
+    HOST_PLATFORM=$(uname -s)
+    HOST_ARCH=$(uname -m)
+    # For MacOS only while running in Rosetta context:
+    # uname -m returns "x86_64" even if running on M processors.
+    # Have to double check with an alternative. More info:
+    #     https://stackoverflow.com/questions/65259300/detect-apple-silicon-from-command-line
+    if [ "$HOST_PLATFORM" = "Darwin" ]; then
+      if [ "$HOST_ARCH" != "arm64" ]; then
+        local _CHECK_ALT
+        _CHECK_ALT=$(sysctl -n machdep.cpu.brand_string | grep -o "Apple M")
+        if [ -n "$_CHECK_ALT" ] && [[ $_CHECK_ALT == *"Apple M"* ]]; then
+          HOST_ARCH="arm64"
+        fi
+      fi
+    fi
+  fi
+}
+export -f update_HOST_vars
+
+is_wsl() {
+  if [ -f "/proc/sys/fs/binfmt_misc/WSLInterop" ] || [ -n "$WSL_DISTRO_NAME" ] || [[ "$(uname -r)" == *"WSL"* ]]; then
+    true
+    return
+  fi
+  false
+  return
+}
+export -f is_wsl

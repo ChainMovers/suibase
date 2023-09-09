@@ -888,28 +888,26 @@ workdir_exec() {
     if [ "$_IS_SET_SUI_REPO" = "true" ]; then
       _USE_PRECOMPILED="false"
     else
-      # Ignore precompiled request if not a x86_64 machine.
-      local _UNAME_OS
-      _UNAME_OS="$(uname -s)"
-      if [ "$_UNAME_OS" = "Linux" ]; then
-        local _UNAME_MACHINE
-        _UNAME_MACHINE="$(uname -m)"
-        if [ "$_UNAME_MACHINE" != "x86_64" ]; then
-          warn_user "Precompiled binaries not available for '$_UNAME_MACHINE'. Will build from source instead."
+      update_HOST_vars
+      if [ "$HOST_PLATFORM" = "Linux" ]; then
+        # Ignore precompiled request if not an Ubuntu x86_64 machine.
+        if [ "$HOST_ARCH" != "x86_64" ]; then
+          warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
           _USE_PRECOMPILED="false"
         fi
-        # Disable if on WSL (not yet supported because of occasional "illegal instruction").
-        if [[ -f "/proc/sys/fs/binfmt_misc/WSLInterop" ]] || [[ -n "$WSL_DISTRO_NAME" ]] || [[ "$(uname -r)" == *WSL* ]]; then
+        # Disable if on WSL ("illegal instruction" probably because of AVX support missing).
+        if is_wsl; then
           _USE_PRECOMPILED="false"
         fi
       else
-        if [ "$_UNAME_OS" = "Darwin" ]; then
-          # echo "Precompiled binaries not available for MacOS. Building from source."
+        if [ "$HOST_PLATFORM" = "Darwin" ]; then
+          #if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "arm64" ]; then
+          #  warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
           _USE_PRECOMPILED="false"
+          #fi
         else
-          # Unsupported OS
-          # _UNAME_OS="windows" presumably...
-          setup_error "Unsupported OS [$_UNAME_OS]"
+          # Unsupported OS... "windows" presumably...
+          setup_error "Unsupported OS [$HOST_PLATFORM]"
         fi
       fi
     fi
