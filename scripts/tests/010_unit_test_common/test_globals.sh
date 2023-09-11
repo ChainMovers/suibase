@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Unit tests for common/__globals.sh
+# Unit tests for common/__globals.sh for utilities
 
 SUIBASE_DIR="$HOME/suibase"
 
@@ -9,13 +9,34 @@ source "$SUIBASE_DIR/scripts/common/__scripts-tests.sh"
 
 # shellcheck source=SCRIPTDIR/common/__globals.sh
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="active"
+WORKDIR="localnet"
 # shellcheck source=SCRIPTDIR/../../common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 tests() {
     test_static_globals_var
+    test_color
+    cd "$HOME" || fail "cd $HOME"
+    rm -rf "${WORKDIRS:?}"
+    localnet create || fail "localnet create"
 }
+
+test_color() {
+    # Just call every color function to make sure they do not exit.
+    echo
+    echo_black " black "
+    echo_red " red "
+    echo_green " green "
+    echo_yellow " yellow "
+    echo_blue " blue "
+    echo_magenta " magenta "
+    echo_cyan " cyan "
+    echo_white " white "
+    echo_low_green " low green "
+    echo_low_yellow " low yellow "
+    echo
+}
+export -f test_color
 
 test_static_globals_var() {
     # These are all the variables that should always be set

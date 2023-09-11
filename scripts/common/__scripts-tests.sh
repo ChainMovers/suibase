@@ -14,6 +14,14 @@
 WORKDIRS="$HOME/suibase/workdirs"
 OUT="$HOME/suibase/scripts/tests/result.txt"
 
+# List of workdir routinely tested.
+export WORKDIRS_NAME=(
+  "localnet"
+  "devnet"
+  "testnet"
+  "mainnet"
+)
+
 fail() {
   echo Failed ["$1"]
   # Print stacktrace
