@@ -37,5 +37,5 @@ jobs:
           mkdir -p $HOME/.local/bin
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
-      - name: Run suibase tests
-        run: $HOME/suibase/scripts/common/__scripts-tests.sh --github
+      - name: Run all suibase tests
+        run: $HOME/suibase/scripts/tests/run-all.sh

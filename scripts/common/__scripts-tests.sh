@@ -11,11 +11,8 @@
 #
 #      "exit" with non-zero.
 #
-# Check $GITHUB_OPTION to limit what can be tested on github.
-#
-
 WORKDIRS="$HOME/suibase/workdirs"
-OUT="$HOME/suibase/scripts/out"
+OUT="$HOME/suibase/scripts/tests/result.txt"
 
 fail() {
   echo Failed ["$1"]
@@ -74,60 +71,40 @@ assert_build_ok() {
   [ "$_FIRST_WORD" = "sui" ] || fail "sui --version did not work [$_VERSION]"
 }
 
-test_no_workdirs() {
-  echo "Testing when starting with no workdirs"
-  echo "======================================"
-
-  rm -rf ~/suibase/workdirs
-  echo "localnet create"
-  (localnet create >& "$OUT") || fail "create"
-  assert_workdir_ok "localnet"
-
-  #rm -rf ~/suibase/workdirs
-  #echo "localnet update"
-  #(localnet update >& "$OUT") || fail "update"
-  #assert_workdir_ok "localnet"
-  #assert_build_ok "localnet"
-}
-
-main() {
+test_setup() {
   # Parse command-line
-  GITHUB_OPTION=false
-  while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        # -t|--target) target="$2"; shift ;; That's an example with a parameter
-        # -f|--flag) flag=1 ;; That's an example flag
-        --github) GITHUB_OPTION=true ;;
-        *)
-        fail "Unknown parameter passed: $1";
-    esac
-    shift
-  done
+  #GITHUB_OPTION=false
+  #while [[ "$#" -gt 0 ]]; do
+  #  case $1 in
+  # -t|--target) target="$2"; shift ;; That's an example with a parameter
+  # -f|--flag) flag=1 ;; That's an example flag
+  #      --github) GITHUB_OPTION=true ;;
+  #      *)
+  #      fail "Unknown parameter passed: $1";
+  #  esac
+  #  shift
+  #done
 
   # Clean-up from potential previous execution.
   rm -rf "$OUT"
 
-  # This script should not be called from under workdirs since it will be deleted.
+  # This script should not be called from under workdirs since it will get deleted.
   local _USER_CWD
   _USER_CWD=$(pwd -P)
   if [[ "$_USER_CWD" = *"suibase/workdirs"* ]]; then
-   fail "Should not call this test from a directory that will get deleted [suibase/workdirs]"
+    fail "Should not call this test from a directory that will get deleted [suibase/workdirs]"
   fi
-
-  # shellcheck source=SCRIPTDIR/../../../suibase/install
-  (source ~/suibase/install >& "$OUT") || fail "install exit status=[#?]"
 
   # Add here tests done on github.
-  test_no_workdirs;
 
-  if [ "$GITHUB_OPTION" = true ]; then
-    # Success on github if reaching here.
-    echo "Test Completed (github early exit)"
-    exit 0
-  fi
+  #if [ "$GITHUB_OPTION" = true ]; then
+  # Success on github if reaching here.
+  #  echo "Test Completed (github early exit)"
+  #  exit 0
+  #fi
 
   # Add here tests not run on github.
-  echo "Test Completed"
+  #echo "Test Completed"
 }
 
-main "$@";
+test_setup
