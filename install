@@ -14,8 +14,11 @@ SUIBASE_DIR="$HOME/suibase"
 EXIT_TERMINAL_INSTRUCTION=false
 
 # Utility functions.
-setup_error() { echo "$*" 1>&2 ; exit 1; }
-is_user_root () { [ "${EUID:-$(id -u)}" -eq 0 ]; }
+setup_error() {
+  echo "$*" 1>&2
+  exit 1
+}
+is_user_root() { [ "${EUID:-$(id -u)}" -eq 0 ]; }
 
 # Function to simply create/update symlinks in $OS_DIR_ON_PATH
 #
@@ -28,10 +31,10 @@ update_bin_path() {
       echo_info "   Symlink added: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
     else
       # Verify link is as intended, if not replace it.
-      UBP_READLINK=$( readlink -f "$OS_DIR_ON_PATH/$1" )
+      UBP_READLINK=$(readlink -f "$OS_DIR_ON_PATH/$1")
       if [[ "$UBP_READLINK" != "$UBP_TARGET" ]]; then
-         ln -sf "$UBP_TARGET" "$OS_DIR_ON_PATH/$1"
-         echo_info "   Symlink updated: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
+        ln -sf "$UBP_TARGET" "$OS_DIR_ON_PATH/$1"
+        echo_info "   Symlink updated: $OS_DIR_ON_PATH/$1 -> $UBP_TARGET"
       fi
     fi
   fi
@@ -40,11 +43,14 @@ update_bin_path() {
 is_local_bin_on_path() {
   # Check if the installation dir is in the $PATH variable.
   if [[ ":$PATH:" == *":$OS_DIR_ON_PATH:"* ]]; then
-      true; return
+    true
+    return
   elif [[ ":$PATH:" == *":$OS_DIR_ON_PATH_ALT:"* ]]; then
-      true; return
+    true
+    return
   fi
-  false; return
+  false
+  return
 }
 
 setup_local_bin_as_needed() {
@@ -70,25 +76,25 @@ setup_local_bin_as_needed() {
     fi
   fi
 
-##### That may work, but affraid to enable it without testing
-# if [[ $(uname) == "Darwin" ]]; then
-    # On macOS, default to .zprofile since catalina, before
-    # it was .bash_profile.
-#    if [ -f "$HOME/.zprofile" ]; then
-#      TARGET_FILE="$HOME/.zprofile"
-#    else
-#      if [ -f "$HOME/.bash_profile" ]; then
-#        TARGET_FILE="$HOME/.bash_profile"
-#      else
-#        echo "No profile files found"
-#      fi
-#    fi
-#    if [ -n "$TARGET_FILE" ]; then
-      # https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path
-#      echo 'export PATH="${PATH:+${PATH}:}~/.local/bin"' >>"$TARGET_FILE"
-#      source "$TARGET_FILE"
-#    fi
-#  fi
+  ##### That may work, but affraid to enable it without testing
+  # if [[ $(uname) == "Darwin" ]]; then
+  # On macOS, default to .zprofile since catalina, before
+  # it was .bash_profile.
+  #    if [ -f "$HOME/.zprofile" ]; then
+  #      TARGET_FILE="$HOME/.zprofile"
+  #    else
+  #      if [ -f "$HOME/.bash_profile" ]; then
+  #        TARGET_FILE="$HOME/.bash_profile"
+  #      else
+  #        echo "No profile files found"
+  #      fi
+  #    fi
+  #    if [ -n "$TARGET_FILE" ]; then
+  # https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path
+  #      echo 'export PATH="${PATH:+${PATH}:}~/.local/bin"' >>"$TARGET_FILE"
+  #      source "$TARGET_FILE"
+  #    fi
+  #  fi
 
   echo_info "Please add $OS_DIR_ON_PATH to your \$PATH variable"
   echo_info
@@ -109,11 +115,25 @@ main() {
   QUIET_OPT=false
   while [[ "$#" -gt 0 ]]; do
     case $1 in
-      --quiet) QUIET_OPT=true ;;
-      *) setup_error "Unknown option '$1'";;
+    --quiet) QUIET_OPT=true ;;
+    *) setup_error "Unknown option '$1'" ;;
     esac
     shift
   done
+
+  if [ "$(uname)" = "Darwin" ]; then
+    # readlink -f is not supported with macOS<12.3
+    min_ver="12.3"
+    ver=$(sw_vers -productVersion)
+    if [ "$(echo -e "$min_ver'\n'$ver" | sort -V | tail -1)" = "$min_ver" ]; then
+      if [ "$ver" != "$min_ver" ]; then
+        echo "Current macOS version: $ver"
+        echo "macOS version $min_ver or higher is required"
+        echo "Please upgrade your macOS version"
+        exit 1
+      fi
+    fi
+  fi
 
   if is_user_root; then
     setup_error "Should not install suibase as root (or sudo)"
@@ -126,13 +146,13 @@ main() {
     exit 1
   fi
 
-  setup_local_bin_as_needed;
+  setup_local_bin_as_needed
 
   echo_info "Starting installation of suibase..."
 
   # Build the list of scripts (e.g. "localnet, devnet, tsui...")
   local script_list=()
-  for dir_entry in "$SUIBASE_DIR/"scripts/* ; do
+  for dir_entry in "$SUIBASE_DIR/"scripts/*; do
     if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
       script_list+=("$(basename "$dir_entry")")
     fi
@@ -159,7 +179,7 @@ main() {
   # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
   source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
-  create_cargobin_as_needed;
+  create_cargobin_as_needed
 
   username=$(whoami)
   echo_info
@@ -180,4 +200,4 @@ main() {
   fi
 }
 
-main "$@";
+main "$@"
