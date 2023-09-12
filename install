@@ -125,7 +125,7 @@ main() {
     # readlink -f is not supported with macOS<12.3
     min_ver="12.3"
     ver=$(sw_vers -productVersion)
-    if [ "$(echo -e "$min_ver'\n'$ver" | sort -V | tail -1)" = "$min_ver" ]; then
+    if [ "$(echo -e $min_ver'\n'$ver | sort -V | tail -1)" = "$min_ver" ]; then
       if [ "$ver" != "$min_ver" ]; then
         echo "Current macOS version: $ver"
         echo "macOS version $min_ver or higher is required"
