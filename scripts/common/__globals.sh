@@ -457,14 +457,12 @@ build_sui_repo_branch() {
   # Verify Sui pre-requisites are installed.
   which curl &>/dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
   which git &>/dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
-  if [ "$USE_PRECOMPILED" = "false" ]; then
-    which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
-    which rustc &>/dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
-    which cargo &>/dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+  which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
+  which rustc &>/dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
+  which cargo &>/dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
 
-    # Verify Rust is recent enough.
-    version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
-  fi
+  # Verify Rust is recent enough.
+  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
 
   local _IS_SET_SUI_REPO="false"
   if is_sui_repo_dir_override; then
