@@ -455,6 +455,11 @@ build_sui_repo_branch() {
   local _FEEDBACK_BEFORE_RETURN=true
 
   # Verify Sui pre-requisites are installed.
+  update_HOST_vars
+  if [[ $HOST_PLATFORM == "Darwin" ]]; then
+    which brew &>/dev/null || setup_error "Need to install brew. See https://docs.sui.io/build/install#prerequisites"
+  fi
+
   which curl &>/dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
   which git &>/dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
   which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
@@ -2155,7 +2160,7 @@ update_PRECOMP_REMOTE_var() {
   done # while read line
 
   if [ -z "$_DOWNLOAD_URL" ]; then
-    setup_error "Could not find a '$_BIN_PLATFORM' binary asset for $_BRANCH in [$_REPO_URL]"
+    setup_error "Could not find a '$_DOWNLOAD_SUBSTRING' binary asset for $_BRANCH in [$_REPO_URL]"
   fi
 
   _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
