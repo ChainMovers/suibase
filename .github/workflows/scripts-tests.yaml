@@ -38,4 +38,4 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
       - name: Run some suibase tests (sanity check)
-        run: $HOME/suibase/scripts/tests/run-all.sh --fast
+        run: $HOME/suibase/scripts/tests/run-all.sh --fast --github_token ${{GITHUB_TOKEN}}

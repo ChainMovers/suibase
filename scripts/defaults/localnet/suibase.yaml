@@ -45,6 +45,22 @@ sui_faucet_client_timeout_secs: 10
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
 
+# Specify a github_token only if you observe "rate limiting" error
+# causing suibase to fail while calling into the Github API.
+#
+# Github has a rate limit of 60 calls per hour for unauthenticated
+# users. This is plenty for most use case, but not enough when doing
+# extensive Suibase "udpate/regen/start" from multiple machines sharing
+# the same public IP address (behind a NAT).
+#
+# With an authentication token, API call rate are possible in the order
+# of thousands per hour.
+#
+# More Info:
+#   https://docs.github.com/en/rest/overview/resources-in-the-rest-api?apiVersion=2022-11-28#rate-limiting
+#   https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+github_token: ~
+
 # Allow using precompiled binaries for default_repo.
 #
 # When true, the binary is downloaded from default_repo_url (not built

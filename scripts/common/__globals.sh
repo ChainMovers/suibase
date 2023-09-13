@@ -1151,9 +1151,17 @@ repair_workdir_as_needed() {
     # ... keep going to repair if pointing to a valid directory.
     WORKDIR_PARAM="$ACTIVE_WORKDIR"
   else
-    if [ ! -d "$WORKDIRS/$WORKDIR_PARAM" ]; then
+    if [ ! -d "$WORKDIRS/$WORKDIR_PARAM" ] &&
+      [ -d "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" ]; then
       # "Create" using the template.
       cp -r "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" "$WORKDIRS"
+      # As needed, initialize common suibase.yaml from template as well.
+      # This is useful for when tests/run-all.sh adds variables
+      # to the common/suibase.yaml (e.g. github_token).
+      if [ ! -f "$WORKDIRS/common/suibase.yaml" ] && [ -f "$SCRIPTS_DIR/templates/common/suibase.yaml" ]; then
+        mkdir -p "$SCRIPTS_DIR/templates/common/"
+        cp "$SCRIPTS_DIR/templates/common/suibase.yaml" "$WORKDIRS/common/suibase.yaml"
+      fi
     fi
     create_active_symlink_as_needed "$WORKDIR_PARAM"
   fi
@@ -2134,7 +2142,17 @@ update_PRECOMP_REMOTE_var() {
   for _retry_curl in 1 2 3; do
     _DOWNLOAD_URL=""
     _TAG_NAME=""
-    _OUT=$(curl -s "$_REPO_URL/releases")
+    if [ "${CFG_github_token:?}" != "~" ]; then
+      _OUT=$(curl -s --request GET \
+        --url "$_REPO_URL/releases" \
+        --header "X-GitHub-Api-Version: 2022-11-28" \
+        --header "Authorization: Bearer ${CFG_github_token:?}")
+    else
+      _OUT=$(curl -s --request GET \
+        --url "$_REPO_URL/releases" \
+        --header "X-GitHub-Api-Version: 2022-11-28")
+    fi
+
     if [ -z "$_OUT" ]; then
       setup_error "Failed to get release information from [$_REPO_URL]"
     fi
@@ -2164,9 +2182,16 @@ update_PRECOMP_REMOTE_var() {
       break
     fi
 
-    if [ $_retry_curl == 1 ]; then
-      # Get a sample to debug what went wrong.
-      echo "Retrieved data = [$_OUT]"
+    # Something went wrong.
+    echo "Github API call result = [$_OUT]"
+
+    if [[ -n ${CFG_github_token:?} ]] && [[ "$_OUT" == *"Bad credentials"* ]]; then
+      setup_error "The github_token in suibase.yaml seems invalid."
+    fi
+
+    if [[ "$_OUT" == *"rate limit exceeded"* ]]; then
+      warn_user "Consider adding your github_token in suibase.yaml to increase the rate limit."
+      setup_error "Github rate limit exceeded. Please try again later."
     fi
 
     if [ $_retry_curl -lt 2 ]; then
@@ -2228,7 +2253,15 @@ download_PRECOMP_REMOTE() {
       fi
     else
       echo "Downloading precompiled $_DOWNLOAD_FILENAME"
-      curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL"
+      if [ "${CFG_github_token:?}" != "~" ]; then
+        curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL" \
+          --header "X-GitHub-Api-Version: 2022-11-28" \
+          --header "Authorization: Bearer ${CFG_github_token:?}"
+      else
+        curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL" \
+          --header "X-GitHub-Api-Version: 2022-11-28"
+      fi
+
       # Extract if not already done. This is an indirect validation that the downloaded file is OK.
       # If not OK, delete and try download again.
       _DO_EXTRACTION="true"

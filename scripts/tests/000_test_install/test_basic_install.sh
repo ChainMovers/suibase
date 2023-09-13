@@ -26,6 +26,8 @@ tests() {
     test_setup "$@"
     # shellcheck source=SCRIPTDIR/../../../../suibase/install
     (~/suibase/install >&"$OUT") || fail "install exit status=[$?]"
+    # As needed, create scripts/templates/common/suibase.yaml
+    init_common_template
     test_no_workdirs
 }
 

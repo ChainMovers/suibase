@@ -31,6 +31,7 @@ main() {
   #   --main_branch: Tests using main branch of Mysten Labs. For "on the edge" validation.
   #
   local _PASSTHRU_OPTIONS=()
+  local _GITHUB_TOKEN=""
   while [[ "$#" -gt 0 ]]; do
     case $1 in
     #-t|--target) target="$2"; shift ;; That's an example with a parameter
@@ -40,6 +41,11 @@ main() {
       ;;
     --main_branch)
       _PASSTHRU_OPTIONS+=("$1")
+      ;;
+    --github_token)
+      _PASSTHRU_OPTIONS+=("$1")
+      _PASSTHRU_OPTIONS+=("$2")
+      shift
       ;;
     *)
       fail "Unknown parameter passed: $1"

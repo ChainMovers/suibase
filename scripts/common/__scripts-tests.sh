@@ -18,6 +18,7 @@ export OUT="$HOME/suibase/scripts/tests/result.txt"
 export FAST_OPTION=false
 export MAIN_BRANCH_OPTION=false
 export TEST_INIT_CALLED=false
+export GITHUB_TOKEN=""
 
 # List of workdir routinely tested.
 export WORKDIRS_NAME=(
@@ -101,7 +102,6 @@ test_init() {
 export -f test_init
 
 test_setup() {
-
   # Parse command-line
   FAST_OPTION=false
   MAIN_BRANCH_OPTION=false
@@ -110,6 +110,10 @@ test_setup() {
     case $1 in
     --fast) FAST_OPTION=true ;;
     --main_branch) MAIN_BRANCH_OPTION=true ;;
+    --github_token)
+      GITHUB_TOKEN="$2"
+      shift
+      ;;
     --skip_init) _SKIP_INIT=true ;;
     *)
       fail "Unknown parameter passed: $1"
@@ -139,3 +143,16 @@ test_setup() {
   fi
 }
 export -f test_setup
+
+init_common_template() {
+  # As needed, create a common suibase.yaml template file.
+  if [ -n "$GITHUB_TOKEN" ]; then
+    mkdir -p "$HOME/suibase/scripts/templates/common"
+    # Do the following only if github_token is not already in the file.
+    if ! grep -q "github_token:" "$HOME/suibase/scripts/templates/common/suibase.yaml"; then
+      echo "Creating templates/common/suibase.yaml"
+      echo "github_token: $GITHUB_TOKEN" >>"$HOME/suibase/scripts/templates/common/suibase.yaml"
+    fi
+  fi
+}
+export -f init_common_template
