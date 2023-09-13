@@ -2110,12 +2110,6 @@ update_PRECOMP_REMOTE_var() {
   # _REPO_URL is now the URL prefix for all github API call.
   _REPO_URL="${_REPO_URL%.git}"
 
-  local _OUT
-  _OUT=$(curl -s "$_REPO_URL/releases")
-  if [ -z "$_OUT" ]; then
-    setup_error "Failed to get release information from [$_REPO_URL]"
-  fi
-
   # Identify the platform and arch substrings in the asset to download.
   local _BIN_PLATFORM # "ubuntu", "macos" or "windows".
   local _BIN_ARCH     # "arm64" or "x86_64"
@@ -2128,42 +2122,63 @@ update_PRECOMP_REMOTE_var() {
       _BIN_PLATFORM="macos"
       _BIN_ARCH="$HOST_ARCH"
     else
-      # Unsupported platform.
-      setup_error "Unsupported platform [$HOST_PLATFORM]"
+      setup_error "Unsupported platform [$HOST_PLATFORM] and arch [$HOST_ARCH]"
     fi
   fi
 
-  # Find latest release with a binary asset.
-  local _TAG_VERSION
+  local _OUT
   local _TAG_NAME
   local _DOWNLOAD_URL
-  while read -r line < <(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -r); do
-    # echo "Processsing $line"
-    # Return something like: "tag_name": "testnet-v1.8.2",
-    _TAG_NAME="${line#*\:}"      # Remove the ":" and everything before
-    _TAG_NAME="${_TAG_NAME#*\"}" # Remove the first '"' and everything before
-    _TAG_NAME="${_TAG_NAME%\"*}" # Remove the last '"' and everything after
+  local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-$_BIN_ARCH"
 
-    # Find the binary asset for that release.
-    local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-$_BIN_ARCH"
+  for _retry_curl in 1 2 3; do
+    _DOWNLOAD_URL=""
+    _TAG_NAME=""
+    _OUT=$(curl -s "$_REPO_URL/releases")
+    if [ -z "$_OUT" ]; then
+      setup_error "Failed to get release information from [$_REPO_URL]"
+    fi
 
-    _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | head -1)
-    _DOWNLOAD_URL="${_DOWNLOAD_URL#*\:}" # Remove the ":" and everything before
-    _DOWNLOAD_URL="${_DOWNLOAD_URL#*\"}" # Remove the first '"' and everything before
-    _DOWNLOAD_URL="${_DOWNLOAD_URL%\"*}" # Remove the last '"' and everything after
+    # Find latest release with a binary asset.
+    while read -r line < <(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -r); do
+      # echo "Processsing $line"
+      # Return something like: "tag_name": "testnet-v1.8.2",
+      _TAG_NAME="${line#*\:}"      # Remove the ":" and everything before
+      _TAG_NAME="${_TAG_NAME#*\"}" # Remove the first '"' and everything before
+      _TAG_NAME="${_TAG_NAME%\"*}" # Remove the last '"' and everything after
 
-    # Stop looping if _DOWNLOAD_URL looks valid.
+      # Find the binary asset for that release.
+      _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | head -1)
+      _DOWNLOAD_URL="${_DOWNLOAD_URL#*\:}" # Remove the ":" and everything before
+      _DOWNLOAD_URL="${_DOWNLOAD_URL#*\"}" # Remove the first '"' and everything before
+      _DOWNLOAD_URL="${_DOWNLOAD_URL%\"*}" # Remove the last '"' and everything after
+
+      # Stop looping if _DOWNLOAD_URL looks valid.
+      if [ -n "$_DOWNLOAD_URL" ]; then
+        break
+      fi
+
+    done # while read line
+
     if [ -n "$_DOWNLOAD_URL" ]; then
       break
     fi
 
-  done # while read line
+    if [ $_retry_curl == 1 ]; then
+      # Get a sample to debug what went wrong.
+      echo "Retrieved data = [$_OUT]"
+    fi
+
+    if [ $_retry_curl -lt 2 ]; then
+      warn_user "Could not retreive release information. Retrying"
+    fi
+  done # curl retry loop
 
   if [ -z "$_DOWNLOAD_URL" ]; then
     setup_error "Could not find a '$_DOWNLOAD_SUBSTRING' binary asset for $_BRANCH in [$_REPO_URL]"
   fi
 
-  _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
+  local _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
   # echo "_OUT=$_OUT"
   # echo "_TAG_NAME=$_TAG_NAME"
   # echo "_TAG_VERSION=$_TAG_VERSION"
