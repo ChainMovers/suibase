@@ -14,6 +14,7 @@ WORKDIR="localnet"
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 tests() {
+    test_setup "$@"
     test_static_globals_var
     test_color
     cd "$HOME" || fail "cd $HOME"
@@ -94,4 +95,4 @@ test_static_globals_var() {
 }
 export -f test_static_globals_var
 
-tests
+tests "$@"

@@ -23,9 +23,10 @@ test_no_workdirs() {
 }
 
 tests() {
+    test_setup "$@"
     # shellcheck source=SCRIPTDIR/../../../../suibase/install
-    (source ~/suibase/install >&"$OUT") || fail "install exit status=[#?]"
+    (~/suibase/install >&"$OUT") || fail "install exit status=[$?]"
     test_no_workdirs
 }
 
-tests
+tests "$@"

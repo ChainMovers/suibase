@@ -14,10 +14,19 @@ WORKDIR="active"
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 
 tests() {
+  test_setup "$@"
   test_workdir "localnet"
+  if [ "$MAIN_BRANCH_OPTION" = "true" ]; then
+    return
+  fi
+
+  test_workdir "mainnet"
+  if [ "$FAST_OPTION" = "true" ]; then
+    return
+  fi
+
   test_workdir "devnet"
   test_workdir "testnet"
-  test_workdir "mainnet"
 }
 
 test_workdir() {
@@ -33,4 +42,4 @@ test_workdir() {
 }
 export -f test_workdir
 
-tests
+tests "$@"

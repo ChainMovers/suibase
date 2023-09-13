@@ -1,5 +1,6 @@
 # Ignore suibase outputs
 workdirs/
+scripts/tests/result.txt
 
 # File system
 .DS_Store

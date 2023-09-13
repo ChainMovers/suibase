@@ -14,7 +14,40 @@
 #  2 At least one error found, but further tests could proceed. The code
 #    should not be deployed.
 
+SUIBASE_DIR="$HOME/suibase"
+
+# shellcheck source=SCRIPTDIR/../common/__scripts-tests.sh
+source "$SUIBASE_DIR/scripts/common/__scripts-tests.sh"
+
 main() {
+  test_init
+
+  # Parse command-line.
+  #
+  # By default the tests are extensive and can take >1hour.
+  #
+  # 2 options (can be combined):
+  #   --fast: Intended to validate quickly. Just a few sanity tests. Goal is <5 minutes.
+  #   --main_branch: Tests using main branch of Mysten Labs. For "on the edge" validation.
+  #
+  local _PASSTHRU_OPTIONS=()
+  while [[ "$#" -gt 0 ]]; do
+    case $1 in
+    #-t|--target) target="$2"; shift ;; That's an example with a parameter
+    # -f|--flag) flag=1 ;; That's an example flag
+    --fast)
+      _PASSTHRU_OPTIONS+=("$1")
+      ;;
+    --main_branch)
+      _PASSTHRU_OPTIONS+=("$1")
+      ;;
+    *)
+      fail "Unknown parameter passed: $1"
+      ;;
+    esac
+    shift
+  done
+
   local _AT_LEAST_ONE_FATAL_ERROR_FOUND=false
   TEST_SCRIPTS=$(find ~/suibase/scripts/tests/. -name "*.sh" -type f -print0 | sort -z | tr '\0' ' ')
   for SCRIPT in $TEST_SCRIPTS; do
@@ -23,7 +56,7 @@ main() {
       continue
     fi
     echo "Running $SCRIPT..."
-    bash "$SCRIPT"
+    ("$SCRIPT" "${_PASSTHRU_OPTIONS[@]}" --skip_init)
     local _CODE=$?
     if [[ $_CODE -ne 0 ]]; then
       _AT_LEAST_ONE_FATAL_ERROR_FOUND=true
@@ -43,4 +76,4 @@ main() {
   fi
 }
 
-main
+main "$@"
