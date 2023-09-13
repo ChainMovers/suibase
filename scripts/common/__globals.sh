@@ -2325,6 +2325,26 @@ update_HOST_vars() {
         fi
       fi
     fi
+
+    # Detect unsupported PLATFORM/ARCH combination and display debug info.
+    local _UNSUPPORTED=false
+    if [ "$HOST_PLATFORM" = "Linux" ]; then
+      if [ "$HOST_ARCH" != "x86_64" ]; then
+        _UNSUPPORTED=true
+      fi
+    else
+      if [ "$HOST_PLATFORM" = "Darwin" ]; then
+        if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "arm64" ]; then
+          _UNSUPPORTED=true
+        fi
+      else
+        _UNSUPPORTED=true
+      fi
+    fi
+
+    if [ "$_UNSUPPORTED" = true ]; then
+      setup_error "Unsupported platform [$HOST_PLATFORM] and arch [$HOST_ARCH]"
+    fi
   fi
 }
 export -f update_HOST_vars
