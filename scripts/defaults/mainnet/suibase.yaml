@@ -18,7 +18,7 @@ sui_faucet_request_buffer_size: 200
 sui_faucet_client_timeout_secs: 10
 
 default_repo_url: "https://github.com/MystenLabs/sui.git"
-default_repo_branch: "main"
+default_repo_branch: "mainnet"
 
 github_token: ~
 
