@@ -1,6 +1,7 @@
 # Ignore suibase outputs
 workdirs/
 scripts/tests/result.txt
+scripts/templates/common/
 
 # File system
 .DS_Store

@@ -275,8 +275,9 @@ file_newer_than() {
 export -f file_newer_than
 
 set_key_value() {
-  local _KEY=$1
-  local _VALUE=$2
+  local _WORKDIR=$1
+  local _KEY=$2
+  local _VALUE=$3
   # A key-value persisted in the workdir.
   # The value can't be the string "NULL"
   #
@@ -288,25 +289,26 @@ set_key_value() {
   if [ -z "$_KEY" ]; then
     setup_error "Can't use an empty key for value [$_VALUE]"
   fi
-  mkdir -p "$WORKDIRS/$WORKDIR/.state"
-  echo "$_VALUE" >|"$WORKDIRS/$WORKDIR/.state/$_KEY"
+  mkdir -p "$WORKDIRS/$_WORKDIR/.state"
+  echo "$_VALUE" >|"$WORKDIRS/$_WORKDIR/.state/$_KEY"
 }
 export -f set_key_value
 
 get_key_value() {
-  local _KEY=$1
+  local _WORKDIR=$1
+  local _KEY=$2
   # A key-value persisted in the workdir.
   # Return the string NULL on error or missing.
   if [ -z "$_KEY" ]; then
     setup_error "Can't retreive empty key"
   fi
-  if [ ! -f "$WORKDIRS/$WORKDIR/.state/$_KEY" ]; then
+  if [ ! -f "$WORKDIRS/$_WORKDIR/.state/$_KEY" ]; then
     echo "NULL"
     return
   fi
 
   local _VALUE
-  _VALUE=$(cat "$WORKDIRS/$WORKDIR/.state/$_KEY")
+  _VALUE=$(cat "$WORKDIRS/$_WORKDIR/.state/$_KEY")
 
   if [ -z "$_VALUE" ]; then
     echo "NULL"
@@ -317,6 +319,18 @@ get_key_value() {
   echo "$_VALUE"
 }
 export -f get_key_value
+
+del_key_value() {
+  local _WORKDIR=$1
+  local _KEY=$2
+  if [ -z "$_KEY" ]; then
+    setup_error "Can't delete an unspecified key"
+  fi
+  if [ -f "$WORKDIRS/$_WORKDIR/.state/$_KEY" ]; then
+    rm -f "$WORKDIRS/$_WORKDIR/.state/$_KEY"
+  fi
+}
+export -f del_key_value
 
 # Now load all the $CFG_ variables from the suibase.yaml files.
 # shellcheck source=SCRIPTDIR/__parse-yaml.sh
@@ -408,7 +422,7 @@ update_SUI_BASE_NET_MOCK_var() {
   # that the process are already running.
   if $SUI_BASE_NET_MOCK; then
     local _USER_REQUEST
-    _USER_REQUEST=$(get_key_value "user_request")
+    _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
     if [ "$_USER_REQUEST" = "start" ]; then
       export SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
       export SUI_FAUCET_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
@@ -559,6 +573,9 @@ build_sui_repo_branch() {
   # Either download precompiled or build from source.
   local _DO_FINAL_SUI_SANITY_CHECK=false
 
+  local _PRECOMP_STATE
+  _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
+
   if [ "$USE_PRECOMPILED" = "true" ]; then
     # Identify the latest remote tag with binaries.
     update_PRECOMP_REMOTE_var
@@ -586,6 +603,19 @@ build_sui_repo_branch() {
     _DO_FINAL_SUI_SANITY_CHECK=true
   else
     # Build from source.
+
+    if [ "$_PRECOMP_STATE" != "NULL" ]; then
+      # Precompile was used before, so cleanup first to avoid confusion.
+      (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
+      cd_sui_log_dir
+      del_key_value "$WORKDIR" "precompiled"
+      _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
+      # Sanity test.
+      if [ "$_PRECOMP_STATE" != "NULL" ]; then
+        setup_error "Unexpected precompiled state [$_PRECOMP_STATE] (1)"
+      fi
+    fi
+
     if [ "$_IS_SET_SUI_REPO" = true ]; then
       echo "Building $WORKDIR $_BUILD_DESC at [$RESOLVED_SUI_REPO_DIR]"
     else
@@ -617,6 +647,33 @@ build_sui_repo_branch() {
 
     # Check if sui is recent enough.
     version_greater_equal "$SUI_VERSION" "$MIN_SUI_VERSION" || setup_error "Sui binary version too old (not supported)"
+  fi
+
+  # Syncronize .state/precompiled with the .cache binary filepath.
+  local _DELETE_PRECOMP_STATE=false
+  if [ "$USE_PRECOMPILED" = "false" ]; then
+    if [ "$_PRECOMP_STATE" != "NULL" ]; then
+      _DELETE_PRECOMP_STATE=true
+    fi
+  else
+    if [ -z "$PRECOMP_REMOTE_DOWNLOAD_DIR" ]; then
+      # That should never happen, but check just in case.
+      _DELETE_PRECOMP_STATE=true
+      warn_user "Can't sync precompiled state with unavailable download info".
+    else
+      if [ "$_PRECOMP_STATE" != "$PRECOMP_REMOTE_DOWNLOAD_DIR" ]; then
+        set_key_value "$WORKDIR" "precompiled" "$PRECOMP_REMOTE_DOWNLOAD_DIR"
+      fi
+    fi
+  fi
+
+  if [ "$_DELETE_PRECOMP_STATE" = "true" ]; then
+    del_key_value "$WORKDIR" "precompiled"
+    _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
+    # Sanity test.
+    if [ "$_PRECOMP_STATE" != "NULL" ]; then
+      setup_error "Unexpected precompiled state [$_PRECOMP_STATE] (2)"
+    fi
   fi
 
   # Help user by reminding the origin of the binaries.
@@ -1054,8 +1111,8 @@ create_state_as_needed() {
 
   if [ "$WORKDIR_PARAM" != "active" ]; then
     if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/name" ] ||
-      [ "$(get_key_value "name")" != "$WORKDIR_PARAM" ]; then
-      set_key_value "name" "$WORKDIR_PARAM"
+      [ "$(get_key_value "$WORKDIR_PARAM" "name")" != "$WORKDIR_PARAM" ]; then
+      set_key_value "$WORKDIR_PARAM" "name" "$WORKDIR_PARAM"
     fi
   fi
 
@@ -2039,7 +2096,7 @@ sync_client_yaml() {
   _EXPECTED_ENV=$WORKDIR_NAME
   if [ "$_CMD" != "no-proxy" ] && [ "${CFG_proxy_enabled:?}" != "false" ]; then
     local _USER_REQUEST
-    _USER_REQUEST=$(get_key_value "user_request")
+    _USER_REQUEST=$(get_key_value "$WORKDIR_NAME" "user_request")
     if [ "$_USER_REQUEST" != "stop" ]; then
       # Proxy is enabled and workdir is running, so
       # the client env should be toward the proxy.
@@ -2254,6 +2311,7 @@ download_PRECOMP_REMOTE() {
     else
       echo "Downloading precompiled $_DOWNLOAD_FILENAME"
       if [ "${CFG_github_token:?}" != "~" ]; then
+        echo "Using github_token"
         curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL" \
           --header "X-GitHub-Api-Version: 2022-11-28" \
           --header "Authorization: Bearer ${CFG_github_token:?}"

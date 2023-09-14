@@ -6,29 +6,44 @@
 #
 SUIBASE_DIR="$HOME/suibase"
 
-# shellcheck source=SCRIPTDIR/../../common/__scripts-tests.sh
-source "$SUIBASE_DIR/scripts/common/__scripts-tests.sh"
+# shellcheck source=SCRIPTDIR/../__scripts-lib-before-globals.sh
+source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
 
-test_no_workdirs() {
-    rm -rf ~/suibase/workdirs
-    echo "localnet create"
-    (localnet create >&"$OUT") || fail "create"
-    assert_workdir_ok "localnet"
+# Installation.
+(~/suibase/install >&"$OUT") || fail "install exit status=[$?]"
 
-    #rm -rf ~/suibase/workdirs
-    #echo "localnet update"
-    #(localnet update >& "$OUT") || fail "update"
-    #assert_workdir_ok "localnet"
-    #assert_build_ok "localnet"
-}
+# As needed, create scripts/templates/common/suibase.yaml
+init_common_template
+
+# Source globals
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="localnet"
+# shellcheck source=SCRIPTDIR/../../common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
+# shellcheck source=SCRIPTDIR/../__scripts-lib-after-globals.sh
+source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 
 tests() {
-    test_setup "$@"
-    # shellcheck source=SCRIPTDIR/../../../../suibase/install
-    (~/suibase/install >&"$OUT") || fail "install exit status=[$?]"
-    # As needed, create scripts/templates/common/suibase.yaml
-    init_common_template
-    test_no_workdirs
+  # shellcheck source=SCRIPTDIR/../../../../suibase/install
+  test_no_workdirs
 }
 
-tests "$@"
+test_no_workdirs() {
+  rm -rf ~/suibase/workdirs
+  # Make sure not in a directory that was deleted.
+  cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
+
+  echo "localnet create"
+  (localnet create >&"$OUT") || fail "create"
+  assert_workdir_ok "localnet"
+
+  #rm -rf ~/suibase/workdirs
+  #echo "localnet update"
+  #(localnet update >& "$OUT") || fail "update"
+  #assert_workdir_ok "localnet"
+  #assert_build_ok "localnet"
+}
+export -f test_no_workdirs
+
+tests

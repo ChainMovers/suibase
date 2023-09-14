@@ -393,7 +393,7 @@ show_suibase_daemon_get_links() {
   local _JSON_PARAM=$2
 
   local _USER_REQUEST
-  _USER_REQUEST=$(get_key_value "user_request")
+  _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
   if [ "$_USER_REQUEST" = "stop" ]; then
     error_exit "$WORKDIR is not running. Do '$WORKDIR start'."

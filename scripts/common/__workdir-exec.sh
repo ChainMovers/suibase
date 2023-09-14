@@ -402,7 +402,7 @@ workdir_exec() {
     exit_if_sui_binary_not_ok
 
     local _USER_REQUEST
-    _USER_REQUEST=$(get_key_value "user_request")
+    _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
     update_SUI_VERSION_var
 
@@ -884,7 +884,6 @@ workdir_exec() {
 
   # Handle case where precompiled is not compatible.
   if [ "$_USE_PRECOMPILED" = "true" ]; then
-    # Ignore precompiled request when set-sui-repo is set.
     if [ "$_IS_SET_SUI_REPO" = "true" ]; then
       _USE_PRECOMPILED="false"
     else
@@ -909,6 +908,25 @@ workdir_exec() {
           # Unsupported OS... "windows" presumably...
           setup_error "Unsupported OS [$HOST_PLATFORM]"
         fi
+      fi
+    fi
+
+    # Make sure the repo/branch has pre-compiled binary available.
+    if [ "$_USE_PRECOMPILED" = "true" ]; then
+      if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ]; then
+        # default_repo_url was overriden by the user.
+        warn_user "Precompiled binaries not available for repo '$CFG_default_repo_url'. Will build from source instead."
+        _USE_PRECOMPILED="false"
+      else
+        case "${CFG_default_repo_branch:?}" in
+        "devnet" | "testnet" | "mainnet")
+          # OK
+          ;;
+        *)
+          warn_user "Precompiled binaries not available for branch '$CFG_default_repo_branch'. Will build from source instead."
+          _USE_PRECOMPILED="false"
+          ;;
+        esac
       fi
     fi
   fi
@@ -1029,10 +1047,10 @@ stop_all_services() {
   #       the workdir content is in a bad state.
   local _OLD_USER_REQUEST
   if [ -d "$WORKDIRS/$WORKDIR" ]; then
-    _OLD_USER_REQUEST=$(get_key_value "user_request")
+    _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
     # Always write to "touch" the file and possibly cause
     # downstream resynch/fixing.
-    set_key_value "user_request" "stop"
+    set_key_value "$WORKDIR" "user_request" "stop"
     if [ "$_OLD_USER_REQUEST" != "stop" ]; then
       sync_client_yaml
     fi
@@ -1084,9 +1102,9 @@ start_all_services() {
   #   1: Everything needed particular to this workdir already running
   #      (Note: suibase-daemon is not *particular* to a workdir)
   local _OLD_USER_REQUEST
-  _OLD_USER_REQUEST=$(get_key_value "user_request")
+  _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
-  set_key_value "user_request" "start"
+  set_key_value "$WORKDIR" "user_request" "start"
 
   # A good time to double-check if some commands from the suibase.yaml need to be applied.
   copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
