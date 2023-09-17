@@ -1,0 +1,80 @@
+{
+  "name": "suibase",
+  "displayName": "localdev",
+  "description": "Streamline Sui Move development and te testing.",
+  "version": "0.0.1",
+  "repository": "https://github.com/ChainMovers/suibase",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "suibase.suibase",
+        "title": "suibase"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "suibase-sidebar",
+          "title": "Suibase",
+          "icon": "media/dep.svg"
+        }
+      ]
+    },
+    "views": {
+      "suibase-sidebar": [
+        {
+          "id": "localnetTreeView",
+          "name": "LOCALNET",
+          "icon": "media/dep.svg",
+          "contextualTitle": "Localnet contextual title"
+        },
+        {
+          "id": "devnetTreeView",
+          "name": "DEVNET",
+          "icon": "media/dep.svg",
+          "contextualTitle": "Devnet contextual title"
+        },        
+        {
+          "id": "testnetTreeView",
+          "name": "TESTNET",
+          "icon": "media/dep.svg",
+          "contextualTitle": "Devnet contextual title"
+        },
+        {
+          "id": "mainnetTreeView",
+          "name": "MAINNET",
+          "icon": "media/dep.svg",
+          "contextualTitle": "Devnet contextual title"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.82.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^6.4.1",
+    "@typescript-eslint/parser": "^6.4.1",
+    "eslint": "^8.47.0",
+    "glob": "^10.3.3",
+    "mocha": "^10.2.0",
+    "typescript": "^5.1.6",
+    "@vscode/test-electron": "^2.3.4"
+  }
+}
