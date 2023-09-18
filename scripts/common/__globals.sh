@@ -1302,8 +1302,16 @@ get_process_pid() {
   #
   update_HOST_vars
   if [[ $HOST_PLATFORM == "Darwin" ]]; then
+    # MacOS 'ps' works differently and does not show the $_ARGS to discern the
+    # process, so next best thing is to match $_PROC to end-of-line with "$".
+    #
+    # Example of issue is to try to get_process_pid "sui" "start" and instead
+    # getting the PID of "suibase-daemon".
+    #
+    # More info: https://github.com/ChainMovers/suibase/issues/79
+
     # shellcheck disable=SC2009
-    _PID=$(ps x -o pid,comm | grep "$_PROC" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+    _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
   else
     # shellcheck disable=SC2009
     _PID=$(ps x -o pid,cmd | grep "$_PROC $_ARGS" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
@@ -1322,7 +1330,7 @@ update_SUI_PROCESS_PID_var() {
 
   # Useful to check if the sui process is running (this is the parent for the "localnet")
   local _PID
-  _PID=$(get_process_pid "sui" "start")
+  _PID=$(get_process_pid "$SUI_BIN_DIR/sui" "start")
   if [ "$_PID" = "NULL" ]; then
     unset SUI_PROCESS_PID
   else
