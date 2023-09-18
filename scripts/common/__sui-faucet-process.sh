@@ -143,7 +143,7 @@ update_SUI_FAUCET_PROCESS_PID_var() {
   if $SUI_BASE_NET_MOCK; then return; fi
 
   local _PID
-  _PID=$(get_process_pid sui-faucet)
+  _PID=$(get_process_pid "$SUI_BIN_DIR/sui-faucet")
   if [ "$_PID" = "NULL" ]; then
     unset SUI_FAUCET_PROCESS_PID
   else
