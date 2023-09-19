@@ -1,55 +1,40 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
-import { DepNodeProvider, Dependency } from './suibaseSidebar';
+import { SuibaseSidebar } from "./suibaseSidebar";
+import { SuibaseExec } from "./suibaseExec";
+import { SuibaseCommands } from "./suibaseCommands";
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+// This method is called when the extension is activated by VSCode.
 export function activate(context: vscode.ExtensionContext) {
+  // Instantiate all the singleton instances.
+  // Each will perform their own registrations.
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "suibase" is now active!');
+  // Low-level APIs enabled first.
+  SuibaseExec.activate(context);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('suibase.suibase', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Suibase running in localdev!');
-	});
+  // "Business logic" enabled next.
+  SuibaseCommands.activate(context);
 
-	context.subscriptions.push(disposable);
-	// Code for the tree view
-	const rootPath =
-  vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
-    ? vscode.workspace.workspaceFolders[0].uri.fsPath
-    : undefined;
+  // UI elements enabled last.
+  SuibaseSidebar.activate(context);
 
-	// Do createTreeView if rootPath is defined
-	{
-	  const tree = new DepNodeProvider("localnet",rootPath);
-	  vscode.window.registerTreeDataProvider('localnetTreeView', tree);
-	}
-
-	{
-		const tree = new DepNodeProvider("devnet",rootPath);
-		vscode.window.registerTreeDataProvider('devnetTreeView', tree);
-	}
-
-	{
-		const tree = new DepNodeProvider("testnet",rootPath);
-		vscode.window.registerTreeDataProvider('testnetTreeView', tree);
-	}
-
-	{
-		const tree = new DepNodeProvider("mainnet",rootPath);
-		vscode.window.registerTreeDataProvider('mainnetTreeView', tree);
-	}
-
+  console.log("extension activate() completed");
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+// This method is called when the extension is deactivated by VSCode.
+export function deactivate() {
+  // Deactivate in reverse order of activation.
+
+  // UI elements disabled first.
+  SuibaseSidebar.deactivate();
+
+  // "Business logic" disabled next.
+  SuibaseCommands.deactivate();
+
+  // Low-level APIs disabled last.
+  SuibaseExec.deactivate();
+
+  console.log("extension deactivate() completed");
+}

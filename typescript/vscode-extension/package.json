@@ -14,45 +14,47 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "suibase.suibase",
-        "title": "suibase"
+			{
+				"command": "suibase.refresh",
+				"title": "refresh",
+				"icon": "$(refresh)"
+      },
+			{
+				"command": "suibase.settings",
+				"title": "settings",
+				"icon": "$(settings-view-bar-icon)"
       }
     ],
+    "menus": {
+			"view/title": [
+				{
+					"command": "suibase.refresh",
+					"when": "view == suibaseTreeView",
+					"group": "navigation@1"
+				},
+				{
+					"command": "suibase.settings",
+					"when": "view == suibaseTreeView",
+					"group": "navigation@0"
+				}
+			]
+    },
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "suibase-sidebar",
+          "id": "suibaseSidebar",
           "title": "Suibase",
           "icon": "media/dep.svg"
         }
       ]
     },
     "views": {
-      "suibase-sidebar": [
+        "suibaseSidebar": [
         {
-          "id": "localnetTreeView",
-          "name": "LOCALNET",
+          "id": "suibaseTreeView",
+          "name": "Suibase",
           "icon": "media/dep.svg",
-          "contextualTitle": "Localnet contextual title"
-        },
-        {
-          "id": "devnetTreeView",
-          "name": "DEVNET",
-          "icon": "media/dep.svg",
-          "contextualTitle": "Devnet contextual title"
-        },        
-        {
-          "id": "testnetTreeView",
-          "name": "TESTNET",
-          "icon": "media/dep.svg",
-          "contextualTitle": "Devnet contextual title"
-        },
-        {
-          "id": "mainnetTreeView",
-          "name": "MAINNET",
-          "icon": "media/dep.svg",
-          "contextualTitle": "Devnet contextual title"
+          "contextualTitle": "Suibase"
         }
       ]
     }

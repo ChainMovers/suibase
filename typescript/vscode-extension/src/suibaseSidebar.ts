@@ -1,27 +1,31 @@
-import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
 
 // References:
 //  https://code.visualstudio.com/api/extension-guides/tree-view
 //  https://github.com/microsoft/vscode-extension-samples/tree/main/tree-view-sample
 export class DepNodeProvider implements vscode.TreeDataProvider<Dependency> {
+  private _onDidChangeTreeData: vscode.EventEmitter<
+    Dependency | undefined | void
+  > = new vscode.EventEmitter<Dependency | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<Dependency | undefined | void> =
+    this._onDidChangeTreeData.event;
 
-	private _onDidChangeTreeData: vscode.EventEmitter<Dependency | undefined | void> = new vscode.EventEmitter<Dependency | undefined | void>();
-	readonly onDidChangeTreeData: vscode.Event<Dependency | undefined | void> = this._onDidChangeTreeData.event;
+  constructor(
+    private workdir: string,
+    private workspaceRoot: string | undefined
+  ) {}
 
-	constructor(private workdir: string, private workspaceRoot: string | undefined) {
-	}
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
 
-	refresh(): void {
-		this._onDidChangeTreeData.fire();
-	}
+  getTreeItem(element: Dependency): vscode.TreeItem {
+    return element;
+  }
 
-	getTreeItem(element: Dependency): vscode.TreeItem {
-		return element;
-	}
-
-	getChildren(element?: Dependency): Thenable<Dependency[]> {
+  getChildren(element?: Dependency): Thenable<Dependency[]> {
     /*
 		if (!this.workspaceRoot) {
 			vscode.window.showInformationMessage('No dependency in empty workspace');
@@ -44,21 +48,34 @@ export class DepNodeProvider implements vscode.TreeDataProvider<Dependency> {
     } else {
       return Promise.resolve(this.getDepsInPackageJson("NULL"));
     }
-	}
+  }
 
-	/**
-	 * Given the path to package.json, read all its dependencies and devDependencies.
-	 */
-	private getDepsInPackageJson(packageJsonPath: string): Dependency[] {
-			const toDep = (moduleName: string, parentName: string): Dependency => {	   
-          if (parentName === "NULL") {
-            return new Dependency(moduleName, parentName, vscode.TreeItemCollapsibleState.Collapsed);				            
-          } else {
-            return new Dependency(moduleName, parentName, vscode.TreeItemCollapsibleState.None);									
-          }
-			};
-      const deps = [ toDep("MyLabel_1", packageJsonPath), toDep("MyLabel_2", packageJsonPath) ];
-			return deps;
+  /**
+   * Given the path to package.json, read all its dependencies and devDependencies.
+   */
+  private getDepsInPackageJson(packageJsonPath: string): Dependency[] {
+    const toDep = (moduleName: string, parentName: string): Dependency => {
+      if (parentName === "NULL") {
+        return new Dependency(
+          moduleName,
+          parentName,
+          vscode.TreeItemCollapsibleState.Collapsed
+        );
+      } else {
+        return new Dependency(
+          moduleName,
+          parentName,
+          vscode.TreeItemCollapsibleState.None
+        );
+      }
+    };
+    const deps = [
+      toDep("Localnet", packageJsonPath),
+      toDep("Devnet", packageJsonPath),
+      toDep("Testnet", packageJsonPath),
+      toDep("Mainnet", packageJsonPath),
+    ];
+    return deps;
     /*
 		const workspaceRoot = this.workspaceRoot;
 		if (this.pathExists(packageJsonPath) && workspaceRoot) {
@@ -76,37 +93,101 @@ export class DepNodeProvider implements vscode.TreeDataProvider<Dependency> {
 			return [];
 		}
     */
-	}
+  }
 
-	private pathExists(p: string): boolean {
-		try {
-			fs.accessSync(p);
-		} catch (err) {
-			return false;
-		}
+  private pathExists(p: string): boolean {
+    try {
+      fs.accessSync(p);
+    } catch (err) {
+      return false;
+    }
 
-		return true;
-	}
+    return true;
+  }
 }
 
 export class Dependency extends vscode.TreeItem {
+  constructor(
+    public readonly label: string,
+    private readonly version: string,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly command?: vscode.Command
+  ) {
+    super(label, collapsibleState);
 
-	constructor(
-		public readonly label: string,
-		private readonly version: string,
-		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-		public readonly command?: vscode.Command
-	) {
-		super(label, collapsibleState);
+    this.tooltip = `${this.label}-${this.version}`;
+    this.description = this.version;
+  }
 
-		this.tooltip = `${this.label}-${this.version}`;
-		this.description = this.version;
-	}
+  iconPath = {
+    light: path.join(
+      __filename,
+      "..",
+      "..",
+      "resources",
+      "light",
+      "dependency.svg"
+    ),
+    dark: path.join(
+      __filename,
+      "..",
+      "..",
+      "resources",
+      "dark",
+      "dependency.svg"
+    ),
+  };
 
-	iconPath = {
-		light: path.join(__filename, '..', '..', 'resources', 'light', 'dependency.svg'),
-		dark: path.join(__filename, '..', '..', 'resources', 'dark', 'dependency.svg')
-	};
+  contextValue = "dependency";
+}
 
-	contextValue = 'dependency';
+export class SuibaseSidebar {
+  private static instance: SuibaseSidebar | undefined;
+  private static context: vscode.ExtensionContext | undefined;
+
+  private constructor() {} // activate() does the instantion instead.
+
+  public static activate(context: vscode.ExtensionContext) {
+    if (!typeof SuibaseSidebar.context === undefined) {
+      console.log("Error: SuibaseSidebar.activate() called more than once");
+      return;
+    }
+
+    SuibaseSidebar.context = context;
+    SuibaseSidebar.instance = new SuibaseSidebar();
+
+    // Registration of the tree view.
+    // Code for the tree view
+    const rootPath =
+      vscode.workspace.workspaceFolders &&
+      vscode.workspace.workspaceFolders.length > 0
+        ? vscode.workspace.workspaceFolders[0].uri.fsPath
+        : undefined;
+
+    // Do createTreeView if rootPath is defined
+    {
+      const tree = new DepNodeProvider("suibase", rootPath);
+      vscode.window.registerTreeDataProvider("suibaseTreeView", tree);
+    }
+
+    return SuibaseSidebar.instance;
+  }
+
+  public static deactivate() {
+    if (typeof SuibaseSidebar.context === undefined) {
+      console.log("Error: SuibaseSidebar.deactivate() called more than once");
+    }
+    SuibaseSidebar.context = undefined;
+    delete SuibaseSidebar.instance;
+  }
+
+  public static getInstance(): SuibaseSidebar {
+    if (!SuibaseSidebar.instance) {
+      console.log(
+        "Error: SuibaseSidebar.getInstance() called before activate()"
+      );
+      SuibaseSidebar.instance = new SuibaseSidebar();
+    }
+    return SuibaseSidebar.instance;
+  }
 }
