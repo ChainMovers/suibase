@@ -83,6 +83,7 @@ test_static_globals_var() {
     "SUI_BASE_NET_MOCK_VER"
     "SUI_BASE_NET_MOCK_PID"
     "NOLOG_KEYTOOL_BIN"
+    "DEBUG_PARAM"
   )
 
   # All vars in _STATIC_GLOBALS_VAR should be set to something.

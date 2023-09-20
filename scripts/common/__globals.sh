@@ -64,6 +64,8 @@ export SUIBASE_DAEMON_NAME="suibase-daemon"
 export SUIBASE_DAEMON_BUILD_DIR="$SUIBASE_DIR/rust/suibase"
 export SUIBASE_DAEMON_BIN="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME"
 
+export DEBUG_PARAM=false # Become true when --debug on command line.
+
 # Prefix often used when calling sui client.
 SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 
@@ -2224,13 +2226,15 @@ update_PRECOMP_REMOTE_var() {
       setup_error "Failed to get release information from [$_REPO_URL]"
     fi
 
-    # Find latest release with a binary asset.
-    while read -r line < <(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -r); do
-      # echo "Processsing $line"
+    while read -r line; do
       # Return something like: "tag_name": "testnet-v1.8.2",
       _TAG_NAME="${line#*\:}"      # Remove the ":" and everything before
       _TAG_NAME="${_TAG_NAME#*\"}" # Remove the first '"' and everything before
       _TAG_NAME="${_TAG_NAME%\"*}" # Remove the last '"' and everything after
+
+      if [ "$DEBUG_PARAM" = "true" ]; then
+        echo "Found $_TAG_NAME in remote repo"
+      fi
 
       # Find the binary asset for that release.
       _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | head -1)
@@ -2242,8 +2246,7 @@ update_PRECOMP_REMOTE_var() {
       if [ -n "$_DOWNLOAD_URL" ]; then
         break
       fi
-
-    done # while read line
+    done <<<"$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -rV)"
 
     if [ -n "$_DOWNLOAD_URL" ]; then
       break
