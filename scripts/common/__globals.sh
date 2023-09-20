@@ -605,9 +605,11 @@ build_sui_repo_branch() {
     # Build from source.
 
     if [ "$_PRECOMP_STATE" != "NULL" ]; then
-      # Precompile was used before, so cleanup first to avoid confusion.
-      (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
-      cd_sui_log_dir
+      if [ "$_IS_SET_SUI_REPO" = "false" ]; then
+        # Precompile was used before, so cleanup first to avoid confusion.
+        (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
+        cd_sui_log_dir
+      fi
       del_key_value "$WORKDIR" "precompiled"
       _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
       # Sanity test.
