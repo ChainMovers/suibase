@@ -145,7 +145,7 @@ export class SuibaseSidebar {
   private static instance: SuibaseSidebar | undefined;
   private static context: vscode.ExtensionContext | undefined;
 
-  private constructor() {} // activate() does the instantion instead.
+  private constructor() {} // Called only from activate().
 
   public static activate(context: vscode.ExtensionContext) {
     if (!typeof SuibaseSidebar.context === undefined) {
@@ -174,19 +174,20 @@ export class SuibaseSidebar {
   }
 
   public static deactivate() {
-    if (typeof SuibaseSidebar.context === undefined) {
+    delete SuibaseSidebar.instance;
+
+    if (SuibaseSidebar.context) {
+      SuibaseSidebar.context = undefined;
+    } else {
       console.log("Error: SuibaseSidebar.deactivate() called more than once");
     }
-    SuibaseSidebar.context = undefined;
-    delete SuibaseSidebar.instance;
   }
 
-  public static getInstance(): SuibaseSidebar {
+  public static getInstance(): SuibaseSidebar | undefined {
     if (!SuibaseSidebar.instance) {
       console.log(
         "Error: SuibaseSidebar.getInstance() called before activate()"
       );
-      SuibaseSidebar.instance = new SuibaseSidebar();
     }
     return SuibaseSidebar.instance;
   }

@@ -3,6 +3,7 @@
 // a UI interaction (e.g. pressing a "refresh" button).
 //
 import * as vscode from "vscode";
+import { SuibaseExec } from "./suibaseExec";
 
 export class SuibaseCommands {
   private static instance: SuibaseCommands | undefined;
@@ -23,7 +24,7 @@ export class SuibaseCommands {
       let disposable = vscode.commands.registerCommand(
         "suibase.settings",
         () => {
-          SuibaseCommands.getInstance().settings();
+          SuibaseCommands.getInstance()?.settings();
         }
       );
       context.subscriptions.push(disposable);
@@ -33,35 +34,50 @@ export class SuibaseCommands {
       let disposable = vscode.commands.registerCommand(
         "suibase.refresh",
         () => {
-          SuibaseCommands.getInstance().refresh();
+          SuibaseCommands.getInstance()?.refresh();
         }
       );
       context.subscriptions.push(disposable);
     }
 
+    // Call the refresh command periodically.
+    setInterval(() => {
+      vscode.commands.executeCommand("suibase.refresh");
+    }, 3000); // 3 seconds
+
     return SuibaseCommands.instance;
   }
 
   public static deactivate() {
-    if (typeof SuibaseCommands.context === undefined) {
+    delete SuibaseCommands.instance;
+
+    if (SuibaseCommands.context) {
+      SuibaseCommands.context = undefined;
+    } else {
       console.log("Error: SuibaseCommands.deactivate() called more than once");
     }
-    SuibaseCommands.context = undefined;
-    delete SuibaseCommands.instance;
   }
 
-  public static getInstance(): SuibaseCommands {
+  public static getInstance(): SuibaseCommands | undefined {
     if (!SuibaseCommands.instance) {
       console.log("Error: SuibaseExec.getInstance() called before activate()");
-      SuibaseCommands.instance = new SuibaseCommands();
     }
     return SuibaseCommands.instance;
   }
 
-  public refresh() {
-    const str = "SuibaseCommands.refresh() called";
-    vscode.window.showInformationMessage(str);
-    console.log(str);
+  public refresh(workdir?: string) {
+    //const str = "SuibaseCommands.refresh() called";
+    //console.log(str);
+
+    // TODO Debouncing to avoid excessive global refresh.
+
+    // Do a JSON-RPC call to the suibase server API.
+    //
+    // If workdir is not specified, update them all.
+
+    // This is a best-effort request and reactions to the
+    // eventual response are handled somewhere else...
+    SuibaseExec.getInstance()?.getLinks();
   }
 
   public settings() {
