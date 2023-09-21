@@ -2,6 +2,7 @@
 workdirs/
 scripts/tests/result.txt
 scripts/templates/common/
+typescript/vscode-extension/out/
 
 # File system
 .DS_Store
@@ -68,6 +69,7 @@ Session.vim
 **/.vscode/ltex.dictionary.en-US.txt
 **/.vscode/settings.json
 **/.vscode/launch.json
+**/.vscode-test/
 
 # Ignore tags created by etags, ctags, gtags (GNU global) and cscope
 TAGS
