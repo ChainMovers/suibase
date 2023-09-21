@@ -1,4 +1,5 @@
 #!/bin/bash
+# Teesting
 
 # Do not call this script directly. It is a "common script" sourced by other suibase scripts.
 #
@@ -238,6 +239,8 @@ version_greater_equal() {
   _arg1=$(echo "$1" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
   # shellcheck disable=SC2001
   _arg2=$(echo "$2" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
+  # With --check=quiet, sort will return 0 if no sort needed. In other word,
+  # the first argument is already greater or equal to the second.
   printf '%s\n%s\n' "$_arg2" "$_arg1" | sort --check=quiet --version-sort
 }
 export -f version_greater_equal

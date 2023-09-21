@@ -1,0 +1,49 @@
+# Periodic exhaustive tests with latest main branch from Mysten Labs.
+#
+# This is for early warning of breaking changes while Mysten Labs
+# independently modify the Sui client.
+#
+# Note: the main branch is not same as mainnet branch! The main branch
+#       is the cutting edge changes that are to be merge next into
+#       Mysten Labs devnet branch.
+#
+
+name: Nightly Test Runner
+
+# Controls when the workflow will run
+on:
+  schedule:
+    - cron: "0 6 * * *" # every day 5AM
+
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isScript: ${{ steps.diff.outputs.isScript }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  test:
+    name: Test on ${{ matrix.os }}
+    needs: diff
+    if: ${{ (needs.diff.outputs.isScript == 'true') || (github.event_name == 'workflow_dispatch') }}
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Prepare environment
+        run: |
+          mkdir -p $HOME/.local/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          ln -s $GITHUB_WORKSPACE $HOME/suibase
+      - name: Tests with Mysten Labs main branch (cutting edge)
+        run: $HOME/suibase/scripts/tests/run-all.sh --main_branch --github_token ${{ secrets.GITHUB_TOKEN }}

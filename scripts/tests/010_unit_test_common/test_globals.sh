@@ -17,11 +17,18 @@ source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORK
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 
 tests() {
+  test_file_newer_than_phase_1
   test_static_globals_var
   test_color
+  test_string_utils
   cd "$HOME" || fail "cd $HOME"
   rm -rf "${WORKDIRS:?}"
   localnet create || fail "localnet create"
+
+  # Some tests are in two phases, with *at least* one second
+  # one second apart from the first phase.
+  sleep 1
+  test_file_newer_than_phase_2
 }
 
 test_color() {
@@ -38,6 +45,80 @@ test_color() {
   echo_low_green " low green "
   echo_low_yellow " low yellow "
   echo
+}
+
+test_version_utils() {
+  if ! version_less_than "1.0.0" "2.0.0"; then
+    fail "1.0.0 should be less than 2.0.0"
+  fi
+
+  if version_less_than "2.0.0" "1.0.0"; then
+    fail "2.0.0 should not be less than 1.0.0"
+  fi
+
+  if version_less_than "1.0.0" "1.0.0"; then
+    fail "1.0.0 should not be less than 1.0.0"
+  fi
+
+  if version_less_than "0.10.0" "0.9.0"; then
+    fail "0.10.0 should not be less than 0.9.0"
+  fi
+
+  if version_less_than "0.0.10" "0.0.1"; then
+    fail "0.0.10 should not be less than 0.0.1"
+  fi
+
+  if ! version_less_than "0.9.9" "1.0.0"; then
+    fail "0.9.9 should be less than 1.0.0"
+  fi
+
+  if ! version_less_than "0.0.9" "0.1.0"; then
+    fail "0.0.9 should be less than 0.1.0"
+  fi
+
+  if ! version_less_than "0.0.10" "0.1.0"; then
+    fail "0.0.10 should be less than 0.1.0"
+  fi
+
+  if ! version_greater_equal "2.0.0" "1.0.0"; then
+    fail "2.0.0 should be greater than or equal to 1.0.0"
+  fi
+
+  if ! version_greater_equal "1.0.0" "1.0.0"; then
+    fail "1.0.0 should be greater than or equal to 1.0.0"
+  fi
+
+  if version_greater_equal "1.0.0" "2.0.0"; then
+    fail "1.0.0 should not be greater than or equal to 2.0.0"
+  fi
+
+  if ! version_greater_equal "0.0.1" "0.0.1"; then
+    fail "equality 0.0.1"
+  fi
+
+  if ! version_greater_equal "0.1.0" "0.1.0"; then
+    fail "equality 0.1.0"
+  fi
+
+  if ! version_greater_equal "1.0.0" "1.0.0"; then
+    fail "equality 1.0.0"
+  fi
+
+  if ! version_greater_equal "0.100.0" "0.90.0"; then
+    fail "0.100.0 should not be less than 0.90.0"
+  fi
+
+  if ! version_greater_equal "0.0.100" "0.0.10"; then
+    fail "0.0.100 should not be less than 0.0.10"
+  fi
+
+  if version_greater_equal "0.99.99" "1.0.0"; then
+    fail "0.99.99 should be less than 1.0.0"
+  fi
+
+  if version_greater_equal "0.0.99" "0.10.0"; then
+    fail "0.0.99 should be less than 0.10.0"
+  fi
 }
 
 test_static_globals_var() {
@@ -95,5 +176,81 @@ test_static_globals_var() {
 
   return 0 # Success
 }
+
+test_string_utils() {
+  if ! beginswith "hello" "hello world"; then
+    fail "beginswith failed to match 'hello' in 'hello world'"
+  fi
+
+  if beginswith "world" "hello world"; then
+    fail "beginswith matched 'world' in 'hello world'"
+  fi
+
+  if ! beginswith "hello" "hello"; then
+    fail "beginswith failed to match 'hello' in 'hello'"
+  fi
+
+  if ! beginswith "a" "ab"; then
+    fail "beginswith failed to match 'a' in 'ab'"
+  fi
+
+  if beginswith "b" "ab"; then
+    fail "beginswith matched 'b' in 'ab'"
+  fi
+
+  if ! beginswith "a" "a"; then
+    fail "beginswith failed to match 'a' in 'a'"
+  fi
+
+  # Empty string does not really make sense, but just
+  # test here that the behavior does not change.
+  if ! beginswith "" "hello world"; then
+    fail "beginswith failed to match empty string in 'hello world'"
+  fi
+
+  if ! beginswith "" ""; then
+    fail "beginswith failed to match empty string with empty string"
+  fi
+
+  if beginswith "a" ""; then
+    fail "beginswith matches 'a' with empty string"
+  fi
+}
+
+export FILE1_TMP
+export FILE2_TMP
+test_file_newer_than_phase_1() {
+  FILE1_TMP=$(mktemp)
+}
+export -f test_file_newer_than_phase_1
+
+test_file_newer_than_phase_2() {
+  # FILE1_TMP and FILE2_TMP are two temporary files with
+  # different modification times.
+  FILE2_TMP=$(mktemp)
+  sleep 1
+  touch "$FILE1_TMP"
+
+  if ! file_newer_than "$FILE1_TMP" "$FILE2_TMP"; then
+    fail "$FILE1_TMP should be newer than $FILE2_TMP"
+  fi
+
+  if file_newer_than "$FILE2_TMP" "$FILE1_TMP"; then
+    fail "$FILE2_TMP should not be newer than $FILE1_TMP"
+  fi
+
+  if ! file_newer_than "$FILE1_TMP" "/nonexistent/file"; then
+    fail "$FILE1_TMP should be newer than /nonexistent/file"
+  fi
+
+  # This does not make sense, but test for maintaining the behavior.
+  if ! file_newer_than "/nonexistent/file" "$FILE1_TMP"; then
+    fail "/nonexistent/file should be newer than $FILE1_TMP"
+  fi
+
+  # Clean up the temporary files.
+  rm "$FILE1_TMP" "$FILE2_TMP"
+}
+export -f test_file_newer_than_phase_2
 
 tests
