@@ -36,7 +36,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macOS-latest-xl]
+        os: [macOS-latest]
 
     steps:
       - uses: actions/checkout@v3
