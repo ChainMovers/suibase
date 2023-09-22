@@ -5,11 +5,13 @@
 import * as vscode from "vscode";
 import { SuibaseExec } from "./suibaseExec";
 
+import { DashboardPanel } from "./panels/DashboardPanel";
+
 export class SuibaseCommands {
   private static instance: SuibaseCommands | undefined;
   private static context: vscode.ExtensionContext | undefined;
 
-  private constructor() {} // activate() does the instantion instead.
+  private constructor() {} // activate() does the instantiation instead.
 
   public static activate(context: vscode.ExtensionContext) {
     if (!typeof SuibaseCommands.context === undefined) {
@@ -21,22 +23,16 @@ export class SuibaseCommands {
     SuibaseCommands.instance = new SuibaseCommands();
 
     {
-      let disposable = vscode.commands.registerCommand(
-        "suibase.settings",
-        () => {
-          SuibaseCommands.getInstance()?.settings();
-        }
-      );
+      let disposable = vscode.commands.registerCommand("suibase.settings", () => {
+        SuibaseCommands.getInstance()?.settings();
+      });
       context.subscriptions.push(disposable);
     }
 
     {
-      let disposable = vscode.commands.registerCommand(
-        "suibase.refresh",
-        () => {
-          SuibaseCommands.getInstance()?.refresh();
-        }
-      );
+      let disposable = vscode.commands.registerCommand("suibase.refresh", () => {
+        SuibaseCommands.getInstance()?.refresh();
+      });
       context.subscriptions.push(disposable);
     }
 
@@ -81,8 +77,9 @@ export class SuibaseCommands {
   }
 
   public settings() {
-    const str = "SuibaseCommands.settings() called";
-    vscode.window.showInformationMessage(str);
-    console.log(str);
+    if (!SuibaseCommands.context) {
+      return;
+    }
+    DashboardPanel.render(SuibaseCommands.context.extensionUri);
   }
 }

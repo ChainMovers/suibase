@@ -1,7 +1,7 @@
 {
   "name": "suibase",
-  "displayName": "localdev",
-  "description": "Streamline Sui Move development and te testing.",
+  "displayName": "suibase",
+  "description": "Streamline Sui Move development and testing.",
   "version": "0.0.1",
   "repository": "https://github.com/ChainMovers/suibase",
   "engines": {
@@ -60,6 +60,9 @@
     }
   },
   "scripts": {
+    "install:all": "pnpm install && cd webview-ui && pnpm install",
+    "start:webview": "cd webview-ui && pnpm run dev",
+    "build:webview": "cd webview-ui && pnpm run build",
     "vscode:prepublish": "pnpm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
@@ -76,7 +79,7 @@
     "@typescript-eslint/parser": "^6.4.1",
     "@vscode/test-electron": "^2.3.4",
     "eslint": "^8.47.0",
-    "glob": "^10.3.3",
+    "glob": "^10.3.4",
     "mocha": "^10.2.0",
     "typescript": "^5.1.6"
   },

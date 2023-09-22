@@ -4,7 +4,7 @@
 //  - Suibase CLI calls (e.g. "lsui", "localnet" etc...)
 //  - JSON-RPC into Suibase
 //
-// All retreived data is stored in a key/value cache.
+// All retrieved data is stored in a key/value cache.
 //
 // All cached value have a convenient unique "id" for
 // versioning.

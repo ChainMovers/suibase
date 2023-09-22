@@ -35,7 +35,7 @@ devDependencies:
     specifier: ^8.47.0
     version: 8.49.0
   glob:
-    specifier: ^10.3.3
+    specifier: ^10.3.4
     version: 10.3.4
   mocha:
     specifier: ^10.2.0
