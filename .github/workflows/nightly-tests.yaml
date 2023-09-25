@@ -8,7 +8,7 @@
 #       Mysten Labs devnet branch.
 #
 
-name: Nightly Test Runner
+name: nightly tests
 
 # Controls when the workflow will run
 on:
@@ -18,21 +18,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  diff:
-    runs-on: [ubuntu-latest]
-    outputs:
-      isScript: ${{ steps.diff.outputs.isScript }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Detect Changes
-        uses: "./.github/actions/diffs"
-        id: diff
-
   test:
     name: Test on ${{ matrix.os }}
-    needs: diff
-    if: ${{ (needs.diff.outputs.isScript == 'true') || (github.event_name == 'workflow_dispatch') }}
-
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
