@@ -33,7 +33,7 @@ export class SuibaseExec {
 
   private constructor() {
     // Should be called only by SuibaseExec.activate()
-    this.ws = new WebSocket("ws://0.0.0.0:44399");
+    this.ws = new WebSocket("ws://localhost:44399");
 
     this.ws.on("open", () => {
       console.log("WebSocket connection opened");

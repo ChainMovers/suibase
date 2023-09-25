@@ -1,4 +1,4 @@
-Note: webview-ui was at first a degit of https://github.com/microsoft/vscode-webview-ui-toolkit-samples/tree/main/frameworks/hello-world-svelte.
+Note: webview-ui was at first a degit of https://github.com/microsoft/vscode-webview-ui-toolkit-samples/tree/main/frameworks/hello-world-svelte. It has been heavily modified for Suibase since...
 
 # Extension development cycle
 
@@ -13,7 +13,7 @@ Due to the fact that the `webview-ui` directory holds a self-contained Svelte ap
 
 Since we can take advantage of the much faster Rollup + Sirv dev server combo provided by the Svelte template, it is encouraged to begin developing webview UI by running the `npm run start:webview` command and then editing the code in the `webview-ui/src` directory.
 
-_Tip: Open the command palette and run the `Simple Browser` command and fill in `http://localhost:3000/` when prompted. This will open a simple browser environment right inside VS Code._
+_Tip: Open the command palette and run the `Simple Browser` command and fill in `http://localhost:8080/` when prompted. This will open a simple browser environment right inside VS Code._
 
 ### Message passing
 
@@ -25,7 +25,9 @@ This utility also enables webview code to be run in the dev server by using nati
 
 ### Move to traditional extension development
 
-Once you're ready to start building other parts of your extension, simply shift to a development model where you run the `npm run build:webview` command as you make changes, press `F5` to compile your extension and open a new Extension Development Host window. Inside the host window, open the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and type `Hello World (Svelte): Show`.
+Once you're ready to start building other parts of your extension, simply shift to a development model where you run the `npm run build:webview` command as you make changes, press `F5` to compile your extension and open a new Extension Development Host window. 
+
+For a hot-reload edit/debug cycle, keep `npm start:webview` running in background and sirv will automatically rebuild on webview changes. Wait a few seconds after saving the change and then press `Ctrl-R` in the Extension Development Host window.
 
 ## Dependency management and project configuration
 

@@ -64,6 +64,7 @@ export class DashboardPanel {
           localResourceRoots: [
             Uri.joinPath(extensionUri, "out"),
             Uri.joinPath(extensionUri, "webview-ui/public/build"),
+            Uri.joinPath(extensionUri, "webview-ui/node_modules/@vscode/codicons/dist"),
           ],
         }
       );
@@ -107,9 +108,18 @@ export class DashboardPanel {
     // The JS file from the Svelte build output
     const scriptUri = getUri(webview, extensionUri, ["webview-ui", "public", "build", "bundle.js"]);
 
+    const codiconsUri = getUri(webview, extensionUri, [
+      "webview-ui",
+      "node_modules",
+      "@vscode/codicons",
+      "dist",
+      "codicon.css",
+    ]);
+
     const nonce = getNonce();
 
     // Tip: Install the es6-string-html VS Code extension to enable code highlighting below
+
     return /*html*/ `
       <!DOCTYPE html>
       <html lang="en">
@@ -117,8 +127,9 @@ export class DashboardPanel {
           <title>Hello World</title>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src http://localhost:*; font-src ${webview.cspSource}; style-src ${webview.cspSource} unsafe-inline; script-src 'nonce-${nonce}';">
           <link rel="stylesheet" type="text/css" href="${stylesUri}">
+          <link rel="stylesheet" type="text/css" href="${codiconsUri}" />
           <script defer nonce="${nonce}" src="${scriptUri}"></script>
         </head>
         <body>
