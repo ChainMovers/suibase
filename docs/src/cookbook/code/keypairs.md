@@ -8,7 +8,7 @@ editLink: true
 
 ::: tip Fact Sheet
 
-- Sui keys, on disk for Sui binaries, are in file: `$HOME/sui_config/sui.keystore `
+- Sui keys, on disk for Sui binaries, are in file: `$HOME/scripts/genesis_data/0.31/sui.keystore`
 - Keys are persisted in the file as a JSON array
 - Entries in the array are base64 encoded strings e.g.: `AIUPxQveY18QxhDDdTO0D0OD6PNV+et50068d1g/rIyl`
 - The byte count of a base64 decoded string is 33
