@@ -1,24 +1,25 @@
 <script lang="ts">
-  import { vscode } from "../utilities/vscode";
+  import { VSCode } from "../lib/VSCode";
+  import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
 
-  export let workdirs = [
+  interface WorkdirData {
+    name: string;
+    status: string;
+  }
+
+  export let workdirs: WorkdirData[] = [
     { name: "Localnet", status: "Running" },
     { name: "Devnet", status: "Degraded" },
     { name: "Testnet", status: "Stopped" },
     { name: "Mainnet", status: "Down" },
   ];
 
-  function handleStartClick() {
+  function handleStartClick(workdir: WorkdirData) {
     // let workdir=workdir.name
-    let workdir_name = "localnet";
-    vscode.postMessage({
-      command: "hello",
-      text: "handleStartClick called",
-    });
 
-    vscode.postMessage({
+    VSCode.postMessage({
       command: "start",
-      workdir: workdir_name,
+      workdir: workdir.name,
     });
     console.log("handleStartClick called");
 
@@ -34,7 +35,7 @@
       jsonrpc: "2.0",
       method: "getLinks",
       params: {
-        workdir: workdir_name,
+        workdir: workdir.name,
       },
     };
 
@@ -57,15 +58,15 @@
       });
   }
 
-  function handleStopClick(workdir) {
-    vscode.postMessage({
+  function handleStopClick(workdir: WorkdirData) {
+    VSCode.postMessage({
       command: "stop",
       workdir: workdir.name,
     });
   }
 
-  function handleRegenClick(workdir) {
-    vscode.postMessage({
+  function handleRegenClick(workdir: WorkdirData) {
+    VSCode.postMessage({
       command: "regen",
       workdir: workdir.name,
     });
@@ -73,6 +74,7 @@
 </script>
 
 <main>
+  <!---
   <vscode-dropdown>
     <vscode-option>Option Label #1</vscode-option>
     <vscode-option>Option Label #2</vscode-option>
@@ -85,27 +87,27 @@
   <vscode-button appearance="icon" aria-label="Confirm">
     <span class="codicon codicon-check" />
   </vscode-button>
-
+-->
   {#each workdirs as workdir}
     <div class="workdir_row">
       <h2 class="workdir">{workdir.name}</h2>
       <h2 class="status">{workdir.status}</h2>
       {#if workdir.status === "Stopped"}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={handleStartClick}>
+        <vscode-button on:click={() => handleStartClick(workdir)}>
           Start
           <span slot="start" class="codicon codicon-debug-start" />
         </vscode-button>
       {:else}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={handleStopClick(workdir.name)}>
+        <vscode-button on:click={() => handleStopClick(workdir)}>
           Stop
           <span slot="start" class="codicon codicon-debug-stop" />
         </vscode-button>
       {/if}
       {#if workdir.name === "Localnet"}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={handleRegenClick(workdir.name)}>
+        <vscode-button on:click={() => handleRegenClick(workdir)}>
           Regen
           <span slot="start" class="codicon codicon-refresh" />
         </vscode-button>

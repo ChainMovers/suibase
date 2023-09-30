@@ -1,4 +1,4 @@
-// An API that encapsulate getting data from the Suibase installation.
+// An API that encapsulate interacting with the Suibase installation.
 //
 // A call may perform:
 //  - Suibase CLI calls (e.g. "lsui", "localnet" etc...)
@@ -24,8 +24,8 @@ const execShell = (cmd: string) =>
   });
 
 export class SuibaseExec {
-  private static instance: SuibaseExec | undefined;
-  private static context: vscode.ExtensionContext | undefined;
+  private static instance?: SuibaseExec;
+  private static context?: vscode.ExtensionContext;
   private ws: WebSocket | undefined;
 
   // Define a cache to store the response
@@ -54,9 +54,9 @@ export class SuibaseExec {
     });
   }
 
-  private deactivate() {
-    // Dispose of the instance (somewhat like a "destructor").
-    // Should be called only by the public SuibaseExec.deactivate()
+  private dispose() {
+    // Should be called only by SuibaseExec.deactivate()
+    // Dispose of the instance resources (somewhat like a "destructor").
     if (this.ws) {
       this.ws.close();
       delete this.ws;
@@ -65,7 +65,7 @@ export class SuibaseExec {
   }
 
   public static activate(context: vscode.ExtensionContext) {
-    if (!typeof SuibaseExec.context === undefined) {
+    if (SuibaseExec.context) {
       console.log("Error: SuibaseExec.activate() called more than once");
       return;
     }
@@ -76,15 +76,14 @@ export class SuibaseExec {
 
   public static deactivate() {
     if (SuibaseExec.instance) {
-      SuibaseExec.instance.deactivate();
+      SuibaseExec.instance.dispose();
       delete SuibaseExec.instance;
+      SuibaseExec.instance = undefined;
+    } else {
+      console.log("Error: SuibaseExec.deactivate() called out of order");
     }
 
-    if (SuibaseExec.context) {
-      SuibaseExec.context = undefined;
-    } else {
-      console.log("Error: SuibaseExec.deactivate() called more than once");
-    }
+    SuibaseExec.context = undefined;
   }
 
   public static getInstance(): SuibaseExec | undefined {
@@ -104,10 +103,50 @@ export class SuibaseExec {
     }
   }
 
+  private async startDaemon() {
+    // Check if suibase-daemon is running, if not, attempt
+    // to start it and return once confirmed ready to
+    // process requests.
+    let suibaseRunning = false;
+    try {
+      const result = await execShell("lsof /tmp/.suibase/suibase-daemon.lock");
+      // Check if "suibase" can be found in first column of one of the outputted line"
+      const lines = result.split("\n");
+      for (let i = 0; i < lines.length && !suibaseRunning; i++) {
+        const line = lines[i];
+        const columns = line.split(" ");
+        if (columns[0].indexOf("suibase") === 0) {
+          suibaseRunning = true;
+        }
+      }
+    } catch (err) {
+      /* Do nothing */
+    }
+
+    if (!suibaseRunning) {
+      // Start suibase by calling "~/suibase/scripts/common/run-suibase-daemon.sh"
+      const result = await execShell("~/suibase/scripts/common/run-suibase-daemon.sh");
+
+      // TODO Implement retry and error handling of run-suibase-daemon.sh for faster startup.
+
+      // Sleep 500 milliseconds to give it a chance to start.
+      await new Promise((r) => setTimeout(r, 500));
+
+      // TODO Confirm that suibase-daemon is responding to requests.
+    }
+  }
+
   private makeJsonRpcCall() {
-    // Best effort sending of the JSON-RPC request.
-    // The eventual response will update the cache if
+    // Send a JSON-RPC request and handle its response.
+    //
+    // A valid response updates the cache if
     // a most recent data_version.
+    //
+    // On failure, keeps retrying until timeout.
+    //
+    // The caller get the response (or last known state) with
+    // a lookup for the data in the cache.
+    //
     let sb = SuibaseExec.getInstance();
     if (!sb) {
       return;

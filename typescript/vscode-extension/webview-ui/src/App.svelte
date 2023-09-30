@@ -1,7 +1,11 @@
 <script lang="ts">
-  import { provideVSCodeDesignSystem, vsCodeButton, allComponents } from "@vscode/webview-ui-toolkit";
-  import { vscode } from "./utilities/vscode";
+  import { provideVSCodeDesignSystem, allComponents } from "@vscode/webview-ui-toolkit";
+  import { VSCode } from "./lib/VSCode";
   import WorkdirsController from "./components/WorkdirsController.svelte";
+  import { GlobalStorage } from "./lib/GlobalStorage";
+
+  // Static initializations
+  GlobalStorage.activate();
 
   // In order to use the Webview UI Toolkit web components they
   // must be registered with the browser (i.e. webview) using the
@@ -24,7 +28,7 @@
   // provideVSCodeDesignSystem().register(allComponents);
 
   function handleHowdyClick() {
-    vscode.postMessage({
+    VSCode.postMessage({
       command: "hello",
       text: "Hey there partner! 🤠",
     });

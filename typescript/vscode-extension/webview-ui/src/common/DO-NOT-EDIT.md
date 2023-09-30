@@ -1,0 +1,1 @@
+These are symlinks to src/common. Do not edit the links (some editor might duplicate the file, remove the link). Edit the target files instead.

@@ -3,18 +3,19 @@
 // a UI interaction (e.g. pressing a "refresh" button).
 //
 import * as vscode from "vscode";
-import { SuibaseExec } from "./suibaseExec";
+import { SuibaseExec } from "./SuibaseExec";
 
 import { DashboardPanel } from "./panels/DashboardPanel";
 
 export class SuibaseCommands {
-  private static instance: SuibaseCommands | undefined;
-  private static context: vscode.ExtensionContext | undefined;
+  private static instance?: SuibaseCommands;
+  private static context?: vscode.ExtensionContext;
 
-  private constructor() {} // activate() does the instantiation instead.
+  private constructor() {} // Called from activate() only.
+  private dispose() {} // Called from deactivate() only.
 
   public static activate(context: vscode.ExtensionContext) {
-    if (!typeof SuibaseCommands.context === undefined) {
+    if (SuibaseCommands.instance) {
       console.log("Error: SuibaseCommands.activate() called more than once");
       return;
     }
@@ -40,23 +41,24 @@ export class SuibaseCommands {
     setInterval(() => {
       vscode.commands.executeCommand("suibase.refresh");
     }, 3000); // 3 seconds
-
-    return SuibaseCommands.instance;
   }
 
   public static deactivate() {
-    delete SuibaseCommands.instance;
-
-    if (SuibaseCommands.context) {
-      SuibaseCommands.context = undefined;
+    if (SuibaseCommands.instance) {
+      SuibaseCommands.instance.dispose();
+      delete SuibaseCommands.instance;
+      SuibaseCommands.instance = undefined;
     } else {
-      console.log("Error: SuibaseCommands.deactivate() called more than once");
+      console.log("Error: SuibaseCommands.deactivate() called out of order");
     }
+
+    SuibaseCommands.context = undefined;
   }
 
   public static getInstance(): SuibaseCommands | undefined {
     if (!SuibaseCommands.instance) {
-      console.log("Error: SuibaseExec.getInstance() called before activate()");
+      console.log("Error: SuibaseCommands.getInstance() called before activate()");
+      return undefined;
     }
     return SuibaseCommands.instance;
   }
@@ -80,6 +82,6 @@ export class SuibaseCommands {
     if (!SuibaseCommands.context) {
       return;
     }
-    DashboardPanel.render(SuibaseCommands.context.extensionUri);
+    DashboardPanel.render();
   }
 }

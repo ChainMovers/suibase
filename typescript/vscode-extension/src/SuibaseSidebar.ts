@@ -6,16 +6,12 @@ import * as path from "path";
 //  https://code.visualstudio.com/api/extension-guides/tree-view
 //  https://github.com/microsoft/vscode-extension-samples/tree/main/tree-view-sample
 export class DepNodeProvider implements vscode.TreeDataProvider<Dependency> {
-  private _onDidChangeTreeData: vscode.EventEmitter<
+  private _onDidChangeTreeData: vscode.EventEmitter<Dependency | undefined | void> = new vscode.EventEmitter<
     Dependency | undefined | void
-  > = new vscode.EventEmitter<Dependency | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<Dependency | undefined | void> =
-    this._onDidChangeTreeData.event;
+  >();
+  readonly onDidChangeTreeData: vscode.Event<Dependency | undefined | void> = this._onDidChangeTreeData.event;
 
-  constructor(
-    private workdir: string,
-    private workspaceRoot: string | undefined
-  ) {}
+  constructor(private workdir: string, private workspaceRoot: string | undefined) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
@@ -56,17 +52,9 @@ export class DepNodeProvider implements vscode.TreeDataProvider<Dependency> {
   private getDepsInPackageJson(packageJsonPath: string): Dependency[] {
     const toDep = (moduleName: string, parentName: string): Dependency => {
       if (parentName === "NULL") {
-        return new Dependency(
-          moduleName,
-          parentName,
-          vscode.TreeItemCollapsibleState.Collapsed
-        );
+        return new Dependency(moduleName, parentName, vscode.TreeItemCollapsibleState.Collapsed);
       } else {
-        return new Dependency(
-          moduleName,
-          parentName,
-          vscode.TreeItemCollapsibleState.None
-        );
+        return new Dependency(moduleName, parentName, vscode.TreeItemCollapsibleState.None);
       }
     };
     const deps = [
@@ -120,35 +108,22 @@ export class Dependency extends vscode.TreeItem {
   }
 
   iconPath = {
-    light: path.join(
-      __filename,
-      "..",
-      "..",
-      "resources",
-      "light",
-      "dependency.svg"
-    ),
-    dark: path.join(
-      __filename,
-      "..",
-      "..",
-      "resources",
-      "dark",
-      "dependency.svg"
-    ),
+    light: path.join(__filename, "..", "..", "resources", "light", "dependency.svg"),
+    dark: path.join(__filename, "..", "..", "resources", "dark", "dependency.svg"),
   };
 
   contextValue = "dependency";
 }
 
 export class SuibaseSidebar {
-  private static instance: SuibaseSidebar | undefined;
-  private static context: vscode.ExtensionContext | undefined;
+  private static instance?: SuibaseSidebar;
+  private static context?: vscode.ExtensionContext;
 
   private constructor() {} // Called only from activate().
+  private dispose() {} // Called only from deactivate().
 
   public static activate(context: vscode.ExtensionContext) {
-    if (!typeof SuibaseSidebar.context === undefined) {
+    if (SuibaseSidebar.instance) {
       console.log("Error: SuibaseSidebar.activate() called more than once");
       return;
     }
@@ -159,8 +134,7 @@ export class SuibaseSidebar {
     // Registration of the tree view.
     // Code for the tree view
     const rootPath =
-      vscode.workspace.workspaceFolders &&
-      vscode.workspace.workspaceFolders.length > 0
+      vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
         ? vscode.workspace.workspaceFolders[0].uri.fsPath
         : undefined;
 
@@ -169,25 +143,23 @@ export class SuibaseSidebar {
       const tree = new DepNodeProvider("suibase", rootPath);
       vscode.window.registerTreeDataProvider("suibaseTreeView", tree);
     }
-
-    return SuibaseSidebar.instance;
   }
 
   public static deactivate() {
-    delete SuibaseSidebar.instance;
-
-    if (SuibaseSidebar.context) {
-      SuibaseSidebar.context = undefined;
+    if (SuibaseSidebar.instance) {
+      SuibaseSidebar.instance.dispose();
+      delete SuibaseSidebar.instance;
+      SuibaseSidebar.instance = undefined;
     } else {
-      console.log("Error: SuibaseSidebar.deactivate() called more than once");
+      console.log("Error: SuibaseSidebar.deactivate() called out of order");
     }
+
+    SuibaseSidebar.context = undefined;
   }
 
   public static getInstance(): SuibaseSidebar | undefined {
     if (!SuibaseSidebar.instance) {
-      console.log(
-        "Error: SuibaseSidebar.getInstance() called before activate()"
-      );
+      console.log("Error: SuibaseSidebar.getInstance() called before activate()");
     }
     return SuibaseSidebar.instance;
   }
