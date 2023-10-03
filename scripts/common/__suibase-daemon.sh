@@ -449,8 +449,8 @@ show_suibase_daemon_get_links() {
     if [[ "${CFG_terminal_color:?}" == 'true' ]]; then
       # Color OK in blue in tables (have two spaces after)
       JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/OK  /\x1B[1;34mOK\x1B[0m  /g')
-      # Color OK in green in top satus (have a space and parenthesis after)
-      JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/OK (/\x1B[1;32mOK\x1B[0m (/g')
+      # Color OK in green in top status
+      JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/multi-link RPC: OK/multi-link RPC: \x1B[1;32mOK\x1B[0m/g')
       # Color DOWN in red.
       JSON_VALUE=$(echo "$JSON_VALUE" | sed -e '1,$s/DOWN/\x1B[1;31mDOWN\x1B[0m/g')
       # Color the load balancing bar.

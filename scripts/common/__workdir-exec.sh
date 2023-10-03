@@ -527,7 +527,11 @@ workdir_exec() {
         echo_red "DOWN"
         ;;
       esac
-      echo " ( $_MLINK_INFO )"
+      if [ -n "$_MLINK_INFO" ]; then
+        echo " ( $_MLINK_INFO )"
+      else
+        echo
+      fi
     fi
     echo "---"
     echo -n "client version: "
@@ -974,19 +978,13 @@ workdir_exec() {
 
   # Start the local services (will be NOOP if already running).
   start_all_services
-  echo "========"
 
   # print sui envs to help debugging (if someone else is using this script).
 
-  CLIENT_YAML_ENVS=$($SUI_EXEC client envs | grep "$WORKDIR")
-  echo "SUI envs:"
+  CLIENT_YAML_ENVS=$($SUI_EXEC client envs | grep -e "$WORKDIR" -e "─" -e "│ active │")
   echo "$CLIENT_YAML_ENVS"
-  echo "========"
-
-  echo "All client addresses:"
 
   $SUI_EXEC client addresses
-  echo "========"
 
   local _ADV="Try it by typing \"$SUI_SCRIPT client gas\""
 
@@ -997,13 +995,19 @@ workdir_exec() {
     _ADV="You can create the first wallet address with \"$SUI_SCRIPT client new-address ed25519\""
   else
     COINS_OWNED=$($SUI_EXEC client gas)
-    COINS_SUM=$(echo "$COINS_OWNED" | awk "{ sum += \$3} END { print sum }")
+    # In awk, use $4 field if sui client version >= 1.11.0, otherwise use $3 field.
+    update_SUI_VERSION_var
+    if version_less_than "$SUI_VERSION" "sui 1.11.0"; then
+      COINS_SUM=$(echo "$COINS_OWNED" | awk "{ sum += \$3} END { print sum }")
+    else
+      COINS_SUM=$(echo "$COINS_OWNED" | awk "{ sum += \$4} END { print sum }")
+    fi
+
     if [ "$COINS_SUM" = "0" ]; then
       echo "Coins owned by $WALLET_ADDR (active): None"
     else
       echo "Coins owned by $WALLET_ADDR (active):"
       echo "$COINS_OWNED"
-      echo "----------------------------------------------------------------------------------"
     fi
   fi
 
