@@ -13,7 +13,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isChanged: ${{ steps.diff.outputs.isScript }} || ${{ steps.diff.outputs.isRust }}
+      isChanged: ${{ steps.diff.outputs.isScript == 'true' || steps.diff.outputs.isRust == 'true' }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
