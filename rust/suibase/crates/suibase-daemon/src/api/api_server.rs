@@ -88,7 +88,7 @@ impl JSONRPCServer {
     }
 
     async fn run_server(self, _subsys: &SubsystemHandle) -> Result<()> {
-        // Refrence:
+        // Reference:
         // https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/cors_server.rs
         let cors = CorsLayer::new()
             // Allow `POST` when accessing the resource

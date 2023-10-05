@@ -1,5 +1,6 @@
 use core::fmt;
 use std::fmt::Display;
+use tokio::sync::Mutex;
 
 use axum::async_trait;
 
@@ -11,21 +12,77 @@ use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
 use crate::basic_types::TargetServerIdx;
-use crate::shared_types::{Globals, ServerStats, TargetServer};
+use crate::shared_types::{Globals, ServerStats, SingleThreadUUID, TargetServer};
 
 use super::{InfoResponse, ProxyApiServer};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
 
+struct GetLinksInput {
+    pub target_servers_stats: Option<Vec<(TargetServerIdx, ServerStats)>>,
+    pub all_servers_stats: Option<ServerStats>,
+    pub selection_vectors: Option<Vec<Vec<u8>>>,
+    pub input_port_found: bool,
+    pub proxy_enabled: bool,
+    pub user_request_start: bool,
+    pub uuid: Option<SingleThreadUUID>,
+}
+
+impl GetLinksInput {
+    fn new(uuid: Option<SingleThreadUUID>) -> Self {
+        Self {
+            target_servers_stats: None,
+            all_servers_stats: None,
+            selection_vectors: None,
+            input_port_found: false,
+            proxy_enabled: false,
+            user_request_start: false,
+            uuid,
+        }
+    }
+
+    fn clone_from(&mut self, other: &Self) {
+        self.target_servers_stats = other.target_servers_stats.clone();
+        self.all_servers_stats = other.all_servers_stats.clone();
+        self.selection_vectors = other.selection_vectors.clone();
+        self.input_port_found = other.input_port_found;
+        self.proxy_enabled = other.proxy_enabled;
+        self.user_request_start = other.user_request_start;
+
+        // If the other Uuid is Some, then clone it, otherwise
+        // increment the self.uuid "in-place".
+        if let Some(other_uuid) = &other.uuid {
+            self.uuid = Some(other_uuid.clone());
+        } else {
+            self.uuid.as_mut().unwrap().increment();
+        }
+    }
+}
+
+impl PartialEq for GetLinksInput {
+    fn eq(&self, other: &Self) -> bool {
+        // Note: uuid is not compared. Allow to compare other when not yet "versioned".
+        self.all_servers_stats.as_ref() == other.all_servers_stats.as_ref()
+            && self.target_servers_stats == other.target_servers_stats
+            && self.selection_vectors == other.selection_vectors
+            && self.input_port_found == other.input_port_found
+            && self.proxy_enabled == other.proxy_enabled
+            && self.user_request_start == other.user_request_start
+    }
+}
+
 pub struct ProxyApiImpl {
     pub globals: Globals,
     pub admctrl_tx: AdminControllerTx,
+    prev_get_links_input: Mutex<GetLinksInput>,
 }
 
 impl ProxyApiImpl {
     pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
+        let prev_get_links_input = Mutex::new(GetLinksInput::new(Some(SingleThreadUUID::new())));
         Self {
             globals,
             admctrl_tx,
+            prev_get_links_input,
         }
     }
 
@@ -72,18 +129,18 @@ impl ProxyApiImpl {
         //
         // Expected input range is "0" or "0.0" to "100.0"
         //
-        // Empty or invalid input is formated as "    -"
+        // Empty or invalid input is formatted as "    -"
         //
         // Any value above "100" is ignored.
         // Any non-numeric value is ignored.
         // Only one decimal is displayed (rounding applies).
         //
         // Examples:
-        //      "0" is interpreted as x == 0 and formated as      "  0.0"
-        //    "0.0" is interpreted as 0 < x < 0.1 and formated as " <0.1"
-        //    "100" is interpreted as x == 100 and formated as    "100.0"
-        // "105.28" is interpreted as x == 100 and formated as    "100.0"
-        //   "0.19" is rounded to 0.2 and formated as             "  0.2"
+        //      "0" is interpreted as x == 0 and formatted as      "  0.0"
+        //    "0.0" is interpreted as 0 < x < 0.1 and formatted as " <0.1"
+        //    "100" is interpreted as x == 100 and formatted as    "100.0"
+        // "105.28" is interpreted as x == 100 and formatted as    "100.0"
+        //   "0.19" is rounded to 0.2 and formatted as             "  0.2"
         let value = input
             .chars()
             .filter(|c| c.is_ascii_digit() || *c == '.')
@@ -188,6 +245,10 @@ impl ProxyApiServer for ProxyApiImpl {
     ) -> RpcResult<LinksResponse> {
         let mut resp = LinksResponse::new();
 
+        // Initialize some of the header fields.
+        resp.header.method = "getLinks".to_string();
+        resp.header.key = Some(workdir.clone());
+
         // "Unwrap" all the options to booleans.
         //
         // Summary/links is the enabling of group of metrics.
@@ -211,12 +272,7 @@ impl ProxyApiServer for ProxyApiImpl {
         let mut debug_out = String::new();
 
         // Variables initialized during the read lock.
-        let mut target_servers_stats: Option<Vec<(TargetServerIdx, ServerStats)>> = None;
-        let mut all_servers_stats: Option<ServerStats> = None;
-        let mut selection_vectors: Option<Vec<Vec<u8>>> = None;
-        let mut input_port_found = false;
-        let mut proxy_enabled = false;
-        let mut user_request_start = false;
+        let mut inputs = GetLinksInput::new(None);
         {
             // Get read lock access to the globals and just quickly copy what is needed.
             // Most parsing and processing is done outside the lock.
@@ -224,27 +280,47 @@ impl ProxyApiServer for ProxyApiImpl {
             let globals = &*globals_read_guard;
 
             if let Some(input_port) = globals.find_input_port_by_name(&workdir) {
-                input_port_found = true;
-                proxy_enabled = input_port.is_proxy_enabled();
-                user_request_start = input_port.is_user_request_start();
+                inputs.input_port_found = true;
+                inputs.proxy_enabled = input_port.is_proxy_enabled();
+                inputs.user_request_start = input_port.is_user_request_start();
 
-                all_servers_stats = Some(input_port.all_servers_stats.clone());
+                inputs.all_servers_stats = Some(input_port.all_servers_stats.clone());
 
                 let target_servers = &input_port.target_servers;
 
-                target_servers_stats = Some(
+                inputs.target_servers_stats = Some(
                     target_servers
                         .iter()
                         .map(|(idx, target_server)| (idx, target_server.stats.clone()))
                         .collect(),
                 );
-                selection_vectors = Some(input_port.selection_vectors.clone());
+                inputs.selection_vectors = Some(input_port.selection_vectors.clone());
             }
 
             // If debug, then extensively add more info to the output.
             // (take a potential performance hit here).
             if debug {
                 debug_out.push_str(&format!("{:?}", globals));
+            }
+
+            // If data, then handle potential UUID increment.
+            if data {
+                // To avoid race condition, prev_get_links_input is lock and modified only here.
+                // Outside the lock, use 'inputs' within this thread.
+                let prev_get_links_input = &mut *self.prev_get_links_input.lock().await;
+                if inputs != *prev_get_links_input {
+                    // Because input.uuid is None, this will clone all the data AND increment
+                    // the existing uuid.
+                    prev_get_links_input.clone_from(&inputs);
+                }
+
+                // Make sure prev_get_links_input.uuid is initialized and inputs.uuid is same.
+                if let Some(prev_uuid) = &prev_get_links_input.uuid {
+                    inputs.uuid = Some(prev_uuid.clone());
+                } else {
+                    prev_get_links_input.uuid = Some(SingleThreadUUID::new());
+                    inputs.uuid = prev_get_links_input.uuid.clone();
+                }
             }
         } // Release the read lock.
 
@@ -253,21 +329,21 @@ impl ProxyApiServer for ProxyApiImpl {
         let mut neutral_health_count: usize = 0;
         let mut link_stats: Vec<LinkStats> = Vec::new();
         let mut load_distribution_depth = 0;
-        if let Some(target_servers_stats) = target_servers_stats {
+        if let Some(target_servers_stats) = inputs.target_servers_stats {
             let mut total_request: u64 = 0;
             let mut link_n_request: Vec<u64> = Vec::with_capacity(target_servers_stats.len());
             // Prepare LinkStats, which is the "metrics" portion of the API.
             //
             // The "display/debug" portion is built from the "metrics" portion.
             //
-            // The design seems a bit innefficient (extra string conversion), but the
+            // The design seems a bit inefficient (extra string conversion), but the
             // intention is to give more opportunity to catch bugs by using (earlier
             // than typical) the least visible (but crucial) metrics portion.
 
             // Use a vector of indices to drive the display order.
             // Also find which selections were assigned for load distribution (if any).
             let mut indices: Vec<usize> = Vec::new();
-            if let Some(selection_vectors) = selection_vectors {
+            if let Some(selection_vectors) = inputs.selection_vectors {
                 if !selection_vectors.is_empty() {
                     load_distribution_depth = selection_vectors[0].len();
                 }
@@ -352,7 +428,7 @@ impl ProxyApiServer for ProxyApiImpl {
         // Map the all_servers_stats into the API LinksSummary.
         let mut summary_stats = LinksSummary::new();
 
-        if let Some(all_servers_stats) = all_servers_stats {
+        if let Some(all_servers_stats) = inputs.all_servers_stats {
             summary_stats.success_on_first_attempt = all_servers_stats.success_on_first_attempt();
             summary_stats.success_on_retry = all_servers_stats.success_on_retry();
             all_servers_stats.get_classified_failure(
@@ -362,7 +438,7 @@ impl ProxyApiServer for ProxyApiImpl {
             );
         }
 
-        if !input_port_found {
+        if !inputs.input_port_found {
             return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into());
         }
 
@@ -374,9 +450,9 @@ impl ProxyApiServer for ProxyApiImpl {
         };
 
         let server_count = link_stats.len();
-        (resp.status, resp.info) = if !proxy_enabled {
+        (resp.status, resp.info) = if !inputs.proxy_enabled {
             ("DOWN".to_string(), "proxy not enabled".to_string())
-        } else if !user_request_start {
+        } else if !inputs.user_request_start {
             ("DOWN".to_string(), format!("{} not started", workdir))
         } else if server_count == 0 {
             ("DOWN".to_string(), "no links in suibase.yaml".to_string())
@@ -385,7 +461,12 @@ impl ProxyApiServer for ProxyApiImpl {
         } else if healthy_server_count == 0 {
             ("DOWN".to_string(), "no servers available".to_string())
         } else if healthy_server_count * 100 / server_count > 50 {
-            ("OK".to_string(), format!("protected{}", load_balance_str))
+            let resp_info = if workdir == "localnet" {
+                load_balance_str
+            } else {
+                format!("protected{}", load_balance_str)
+            };
+            ("OK".to_string(), resp_info)
         } else {
             (
                 "OK".to_string(),
@@ -398,16 +479,21 @@ impl ProxyApiServer for ProxyApiImpl {
         if display {
             // User requested human-friendly display.
             if summary {
+                let resp_info = if resp.info.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ( {} )", resp.info)
+                };
                 display_out.push_str(&format!(
-                    "multi-link RPC: {} ( {} )\n\n\
-                    Cummulative Request Stats\n\
+                    "multi-link RPC: {}{}\n\n\
+                    Cumulative Request Stats\n\
   -------------------------\n\
   Success first attempt {:>9}\n\
   Success after retry   {:>9}\n\
   Failure bad request   {:>9}\n\
   Failure others        {:>9}\n\n",
                     resp.status,
-                    resp.info,
+                    resp_info,
                     summary_stats.success_on_first_attempt,
                     summary_stats.success_on_retry,
                     summary_stats.fail_bad_request,
@@ -471,6 +557,12 @@ impl ProxyApiServer for ProxyApiImpl {
             if links {
                 resp.links = Some(link_stats);
             }
+
+            if let Some(uuid) = inputs.uuid {
+                let (server_uuid, data_uuid) = uuid.get();
+                resp.header.data_uuid = Some(data_uuid.to_string());
+                resp.header.server_uuid = Some(server_uuid.to_string());
+            }
         }
 
         Ok(resp)
@@ -478,6 +570,9 @@ impl ProxyApiServer for ProxyApiImpl {
 
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse> {
         let mut resp = InfoResponse::new();
+
+        // Initialize some of the header fields.
+        resp.header.method = "fsChange".to_string();
 
         // Inform the AdminController that something changed...
         let mut msg = AdminControllerMsg::new();

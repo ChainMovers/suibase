@@ -19,6 +19,7 @@ mime = "0.3.16"
 
 memchr = "2.5.0"
 
+
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true
 
@@ -27,6 +28,8 @@ notify = { version = "6.0", default-features = false, features = [
     "macos_kqueue",
 ] }
 
+uuid.workspace = true
+uuid7.workspace = true
 anyhow.workspace = true
 
 clap.workspace = true

@@ -126,6 +126,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c59bdb34bc650a32731b31bd8f0829cc15d24a708ee31559e0bb34f2bc320cba"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -577,6 +583,12 @@ checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
 dependencies = [
  "percent-encoding",
 ]
+
+[[package]]
+name = "fstr"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c395dd73333fdeddb92b9d9de4d63e265233a91206de34ca9536473be4c2b5b"
 
 [[package]]
 name = "futures"
@@ -2142,6 +2154,8 @@ dependencies = [
  "tower",
  "tower-http",
  "twox-hash",
+ "uuid",
+ "uuid7",
 ]
 
 [[package]]
@@ -2554,11 +2568,25 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d023da39d1fde5a8a3fe1f3e01ca9632ada0a63e9797de55a879d6e2236277be"
+checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
 dependencies = [
+ "atomic",
  "getrandom",
+ "rand",
+]
+
+[[package]]
+name = "uuid7"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcba843a27a44d6bfbc8852222af425ebd04da999d898df30fd2ed16abe469ac"
+dependencies = [
+ "fstr",
+ "rand",
+ "rand_chacha",
+ "uuid",
 ]
 
 [[package]]

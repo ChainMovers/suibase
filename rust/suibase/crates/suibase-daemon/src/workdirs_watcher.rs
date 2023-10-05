@@ -9,8 +9,8 @@ use crate::admin_controller::{
 };
 use crate::shared_types::{Workdir, Workdirs};
 
-use notify::{Watcher, PollWatcher};
 use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
+use notify::{PollWatcher, Watcher};
 
 pub struct WorkdirsWatcher {
     workdirs: Workdirs,
@@ -272,10 +272,9 @@ impl WorkdirsWatcher {
             .unwrap();
 
         let poll_watcher_config = notify::Config::default();
-        
-        let mut poll_watcher =
-            // notify::recommended_watcher(move |res: Result<notify::Event, _>| match res {
-            PollWatcher::new(move |res: Result<notify::Event, _>| match res {                
+
+        let mut poll_watcher = PollWatcher::new(
+            move |res: Result<notify::Event, _>| match res {
                 Ok(event) => {
                     //log::info!("watcher step 1 event {:?}", event);
                     let event_to_spawned_fn = event; //.clone();
@@ -290,7 +289,9 @@ impl WorkdirsWatcher {
                 Err(e) => {
                     log::error!("watcher error: {:?}", e);
                 }
-            }, poll_watcher_config.with_poll_interval(std::time::Duration::from_secs(15)) )?;
+            },
+            poll_watcher_config.with_poll_interval(std::time::Duration::from_secs(15)),
+        )?;
 
         {
             let workdirs_guard = self.workdirs.read().await;

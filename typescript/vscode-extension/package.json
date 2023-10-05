@@ -84,6 +84,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
+    "rpc-websockets": "^7.6.0",
     "ws": "^8.14.2"
   }
 }

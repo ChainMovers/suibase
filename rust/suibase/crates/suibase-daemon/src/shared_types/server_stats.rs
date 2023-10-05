@@ -43,7 +43,7 @@ pub const SEND_FAILED_LAST_REASON: u8 = SEND_FAILED_UNSPECIFIED_STATUS;
 // Do not touch this.
 pub const SEND_FAILED_VEC_SIZE: usize = SEND_FAILED_LAST_REASON as usize + 1;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ServerStats {
     // Keep a copy of the server alias here because it is very
     // practical later while processing API calls.
@@ -74,7 +74,7 @@ pub struct ServerStats {
     // Theses are specific failure counts for request.
     //
     // There could be multiple send failure (retries) per
-    // request so these are counted seperatly.
+    // request so these are counted separately.
     //
     // unknown_reason are for when something out-of-range
     // is reported (that would be a bug).
@@ -187,7 +187,7 @@ impl ServerStats {
         // Sum all the request failures.
         let total = self.get_accum_failure();
 
-        // Now isolate a few noteable one for the caller.
+        // Now isolate a few notable one for the caller.
         *network_down = self.req_failure_reasons[REQUEST_FAILED_NETWORK_DOWN as usize];
         *bad_request = self.req_failure_reasons[REQUEST_FAILED_BAD_REQUEST_HTTP as usize];
         *other_failures = total - (*network_down + *bad_request);
@@ -281,7 +281,7 @@ impl ServerStats {
             self.send_failure_reasons[reason as usize] += 1;
             match reason {
                 SEND_FAILED_UNSPECIFIED_ERROR => {
-                    self.error_info = Some("Server Unreacheable".to_string())
+                    self.error_info = Some("Server Unreachable".to_string())
                 }
                 SEND_FAILED_RESP_HTTP_STATUS => {
                     let status_code = http::StatusCode::from_u16(status);

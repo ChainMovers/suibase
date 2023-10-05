@@ -1,3 +1,4 @@
+use hyper::header;
 // Defines the JSON-RPC API.
 //
 // Intended Design (WIP)
@@ -11,12 +12,45 @@
 // emit a message toward the AdminController describing the action needed. The AdminController perform the
 // modification and provides the response with a returning tokio OneShot channel.
 //
+// All *successful" JSON responses have a required "header" section.
+//
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+
+#[serde_as]
+#[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Header {
+    // Header fields
+    // =============
+    //    - method:
+    //        A string echoing the method of the request.
+    //
+    //    - key:
+    //        A string echoing one of the "key" parameter of the request (e.g. the workdir requested).
+    //        This field is optional and its interpretation depends on the method.
+    //
+    //    - data_uuid:
+    //        A sortable hex 64 bytes (UUID v7). Increments with every data modification.
+    //
+    //    - server_uuid:
+    //        A hex 64 bytes that changes every time the server detects that
+    //        a data_uuid is unexpectedly lower than the previous one (e.g. system
+    //        time went backward) or the PID of the process changes. This is to
+    //        complement data_version for added reliability.
+    //
+    pub method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
 
 #[serde_as]
 #[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
@@ -75,6 +109,8 @@ impl LinksSummary {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LinksResponse {
+    pub header: Header,
+
     pub status: String, // This is a single word combined "Multi-Link status". Either "OK" or "DOWN".
 
     pub info: String, // More details about the status (e.g. '50% degraded', 'all servers down', etc...)
@@ -100,6 +136,7 @@ pub struct LinksResponse {
 impl LinksResponse {
     pub fn new() -> Self {
         Self {
+            header: Header::default(),
             status: "DISABLED".to_string(),
             info: "INITIALIZING".to_string(),
             summary: None,
@@ -114,12 +151,14 @@ impl LinksResponse {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
+    pub header: Header,
     pub info: String, // "Success" or info on failure.
 }
 
 impl InfoResponse {
     pub fn new() -> Self {
         Self {
+            header: Header::default(),
             info: "Unknown Error".to_string(),
         }
     }

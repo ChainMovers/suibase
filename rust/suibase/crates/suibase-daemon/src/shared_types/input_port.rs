@@ -11,7 +11,7 @@ use twox_hash::XxHash32;
 pub struct InputPort {
     idx: Option<ManagedVecUSize>,
 
-    // The name of the workdir (e.g. localnet). Set once at contruction.
+    // The name of the workdir (e.g. localnet). Set once at construction.
     workdir_name: String,
 
     // The workdir idx (from AdminController context). Set once at construction.
@@ -43,7 +43,7 @@ pub struct InputPort {
     pub all_servers_stats: ServerStats,
 
     // The "TargetServer" selection vectors are updated periodically by
-    // the NetworkMonitor. They help the handler to very quicly pick
+    // the NetworkMonitor. They help the handler to very quickly pick
     // a set of TargetServer to try.
     //
     // Design:
@@ -55,7 +55,7 @@ pub struct InputPort {
     pub selection_vectors: Vec<Vec<TargetServerIdx>>,
 
     // All remaining TargetServerIdx that are not in selection_vectors because
-    // not in OK state (could be fine rigt now, but not yet known). These are the
+    // not in OK state (could be fine right now, but not yet known). These are the
     // fallback attempts on initialization or hard recovery (least worst first).
     pub selection_worst: Vec<TargetServerIdx>,
 }
@@ -286,7 +286,7 @@ impl InputPort {
 
         // Build a vector of idx() of the elements of target_servers.
         // At same time, find one currently OK with the best latency_avg().
-        // Isolate immediatly all down target servers in selection_worst.
+        // Isolate immediately all down target servers in selection_worst.
         let mut ok_idx_vec: Vec<TargetServerIdx> = Vec::new();
         let mut best_latency_avg: f64 = f64::MAX;
         let mut best_latency_avg_idx: Option<TargetServerIdx> = None;

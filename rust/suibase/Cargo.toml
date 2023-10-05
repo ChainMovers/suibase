@@ -44,6 +44,9 @@ tower-http = { version = "0.3.4", features = [
     "propagate-header",
 ] }
 
+uuid = { version = "1.4.1", features = ["v4","v7","fast-rng"] }
+uuid7 = { version= "0.7.0", features = [ "uuid" ] }
+
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 thiserror = "1.0"
 
