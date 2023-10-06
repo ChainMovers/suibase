@@ -597,9 +597,14 @@ build_sui_repo_branch() {
     _DETACHED_INFO=$(cd "$SUI_REPO_DIR" && git branch | grep detached)
     # Checkout if _DETACHED_INFO does NOT contain the PRECOMP_REMOTE_TAG_NAME substring.
     if [[ "$_DETACHED_INFO" != *"$PRECOMP_REMOTE_TAG_NAME"* ]]; then
-      # Simply checkout the tag that match the precompiled binary.
-      (cd "$SUI_REPO_DIR_DEFAULT" && git checkout -f "$PRECOMP_REMOTE_TAG_NAME" >&/dev/null)
+
+      # Checkout the tag that match the precompiled binary.
       echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+      (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >&/dev/null)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >&/dev/null)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >&/dev/null)
+      (cd "$SUI_REPO_DIR" && git merge '@{u}' >&/dev/null)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >&/dev/null)
       _FEEDBACK_BEFORE_RETURN=false
     fi
 
