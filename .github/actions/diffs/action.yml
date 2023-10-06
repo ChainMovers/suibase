@@ -28,6 +28,8 @@ runs:
         filters: |
           isRust:
             - 'crates/**'
+            - 'Cargo.lock'
+            - 'Cargo.toml'
             - '.github/workflows/rust.yml'
           isDoc:
             - 'docs/**'
@@ -41,6 +43,8 @@ runs:
             - 'install'
             - 'uninstall'
             - 'update'
+            - 'repair'
+            - 'pip-install'
             - '.github/workflows/scripts-tests.yml'
           isDocHelperAPI:
             - 'rust/helper/lib.rs'
