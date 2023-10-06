@@ -603,7 +603,7 @@ build_sui_repo_branch() {
       (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >&/dev/null)
       (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >&/dev/null)
       (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >&/dev/null)
-      (cd "$SUI_REPO_DIR" && git merge '@{u}' >&/dev/null)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git merge '@{u}' >&/dev/null)
       (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >&/dev/null)
       _FEEDBACK_BEFORE_RETURN=false
     fi

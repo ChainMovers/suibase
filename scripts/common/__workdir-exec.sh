@@ -742,8 +742,19 @@ workdir_exec() {
   # For now we support delete of localnet only.
   # Need to be more careful for testnet/devnet to preserve key.
   if [ "$CMD_DELETE_REQ" = true ]; then
+    stop_all_services
+
     if ! $is_local; then
-      info_exit "Not supported yet for $WORKDIR"
+      (if cd "$SUI_REPO_DIR" >&/dev/null; then cargo clean; fi)
+      rm -rf "$WORKDIRS/$WORKDIR/logs/sui.log/*"
+      rm -rf "$WORKDIRS/$WORKDIR/config/sui-process.log"
+      rm -rf "$WORKDIRS/$WORKDIR/config/sui-faucet-process.log"
+      if [ -d "$WORKDIRS/$WORKDIR/sui-repo-default" ]; then
+        rm -rf "$WORKDIRS/$WORKDIR/sui-repo-default"
+        info_exit "Logs, default repo and artifacts deleted. sui.keystore and client.yaml are NEVER deleted for '$WORKDIR'."
+      else
+        info_exit "$WORKDIR is already deleted"
+      fi
     fi
 
     if [ ! -d "$WORKDIRS/$WORKDIR" ]; then
