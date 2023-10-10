@@ -27,9 +27,13 @@ runs:
       with:
         filters: |
           isRust:
+            - '/rust/**'
             - 'crates/**'
+            - '*.rs'
             - 'Cargo.lock'
             - 'Cargo.toml'
+            - 'rustfmt.toml'
+            - 'rust-toolchain.toml'
             - '.github/workflows/rust.yml'
           isDoc:
             - 'docs/**'
