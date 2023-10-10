@@ -29,8 +29,8 @@ pub enum RpcInputError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcServerError {
-    #[error("params {0} has invalid value '{1}'")]
-    InvalidParams(String, String),
+    #[error("internal error: {0}")]
+    InternalError(String),
 }
 
 impl RpcInputError {

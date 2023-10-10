@@ -10,10 +10,10 @@ use crate::network_monitor::{
     HEADER_SBSD_SERVER_IDX,
 };
 use crate::shared_types::{
-    Globals, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_CONFIG_DISABLED, REQUEST_FAILED_NOT_STARTED,
-    REQUEST_FAILED_NO_SERVER_AVAILABLE, REQUEST_FAILED_NO_SERVER_RESPONDING,
-    REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX, SEND_FAILED_RESP_HTTP_STATUS,
-    SEND_FAILED_UNSPECIFIED_ERROR, SEND_FAILED_UNSPECIFIED_STATUS,
+    GlobalsProxyMT, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_CONFIG_DISABLED,
+    REQUEST_FAILED_NOT_STARTED, REQUEST_FAILED_NO_SERVER_AVAILABLE,
+    REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
+    SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_ERROR, SEND_FAILED_UNSPECIFIED_STATUS,
 };
 
 use anyhow::{anyhow, Result};
@@ -43,7 +43,7 @@ pub struct SharedStates {
     port_idx: ManagedVecUSize,
     client: reqwest::Client,
     netmon_tx: NetMonTx,
-    globals: Globals,
+    globals: GlobalsProxyMT,
 }
 
 pub struct ProxyServer {
@@ -75,7 +75,7 @@ impl ProxyServer {
             return false;
         };
 
-        // TODO https://www.jsonrpc.org/historical/json-rpc-over-http.html Check for json-rpc and jsonrequest?
+        // TODO https://www.jsonrpc.org/historical/json-rpc-over-http.html Check for json-rpc and json request?
         let is_json_content_type = mime.type_() == "application"
             && (mime.subtype() == "json" || mime.suffix().map_or(false, |name| name == "json"));
 
@@ -125,7 +125,7 @@ impl ProxyServer {
         // This will properly accumulate the statistics *once* per request.
         //
         // When to use each:
-        // (1) req_resp_ok is for when the request and response were both sucessful.
+        // (1) req_resp_ok is for when the request and response were both successful.
         // (2) req_fail is when the request could not even be sent (after all retries).
         // (3) req_resp_err is for all scenario where a response was received, but an
         //     error was detected in the response.
@@ -374,7 +374,7 @@ impl ProxyServer {
         self,
         subsys: SubsystemHandle,
         port_idx: InputPortIdx,
-        globals: Globals,
+        globals: GlobalsProxyMT,
         netmon_tx: NetMonTx,
     ) -> Result<()> {
         let shared_states: Arc<SharedStates> = Arc::new(SharedStates {

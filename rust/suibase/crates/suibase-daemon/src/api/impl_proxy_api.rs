@@ -12,11 +12,14 @@ use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
 use crate::basic_types::TargetServerIdx;
-use crate::shared_types::{Globals, ServerStats, SingleThreadUUID, TargetServer};
+use crate::shared_types::{GlobalsProxyMT, ServerStats, TargetServer, UuidST};
 
 use super::{InfoResponse, ProxyApiServer};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
 
+use super::def_header::{Header, Versioned};
+
+#[derive(Clone, PartialEq)]
 struct GetLinksInput {
     pub target_servers_stats: Option<Vec<(TargetServerIdx, ServerStats)>>,
     pub all_servers_stats: Option<ServerStats>,
@@ -24,11 +27,10 @@ struct GetLinksInput {
     pub input_port_found: bool,
     pub proxy_enabled: bool,
     pub user_request_start: bool,
-    pub uuid: Option<SingleThreadUUID>,
 }
 
 impl GetLinksInput {
-    fn new(uuid: Option<SingleThreadUUID>) -> Self {
+    pub fn new() -> Self {
         Self {
             target_servers_stats: None,
             all_servers_stats: None,
@@ -36,49 +38,19 @@ impl GetLinksInput {
             input_port_found: false,
             proxy_enabled: false,
             user_request_start: false,
-            uuid,
         }
-    }
-
-    fn clone_from(&mut self, other: &Self) {
-        self.target_servers_stats = other.target_servers_stats.clone();
-        self.all_servers_stats = other.all_servers_stats.clone();
-        self.selection_vectors = other.selection_vectors.clone();
-        self.input_port_found = other.input_port_found;
-        self.proxy_enabled = other.proxy_enabled;
-        self.user_request_start = other.user_request_start;
-
-        // If the other Uuid is Some, then clone it, otherwise
-        // increment the self.uuid "in-place".
-        if let Some(other_uuid) = &other.uuid {
-            self.uuid = Some(other_uuid.clone());
-        } else {
-            self.uuid.as_mut().unwrap().increment();
-        }
-    }
-}
-
-impl PartialEq for GetLinksInput {
-    fn eq(&self, other: &Self) -> bool {
-        // Note: uuid is not compared. Allow to compare other when not yet "versioned".
-        self.all_servers_stats.as_ref() == other.all_servers_stats.as_ref()
-            && self.target_servers_stats == other.target_servers_stats
-            && self.selection_vectors == other.selection_vectors
-            && self.input_port_found == other.input_port_found
-            && self.proxy_enabled == other.proxy_enabled
-            && self.user_request_start == other.user_request_start
     }
 }
 
 pub struct ProxyApiImpl {
-    pub globals: Globals,
+    pub globals: GlobalsProxyMT,
     pub admctrl_tx: AdminControllerTx,
-    prev_get_links_input: Mutex<GetLinksInput>,
+    prev_get_links_input: Mutex<Versioned<GetLinksInput>>,
 }
 
 impl ProxyApiImpl {
-    pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
-        let prev_get_links_input = Mutex::new(GetLinksInput::new(Some(SingleThreadUUID::new())));
+    pub fn new(globals: GlobalsProxyMT, admctrl_tx: AdminControllerTx) -> Self {
+        let prev_get_links_input = Mutex::new(Versioned::new(GetLinksInput::new()));
         Self {
             globals,
             admctrl_tx,
@@ -272,7 +244,9 @@ impl ProxyApiServer for ProxyApiImpl {
         let mut debug_out = String::new();
 
         // Variables initialized during the read lock.
-        let mut inputs = GetLinksInput::new(None);
+        let mut inputs = GetLinksInput::new();
+        let mut inputs_version: Option<UuidST> = None;
+
         {
             // Get read lock access to the globals and just quickly copy what is needed.
             // Most parsing and processing is done outside the lock.
@@ -306,21 +280,9 @@ impl ProxyApiServer for ProxyApiImpl {
             // If data, then handle potential UUID increment.
             if data {
                 // To avoid race condition, prev_get_links_input is lock and modified only here.
-                // Outside the lock, use 'inputs' within this thread.
-                let prev_get_links_input = &mut *self.prev_get_links_input.lock().await;
-                if inputs != *prev_get_links_input {
-                    // Because input.uuid is None, this will clone all the data AND increment
-                    // the existing uuid.
-                    prev_get_links_input.clone_from(&inputs);
-                }
-
-                // Make sure prev_get_links_input.uuid is initialized and inputs.uuid is same.
-                if let Some(prev_uuid) = &prev_get_links_input.uuid {
-                    inputs.uuid = Some(prev_uuid.clone());
-                } else {
-                    prev_get_links_input.uuid = Some(SingleThreadUUID::new());
-                    inputs.uuid = prev_get_links_input.uuid.clone();
-                }
+                // Outside the lock, use 'inputs' and 'inputs_version' within this thread.
+                let prev_input = &mut *self.prev_get_links_input.lock().await;
+                inputs_version = Some(prev_input.set(&inputs));
             }
         } // Release the read lock.
 
@@ -558,10 +520,10 @@ impl ProxyApiServer for ProxyApiImpl {
                 resp.links = Some(link_stats);
             }
 
-            if let Some(uuid) = inputs.uuid {
-                let (server_uuid, data_uuid) = uuid.get();
+            if let Some(version) = inputs_version {
+                let (method_uuid, data_uuid) = version.get();
+                resp.header.method_uuid = Some(method_uuid.to_string());
                 resp.header.data_uuid = Some(data_uuid.to_string());
-                resp.header.server_uuid = Some(server_uuid.to_string());
             }
         }
 

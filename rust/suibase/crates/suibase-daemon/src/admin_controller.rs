@@ -5,8 +5,12 @@ use crate::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::shared_types::{Globals, InputPort, SafeWorkdirs, WorkdirProxyConfig, Workdirs};
+use crate::shared_types::{
+    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsWorkdirsMT, InputPort, WorkdirProxyConfig,
+    WorkdirsST,
+};
 use crate::workdirs_watcher::WorkdirsWatcher;
+use crate::workers::ShellWorker;
 
 use anyhow::Result;
 
@@ -16,13 +20,13 @@ use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemHandle};
 //
 // The AdminController does:
 //   - Process all system/configuration-level events that are easier to handle when done sequentially
-//     (implemented by dequeing and processing one event at the time).
+//     (implemented by dequeuing and processing one event at the time).
 //   - Handle events to hot-reload the suibase.yaml
 //   - Handle events for various user actions (e.g. from JSONRPCServer).
-//   - Responsible to keep one "ProxyServer" per workdir running (localnet, devnet, testnet ...)
+//   - Responsible to keep one "ProxyServer" and "ShellProcessor" running per workdir.
 //
-// Globals: InputPort Instantiation
-// ================================
+// globals.proxy: InputPort Instantiation
+// =======================================
 // One InputPort is instantiated per workdir (localnet, devnet, testnet ...).
 //
 // Once instantiated, it is never deleted. Subsequently, the ProxyServer is also started
@@ -34,10 +38,11 @@ use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemHandle};
 pub struct AdminController {
     idx: Option<ManagedVecUSize>,
     globals: Globals,
+
     admctrl_rx: AdminControllerRx,
     admctrl_tx: AdminControllerTx,
     netmon_tx: NetMonTx,
-    workdirs: Workdirs,
+
     wd_tracking: AutoSizeVec<WorkdirTracking>,
     port_tracking: AutoSizeVec<InputPortTracking>,
 }
@@ -45,15 +50,44 @@ pub struct AdminController {
 pub type AdminControllerTx = tokio::sync::mpsc::Sender<AdminControllerMsg>;
 pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 struct WorkdirTracking {
     last_read_config: Option<WorkdirProxyConfig>,
+    shell_worker_tx: Option<AdminControllerTx>,
+    shell_worker_handle: Option<NestedSubsystem>, // Set when the shell_worker is started.
+}
+
+impl WorkdirTracking {
+    pub fn new() -> Self {
+        Self {
+            last_read_config: None,
+            shell_worker_tx: None,
+            shell_worker_handle: None,
+        }
+    }
+}
+impl std::fmt::Debug for WorkdirTracking {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkdirTracking")
+            // NestedSubsystem does not implement Debug
+            .field("last_read_config", &self.last_read_config)
+            .finish()
+    }
 }
 
 #[derive(Default)]
 struct InputPortTracking {
     proxy_server_handle: Option<NestedSubsystem>, // Set when the proxy_server is started.
     port_number: u16, // port number used when the proxy_server was started.
+}
+
+impl std::fmt::Debug for InputPortTracking {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkdirTracking")
+            // NestedSubsystem does not implement Debug
+            .field("port_number", &self.port_number)
+            .finish()
+    }
 }
 
 pub struct AdminControllerMsg {
@@ -92,11 +126,11 @@ impl std::fmt::Debug for AdminControllerMsg {
 pub type AdminControllerEventID = u8;
 pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 1;
 pub const EVENT_DEBUG_PRINT: u8 = 2;
+pub const EVENT_SHELL_EXEC: u8 = 3;
 
 impl AdminController {
     pub fn new(
         globals: Globals,
-        workdirs: Workdirs,
         admctrl_rx: AdminControllerRx,
         admctrl_tx: AdminControllerTx,
         netmon_tx: NetMonTx,
@@ -104,13 +138,50 @@ impl AdminController {
         Self {
             idx: None,
             globals,
-            workdirs,
             admctrl_rx,
             admctrl_tx,
             netmon_tx,
             wd_tracking: AutoSizeVec::new(),   // WorkdirTracking
             port_tracking: AutoSizeVec::new(), // InputPortTracking
         }
+    }
+
+    async fn process_shell_exec_msg(&mut self, msg: AdminControllerMsg, subsys: &SubsystemHandle) {
+        // Simply forward to the proper ShellWorker (one worker per workdir).
+        if msg.event_id != EVENT_SHELL_EXEC {
+            log::error!("Unexpected event_id {:?}", msg.event_id);
+            // Do nothing. Consume the message.
+            return;
+        }
+
+        if msg.workdir_idx.is_none() {
+            log::error!("EVENT_SHELL_EXEC missing workdir_idx");
+            return;
+        }
+        let workdir_idx = msg.workdir_idx.unwrap();
+
+        // Find the corresponding ShellWorker in wd_tracking using the workdir_idx.
+        let wd_tracking = self.wd_tracking.get_mut(workdir_idx);
+
+        // Instantiate and start the ShellWorker if not already done.
+        if wd_tracking.shell_worker_handle.is_none() {
+            let (shell_worker_tx, shell_worker_rx) = tokio::sync::mpsc::channel(100);
+            wd_tracking.shell_worker_tx = Some(shell_worker_tx);
+            let shell_worker =
+                ShellWorker::new(self.globals.clone(), shell_worker_rx, Some(workdir_idx));
+            wd_tracking.shell_worker_handle =
+                Some(subsys.start("proxy-server", move |a| shell_worker.run(a)));
+        }
+
+        if wd_tracking.shell_worker_tx.is_none() {
+            log::error!("EVENT_SHELL_EXEC missing shell_worker_tx");
+            return;
+        }
+        let shell_worker_tx = wd_tracking.shell_worker_tx.as_ref().unwrap();
+
+        // Forward the message to the ShellWorker.
+        // TODO Error handling
+        shell_worker_tx.send(msg).await.unwrap();
     }
 
     async fn process_debug_print_msg(&mut self, msg: AdminControllerMsg) {
@@ -204,7 +275,7 @@ impl AdminController {
         let workdir_idx: u8;
         let workdir_name: String;
         {
-            let workdirs_guard = self.workdirs.read().await;
+            let workdirs_guard = self.globals.workdirs.read().await;
             let workdirs = &*workdirs_guard;
 
             let workdir_search_result = workdirs.find_workdir(&path);
@@ -217,7 +288,7 @@ impl AdminController {
             workdir_idx = found_workdir_idx;
             workdir_name = workdir.name().to_string();
 
-            // Load the 3xsuibase.yaml. The default, common and user version in order.
+            // Load the 3 suibase.yaml files. The default, common and user version in order.
             let try_load = workdir_config
                 .load_and_merge_from_file(&workdir.suibase_yaml_default().to_string_lossy());
             if try_load.is_err() {
@@ -261,7 +332,7 @@ impl AdminController {
         // Apply the configuration to the globals.
         let config_applied: Option<(ManagedVecUSize, u16)> = {
             // Get a write lock on the globals.
-            let mut globals_guard = self.globals.write().await;
+            let mut globals_guard = self.globals.proxy.write().await;
             let globals = &mut *globals_guard;
 
             // Apply the config to add/modify the related InputPort in the globals (as needed).
@@ -283,7 +354,7 @@ impl AdminController {
                 Self::apply_workdir_config(input_port, &workdir_config);
                 Some((port_idx, input_port.port_number()))
             } else {
-                // TODO Verify there is no conflicting port assigment.
+                // TODO Verify there is no conflicting port assignment.
 
                 // No InputPort yet for that workdir... so create it.
                 let mut input_port =
@@ -302,7 +373,7 @@ impl AdminController {
 
             if port_tracking.proxy_server_handle.is_none() {
                 let proxy_server = ProxyServer::new();
-                let globals = self.globals.clone();
+                let globals = self.globals.proxy.clone();
                 let netmon_tx = self.netmon_tx.clone();
                 port_tracking.proxy_server_handle = Some(subsys.start("proxy-server", move |a| {
                     proxy_server.run(a, port_idx, globals, netmon_tx)
@@ -343,6 +414,9 @@ impl AdminController {
                     EVENT_NOTIF_CONFIG_FILE_CHANGE => {
                         self.process_config_msg(msg, subsys).await;
                     }
+                    EVENT_SHELL_EXEC => {
+                        self.process_shell_exec_msg(msg, subsys).await;
+                    }
                     _ => {
                         log::error!("Unknown event_id {}", msg.event_id);
                     }
@@ -363,7 +437,7 @@ impl AdminController {
         // send back to this thread on the AdminController channel.
         {
             let admctrl_tx = self.admctrl_tx.clone();
-            let workdirs_watcher = WorkdirsWatcher::new(self.workdirs.clone(), admctrl_tx);
+            let workdirs_watcher = WorkdirsWatcher::new(self.globals.workdirs.clone(), admctrl_tx);
             subsys.start("workdirs-watcher", move |a| workdirs_watcher.run(a));
         }
 
@@ -394,7 +468,7 @@ fn test_load_config_from_suibase_default() {
     // Note: More of a functional test. Suibase need to be installed.
 
     // Test a known "standard" localnet suibase.yaml
-    let workdirs = SafeWorkdirs::new();
+    let workdirs = WorkdirsST::new();
     let mut path = std::path::PathBuf::from(workdirs.suibase_home());
     path.push("scripts");
     path.push("defaults");

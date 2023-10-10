@@ -41,10 +41,11 @@ mod basic_types;
 mod clock_trigger;
 mod network_monitor;
 mod proxy_server;
-mod request_worker;
 mod shared_types;
 mod workdirs_watcher;
+mod workers;
 
+use shared_types::{Globals, GlobalsStatusMT, GlobalsStatusST};
 use tokio::time::Duration;
 
 use tokio_graceful_shutdown::Toplevel;
@@ -52,7 +53,7 @@ use tokio_graceful_shutdown::Toplevel;
 use crate::admin_controller::AdminController;
 use crate::api::APIServer;
 use crate::network_monitor::NetworkMonitor;
-use crate::shared_types::{Globals, SafeGlobals, SafeWorkdirs, Workdirs};
+use crate::shared_types::{GlobalsProxyMT, GlobalsProxyST, GlobalsWorkdirsMT, WorkdirsST};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -69,14 +70,14 @@ pub enum Command {
 }
 
 impl Command {
-    pub async fn execute(self, globals: Globals, workdirs: Workdirs) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, globals: Globals) -> Result<(), anyhow::Error> {
         match self {
             Command::Run {} => {
                 // Create mpsc channels (internal messaging between threads).
                 //
                 // The AdminController handles events about configuration changes
                 //
-                // The NetworkMonitor handles events about network stats and periodic healtch checks.
+                // The NetworkMonitor handles events about network stats and periodic health checks.
                 //
                 let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(100);
                 let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(10000);
@@ -84,17 +85,17 @@ impl Command {
                 // Instantiate and connect all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(
                     globals.clone(),
-                    workdirs.clone(),
                     admctrl_rx,
                     admctrl_tx.clone(),
                     netmon_tx.clone(),
                 );
 
-                let netmon = NetworkMonitor::new(globals.clone(), netmon_rx, netmon_tx.clone());
+                let netmon =
+                    NetworkMonitor::new(globals.proxy.clone(), netmon_rx, netmon_tx.clone());
 
                 let apiserver = APIServer::new(globals.clone(), admctrl_tx.clone());
 
-                let clock: ClockTrigger = ClockTrigger::new(globals.clone(), netmon_tx.clone());
+                let clock: ClockTrigger = ClockTrigger::new(netmon_tx.clone());
 
                 // Start the subsystems.
                 Toplevel::new()
@@ -119,8 +120,7 @@ async fn main() {
     //
     // Keep a reference here at main level so they will never get "deleted" until the
     // end of the program.
-    let main_globals = Arc::new(tokio::sync::RwLock::new(SafeGlobals::new()));
-    let main_workdirs = Arc::new(tokio::sync::RwLock::new(SafeWorkdirs::new()));
+    let main_globals = Globals::new();
 
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
@@ -130,10 +130,7 @@ async fn main() {
 
     let cmd: Command = Command::parse();
 
-    match cmd
-        .execute(main_globals.clone(), main_workdirs.clone())
-        .await
-    {
+    match cmd.execute(main_globals.clone()).await {
         Ok(_) => (),
         Err(err) => {
             log::error!("error: {}", err.to_string().red());

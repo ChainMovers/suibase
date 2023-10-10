@@ -1,8 +1,8 @@
 // MTSafeUUID provides:
-//   - a get() function that returns both a server_id (UUID v4) and a data_version (UUID v7).
-//   - The server_id is initialized once on process startup and changes whenever
-//     a data_version is unexpectedly not higher than the previous one generated.
-//   - get() is multi-thread safe (Mutex protected).
+//   - a get() function that returns both a method_uuid (UUID v4) and a data_uuid (UUID v7).
+//   - The method_uuid is initialized once on process startup and changes whenever a data_uuid is
+//     unexpectedly sorted lower than the previous one generated (e.g. system time went backward).
+//   - Multi-thread protection (Mutex protected).
 //
 // SingleThreadUUID is same, except the user is responsible for Mutex access.
 //
@@ -16,54 +16,47 @@ use log::{info, warn};
 #[cfg(test)]
 use std::{println as info, println as warn};
 
-#[derive(Clone, Debug)]
-pub struct SingleThreadUUID {
-    server_id: Uuid,
-    data_version: Uuid,
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
+pub struct UuidST {
+    method_uuid: Uuid,
+    data_uuid: Uuid,
 }
 
-impl SingleThreadUUID {
+impl UuidST {
     pub fn new() -> Self {
         Self {
-            server_id: Uuid::new_v4(),
-            data_version: uuid7::new_v7(),
+            method_uuid: Uuid::new_v4(),
+            data_uuid: uuid7::new_v7(),
         }
     }
 
     pub fn get(&self) -> (Uuid, Uuid) {
-        (self.server_id, self.data_version)
+        (self.method_uuid, self.data_uuid)
     }
 
     pub fn set(&mut self, other: &Self) {
-        self.server_id = other.server_id;
-        self.data_version = other.data_version;
+        self.method_uuid = other.method_uuid;
+        self.data_uuid = other.data_uuid;
     }
 
     pub fn increment(&mut self) {
-        let new_data_version: Uuid = uuid7::new_v7();
+        let new_data_uuid: Uuid = uuid7::new_v7();
 
-        //info!("data_version: {}", new_data_version.to_string());
-        //info!("server_id: {}", self.server_id.to_string());
-        /*
-        if let Some(version) = new_data_version.get_version() {
-          if version != Version::SortRand {
-            warn!("WARNING: UUID data_version is not random");
-          }
-        }*/
-        if new_data_version <= self.data_version {
-            self.server_id = Uuid::new_v4();
+        if new_data_uuid <= self.data_uuid {
+            self.method_uuid = Uuid::new_v4();
         }
-        self.data_version = new_data_version;
+        self.data_uuid = new_data_uuid;
     }
 }
 
-impl PartialEq for SingleThreadUUID {
-    fn eq(&self, other: &Self) -> bool {
-        self.server_id == other.server_id && self.data_version == other.data_version
+impl Default for UuidST {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-pub type MTSafeUUID = Arc<tokio::sync::Mutex<SingleThreadUUID>>;
+// MT: Multi-threaded reference count, ST: Single-threaded access with a lock.
+pub type UuidMT = Arc<tokio::sync::Mutex<UuidST>>;
 
 #[cfg(test)]
 mod tests {
@@ -71,31 +64,31 @@ mod tests {
 
     #[tokio::test]
     async fn test_one_thread_uuid() {
-        let single_thread_uuid = SingleThreadUUID::new();
+        let single_thread_uuid = UuidST::new();
         let mt_safe_uuid = Arc::new(tokio::sync::Mutex::new(single_thread_uuid));
         let mut locked_uuid = mt_safe_uuid.lock().await;
-        let mut prev_data_version = locked_uuid.data_version;
-        let initial_server_id = locked_uuid.server_id;
+        let mut prev_data_uuid = locked_uuid.data_uuid;
+        let initial_method_uuid = locked_uuid.method_uuid;
         for _ in 0..100000 {
             locked_uuid.increment();
-            let (server_id, data_version) = locked_uuid.get();
+            let (method_uuid, data_uuid) = locked_uuid.get();
 
-            assert_eq!(server_id, initial_server_id);
-            assert!(data_version > prev_data_version);
+            assert_eq!(method_uuid, initial_method_uuid);
+            assert!(data_uuid > prev_data_uuid);
 
-            prev_data_version = data_version;
+            prev_data_uuid = data_uuid;
         }
     }
 
     #[tokio::test]
     async fn test_two_threads_uuid() {
-        let single_thread_uuid = SingleThreadUUID::new();
+        let single_thread_uuid = UuidST::new();
         let mt_safe_uuid = Arc::new(tokio::sync::Mutex::new(single_thread_uuid));
         let mt_safe_uuid_clone = mt_safe_uuid.clone();
 
-        let (initial_server_id, mut prev_data_version) = {
+        let (initial_method_uuid, mut prev_data_uuid) = {
             let locked_uuid = mt_safe_uuid.lock().await;
-            (locked_uuid.server_id, locked_uuid.data_version)
+            (locked_uuid.method_uuid, locked_uuid.data_uuid)
         };
 
         let (_result1, _result2) = tokio::join!(
@@ -103,26 +96,66 @@ mod tests {
                 for _ in 0..100000 {
                     let mut locked_uuid = mt_safe_uuid.lock().await;
                     locked_uuid.increment();
-                    let (server_id, data_version) = locked_uuid.get();
+                    let (method_uuid, data_uuid) = locked_uuid.get();
 
-                    assert_eq!(server_id, initial_server_id);
-                    assert!(data_version > prev_data_version);
+                    assert_eq!(method_uuid, initial_method_uuid);
+                    assert!(data_uuid > prev_data_uuid);
 
-                    prev_data_version = data_version;
+                    prev_data_uuid = data_uuid;
                 }
             },
             async move {
                 for _ in 0..100000 {
                     let mut locked_uuid = mt_safe_uuid_clone.lock().await;
                     locked_uuid.increment();
-                    let (server_id, data_version) = locked_uuid.get();
+                    let (method_uuid, data_uuid) = locked_uuid.get();
 
-                    assert_eq!(server_id, initial_server_id);
-                    assert!(data_version > prev_data_version);
+                    assert_eq!(method_uuid, initial_method_uuid);
+                    assert!(data_uuid > prev_data_uuid);
 
-                    prev_data_version = data_version;
+                    prev_data_uuid = data_uuid;
                 }
             }
         );
+    }
+
+    #[tokio::test]
+    async fn test_ordering() {
+        let mut a = UuidST::new();
+        for _ in 0..100000 {
+            let prev_a = a.clone();
+            a.increment();
+
+            // Test cloning.
+            let same_a = a.clone();
+            assert_eq!(a, same_a);
+            assert_eq!(same_a, a);
+            assert!(a <= same_a);
+            assert!(a >= same_a);
+            assert_eq!(same_a, same_a);
+
+            // Repeat same cloning tests with individual components with get()
+            let (a_method_uuid, a_data_uuid) = a.get();
+            let (same_a_method_uuid, same_a_data_uuid) = same_a.get();
+            assert_eq!(a_method_uuid, same_a_method_uuid);
+            assert_eq!(a_data_uuid, same_a_data_uuid);
+            assert!(a_method_uuid <= same_a_method_uuid);
+            assert!(a_data_uuid <= same_a_data_uuid);
+            assert!(a_method_uuid >= same_a_method_uuid);
+            assert!(a_data_uuid >= same_a_data_uuid);
+
+            // Test various operators
+            assert_eq!(prev_a, prev_a);
+            assert_ne!(prev_a, a);
+            assert!(prev_a != a);
+            assert!(prev_a < a);
+            assert!(a > prev_a);
+
+            // Repeat tests with the cloned one.
+            assert_ne!(prev_a, same_a);
+            assert!(prev_a != same_a);
+            assert!(prev_a < same_a);
+            assert!(same_a > prev_a);
+        }
     }
 }

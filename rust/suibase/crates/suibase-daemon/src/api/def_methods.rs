@@ -1,56 +1,27 @@
 use hyper::header;
 // Defines the JSON-RPC API.
 //
-// Intended Design (WIP)
+// Design:
 //
 // The API defined here is registered and served by jsonrpsee  (See api_server.rs).
 //
-// The definitions here are just thin layers and most of the heavy lifting is done
-// in other modules.
+// This is a thin layers and most of the heavy lifting is done in other modules.
 //
-// When doing a request that can "mutate" the process (other than API statistics), the request handler
-// emit a message toward the AdminController describing the action needed. The AdminController perform the
-// modification and provides the response with a returning tokio OneShot channel.
+// When doing a request that can "mutate" the process (other than API statistics), a message is emit
+// toward the AdminController which will perform the mutation and emit a response with a tokio
+// OneShot channel.
 //
-// All *successful" JSON responses have a required "header" section.
+// This serialization of mutations helps minimizing multi-threading complexity.
 //
+// All *successful" JSON responses have a required "Header" field for data versioning.
+//
+use super::def_header::Header;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
-#[serde_as]
-#[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct Header {
-    // Header fields
-    // =============
-    //    - method:
-    //        A string echoing the method of the request.
-    //
-    //    - key:
-    //        A string echoing one of the "key" parameter of the request (e.g. the workdir requested).
-    //        This field is optional and its interpretation depends on the method.
-    //
-    //    - data_uuid:
-    //        A sortable hex 64 bytes (UUID v7). Increments with every data modification.
-    //
-    //    - server_uuid:
-    //        A hex 64 bytes that changes every time the server detects that
-    //        a data_uuid is unexpectedly lower than the previous one (e.g. system
-    //        time went backward) or the PID of the process changes. This is to
-    //        complement data_version for added reliability.
-    //
-    pub method: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub server_uuid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_uuid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub key: Option<String>,
-}
 
 #[serde_as]
 #[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
@@ -123,7 +94,7 @@ pub struct LinksResponse {
     pub links: Option<Vec<LinkStats>>,
 
     // This is the output when the option 'display' is true.
-    // Will also change the default to false for the summary/links/display output.
+    // Will also change the default to false for the summary/links output.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<String>,
 
@@ -164,6 +135,87 @@ impl InfoResponse {
     }
 }
 
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusService {
+    pub label: String, // "localnet process", "proxy server", "multi-link RPC" etc...
+    pub status: Option<String>, // OK, DOWN, DEGRADED
+    pub status_info: Option<String>, // Info related to status.
+    pub help_info: Option<String>, // Short help info (e.g. the faucet URL)
+    pub pid: Option<u64>,
+}
+
+impl StatusService {
+    pub fn new(label: String) -> Self {
+        Self {
+            label,
+            status: None,
+            status_info: None,
+            help_info: None,
+            pid: None,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusResponse {
+    pub header: Header,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>, // This is a single word combined "Multi-Link status". Either "OK" or "DOWN".
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_info: Option<String>, // More details about the status (e.g. '50% degraded', 'internal error', etc...)
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_version: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_version: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asui_selection: Option<String>,
+
+    // Finer grain status for each process/feature/service.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub services: Option<Vec<StatusService>>,
+
+    // This is the output when the option 'display' is true.
+    // Will also change the default to false for all the other fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+
+    // This is the output when the option 'debug' is true.
+    // Will also change the default to true for the other fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>,
+}
+
+impl StatusResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            status: None,
+            status_info: None,
+            client_version: None,
+            network_version: None,
+            asui_selection: None,
+            services: None,
+            display: None,
+            debug: None,
+        }
+    }
+}
+
+impl Default for StatusResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[rpc(server)]
 pub trait ProxyApi {
     /// Returns data about all the RPC/Websocket links
@@ -184,4 +236,18 @@ pub trait ProxyApi {
 
     #[method(name = "fsChange")]
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
+}
+
+#[rpc(server)]
+pub trait GeneralApi {
+    #[method(name = "getStatus")]
+    async fn get_status(
+        &self,
+        workdir: String,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+        method_uuid: Option<String>,
+        data_uuid: Option<String>,
+    ) -> RpcResult<StatusResponse>;
 }

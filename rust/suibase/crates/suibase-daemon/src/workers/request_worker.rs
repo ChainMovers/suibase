@@ -12,14 +12,14 @@ const SERVER_CHECK_REQUEST_BODY: &str =
     "{\"jsonrpc\":\"2.0\",\"method\":\"suix_getLatestSuiSystemState\",\"id\":1,\"params\":[\"\"]}";
 
 pub struct RequestWorker {
-    reqworker_rx: NetMonRx,
+    netmon_rx: NetMonRx,
     client: reqwest::Client,
 }
 
 impl RequestWorker {
-    pub fn new(reqworker_rx: NetMonRx) -> Self {
+    pub fn new(netmon_rx: NetMonRx) -> Self {
         Self {
-            reqworker_rx,
+            netmon_rx,
             client: reqwest::Client::new(),
         }
     }
@@ -49,7 +49,7 @@ impl RequestWorker {
     async fn event_loop(&mut self, subsys: &SubsystemHandle) {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
-            if let Some(msg) = self.reqworker_rx.recv().await {
+            if let Some(msg) = self.netmon_rx.recv().await {
                 // Process the message.
                 self.do_request(msg).await;
             } else {

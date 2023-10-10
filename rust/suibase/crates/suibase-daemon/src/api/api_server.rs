@@ -14,13 +14,22 @@ use tokio::time::{interval, Duration};
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle, Toplevel};
 
-use crate::{admin_controller::AdminControllerTx, shared_types::Globals};
+use crate::{
+    admin_controller::AdminControllerTx,
+    shared_types::{Globals, GlobalsProxyMT, GlobalsStatusMT},
+};
+
+use super::GeneralApiServer;
+use crate::api::impl_general_api::GeneralApiImpl;
 
 use super::ProxyApiServer;
-use crate::api::proxy_api::ProxyApiImpl;
+use crate::api::impl_proxy_api::ProxyApiImpl;
 
 use hyper::Method;
-use jsonrpsee::server::{AllowHosts, RpcModule, Server, ServerBuilder};
+use jsonrpsee::{
+    core::server::rpc_module::Methods,
+    server::{AllowHosts, RpcModule, Server, ServerBuilder},
+};
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -108,10 +117,22 @@ impl JSONRPCServer {
             .build(SocketAddr::from(([127, 0, 0, 1], 44399)))
             .await?;
 
-        let proxy_api = ProxyApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
-        let methods = proxy_api.into_rpc();
+        let mut all_methods = Methods::new();
 
-        let start_result = server.start(methods);
+        let proxy_api = ProxyApiImpl::new(self.globals.proxy.clone(), self.admctrl_tx.clone());
+        let proxy_methods = proxy_api.into_rpc();
+
+        if let Err(e) = all_methods.merge(proxy_methods) {
+            log::error!("Error merging proxy_methods: {}", e);
+        }
+
+        let general_api = GeneralApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
+        let general_methods = general_api.into_rpc();
+        if let Err(e) = all_methods.merge(general_methods) {
+            log::error!("Error merging general_methods: {}", e);
+        }
+
+        let start_result = server.start(all_methods);
 
         if let Ok(handle) = start_result {
             //let addr = server.local_addr()?;

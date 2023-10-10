@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use crate::{basic_types::*, shared_types::InputPort};
 
-use crate::request_worker::RequestWorker;
 use crate::shared_types::{
-    Globals, RequestFailedReason, SafeGlobals, SendFailedReason, ServerStats, TargetServer,
-    REQUEST_FAILED_BAD_REQUEST_HTTP, SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_STATUS,
+    GlobalsProxyMT, GlobalsProxyST, RequestFailedReason, SendFailedReason, ServerStats,
+    TargetServer, REQUEST_FAILED_BAD_REQUEST_HTTP, SEND_FAILED_RESP_HTTP_STATUS,
+    SEND_FAILED_UNSPECIFIED_STATUS,
 };
+use crate::workers::RequestWorker;
 
 use bitflags::bitflags;
 
@@ -67,7 +68,7 @@ impl NetmonMsg {
 pub type NetmonEvent = u8;
 pub const EVENT_GLOBALS_AUDIT: u8 = 1; // Periodic read-only audit of the globals. May trig other events.
 pub const EVENT_REPORT_REQ_FAILED: u8 = 2; // proxy_server reporting stats on a request dropped (not sent after retries).
-pub const EVENT_REPORT_TGT_REQ_RESP_OK: u8 = 3; // proxy_server reporting stats on a successul request/response.
+pub const EVENT_REPORT_TGT_REQ_RESP_OK: u8 = 3; // proxy_server reporting stats on a successful request/response.
 pub const EVENT_REPORT_TGT_REQ_RESP_ERR: u8 = 4; // proxy_server reporting stats on a response indicating an error.
 pub const EVENT_REPORT_TGT_SEND_FAILED: u8 = 5; // proxy_server reporting stats on a failed send attempt.
 pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 6; // Start an async health check (a request/response test) for one server.
@@ -115,7 +116,7 @@ impl MonitorData {
 }
 
 pub struct NetworkMonitor {
-    globals: Globals,
+    globals: GlobalsProxyMT,
     netmon_rx: NetMonRx,
     mon_map: HashMap<(InputPortIdx, TargetServerIdx), MonitorData>,
 }
@@ -256,7 +257,7 @@ impl<'a> ProxyHandlerReport<'a> {
     pub async fn http_response_error(
         &mut self,
         server_idx: &u8,
-        req_inititation_time: EpochTimestamp,
+        req_initiation_time: EpochTimestamp,
         _resp_received: EpochTimestamp,
         retry_count: u8,
         err: &reqwest::Error,
@@ -281,7 +282,7 @@ impl<'a> ProxyHandlerReport<'a> {
             let _ = self
                 .send_failed(
                     *server_idx,
-                    req_inititation_time,
+                    req_initiation_time,
                     SEND_FAILED_RESP_HTTP_STATUS,
                     status,
                 )
@@ -291,7 +292,7 @@ impl<'a> ProxyHandlerReport<'a> {
             let _ = self
                 .send_failed(
                     *server_idx,
-                    req_inititation_time,
+                    req_initiation_time,
                     SEND_FAILED_UNSPECIFIED_STATUS,
                     http::StatusCode::INTERNAL_SERVER_ERROR,
                 )
@@ -304,7 +305,7 @@ impl<'a> ProxyHandlerReport<'a> {
 }
 
 impl NetworkMonitor {
-    pub fn new(globals: Globals, netmon_rx: NetMonRx, _netmon_tx: NetMonTx) -> Self {
+    pub fn new(globals: GlobalsProxyMT, netmon_rx: NetMonRx, _netmon_tx: NetMonTx) -> Self {
         Self {
             globals,
             netmon_rx,

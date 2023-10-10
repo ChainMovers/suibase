@@ -1,5 +1,6 @@
 use super::ManagedVecUSize;
 
+#[derive(Clone)]
 pub struct AutoSizeVec<T> {
     data: Vec<Option<T>>,
 }
@@ -17,6 +18,9 @@ impl<T: Default> AutoSizeVec<T> {
     //
     // This allow multiple "loosely coupled" system to synchronized with
     // very fast lookup using the leader key/index.
+    //
+    // Use instead get_if_some() for read-only operations that do not
+    // create default T object if not already in the AutoSizeVec.
     //
     pub fn get(&mut self, leader_index: ManagedVecUSize) -> &T {
         let usize_index = usize::from(leader_index);
@@ -51,6 +55,15 @@ impl<T: Default> AutoSizeVec<T> {
             .unwrap()
     }
 
+    pub fn get_if_some(&self, leader_index: ManagedVecUSize) -> Option<&T> {
+        let usize_index = usize::from(leader_index);
+        // Extend the size of self.data if leader_index is out-of-bounds of self.data
+        if usize_index >= self.data.len() {
+            return None;
+        }
+        self.data[usize_index].as_ref()
+    }
+
     // Implement Iter and IterMut to iterate over the used cells.
     pub fn into_iter(self) -> impl Iterator<Item = (ManagedVecUSize, T)> {
         self.data
@@ -74,6 +87,12 @@ impl<T: Default> AutoSizeVec<T> {
                 cell.as_mut()
                     .map(|value| (index.try_into().unwrap(), value))
             })
+    }
+}
+
+impl Default for AutoSizeVec<u8> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

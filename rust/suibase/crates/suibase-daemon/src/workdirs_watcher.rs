@@ -7,13 +7,13 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::shared_types::{Workdir, Workdirs};
+use crate::shared_types::{GlobalsWorkdirsMT, Workdir};
 
 use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
 use notify::{PollWatcher, Watcher};
 
 pub struct WorkdirsWatcher {
-    workdirs: Workdirs,
+    workdirs: GlobalsWorkdirsMT,
     admctrl_tx: AdminControllerTx,
     tracking: AutoSizeVec<WorkdirTracking>,
 }
@@ -26,7 +26,7 @@ struct WorkdirTracking {
 }
 
 impl WorkdirsWatcher {
-    pub fn new(workdirs: Workdirs, admctrl_tx: AdminControllerTx) -> Self {
+    pub fn new(workdirs: GlobalsWorkdirsMT, admctrl_tx: AdminControllerTx) -> Self {
         Self {
             workdirs,
             admctrl_tx,

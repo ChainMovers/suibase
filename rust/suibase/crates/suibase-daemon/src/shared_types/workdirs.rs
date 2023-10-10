@@ -160,7 +160,7 @@ impl WorkdirProxyConfig {
         }
 
         // Remaining variables do not make sense in common files, so ignore them.
-        // TODO: Implement warning user for bad useage...
+        // TODO: Implement warning user for bad usage...
         if common {
             return Ok(());
         }
@@ -210,6 +210,7 @@ impl Default for WorkdirProxyConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct Workdir {
     idx: Option<ManagedVecUSize>,
     name: String,
@@ -264,14 +265,15 @@ impl Workdir {
     }
 }
 
-pub struct SafeWorkdirs {
+#[derive(Debug)]
+pub struct WorkdirsST {
     pub workdirs: ManagedVec<Workdir>,
     suibase_home: String,
     path: PathBuf,
     suibase_yaml_common: PathBuf,
 }
 
-impl SafeWorkdirs {
+impl WorkdirsST {
     pub fn new() -> Self {
         let home_dir = if let Some(home_dir) = home_dir() {
             home_dir
@@ -353,7 +355,7 @@ impl SafeWorkdirs {
     }
 }
 
-impl Default for SafeWorkdirs {
+impl Default for WorkdirsST {
     fn default() -> Self {
         Self::new()
     }
@@ -369,4 +371,4 @@ impl ManagedElement for Workdir {
     }
 }
 
-pub type Workdirs = Arc<tokio::sync::RwLock<SafeWorkdirs>>;
+pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<WorkdirsST>>;
