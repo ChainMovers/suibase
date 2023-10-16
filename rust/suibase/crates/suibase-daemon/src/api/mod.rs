@@ -10,5 +10,6 @@ mod api_server;
 mod def_header;
 mod def_methods;
 mod impl_general_api;
+mod impl_modules_api;
 mod impl_proxy_api;
 mod rpc_error;

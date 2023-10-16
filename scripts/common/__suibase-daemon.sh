@@ -514,3 +514,30 @@ notify_suibase_daemon_fs_change() {
   curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
 }
 export -f notify_suibase_daemon_fs_change
+
+notify_suibase_daemon_publish() {
+  # Best-effort notification to the suibase-daemon that a new modules
+  # was successfully published.
+  local _NAME=$1
+  local _ID=$2
+
+  if ! is_suibase_daemon_running; then
+    return
+  fi
+
+  if [ -z "$WORKDIR_NAME" ]; then
+    return
+  fi
+
+  local _HEADERS="Content-Type: application/json"
+
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"publish\",\"params\":{\"workdir\":\"$WORKDIR_NAME\", \"module_name\": \"$_NAME\", \"module_id\": \"$_ID\"}}"
+
+  #curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
+  _RESULT=$(curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+  update_JSON_VALUE "success" "$_RESULT"
+  if [ "$JSON_VALUE" != "true" ]; then
+    warn_user "notify_suibase_daemon_publish failed: [$_RESULT] [$JSON_VALUE]"
+  fi
+}
+export -f notify_suibase_daemon_publish

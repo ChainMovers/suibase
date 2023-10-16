@@ -10167,7 +10167,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.11.1"
+version = "1.11.0"
 dependencies = [
  "bcs",
  "schemars",
@@ -10227,7 +10227,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.11.1"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "async-trait",

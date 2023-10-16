@@ -4,7 +4,7 @@
 
 # Intended to be sourced only in __workdir-exec.sh
 
-publish_local() {
+publish_all() {
 
   local _PASSTHRU_OPTIONS="${*}"
 
@@ -88,7 +88,10 @@ publish_local() {
   echo "]" >>"$INSTALL_DIR/created-objects.json"
 
   # Load back the package-id.json from the file for validation
-  _ID_PACKAGE=$(sed 's/\[//g; s/\]//g; s/"//g;' "$INSTALL_DIR/package-id.json")
+  local _ID_PACKAGE
+  if [ -f "$INSTALL_DIR/package-id.json" ]; then
+    _ID_PACKAGE=$(sed 's/\[//g; s/\]//g; s/"//g;' "$INSTALL_DIR/package-id.json")
+  fi
 
   # echo "Package ID=[$_ID_PACKAGE]"
 
@@ -111,5 +114,8 @@ publish_local() {
   echo "Package ID is $JSON_STR"
   echo "Also written in [$INSTALL_DIR/package-id.json]"
   echo "Publication Successful"
+
+  # Push new information to suibase-daemon.
+  notify_suibase_daemon_publish "$MOVE_TOML_PACKAGE_NAME" "$_ID_PACKAGE"
 }
-export -f publish_local
+export -f publish_all

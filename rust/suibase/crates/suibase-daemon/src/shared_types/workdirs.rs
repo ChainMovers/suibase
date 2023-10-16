@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+use super::Globals;
+
 // List of workdir planned to be always supported.
 pub const WORKDIRS_KEYS: [&str; 4] = ["mainnet", "testnet", "devnet", "localnet"];
 
@@ -266,14 +268,14 @@ impl Workdir {
 }
 
 #[derive(Debug)]
-pub struct WorkdirsST {
+pub struct GlobalsWorkdirsST {
     pub workdirs: ManagedVec<Workdir>,
     suibase_home: String,
     path: PathBuf,
     suibase_yaml_common: PathBuf,
 }
 
-impl WorkdirsST {
+impl GlobalsWorkdirsST {
     pub fn new() -> Self {
         let home_dir = if let Some(home_dir) = home_dir() {
             home_dir
@@ -341,7 +343,7 @@ impl WorkdirsST {
 
     // Given a path string, find the corresponding workdir object.
     // This also works if the string is simply the workdir name (e.g. "localnet").
-    pub fn find_workdir(&self, path: &str) -> Option<(ManagedVecUSize, &Workdir)> {
+    pub fn find_workdir(&self, path: &str) -> Option<(WorkdirIdx, &Workdir)> {
         // Remove the home_dir from the path.
         let path = path.trim_start_matches(&self.suibase_home);
         let path = path.trim_start_matches("/scripts/defaults/");
@@ -353,9 +355,31 @@ impl WorkdirsST {
         }
         None
     }
+
+    // Utility that returns the workdir_idx from the globals
+    // using an exact workdir_name.
+    //
+    // This is a multi-thread safe call (will get the proper
+    // lock on the globals).
+    //
+    // This is a relatively costly call, use wisely.
+    pub async fn find_workdir_idx_by_name(
+        globals: &Globals,
+        workdir_name: &String,
+    ) -> Option<WorkdirIdx> {
+        let workdirs_guard = globals.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        for (workdir_idx, workdir) in workdirs_vec.iter() {
+            if workdir.name() == workdir_name {
+                return Some(workdir_idx);
+            }
+        }
+        None
+    }
 }
 
-impl Default for WorkdirsST {
+impl Default for GlobalsWorkdirsST {
     fn default() -> Self {
         Self::new()
     }
@@ -370,5 +394,3 @@ impl ManagedElement for Workdir {
         self.idx = index;
     }
 }
-
-pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<WorkdirsST>>;

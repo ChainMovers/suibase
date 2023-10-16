@@ -6,7 +6,6 @@ use axum::async_trait;
 
 use anyhow::Result;
 
-//use clap::Indices;
 use futures::future::ok;
 use jsonrpsee::core::RpcResult;
 
@@ -15,12 +14,11 @@ use crate::admin_controller::{
 };
 use crate::basic_types::{TargetServerIdx, WorkdirIdx};
 use crate::shared_types::{
-    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsStatusOneWorkdirST, ServerStats, TargetServer,
-    UuidST, Workdir,
+    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsWorkdirStatusST, GlobalsWorkdirsST,
+    ServerStats, TargetServer, UuidST, Workdir,
 };
 
-use super::{GeneralApiServer, RpcServerError, StatusResponse, StatusService};
-use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
+use super::{GeneralApiServer, RpcInputError, RpcServerError, StatusResponse, StatusService};
 
 use super::def_header::{Header, Versioned};
 
@@ -239,22 +237,21 @@ impl GeneralApiServer for GeneralApiImpl {
         let data = data.unwrap_or(!(debug || display));
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = {
-            let workdirs_guard = self.globals.workdirs.read().await;
-            let workdirs = &*workdirs_guard;
-            let workdir_idx = match workdirs.find_workdir(workdir.as_str()) {
-                Some((workdir_idx, _workdir_object)) => workdir_idx,
-                None => {
-                    return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into())
-                }
-            };
-            workdir_idx
+        let workdir_idx = match GlobalsWorkdirsST::find_workdir_idx_by_name(&self.globals, &workdir)
+            .await
+        {
+            Some(workdir_idx) => workdir_idx,
+            None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
         // Initialize some of the header fields of the response.
         let mut resp = StatusResponse::new();
         resp.header.method = "getStatus".to_string();
         resp.header.key = Some(workdir.clone());
+
+        // TODO: Consider refactoring as follow:
+        //         get_data_if_no_change(request_uuids,resp)
+        //         set_data_when_changed(new_data: T,resp)
 
         // Check if GlobalsStatus need to be refresh, if not, then
         // just return what is already loaded in-memory.

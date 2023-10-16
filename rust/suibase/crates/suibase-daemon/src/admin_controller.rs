@@ -6,8 +6,8 @@ use crate::basic_types::*;
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
 use crate::shared_types::{
-    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsWorkdirsMT, InputPort, WorkdirProxyConfig,
-    WorkdirsST,
+    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsWorkdirsMT, GlobalsWorkdirsST, InputPort,
+    WorkdirProxyConfig,
 };
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
@@ -468,7 +468,7 @@ fn test_load_config_from_suibase_default() {
     // Note: More of a functional test. Suibase need to be installed.
 
     // Test a known "standard" localnet suibase.yaml
-    let workdirs = WorkdirsST::new();
+    let workdirs = GlobalsWorkdirsST::new();
     let mut path = std::path::PathBuf::from(workdirs.suibase_home());
     path.push("scripts");
     path.push("defaults");

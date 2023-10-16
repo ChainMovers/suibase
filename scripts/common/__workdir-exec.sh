@@ -707,24 +707,11 @@ workdir_exec() {
 
     # shellcheck source=SCRIPTDIR/__publish.sh
     source "$SUIBASE_DIR/scripts/common/__publish.sh"
-
-    if $is_local; then
-      # publication requires localnet to run.
-      # If stopped, then try (once) to start it.
-      update_SUI_PROCESS_PID_var
-      if [ "$SUI_PROCESS_PID" ]; then
-        publish_local "$PASSTHRU_OPTIONS"
-      else
-        start_all_services
-        if [ "$SUI_PROCESS_PID" ]; then
-          publish_local "$PASSTHRU_OPTIONS"
-        else
-          error_exit "Unable to start $WORKDIR"
-        fi
-      fi
-    else
-      publish_local "$PASSTHRU_OPTIONS"
+    start_all_services
+    if $is_local && [ -z "$SUI_PROCESS_PID" ]; then
+      error_exit "Unable to start $WORKDIR"
     fi
+    publish_all "$PASSTHRU_OPTIONS"
     exit
   fi
 

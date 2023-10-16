@@ -4,17 +4,16 @@
 //
 // Simple design:
 //
-//  - A single "all encompassing" RwLock for most global variables shared between the subsystems/threads
+//  - Group of global variables shared between the subsystems/threads
 //    (AdminController, NetworkMonitor, ProxyServer etc...)
 //
-//  - Each thread get a reference count (Arc) on the same 'SafeGlobal' instance.
+//  - Each thread get a reference count (Arc) on the same 'multi-thread 'MT' instance.
 //
-//  - A thread can choose read/write access to that 'SafeGlobal'
+//  - A thread can lock read/write access on the single writer thread 'ST' instance.
 //
 //  - Although globals are not encouraged, they are carefully used here in a balanced way
 //    and as a stepping stone toward a more optimized design. Ask the dev for more details.
 //
-
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
@@ -22,7 +21,7 @@ use crate::api::{StatusResponse, Versioned};
 use crate::basic_types::{AutoSizeVec, ManagedVec};
 use crate::shared_types::InputPort;
 
-use super::{GlobalsWorkdirsMT, WorkdirsST};
+use super::{GlobalsEventsDataST, GlobalsModulesConfigST, GlobalsWorkdirsST};
 
 #[derive(Debug)]
 pub struct GlobalsProxyST {
@@ -54,7 +53,7 @@ impl Default for GlobalsProxyST {
 }
 
 #[derive(Debug, Clone)]
-pub struct GlobalsStatusOneWorkdirST {
+pub struct GlobalsWorkdirStatusST {
     // Mostly store everything in the same struct
     // as the response of the GetStatus API. That way,
     // the UI queries can be served very quickly.
@@ -62,7 +61,7 @@ pub struct GlobalsStatusOneWorkdirST {
     pub last_ui_update: tokio::time::Instant,
 }
 
-impl GlobalsStatusOneWorkdirST {
+impl GlobalsWorkdirStatusST {
     pub fn new() -> Self {
         Self {
             ui: None,
@@ -71,7 +70,7 @@ impl GlobalsStatusOneWorkdirST {
     }
 }
 
-impl std::default::Default for GlobalsStatusOneWorkdirST {
+impl std::default::Default for GlobalsWorkdirStatusST {
     fn default() -> Self {
         Self::new()
     }
@@ -80,7 +79,7 @@ impl std::default::Default for GlobalsStatusOneWorkdirST {
 #[derive(Debug, Clone)]
 pub struct GlobalsStatusST {
     // One per workdir, WorkdirIdx maintained by workdirs.
-    pub workdirs: AutoSizeVec<GlobalsStatusOneWorkdirST>,
+    pub workdirs: AutoSizeVec<GlobalsWorkdirStatusST>,
 }
 
 impl GlobalsStatusST {
@@ -144,15 +143,31 @@ impl Default for GlobalsConfigST {
 pub type GlobalsProxyMT = Arc<tokio::sync::RwLock<GlobalsProxyST>>;
 pub type GlobalsStatusMT = Arc<tokio::sync::RwLock<GlobalsStatusST>>;
 pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsConfigST>>;
+pub type GlobalsModulesConfigMT = Arc<tokio::sync::RwLock<GlobalsModulesConfigST>>;
+pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
+pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
 
 // A convenient way to refer to all globals at once.
 // Note: clone() conveniently increment the reference count of every field (ARC).
 #[derive(Debug, Clone)]
 pub struct Globals {
+    // proxy server health status and various stats
     pub proxy: GlobalsProxyMT,
+
+    // Configuration that rarely changes driven by suibase.yaml files (e.g. port of this daemon).
     pub config: GlobalsConfigMT,
+
+    // All workdirs path locations and user controlled state (e.g. is localnet started by the user?).
     pub workdirs: GlobalsWorkdirsMT,
+
+    // All workdirs status as presented on the UI (e.g. which process are running, is the localnet down?)
     pub status: GlobalsStatusMT,
+
+    // Configuration related to Sui Move modules, particularly for monitoring management.
+    pub modules_config: GlobalsModulesConfigMT,
+
+    // In-memory access to events data of actively monitored modules.
+    pub events_data: GlobalsEventsDataMT,
 }
 
 impl Globals {
@@ -160,8 +175,10 @@ impl Globals {
         Self {
             proxy: Arc::new(tokio::sync::RwLock::new(GlobalsProxyST::new())),
             config: Arc::new(tokio::sync::RwLock::new(GlobalsConfigST::new())),
-            workdirs: Arc::new(tokio::sync::RwLock::new(WorkdirsST::new())),
+            workdirs: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirsST::new())),
             status: Arc::new(tokio::sync::RwLock::new(GlobalsStatusST::new())),
+            modules_config: Arc::new(tokio::sync::RwLock::new(GlobalsModulesConfigST::new())),
+            events_data: Arc::new(tokio::sync::RwLock::new(GlobalsEventsDataST::new())),
         }
     }
 }

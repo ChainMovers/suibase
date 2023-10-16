@@ -216,6 +216,71 @@ impl Default for StatusResponse {
     }
 }
 
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiEvents {
+    pub message: String,
+    pub timestamp: String,
+}
+
+impl SuiEvents {
+    pub fn new(label: String) -> Self {
+        Self {
+            message: label,
+            timestamp: "".to_string(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiEventsResponse {
+    pub header: Header,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<Vec<SuiEvents>>,
+}
+
+impl SuiEventsResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            events: None,
+        }
+    }
+}
+
+impl Default for SuiEventsResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessResponse {
+    pub header: Header,
+    pub success: bool,
+}
+
+impl SuccessResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            success: false,
+        }
+    }
+}
+
+impl Default for SuccessResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[rpc(server)]
 pub trait ProxyApi {
     /// Returns data about all the RPC/Websocket links
@@ -238,6 +303,67 @@ pub trait ProxyApi {
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
 }
 
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleConfig {
+    pub name: Option<String>, // "localnet process", "proxy server", "multi-link RPC" etc...
+    pub id: Option<String>,   // OK, DOWN, DEGRADED
+}
+
+impl ModuleConfig {
+    pub fn new() -> Self {
+        Self {
+            name: None,
+            id: None,
+        }
+    }
+}
+
+impl Default for ModuleConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModulesConfigResponse {
+    pub header: Header,
+
+    // Last publish instance of each module.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modules: Option<Vec<ModuleConfig>>,
+
+    // This is the output when the option 'display' is true.
+    // Will also change the default to false for all the other fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+
+    // This is the output when the option 'debug' is true.
+    // Will also change the default to true for the other fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>,
+}
+
+impl ModulesConfigResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            modules: None,
+            display: None,
+            debug: None,
+        }
+    }
+}
+
+impl Default for ModulesConfigResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[rpc(server)]
 pub trait GeneralApi {
     #[method(name = "getStatus")]
@@ -250,4 +376,34 @@ pub trait GeneralApi {
         method_uuid: Option<String>,
         data_uuid: Option<String>,
     ) -> RpcResult<StatusResponse>;
+}
+
+#[rpc(server)]
+pub trait ModulesApi {
+    #[method(name = "getEvents")]
+    async fn get_events(
+        &self,
+        workdir: String,
+        after_ts: Option<String>,
+        last_ts: Option<String>,
+    ) -> RpcResult<SuiEventsResponse>;
+
+    #[method(name = "getModulesConfig")]
+    async fn get_modules_config(
+        &self,
+        workdir: String,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+        method_uuid: Option<String>,
+        data_uuid: Option<String>,
+    ) -> RpcResult<ModulesConfigResponse>;
+
+    #[method(name = "publish")]
+    async fn publish(
+        &self,
+        workdir: String,
+        module_name: String,
+        module_id: String,
+    ) -> RpcResult<SuccessResponse>;
 }

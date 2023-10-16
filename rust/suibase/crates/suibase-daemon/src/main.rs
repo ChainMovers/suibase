@@ -9,6 +9,8 @@
 //     - AdminController: The thread validating and applying the config changes.
 //     - NetworkMonitor: Maintains remote server stats. Info coming from multiple sources (on a mpsc channel).
 //     - APIServer: Does limited "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
+//     - EventsMonitor: Manage connection(s) to receive/dedup Sui events. Data written to FS (SQLite) for
+//                      every distinct workdir and modules.
 //     - ClockTrigger: Send periodic events (network stats recalculation, watchdog etc...)
 //
 // Other threads (not started here):
@@ -53,7 +55,7 @@ use tokio_graceful_shutdown::Toplevel;
 use crate::admin_controller::AdminController;
 use crate::api::APIServer;
 use crate::network_monitor::NetworkMonitor;
-use crate::shared_types::{GlobalsProxyMT, GlobalsProxyST, GlobalsWorkdirsMT, WorkdirsST};
+use crate::shared_types::{GlobalsProxyMT, GlobalsProxyST, GlobalsWorkdirsMT, GlobalsWorkdirsST};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]

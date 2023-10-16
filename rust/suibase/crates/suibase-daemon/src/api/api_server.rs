@@ -25,6 +25,9 @@ use crate::api::impl_general_api::GeneralApiImpl;
 use super::ProxyApiServer;
 use crate::api::impl_proxy_api::ProxyApiImpl;
 
+use super::ModulesApiServer;
+use crate::api::impl_modules_api::ModulesApiImpl;
+
 use hyper::Method;
 use jsonrpsee::{
     core::server::rpc_module::Methods,
@@ -119,17 +122,28 @@ impl JSONRPCServer {
 
         let mut all_methods = Methods::new();
 
-        let proxy_api = ProxyApiImpl::new(self.globals.proxy.clone(), self.admctrl_tx.clone());
-        let proxy_methods = proxy_api.into_rpc();
-
-        if let Err(e) = all_methods.merge(proxy_methods) {
-            log::error!("Error merging proxy_methods: {}", e);
+        {
+            let api = ProxyApiImpl::new(self.globals.proxy.clone(), self.admctrl_tx.clone());
+            let methods = api.into_rpc();
+            if let Err(e) = all_methods.merge(methods) {
+                log::error!("Error merging ProxyApiImpl methods: {}", e);
+            }
         }
 
-        let general_api = GeneralApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
-        let general_methods = general_api.into_rpc();
-        if let Err(e) = all_methods.merge(general_methods) {
-            log::error!("Error merging general_methods: {}", e);
+        {
+            let api = GeneralApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
+            let methods = api.into_rpc();
+            if let Err(e) = all_methods.merge(methods) {
+                log::error!("Error merging GeneralApiImpl methods: {}", e);
+            }
+        }
+
+        {
+            let api = ModulesApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
+            let methods = api.into_rpc();
+            if let Err(e) = all_methods.merge(methods) {
+                log::error!("Error merging ModulesApiImpl methods: {}", e);
+            }
         }
 
         let start_result = server.start(all_methods);
