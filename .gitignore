@@ -36,6 +36,9 @@ tmp
 .pre-commit*
 
 # Move build files
+**/build/**/sources/*
+**/build/**/BuildInfo.yaml
+*.mvsm
 *.mv
 output.bpl
 
