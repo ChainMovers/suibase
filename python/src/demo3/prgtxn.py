@@ -16,10 +16,9 @@
 """Demonstrate Programmable Transactions."""
 
 from pysui.abstracts import SignatureScheme
+from pysui import SyncClient, SuiConfig
+from pysui.sui.sui_txn import SyncTransaction
 from pysui.sui.sui_types.address import SuiAddress
-from pysui.sui.sui_config import SuiConfig
-from pysui.sui.sui_clients.sync_client import SuiClient
-from pysui.sui.sui_clients.transaction import SuiTransaction
 from pysui.sui.sui_txresults.single_tx import SuiCoinObject
 from pysui.sui.sui_clients.common import handle_result
 
@@ -27,7 +26,7 @@ from pysui.sui.sui_clients.common import handle_result
 from src.common.demo_utils import first_address_for_keytype
 
 
-def main(client: SuiClient):
+def main(client: SyncClient):
     """Entry point for demo.
 
     This demonstrates using pysui Programmable Transaction (SuiTransaction).
@@ -42,7 +41,7 @@ def main(client: SuiClient):
 
     # Setup the Transaction Builder using the client
     # By default, the 'sender' is set to client.config.active-address
-    tx_builder = SuiTransaction(client)
+    tx_builder = SyncTransaction(client)
     # We reset sender to the 'from_address'
     from_address = SuiAddress(from_address)
     tx_builder.signer_block.sender = from_address
@@ -53,10 +52,14 @@ def main(client: SuiClient):
     # Get it's balance and convert to int
     a_coin_balance = int(a_coin.balance)
 
-    print(f"Transferring 50% of coin: {a_coin.coin_object_id} from address: {from_address} to address: {to_address}")
+    print(
+        f"Transferring 50% of coin: {a_coin.coin_object_id} from address: {from_address} to address: {to_address}"
+    )
     # Construct a split coin for 50% of a_coin
     # We want the result as input into the subsequent transfer
-    split_coin = tx_builder.split_coin(coin=a_coin.coin_object_id, amounts=int(a_coin_balance / 2))
+    split_coin = tx_builder.split_coin(
+        coin=a_coin.coin_object_id, amounts=int(a_coin_balance / 2)
+    )
     # Construct a transfer to send the result of splitting out the coin
     # to the recipient
     tx_builder.transfer_objects(transfers=split_coin, recipient=SuiAddress(to_address))
@@ -82,4 +85,4 @@ def main(client: SuiClient):
 
 
 if __name__ == "__main__":
-    main(SuiClient(SuiConfig.sui_base_config()))
+    main(SyncClient(SuiConfig.sui_base_config()))

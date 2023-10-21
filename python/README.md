@@ -16,7 +16,7 @@ $ cd ~/suibase/python
 $ python3 -m venv env
 $ . env/bin/activate
 $ pip install -U pip
-$ pip install --use-pep517 -r requirements.txt
+$ pip install -r requirements.txt
 ```
 
 ## Demo's

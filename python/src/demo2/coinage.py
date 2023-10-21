@@ -18,14 +18,13 @@
 
 import json
 
-from pysui.sui.sui_config import SuiConfig
+from pysui import SuiConfig, SyncClient
 from pysui.sui.sui_clients.common import handle_result
-from pysui.sui.sui_clients.sync_client import SuiClient
 from pysui.sui.sui_builders.get_builders import GetAllCoins
 from pysui.sui.sui_txresults.single_tx import SuiCoinObjects
 
 
-def coin(client: SuiClient) -> None:
+def coin(client: SyncClient) -> None:
     """Summarize, by address by coin type, count of coin and balance
 
     It organizes the information in a dict structure:
@@ -37,11 +36,13 @@ def coin(client: SuiClient) -> None:
     }
 
     Args:
-        client (SuiClient): The interface to the Sui RPC API.
+        client (SyncClient): The interface to the Sui RPC API.
     """
     summary = {}
     for address in client.config.addresses:
-        coin_type_list: SuiCoinObjects = handle_result(client.execute(GetAllCoins(owner=address)))
+        coin_type_list: SuiCoinObjects = handle_result(
+            client.execute(GetAllCoins(owner=address))
+        )
         coin_collection = {}
         for coinage in coin_type_list.data:
             if coinage.coin_type in coin_collection:
@@ -54,12 +55,14 @@ def coin(client: SuiClient) -> None:
     print(json.dumps(summary, indent=2))
 
 
-def main(client: SuiClient):
+def main(client: SyncClient):
     """Entry point for demo."""
     addy_keypair = client.config.keypair_for_address(client.config.active_address)
-    print(f"Active address: {client.config.active_address} public-key: {addy_keypair.public_key}")
+    print(
+        f"Active address: {client.config.active_address} public-key: {addy_keypair.public_key}"
+    )
     coin(client)
 
 
 if __name__ == "__main__":
-    main(SuiClient(SuiConfig.sui_base_config()))
+    main(SyncClient(SuiConfig.sui_base_config()))

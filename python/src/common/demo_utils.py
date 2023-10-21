@@ -15,17 +15,18 @@
 # -*- coding: utf-8 -*-
 
 """Common demo utilities shared across demo apps."""
-import sys
+
+from pysui import SyncClient, SuiAddress
 from pysui.abstracts import SignatureScheme, KeyPair
-from pysui.sui.sui_clients.sync_client import SuiClient
-from pysui.sui.sui_types.address import SuiAddress
 
 
-def first_address_for_keytype(client: SuiClient, keytype: SignatureScheme) -> tuple[str, KeyPair]:
+def first_address_for_keytype(
+    client: SyncClient, keytype: SignatureScheme
+) -> tuple[str, KeyPair]:
     """Get a SuiAddress and KeyPair tuple for specific keytype.
 
     Args:
-        client (SuiClient): Use the configuration from a specific SuiClient provider
+        client (SyncClient): Use the configuration from a specific SyncClient provider
         keytype (SignatureScheme): Indicate the key type to filter on
 
     Raises:
@@ -34,8 +35,11 @@ def first_address_for_keytype(client: SuiClient, keytype: SignatureScheme) -> tu
     Returns:
         tuple[str, KeyPair]: A matching address string and keypair of first found tuple
     """
-    filtered: tuple[SuiAddress, KeyPair] = [(k, v) for (k, v) in client.config.addresses_and_keys.items()
-                                            if v.scheme == keytype]
+    filtered: tuple[SuiAddress, KeyPair] = [
+        (k, v)
+        for (k, v) in client.config.addresses_and_keys.items()
+        if v.scheme == keytype
+    ]
     if filtered:
         return filtered[0]
     raise ValueError(f"No keypair type of {keytype.as_str()}")
