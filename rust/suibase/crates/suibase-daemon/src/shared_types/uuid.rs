@@ -6,15 +6,8 @@
 //
 // SingleThreadUUID is same, except the user is responsible for Mutex access.
 //
-use std::sync::{Arc, Mutex};
-use uuid::{Uuid, Variant, Version};
-use uuid7::{uuid7, V7Generator};
-
-#[cfg(not(test))]
-use log::{info, warn};
-
-#[cfg(test)]
-use std::{println as info, println as warn};
+use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct UuidST {
@@ -47,6 +40,20 @@ impl UuidST {
         }
         self.data_uuid = new_data_uuid;
     }
+
+    pub fn get_method_uuid(&self) -> String {
+        Self::short_uuid_string(&self.method_uuid)
+    }
+
+    pub fn get_data_uuid(&self) -> String {
+        Self::short_uuid_string(&self.data_uuid)
+    }
+
+    fn short_uuid_string(uuid: &Uuid) -> String {
+        // Make the uuid shorter with Base32 Hex encoding (RFC4648).
+        // This UUID remains lexicographically sortable.
+        data_encoding::BASE32HEX_NOPAD.encode(uuid.as_bytes())
+    }
 }
 
 impl Default for UuidST {
@@ -69,14 +76,18 @@ mod tests {
         let mut locked_uuid = mt_safe_uuid.lock().await;
         let mut prev_data_uuid = locked_uuid.data_uuid;
         let initial_method_uuid = locked_uuid.method_uuid;
+        let mut prev_uuid_obj = locked_uuid.clone();
         for _ in 0..100000 {
             locked_uuid.increment();
             let (method_uuid, data_uuid) = locked_uuid.get();
 
             assert_eq!(method_uuid, initial_method_uuid);
             assert!(data_uuid > prev_data_uuid);
+            // Verify lexicographic sorting of strings.
+            assert!(locked_uuid.get_data_uuid() > prev_uuid_obj.get_data_uuid());
 
             prev_data_uuid = data_uuid;
+            prev_uuid_obj = locked_uuid.clone();
         }
     }
 
@@ -86,10 +97,16 @@ mod tests {
         let mt_safe_uuid = Arc::new(tokio::sync::Mutex::new(single_thread_uuid));
         let mt_safe_uuid_clone = mt_safe_uuid.clone();
 
-        let (initial_method_uuid, mut prev_data_uuid) = {
+        let (initial_method_uuid, mut prev_data_uuid, mut prev_uuid_obj) = {
             let locked_uuid = mt_safe_uuid.lock().await;
-            (locked_uuid.method_uuid, locked_uuid.data_uuid)
+            (
+                locked_uuid.method_uuid,
+                locked_uuid.data_uuid,
+                locked_uuid.clone(),
+            )
         };
+
+        let mut prev_uuid_obj_clone = prev_uuid_obj.clone();
 
         let (_result1, _result2) = tokio::join!(
             async move {
@@ -100,8 +117,10 @@ mod tests {
 
                     assert_eq!(method_uuid, initial_method_uuid);
                     assert!(data_uuid > prev_data_uuid);
+                    assert!(locked_uuid.get_data_uuid() > prev_uuid_obj.get_data_uuid());
 
                     prev_data_uuid = data_uuid;
+                    prev_uuid_obj = locked_uuid.clone();
                 }
             },
             async move {
@@ -112,8 +131,10 @@ mod tests {
 
                     assert_eq!(method_uuid, initial_method_uuid);
                     assert!(data_uuid > prev_data_uuid);
+                    assert!(locked_uuid.get_data_uuid() > prev_uuid_obj_clone.get_data_uuid());
 
                     prev_data_uuid = data_uuid;
+                    prev_uuid_obj_clone = locked_uuid.clone();
                 }
             }
         );
@@ -133,6 +154,8 @@ mod tests {
             assert!(a <= same_a);
             assert!(a >= same_a);
             assert_eq!(same_a, same_a);
+            assert_eq!(same_a.get_data_uuid(), a.get_data_uuid());
+            assert_eq!(same_a.get_method_uuid(), a.get_method_uuid());
 
             // Repeat same cloning tests with individual components with get()
             let (a_method_uuid, a_data_uuid) = a.get();

@@ -1,18 +1,18 @@
 use crate::{
-    api::{ModulesConfigResponse, SuiEvents, Versioned},
+    api::{PackagesConfigResponse, Versioned},
     basic_types::AutoSizeVec,
 };
 
 #[derive(Debug, Clone)]
-pub struct ModulesWorkdirConfig {
+pub struct PackagesWorkdirConfig {
     // Mostly store everything in the same struct
     // as the response of the GetEventsConfig API. That way,
     // the UI queries can be served very quickly.
-    pub ui: Option<Versioned<ModulesConfigResponse>>,
+    pub ui: Option<Versioned<PackagesConfigResponse>>,
     pub last_ui_update: tokio::time::Instant,
 }
 
-impl ModulesWorkdirConfig {
+impl PackagesWorkdirConfig {
     pub fn new() -> Self {
         Self {
             ui: None,
@@ -21,19 +21,19 @@ impl ModulesWorkdirConfig {
     }
 }
 
-impl std::default::Default for ModulesWorkdirConfig {
+impl std::default::Default for PackagesWorkdirConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct GlobalsModulesConfigST {
+pub struct GlobalsPackagesConfigST {
     // One per workdir, WorkdirIdx maintained by workdirs.
-    pub workdirs: AutoSizeVec<ModulesWorkdirConfig>,
+    pub workdirs: AutoSizeVec<PackagesWorkdirConfig>,
 }
 
-impl GlobalsModulesConfigST {
+impl GlobalsPackagesConfigST {
     pub fn new() -> Self {
         Self {
             workdirs: AutoSizeVec::new(),
@@ -41,7 +41,7 @@ impl GlobalsModulesConfigST {
     }
 }
 
-impl Default for GlobalsModulesConfigST {
+impl Default for GlobalsPackagesConfigST {
     fn default() -> Self {
         Self::new()
     }

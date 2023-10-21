@@ -1,9 +1,7 @@
 use std::process::Command;
 
 use crate::{
-    admin_controller::{
-        self, AdminController, AdminControllerMsg, AdminControllerRx, EVENT_SHELL_EXEC,
-    },
+    admin_controller::{self, AdminControllerMsg, AdminControllerRx},
     basic_types::WorkdirIdx,
     shared_types::Globals,
 };

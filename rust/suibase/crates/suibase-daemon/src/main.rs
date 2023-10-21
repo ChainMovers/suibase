@@ -1,6 +1,5 @@
 // TODO WIP Re-enable these clippy warnings after initial development writing completed.
 #![allow(dead_code)]
-#![allow(unused_imports)]
 
 // main.rs does:
 //  - Validate command line.
@@ -26,7 +25,6 @@
 //
 //  - JSONRPCServer: Handles API requests. Mostly read statistics from Globals and apply user action by
 //                   exchanging messages with the AdminController. (re)started/stopped by the APIServer.
-use std::sync::Arc;
 
 use anyhow::Result;
 
@@ -47,7 +45,7 @@ mod shared_types;
 mod workdirs_watcher;
 mod workers;
 
-use shared_types::{Globals, GlobalsStatusMT, GlobalsStatusST};
+use shared_types::Globals;
 use tokio::time::Duration;
 
 use tokio_graceful_shutdown::Toplevel;
@@ -55,7 +53,6 @@ use tokio_graceful_shutdown::Toplevel;
 use crate::admin_controller::AdminController;
 use crate::api::APIServer;
 use crate::network_monitor::NetworkMonitor;
-use crate::shared_types::{GlobalsProxyMT, GlobalsProxyST, GlobalsWorkdirsMT, GlobalsWorkdirsST};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]

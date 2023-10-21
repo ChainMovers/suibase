@@ -9,7 +9,8 @@ version = "0.0.3"
 edition = "2021"
 
 [workspace.dependencies]
-
+data-encoding = "2.4.0"
+chrono = "0.4.31" 
 futures = "0.3.25"
 
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
@@ -18,6 +19,7 @@ jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b3007847
     "jsonrpsee-core",
 ] }
 jsonrpsee-proc-macros = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
+md5 = "0.7"
 schemars = { version = "0.8.10", features = ["either"] }
 serde_with = { version = "2.1.0", features = ["hex"] }
 serde_json = { version = "1.0.95", features = [

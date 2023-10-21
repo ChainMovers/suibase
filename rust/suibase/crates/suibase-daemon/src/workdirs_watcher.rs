@@ -1,5 +1,4 @@
-use crate::basic_types::{AutoSizeVec, WorkdirIdx};
-use std::path::Path;
+use crate::basic_types::AutoSizeVec;
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
@@ -9,7 +8,7 @@ use crate::admin_controller::{
 };
 use crate::shared_types::{GlobalsWorkdirsMT, Workdir};
 
-use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
+use notify::RecursiveMode;
 use notify::{PollWatcher, Watcher};
 
 pub struct WorkdirsWatcher {

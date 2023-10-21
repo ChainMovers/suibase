@@ -518,8 +518,9 @@ export -f notify_suibase_daemon_fs_change
 notify_suibase_daemon_publish() {
   # Best-effort notification to the suibase-daemon that a new modules
   # was successfully published.
-  local _NAME=$1
-  local _ID=$2
+  local _TOML_PATH=$1
+  local _NAME=$2
+  local _ID=$3
 
   if ! is_suibase_daemon_running; then
     return
@@ -531,7 +532,7 @@ notify_suibase_daemon_publish() {
 
   local _HEADERS="Content-Type: application/json"
 
-  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"publish\",\"params\":{\"workdir\":\"$WORKDIR_NAME\", \"module_name\": \"$_NAME\", \"module_id\": \"$_ID\"}}"
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"publish\",\"params\":{\"workdir\":\"$WORKDIR_NAME\", \"move_toml_path\": \"$_TOML_PATH\", \"package_id\": \"$_ID\", \"package_name\": \"$_NAME\"}}"
 
   #curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
   _RESULT=$(curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")

@@ -1,4 +1,5 @@
-use hyper::header;
+use std::collections::HashMap;
+
 // Defines the JSON-RPC API.
 //
 // Design:
@@ -264,6 +265,8 @@ impl Default for SuiEventsResponse {
 pub struct SuccessResponse {
     pub header: Header,
     pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub info: Option<String>,
 }
 
 impl SuccessResponse {
@@ -271,11 +274,132 @@ impl SuccessResponse {
         Self {
             header: Header::default(),
             success: false,
+            info: None,
         }
     }
 }
 
 impl Default for SuccessResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiObjectInstance {
+    object_id: String,
+}
+
+impl SuiObjectInstance {
+    pub fn new(object_id: String) -> Self {
+        Self { object_id }
+    }
+    pub fn object_id(&self) -> &str {
+        &self.object_id
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageInstance {
+    pub package_id: String,
+    pub package_name: String,
+    pub init_objects: Option<Vec<SuiObjectInstance>>,
+}
+
+impl PackageInstance {
+    pub fn new(package_id: String, package_name: String) -> Self {
+        Self {
+            package_id,
+            package_name,
+            init_objects: None,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveConfig {
+    // The key is the "output_dir" defined in the Suibase.toml.
+
+    // Last reported location of the .toml files.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+
+    // Last publish instance of the package.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_package: Option<PackageInstance>,
+
+    // Packages previously published (does not include the current).
+    // Useful for tracking older package id for debug browsing.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub older_packages: Vec<PackageInstance>,
+}
+
+impl MoveConfig {
+    pub fn new() -> Self {
+        Self {
+            path: None,
+            latest_package: None,
+            older_packages: Vec::new(),
+        }
+    }
+}
+
+impl Default for MoveConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackagesConfigResponse {
+    pub header: Header,
+
+    // One entry per distinct Move.toml published.
+    //
+    // Hashmap Jey is a base32+md5sum of the "output_dir" defined
+    // in the Suibase.toml co-located with the Move.toml.
+    //
+    // For each MoveConfig, zero or more package instances
+    // might have been published. MoveConfig keep track of
+    // the latest instance.
+    //
+    // Among the move_configs, there is an additional constraint:
+    //   - The MoveConfig.path must all be distinct.
+    //
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub move_configs: Option<HashMap<String, MoveConfig>>,
+
+    // This is the output when the option 'display' is true.
+    // Will also change the default to false for all the other fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+
+    // This is the output when the option 'debug' is true.
+    // Will also change the default to true for the other fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>,
+}
+
+impl PackagesConfigResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            move_configs: None,
+            display: None,
+            debug: None,
+        }
+    }
+}
+
+impl Default for PackagesConfigResponse {
     fn default() -> Self {
         Self::new()
     }
@@ -303,67 +427,6 @@ pub trait ProxyApi {
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
 }
 
-#[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ModuleConfig {
-    pub name: Option<String>, // "localnet process", "proxy server", "multi-link RPC" etc...
-    pub id: Option<String>,   // OK, DOWN, DEGRADED
-}
-
-impl ModuleConfig {
-    pub fn new() -> Self {
-        Self {
-            name: None,
-            id: None,
-        }
-    }
-}
-
-impl Default for ModuleConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ModulesConfigResponse {
-    pub header: Header,
-
-    // Last publish instance of each module.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub modules: Option<Vec<ModuleConfig>>,
-
-    // This is the output when the option 'display' is true.
-    // Will also change the default to false for all the other fields.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<String>,
-
-    // This is the output when the option 'debug' is true.
-    // Will also change the default to true for the other fields.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub debug: Option<String>,
-}
-
-impl ModulesConfigResponse {
-    pub fn new() -> Self {
-        Self {
-            header: Header::default(),
-            modules: None,
-            display: None,
-            debug: None,
-        }
-    }
-}
-
-impl Default for ModulesConfigResponse {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[rpc(server)]
 pub trait GeneralApi {
     #[method(name = "getStatus")]
@@ -379,7 +442,7 @@ pub trait GeneralApi {
 }
 
 #[rpc(server)]
-pub trait ModulesApi {
+pub trait PackagesApi {
     #[method(name = "getEvents")]
     async fn get_events(
         &self,
@@ -388,8 +451,8 @@ pub trait ModulesApi {
         last_ts: Option<String>,
     ) -> RpcResult<SuiEventsResponse>;
 
-    #[method(name = "getModulesConfig")]
-    async fn get_modules_config(
+    #[method(name = "getPackagesConfig")]
+    async fn get_packages_config(
         &self,
         workdir: String,
         data: Option<bool>,
@@ -397,13 +460,14 @@ pub trait ModulesApi {
         debug: Option<bool>,
         method_uuid: Option<String>,
         data_uuid: Option<String>,
-    ) -> RpcResult<ModulesConfigResponse>;
+    ) -> RpcResult<PackagesConfigResponse>;
 
     #[method(name = "publish")]
     async fn publish(
         &self,
         workdir: String,
-        module_name: String,
-        module_id: String,
+        move_toml_path: String,
+        package_id: String,
+        package_name: String,
     ) -> RpcResult<SuccessResponse>;
 }

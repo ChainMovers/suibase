@@ -7,7 +7,6 @@
 //
 use home::home_dir;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::basic_types::*;
 

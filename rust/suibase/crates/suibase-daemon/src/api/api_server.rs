@@ -8,16 +8,12 @@
 // A JSONRPCServer owns a jsonrpsee Server to handle the JSON-RPC requests.
 // ( https://github.com/paritytech/jsonrpsee )
 
-use reqwest::Proxy;
-use tokio::time::{interval, Duration};
+use tokio::time::Duration;
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle, Toplevel};
 
-use crate::{
-    admin_controller::AdminControllerTx,
-    shared_types::{Globals, GlobalsProxyMT, GlobalsStatusMT},
-};
+use crate::{admin_controller::AdminControllerTx, shared_types::Globals};
 
 use super::GeneralApiServer;
 use crate::api::impl_general_api::GeneralApiImpl;
@@ -25,13 +21,13 @@ use crate::api::impl_general_api::GeneralApiImpl;
 use super::ProxyApiServer;
 use crate::api::impl_proxy_api::ProxyApiImpl;
 
-use super::ModulesApiServer;
-use crate::api::impl_modules_api::ModulesApiImpl;
+use super::PackagesApiServer;
+use crate::api::impl_packages_api::PackagesApiImpl;
 
 use hyper::Method;
 use jsonrpsee::{
     core::server::rpc_module::Methods,
-    server::{AllowHosts, RpcModule, Server, ServerBuilder},
+    server::{AllowHosts, ServerBuilder},
 };
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
@@ -139,7 +135,7 @@ impl JSONRPCServer {
         }
 
         {
-            let api = ModulesApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
+            let api = PackagesApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
             let methods = api.into_rpc();
             if let Err(e) = all_methods.merge(methods) {
                 log::error!("Error merging ModulesApiImpl methods: {}", e);

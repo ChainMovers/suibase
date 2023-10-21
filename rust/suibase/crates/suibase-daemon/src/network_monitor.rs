@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use crate::{basic_types::*, shared_types::InputPort};
 
 use crate::shared_types::{
-    GlobalsProxyMT, GlobalsProxyST, RequestFailedReason, SendFailedReason, ServerStats,
-    TargetServer, REQUEST_FAILED_BAD_REQUEST_HTTP, SEND_FAILED_RESP_HTTP_STATUS,
-    SEND_FAILED_UNSPECIFIED_STATUS,
+    GlobalsProxyMT, RequestFailedReason, SendFailedReason, ServerStats, TargetServer,
+    REQUEST_FAILED_BAD_REQUEST_HTTP, SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_STATUS,
 };
 use crate::workers::RequestWorker;
 

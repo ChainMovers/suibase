@@ -6,14 +6,13 @@ use crate::app_error::AppError;
 use crate::basic_types::*;
 
 use crate::network_monitor::{
-    NetMonTx, NetmonFlags, NetworkMonitor, ProxyHandlerReport, HEADER_SBSD_SERVER_HC,
-    HEADER_SBSD_SERVER_IDX,
+    NetMonTx, NetmonFlags, ProxyHandlerReport, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
 };
 use crate::shared_types::{
     GlobalsProxyMT, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_CONFIG_DISABLED,
     REQUEST_FAILED_NOT_STARTED, REQUEST_FAILED_NO_SERVER_AVAILABLE,
     REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
-    SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_ERROR, SEND_FAILED_UNSPECIFIED_STATUS,
+    SEND_FAILED_UNSPECIFIED_ERROR,
 };
 
 use anyhow::{anyhow, Result};
@@ -30,7 +29,6 @@ use hyper::http;
 use memchr::memmem;
 use serde::{Deserialize, Serialize};
 use tokio_graceful_shutdown::SubsystemHandle;
-use tower::retry;
 
 // An application target the localhost:port
 //

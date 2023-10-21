@@ -21,7 +21,7 @@ use crate::api::{StatusResponse, Versioned};
 use crate::basic_types::{AutoSizeVec, ManagedVec};
 use crate::shared_types::InputPort;
 
-use super::{GlobalsEventsDataST, GlobalsModulesConfigST, GlobalsWorkdirsST};
+use super::{GlobalsEventsDataST, GlobalsPackagesConfigST, GlobalsWorkdirsST};
 
 #[derive(Debug)]
 pub struct GlobalsProxyST {
@@ -143,7 +143,7 @@ impl Default for GlobalsConfigST {
 pub type GlobalsProxyMT = Arc<tokio::sync::RwLock<GlobalsProxyST>>;
 pub type GlobalsStatusMT = Arc<tokio::sync::RwLock<GlobalsStatusST>>;
 pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsConfigST>>;
-pub type GlobalsModulesConfigMT = Arc<tokio::sync::RwLock<GlobalsModulesConfigST>>;
+pub type GlobalsPackagesConfigMT = Arc<tokio::sync::RwLock<GlobalsPackagesConfigST>>;
 pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
 pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
 
@@ -164,7 +164,7 @@ pub struct Globals {
     pub status: GlobalsStatusMT,
 
     // Configuration related to Sui Move modules, particularly for monitoring management.
-    pub modules_config: GlobalsModulesConfigMT,
+    pub packages_config: GlobalsPackagesConfigMT,
 
     // In-memory access to events data of actively monitored modules.
     pub events_data: GlobalsEventsDataMT,
@@ -177,7 +177,7 @@ impl Globals {
             config: Arc::new(tokio::sync::RwLock::new(GlobalsConfigST::new())),
             workdirs: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirsST::new())),
             status: Arc::new(tokio::sync::RwLock::new(GlobalsStatusST::new())),
-            modules_config: Arc::new(tokio::sync::RwLock::new(GlobalsModulesConfigST::new())),
+            packages_config: Arc::new(tokio::sync::RwLock::new(GlobalsPackagesConfigST::new())),
             events_data: Arc::new(tokio::sync::RwLock::new(GlobalsEventsDataST::new())),
         }
     }

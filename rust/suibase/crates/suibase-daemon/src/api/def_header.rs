@@ -82,8 +82,7 @@ impl<T: Clone + PartialEq> Versioned<T> {
 
     // Write version into a Header structure.
     pub fn init_header_uuids(&self, header: &mut Header) {
-        let (method_uuid, data_uuid) = self.uuid.get();
-        header.method_uuid = Some(method_uuid.to_string());
-        header.data_uuid = Some(data_uuid.to_string());
+        header.method_uuid = Some(self.uuid.get_method_uuid());
+        header.data_uuid = Some(self.uuid.get_data_uuid());
     }
 }

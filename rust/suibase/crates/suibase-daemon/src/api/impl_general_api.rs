@@ -1,26 +1,18 @@
-use core::fmt;
-use std::fmt::Display;
 use tokio::sync::Mutex;
 
 use axum::async_trait;
 
 use anyhow::Result;
 
-use futures::future::ok;
 use jsonrpsee::core::RpcResult;
 
-use crate::admin_controller::{
-    AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE, EVENT_SHELL_EXEC,
-};
-use crate::basic_types::{TargetServerIdx, WorkdirIdx};
-use crate::shared_types::{
-    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsWorkdirStatusST, GlobalsWorkdirsST,
-    ServerStats, TargetServer, UuidST, Workdir,
-};
+use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
+use crate::basic_types::WorkdirIdx;
+use crate::shared_types::{Globals, GlobalsWorkdirsST};
 
 use super::{GeneralApiServer, RpcInputError, RpcServerError, StatusResponse, StatusService};
 
-use super::def_header::{Header, Versioned};
+use super::def_header::Versioned;
 
 pub struct GeneralApiImpl {
     pub globals: Globals,
@@ -274,10 +266,9 @@ impl GeneralApiServer for GeneralApiImpl {
                             // If no change since the specified user Uuids in the request, then
                             // return an empty response (just echo the Uuids).
                             if let (Some(method_uuid), Some(data_uuid)) = (method_uuid, data_uuid) {
-                                let (globals_method_uuid, globals_data_uuid) = ui.get_uuid().get();
-                                let globals_data_uuid = globals_data_uuid.to_string();
+                                let globals_data_uuid = ui.get_uuid().get_data_uuid();
                                 if data_uuid == globals_data_uuid {
-                                    let globals_method_uuid = globals_method_uuid.to_string();
+                                    let globals_method_uuid = ui.get_uuid().get_method_uuid();
                                     if method_uuid == globals_method_uuid {
                                         ui.init_header_uuids(&mut resp.header);
                                         resp_ready = true;

@@ -116,6 +116,6 @@ publish_all() {
   echo "Publication Successful"
 
   # Push new information to suibase-daemon.
-  notify_suibase_daemon_publish "$MOVE_TOML_PACKAGE_NAME" "$_ID_PACKAGE"
+  notify_suibase_daemon_publish "$MOVE_TOML_DIR" "$MOVE_TOML_PACKAGE_NAME" "$_ID_PACKAGE"
 }
 export -f publish_all

@@ -1,14 +1,8 @@
-use std::fmt::Debug;
-use std::vec;
-
 use crate::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::shared_types::{
-    Globals, GlobalsProxyMT, GlobalsStatusMT, GlobalsWorkdirsMT, GlobalsWorkdirsST, InputPort,
-    WorkdirProxyConfig,
-};
+use crate::shared_types::{Globals, InputPort, WorkdirProxyConfig};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
 
@@ -462,6 +456,9 @@ impl ManagedElement for AdminController {
         self.idx = idx;
     }
 }
+
+#[cfg(test)]
+use crate::shared_types::GlobalsWorkdirsST;
 
 #[test]
 fn test_load_config_from_suibase_default() {

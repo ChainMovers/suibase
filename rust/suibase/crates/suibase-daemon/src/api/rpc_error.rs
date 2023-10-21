@@ -7,7 +7,6 @@
 
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
-use thiserror::Error;
 
 impl From<RpcInputError> for RpcError {
     fn from(e: RpcInputError) -> Self {

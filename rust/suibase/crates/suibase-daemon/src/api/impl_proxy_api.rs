@@ -1,23 +1,19 @@
-use core::fmt;
-use std::fmt::Display;
 use tokio::sync::Mutex;
 
 use axum::async_trait;
 
-use clap::Indices;
-use futures::future::ok;
 use jsonrpsee::core::RpcResult;
 
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
 use crate::basic_types::TargetServerIdx;
-use crate::shared_types::{GlobalsProxyMT, ServerStats, TargetServer, UuidST};
+use crate::shared_types::{GlobalsProxyMT, ServerStats, UuidST};
 
 use super::{InfoResponse, ProxyApiServer};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
 
-use super::def_header::{Header, Versioned};
+use super::def_header::Versioned;
 
 #[derive(Clone, PartialEq)]
 struct GetLinksInput {
@@ -521,9 +517,8 @@ impl ProxyApiServer for ProxyApiImpl {
             }
 
             if let Some(version) = inputs_version {
-                let (method_uuid, data_uuid) = version.get();
-                resp.header.method_uuid = Some(method_uuid.to_string());
-                resp.header.data_uuid = Some(data_uuid.to_string());
+                resp.header.method_uuid = Some(version.get_method_uuid());
+                resp.header.data_uuid = Some(version.get_data_uuid());
             }
         }
 
