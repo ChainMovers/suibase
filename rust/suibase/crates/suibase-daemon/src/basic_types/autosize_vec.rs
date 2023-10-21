@@ -114,12 +114,6 @@ fn one_element() {
         pub value: u32,
     }
 
-    impl TS {
-        pub fn new(value: u32) -> Self {
-            Self { value }
-        }
-    }
-
     impl Default for TS {
         fn default() -> Self {
             Self { value: u32::MAX }

@@ -172,32 +172,33 @@ impl ProxyApiImpl {
             format!("{:+6.1}", input)
         }
     }
-
-    fn fmt_u64(input: u64) -> String {
-        // Fix field width of 9 characters.
-        //
-        // if input >99999999 then return ">99999999"
-        // if input is zero then return   "        0"
-        // if u64:MAX then return         "        -"
-        if input > 99999999 {
-            ">99999999".to_string()
-        } else if input == 0 {
-            "        0".to_string()
-        } else if input == u64::MAX {
-            "        -".to_string()
-        } else {
-            format!("{:9}", input)
+    /*
+        fn fmt_u64(input: u64) -> String {
+            // Fix field width of 9 characters.
+            //
+            // if input >99999999 then return ">99999999"
+            // if input is zero then return   "        0"
+            // if u64:MAX then return         "        -"
+            if input > 99999999 {
+                ">99999999".to_string()
+            } else if input == 0 {
+                "        0".to_string()
+            } else if input == u64::MAX {
+                "        -".to_string()
+            } else {
+                format!("{:9}", input)
+            }
         }
-    }
 
-    fn fmt_u32(input: u32) -> String {
-        // Same logic as fmt_u64.
-        if input == u32::MAX {
-            Self::fmt_u64(u64::MAX)
-        } else {
-            Self::fmt_u64(input as u64)
+        fn fmt_u32(input: u32) -> String {
+            // Same logic as fmt_u64.
+            if input == u32::MAX {
+                Self::fmt_u64(u64::MAX)
+            } else {
+                Self::fmt_u64(input as u64)
+            }
         }
-    }
+    */
 }
 
 #[async_trait]

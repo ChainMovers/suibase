@@ -50,17 +50,19 @@ impl NetmonMsg {
         self.server_idx
     }
 
+    /*
     pub fn para32(&self) -> &[u32; 2] {
         &self.para32
-    }
+    }*/
 
     pub fn para16(&self) -> &[u16; 1] {
         &self.para16
     }
-
+    /*
     pub fn para8(&self) -> &[u8; 2] {
         &self.para8
     }
+    */
 }
 
 // Events ID

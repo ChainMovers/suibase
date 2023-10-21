@@ -1,4 +1,4 @@
-// TODO Neeeded? Refactor this to SuibaseError
+// TODO Needed? Refactor this to SuibaseError
 
 // Reference:
 //    https://github.com/tokio-rs/axum/blob/v0.6.x/examples/anyhow-error-response/src/main.rs
@@ -8,13 +8,12 @@ use axum::{
     Json,
 };
 
-use anyhow::anyhow;
-
 use serde_json::json;
 
 // Make our own error that wraps `anyhow::Error`.
 pub struct AppError(anyhow::Error);
 
+/*
 impl AppError {
     pub fn new<E>(err: E) -> Self
     where
@@ -25,10 +24,11 @@ impl AppError {
 
     // Function that always return an AppError
     // built from a string.
+
     pub fn from_str(err: &str) -> Self {
         Self(anyhow!(err.to_string()))
     }
-}
+}*/
 
 // Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {

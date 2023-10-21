@@ -10,7 +10,7 @@ use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 pub struct ShellWorker {
-    globals: Globals,
+    _globals: Globals,
     event_rx: AdminControllerRx,
     workdir_idx: Option<WorkdirIdx>,
 }
@@ -22,7 +22,7 @@ impl ShellWorker {
         workdir_idx: Option<WorkdirIdx>,
     ) -> Self {
         Self {
-            globals,
+            _globals: globals,
             event_rx,
             workdir_idx,
         }

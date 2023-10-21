@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use tokio::sync::Mutex;
-
 use axum::async_trait;
 
 use jsonrpsee::core::RpcResult;
@@ -21,8 +19,6 @@ use super::def_header::Versioned;
 pub struct PackagesApiImpl {
     pub globals: Globals,
     pub admctrl_tx: AdminControllerTx,
-    // TODO Change this to be per workdir.
-    config_mutex: Mutex<tokio::time::Instant>,
 }
 
 impl PackagesApiImpl {
@@ -30,7 +26,6 @@ impl PackagesApiImpl {
         Self {
             globals,
             admctrl_tx,
-            config_mutex: Mutex::new(tokio::time::Instant::now()),
         }
     }
 

@@ -6,7 +6,6 @@
 //
 // SingleThreadUUID is same, except the user is responsible for Mutex access.
 //
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
@@ -62,11 +61,10 @@ impl Default for UuidST {
     }
 }
 
-// MT: Multi-threaded reference count, ST: Single-threaded access with a lock.
-pub type UuidMT = Arc<tokio::sync::Mutex<UuidST>>;
-
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     #[tokio::test]

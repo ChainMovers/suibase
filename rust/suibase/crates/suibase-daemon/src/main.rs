@@ -1,4 +1,4 @@
-// TODO WIP Re-enable these clippy warnings after initial development writing completed.
+// TODO WIP Re-enable dead_code warnings after initial development writing completed.
 #![allow(dead_code)]
 
 // main.rs does:

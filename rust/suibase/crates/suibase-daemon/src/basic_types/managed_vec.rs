@@ -145,12 +145,15 @@ impl<T: ManagedElement> Default for ManagedVec<T> {
 fn len() {
     struct TS {
         idx: Option<ManagedVecUSize>,
-        value: u8,
+        _value: u8,
     }
 
     impl TS {
         pub fn new(value: u8) -> Self {
-            Self { idx: None, value }
+            Self {
+                idx: None,
+                _value: value,
+            }
         }
     }
 

@@ -52,13 +52,14 @@ struct WorkdirTracking {
 }
 
 impl WorkdirTracking {
+    /*
     pub fn new() -> Self {
         Self {
             last_read_config: None,
             shell_worker_tx: None,
             shell_worker_handle: None,
         }
-    }
+    }*/
 }
 impl std::fmt::Debug for WorkdirTracking {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

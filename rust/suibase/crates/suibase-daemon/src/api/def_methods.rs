@@ -225,15 +225,6 @@ pub struct SuiEvents {
     pub timestamp: String,
 }
 
-impl SuiEvents {
-    pub fn new(label: String) -> Self {
-        Self {
-            message: label,
-            timestamp: "".to_string(),
-        }
-    }
-}
-
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -364,7 +355,7 @@ pub struct PackagesConfigResponse {
 
     // One entry per distinct Move.toml published.
     //
-    // Hashmap Jey is a base32+md5sum of the "output_dir" defined
+    // Hashmap Key is a base32+md5sum of the "output_dir" defined
     // in the Suibase.toml co-located with the Move.toml.
     //
     // For each MoveConfig, zero or more package instances

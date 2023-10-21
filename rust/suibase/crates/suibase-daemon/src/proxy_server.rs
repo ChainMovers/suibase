@@ -53,6 +53,7 @@ impl ProxyServer {
         Self { enabled: false }
     }
 
+    /*
     // From https://docs.rs/axum/0.6.18/src/axum/json.rs.html#147
     fn is_json_content_type(headers: &HeaderMap) -> bool {
         let content_type = if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
@@ -78,7 +79,7 @@ impl ProxyServer {
             && (mime.subtype() == "json" || mime.suffix().map_or(false, |name| name == "json"));
 
         is_json_content_type
-    }
+    }*/
 
     fn process_header_server_idx(
         headers: &mut HeaderMap,
