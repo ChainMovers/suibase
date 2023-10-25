@@ -2,6 +2,7 @@
   import { provideVSCodeDesignSystem, allComponents } from "@vscode/webview-ui-toolkit";
   import { VSCode } from "./lib/VSCode";
   import WorkdirsController from "./components/WorkdirsController.svelte";
+  import ConsoleController from "./components/ConsoleController.svelte";
   import { GlobalStorage } from "./lib/GlobalStorage";
 
   // Static initializations
@@ -37,7 +38,11 @@
 </script>
 
 <main>
-  <WorkdirsController />
+  {#if globalThis.suibase_panel_key == "suibase.settings"}
+    <WorkdirsController />
+  {:else if globalThis.suibase_panel_key == "suibase.console"}
+    <ConsoleController />
+  {/if}
 
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <vscode-button on:click={handleHowdyClick}>Howdy!</vscode-button>

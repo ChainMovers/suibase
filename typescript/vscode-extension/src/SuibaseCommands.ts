@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { SuibaseExec } from "./SuibaseExec";
 
 import { DashboardPanel } from "./panels/DashboardPanel";
+import { ConsolePanel } from "./panels/ConsolePanel";
 
 export class SuibaseCommands {
   private static instance?: SuibaseCommands;
@@ -26,6 +27,13 @@ export class SuibaseCommands {
     {
       let disposable = vscode.commands.registerCommand("suibase.settings", () => {
         SuibaseCommands.getInstance()?.settings();
+      });
+      context.subscriptions.push(disposable);
+    }
+
+    {
+      let disposable = vscode.commands.registerCommand("suibase.console", () => {
+        SuibaseCommands.getInstance()?.console();
       });
       context.subscriptions.push(disposable);
     }
@@ -83,5 +91,12 @@ export class SuibaseCommands {
       return;
     }
     DashboardPanel.render();
+  }
+
+  public console() {
+    if (!SuibaseCommands.context) {
+      return;
+    }
+    ConsolePanel.render();
   }
 }

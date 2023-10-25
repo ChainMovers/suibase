@@ -178,9 +178,14 @@ export class BasePanel {
           <title>Hello World</title>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src http://localhost:*; font-src ${cspSource}; style-src ${cspSource} unsafe-inline; script-src 'nonce-${nonce}';">
+          <meta http-equiv="Content-Security-Policy" content="default-src ${cspSource}; connect-src http://localhost:*; font-src ${cspSource}; style-src ${cspSource} 'unsafe-inline'; img-src ${cspSource}; script-src ${cspSource} 'strict-dynamic' 'nonce-${nonce}'">      
+          
           <link rel="stylesheet" type="text/css" href="${stylesUri}">
-          <link rel="stylesheet" type="text/css" href="${iconsUri}" />
+          <link rel="stylesheet" type="text/css" href="${iconsUri}" />      
+
+          <script nonce="${nonce}">
+            var suibase_panel_key = '${this.panelKey}';
+          </script>
           <script defer nonce="${nonce}" src="${scriptUri}"></script>
         </head>
         <body>

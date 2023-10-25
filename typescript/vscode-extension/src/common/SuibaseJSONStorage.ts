@@ -1,6 +1,6 @@
 // JSON storage of all data (config, state and status) related to a Suibase installation.
 //
-// Multiple instance are expected to exists, allowing to compare one store to another.
+// Multiple instance are expected for a given data for doing comparison and detect deltas.
 //
 // The purpose of the SuibaseJSONStorage is to :
 //    - Always get any data (even if not up to date) and revert to a default when not initialized.

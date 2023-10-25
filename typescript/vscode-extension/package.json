@@ -15,27 +15,37 @@
   "contributes": {
     "commands": [
       {
-        "command": "suibase.refresh",
-        "title": "refresh",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "suibase.settings",
         "title": "settings",
         "icon": "$(settings-view-bar-icon)"
+      },
+      {
+        "command": "suibase.console",
+        "title": "console",
+        "icon": "$(debug-console)"
+      },
+      {
+        "command": "suibase.refresh",
+        "title": "refresh",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "suibase.refresh",
+          "command": "suibase.settings",
+          "when": "view == suibaseTreeView",
+          "group": "navigation@0"
+        },
+        {
+          "command": "suibase.console",
           "when": "view == suibaseTreeView",
           "group": "navigation@1"
         },
         {
-          "command": "suibase.settings",
+          "command": "suibase.refresh",
           "when": "view == suibaseTreeView",
-          "group": "navigation@0"
+          "group": "navigation@2"
         }
       ]
     },
