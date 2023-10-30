@@ -24,6 +24,9 @@ github_token: ~
 
 precompiled_bin: false
 
+cargo_release: false
+cargo_add_options: ~
+
 # proxy not applicable to cargobin
 proxy_enabled: false
 proxy_host_ip: "0.0.0.0"

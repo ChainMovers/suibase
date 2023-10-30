@@ -204,6 +204,8 @@ workdir_exec() {
   DEBUG_PARAM=false
   NOBINARY_PARAM=false
   PRECOMPILED_PARAM=false
+  NO_AVX2_PARAM=false
+  NO_AVX_PARAM=false
 
   # This is for the --json parameter
   JSON_PARAM=false
@@ -280,6 +282,11 @@ workdir_exec() {
       --debug) DEBUG_PARAM=true ;;
       --nobinary) NOBINARY_PARAM=true ;; # Will just update the repo.
       --precompiled) PRECOMPILED_PARAM=true ;;
+      --no_avx2) NO_AVX2_PARAM=true ;;
+      --no_avx)
+        NO_AVX2_PARAM=true
+        NO_AVX_PARAM=true
+        ;;
       *) PASSTHRU_OPTIONS="$PASSTHRU_OPTIONS $1" ;;
       esac
       shift
@@ -335,6 +342,14 @@ workdir_exec() {
 
   if [ "$PRECOMPILED_PARAM" = true ]; then
     echo "precompiled flag set. Will download binaries from the repo."
+  fi
+
+  if [ "$NO_AVX_PARAM" = true ]; then
+    echo "no_avx flag set. Will not use AVX and AVX2 instructions."
+  else
+    if [ "$NO_AVX2_PARAM" = true ]; then
+      echo "no_avx2 flag set. Will not use AVX2 instructions."
+    fi
   fi
 
   # Validate if the path exists.
@@ -871,6 +886,17 @@ workdir_exec() {
     ALLOW_BINARY="false"
   fi
 
+  DISABLE_AVX="false"
+  DISABLE_AVX2="false"
+  if [ "$NO_AVX_PARAM" = true ]; then
+    DISABLE_AVX="true"
+    DISABLE_AVX2="true"
+  else
+    if [ "$NO_AVX2_PARAM" = true ]; then
+      DISABLE_AVX2="true"
+    fi
+  fi
+
   local _USE_PRECOMPILED="false"
   if [ "$CMD_BUILD_REQ" = true ]; then
     # Use the --precompiled flag only when 'build' command.
@@ -933,7 +959,7 @@ workdir_exec() {
     fi
   fi
 
-  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BINARY" "$_USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
+  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BINARY" "$DISABLE_AVX" "$DISABLE_AVX2" "$_USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
 
   if [ "$CMD_BUILD_REQ" = true ]; then
     # No further action needed when "build" command.

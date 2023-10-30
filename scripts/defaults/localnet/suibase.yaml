@@ -13,16 +13,16 @@ network_type: local
 
 # Enable auto key generation.
 #
-# These are the default addresses created to help for test automations. You can
-# disable these initial key creation and start instead with an empty wallet (sui.keystore)
-# and/or optionally add your own with 'add_private_keys'. See docs for more details.
+# These are the default addresses created to help for test automation. You can
+# disable these initial key creation and instead start with an empty wallet (sui.keystore)
+# and optionally add your own with 'add_private_keys'. See docs for more details.
 auto_key_generation: true
 
 # Enable ANSI color codes on command line response.
 terminal_color: true
 
-# For local only. When a sui.keystore is created, each address
-# are funded with that much Mist per address (divided in 5 coins)
+# For localnet only. When a sui.keystore is created, each address
+# is funded with that much Mist per address (divided in 5 coins)
 initial_fund_per_address: 150000000000000000
 
 # Control the sui-faucet process.
@@ -40,7 +40,7 @@ sui_faucet_client_timeout_secs: 10
 # This is the repo for building the sui client.
 #
 # These variables are ignored when a 'set-sui-repo' is forcing
-# the use of a repo (e.g. 'localnet set-sui-repo --path ~/my-repo' )
+# the use of your own repo (e.g. 'localnet set-sui-repo --path ~/my-repo' )
 #
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
@@ -50,10 +50,10 @@ default_repo_branch: "devnet"
 #
 # Github has a rate limit of 60 calls per hour for unauthenticated
 # users. This is plenty for most use case, but not enough when doing
-# extensive Suibase "udpate/regen/start" from multiple machines sharing
+# extensive Suibase "update/regen/start" from multiple machines sharing
 # the same public IP address (behind a NAT).
 #
-# With an authentication token, API call rate are possible in the order
+# With an authentication token, API call rate are allowed in the order
 # of thousands per hour.
 #
 # More Info:
@@ -69,6 +69,18 @@ github_token: ~
 #
 # If false, then the binaries are instead built from the local repo.
 precompiled_bin: true
+
+# Control cargo option when building sui binaries.
+#
+# cargo_add_options is appended to the cargo command line for both on-demand (e.g. "localnet build")
+# and automated builds (e.g. "localnet update").
+#
+# Optionally, you can also add more options at the workdir command line (e.g. "localnet build --release --target-cpu i686").
+#
+# Do not specify "--release" in cargo_add_options. Set cargo_release to true instead.
+#
+cargo_release: false # Set to true to build release binaries.
+cargo_add_options: ~
 
 # Proxy server related configurations. See https://suibase.io/how-to/proxy
 proxy_enabled: true

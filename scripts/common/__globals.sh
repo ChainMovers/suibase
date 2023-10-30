@@ -1,5 +1,4 @@
 #!/bin/bash
-# Teesting
 
 # Do not call this script directly. It is a "common script" sourced by other suibase scripts.
 #
@@ -457,8 +456,10 @@ export -f check_yaml_parsed
 build_sui_repo_branch() {
   ALLOW_DOWNLOAD="$1"
   ALLOW_BINARY="$2"
-  USE_PRECOMPILED="$3"
-  PASSTHRU_OPTIONS="$4"
+  DISABLE_AVX="$3"
+  DISABLE_AVX2="$4"
+  USE_PRECOMPILED="$5"
+  PASSTHRU_OPTIONS="$6"
 
   local _BUILD_DESC
   if [ "${CFG_network_type:?}" = "local" ]; then
@@ -577,6 +578,7 @@ build_sui_repo_branch() {
   # repo should now be initialized.
   # Either download precompiled or build from source.
   local _DO_FINAL_SUI_SANITY_CHECK=false
+  local _DO_FINAL_SUI_FAUCET_SANITY_CHECK=false
 
   local _PRECOMP_STATE
   _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
@@ -613,6 +615,13 @@ build_sui_repo_branch() {
     _DO_FINAL_SUI_SANITY_CHECK=true
   else
     # Build from source.
+    local _IS_RELEASE_BUILD=false
+    if [[ "${CFG_cargo_release:?}" == "true" ]] || [[ "$PASSTHRU_OPTIONS" == *"--release"* ]]; then
+      _IS_RELEASE_BUILD=true
+      # delete target/debug content to avoid confusion.
+      # Will be restored later on success.
+      rm -rf "$WORKDIRS/$_WORKDIR/sui-repo/target/debug/*"
+    fi
 
     if [ "$_PRECOMP_STATE" != "NULL" ]; then
       if [ "$_IS_SET_SUI_REPO" = "false" ]; then
@@ -634,27 +643,82 @@ build_sui_repo_branch() {
       echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
     fi
 
-    if [ -z "$PASSTHRU_OPTIONS" ]; then
-      # Build faucet only if local. Unlikely anyone will enable faucet on any public network... let see if anyone ask...
-      if [ $is_local = true ]; then
-        (if cd "$SUI_REPO_DIR"; then cargo build -p sui -p sui-faucet; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
-      else
-        (if cd "$SUI_REPO_DIR"; then cargo build -p sui; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+    # TODO Could not get _RUST_TARGET_CPU to work... not used for now.
+    local _RUST_TARGET
+    if [ "$_IS_RELEASE_BUILD" = "true" ]; then
+      # Set _RUST_TARGET to --release if not done in user provided options.
+      if [[ "$PASSTHRU_OPTIONS" != *"--release"* ]]; then
+        _RUST_TARGET="--release"
       fi
-      _DO_FINAL_SUI_SANITY_CHECK=true
+    fi
+
+    local _RUST_TARGET_CPU
+    if [ "$DISABLE_AVX" = "true" ]; then
+      # shellcheck disable=SC2089 # Quotes are OK here.
+      _RUST_TARGET_CPU="-C target-cpu=nehalem"
+    elif [ "$DISABLE_AVX2" = "true" ]; then
+      # shellcheck disable=SC2089 # Quotes are OK here.
+      _RUST_TARGET_CPU="-C target-cpu=sandybridge"
+    fi
+
+    local _BIN_LIST
+    if [ $is_local = true ]; then
+      _BIN_LIST="-p sui -p sui-faucet"
+      _DO_FINAL_SUI_FAUCET_SANITY_CHECK=true
     else
-      # This is for when build was called for a specific binary.
-      #shellcheck disable=SC2086 # Don't want to double quote $PASSTHRU_OPTIONS
-      (if cd "$SUI_REPO_DIR"; then cargo build $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+      _BIN_LIST="-p sui"
+    fi
+    _DO_FINAL_SUI_SANITY_CHECK=true
+
+    if [ -n "$PASSTHRU_OPTIONS" ]; then
+      # Check if a "-p " is specified. If not, then add the defaults to _BIN_LIST.
+      if [[ "$PASSTHRU_OPTIONS" == *"-p "* ]]; then
+        # The caller wants to control what gets build, so clear _BIN_LIST.
+        _BIN_LIST=""
+        # Can't assume the caller is building these.
+        _DO_FINAL_SUI_SANITY_CHECK=false
+        _DO_FINAL_SUI_FAUCET_SANITY_CHECK=false
+      fi
+    fi
+
+    unset RUSTFLAGS
+    # shellcheck disable=SC2086,SC2090 # Not using quotes around $_RUST_XXXX vars is intended here.
+    (if cd "$SUI_REPO_DIR"; then cargo build --locked $_RUST_TARGET $_BIN_LIST $PASSTHRU_OPTIONS; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
+
+    # If the build was release, copy it where it is expected by the scripts (target/debug)
+    # Although not really a debug build... it just does not matter (will be overwritten if the
+    # user really care building a debug version).
+    if [ "$_IS_RELEASE_BUILD" = "true" ]; then
+      local _SRC_DIR="$SUI_REPO_DIR/target/release"
+      local _DST_DIR="$SUI_REPO_DIR/target/debug"
+      mkdir -p "$_DST_DIR"
+      local _SRC_LIST=("sui" "sui-faucet")
+      # Iterate the _SRC_LIST array and copy the minimally needed files.
+      for _SRC_FILE in "${_SRC_LIST[@]}"; do
+        if [ -f "$_SRC_DIR/$_SRC_FILE" ]; then
+          cp "$_SRC_DIR/$_SRC_FILE" "$_DST_DIR/$_SRC_FILE"
+        fi
+      done
     fi
   fi
 
+  # First sanity check depends if the binary is expected or not...
   if [ "$_DO_FINAL_SUI_SANITY_CHECK" = "true" ]; then
-    # Sanity test that the sui binary works
+    # Error if the sui binary does not exists, while it is expected.
     if [ ! -f "$SUI_BIN_DIR/sui" ]; then
       setup_error "$SUI_BIN_DIR/sui binary not found"
     fi
+  fi
 
+  if [ "$_DO_FINAL_SUI_FAUCET_SANITY_CHECK" = "true" ]; then
+    # Error if the sui-faucet binary does not exists, while it is expected.
+    if [ ! -f "$SUI_BIN_DIR/sui-faucet" ]; then
+      setup_error "$SUI_BIN_DIR/sui-faucet binary not found"
+    fi
+  fi
+
+  # This second group of sanity checks are always done if the sui binary exists.
+  if [ -f "$SUI_BIN_DIR/sui" ]; then
     update_SUI_VERSION_var
 
     # Check if sui is recent enough.

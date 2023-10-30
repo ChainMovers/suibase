@@ -24,6 +24,9 @@ github_token: ~
 
 precompiled_bin: true
 
+cargo_release: false
+cargo_add_options: ~
+
 proxy_enabled: true
 proxy_host_ip: "0.0.0.0"
 proxy_port_number: 44342
