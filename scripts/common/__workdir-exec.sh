@@ -922,9 +922,39 @@ workdir_exec() {
           warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
           _USE_PRECOMPILED="false"
         fi
-        # Disable if on WSL ("illegal instruction" probably because of AVX support missing).
+
+        # Disable with WSL/Linux when (AVX or AVX2) not available.
+        #
+        # For other Linux setup, lets assume the user knows better and allow
+        # pre-compiled binaries... (if there is a problem they can work-around this
+        # with "precompiled_bin: false" in suibase.yaml)
+        #
+        # Rational:
+        #  A Linux VM guess may NOT report AVX/AVX2 in /proc/cpuinfo, but the host cpu can support it.
+        #  The app will still work, because the VM just execute the instructions blindly and they
+        #  are not detected as "illegal instructions".
+        #  This might be intended by some Linux super-user... but it is less likely intended for WSL
+        #  users (more likely the physical host is really not supporting AVX). So protect WSL users
+        #  with forcing compilation at the host when no AVX/AVX2 detected.
         if is_wsl; then
-          _USE_PRECOMPILED="false"
+          if [[ -f /proc/cpuinfo ]]; then
+            local _AVX2_ENABLED
+            if grep -q avx2 /proc/cpuinfo; then
+              _AVX2_ENABLED="true"
+            else
+              _AVX2_ENABLED="false"
+            fi
+            local _AVX_ENABLED
+            if grep -q avx /proc/cpuinfo; then
+              _AVX_ENABLED="true"
+            else
+              _AVX_ENABLED="false"
+            fi
+            if [ "$_AVX2_ENABLED" = "false" ] || [ "$_AVX_ENABLED" = "false" ]; then
+              warn_user "Precompiled binaries not available for WSL/Linux without AVX. Will build from source instead."
+              _USE_PRECOMPILED="false"
+            fi
+          fi
         fi
       else
         if [ "$HOST_PLATFORM" = "Darwin" ]; then
