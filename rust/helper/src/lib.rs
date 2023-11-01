@@ -67,12 +67,10 @@ impl Helper {
     /// # Example
     /// ```
     /// use suibase::Helper;
-    /// fn main() {
-    ///   let sbh = Helper::new();
-    ///   if sbh.is_installed()? {
-    ///      sbh.select_workdir("localnet")?;
-    ///      println!("active address is {}", sbh.client_address("active"));
-    ///   }
+    /// let sbh = Helper::new();
+    /// if sbh.is_installed()? {
+    ///    sbh.select_workdir("localnet")?;
+    ///    println!("active address is {}", sbh.client_address("active"));
     /// }
     /// ```
     pub fn new() -> Self {
