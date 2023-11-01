@@ -13,6 +13,7 @@ categories = ["development-tools"]
 
 [lib]
 crate-type = ["lib"]
+doctest = false
 
 [dependencies]
 sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }

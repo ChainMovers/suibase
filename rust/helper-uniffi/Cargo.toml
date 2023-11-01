@@ -1,12 +1,13 @@
 [package]
 name = "suibase"
-version = "0.1.7"
+version = "0.1.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "suibase"
 crate-type = ["cdylib"]
+doctest = false
 
 [dependencies]
 uniffi = "0.24.1"

@@ -11,7 +11,7 @@ export USER_CWD=$(pwd -P)
 # Format is: "major.minor.patch-build"
 #
 # The build hash is best-effort appended later.
-export SUIBASE_VERSION="0.1.5"
+export SUIBASE_VERSION="0.1.6"
 
 # Suibase does not work with version below these.
 export MIN_SUI_VERSION="sui 0.27.0"

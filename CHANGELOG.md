@@ -11,12 +11,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unpublished]
 
 ### Added
-- (#68) precompiled binaries for Linux Ubuntu (x86 64 bits only).
 
 ### Fixed
+  
+### Changed
+
+### Removed
+
+## [0.1.6] 2023-11-01
+
+### Added
+- (#68) Precompiled binaries for MacOS, x86_64 Linux and Windows WSL2.
+
+### Fixed
+- (#83) Do sui binaries --locked cargo build for consistency.
 - (#65) Fix support for 'sui client publish' and 'sui move' when path and/or install-dir are not specified.
 - (#24) Fix help for faucet.
-- Misc fix to support sui client v1.10.x changes to CLI related to new output format (tables).
+- Misc fix to support sui client >1.10.x for CLI new output format (tables).
   
 ### Changed
 
