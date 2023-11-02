@@ -24,7 +24,14 @@ source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 
 localnet set-active
 
+if [ "$FAST_OPTION" = "true" ]; then
+  if [[ "$CARGO_DIR" == *"demo-app"* ]]; then
+    return 2
+  fi
+fi
+
 do_tests() {
+
   # Do 'cargo clippy', but only on Linux (somehow not always installed on Apple/Darwin).
   # TODO detect if "cargo clippy" installed instead.
   update_HOST_vars
