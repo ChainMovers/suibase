@@ -25,11 +25,15 @@ source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 localnet set-active
 
 do_tests() {
-  # Do 'cargo clippy'
-  (
-    cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clippy'"
-    cargo clippy -- -D warnings || fail "'$CARGO_DIR/cargo clippy' failed"
-  )
+  # Do 'cargo clippy', but only on Linux (somehow not always installed on Apple/Darwin).
+  # TODO detect if "cargo clippy" installed instead.
+  update_HOST_vars
+  if [ "$HOST_PLATFORM" = "Linux" ]; then
+    (
+      cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clippy'"
+      cargo clippy -- -D warnings || fail "'$CARGO_DIR/cargo clippy' failed"
+    )
+  fi
 
   # Do 'cargo test'
   (
