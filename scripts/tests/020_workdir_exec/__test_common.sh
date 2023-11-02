@@ -46,6 +46,11 @@ tests() {
 
   # Verify still healthy.
   assert_workdir_ok "$WORKDIR"
+
+  # Clean-up to make disk space... except for localnet.
+  if [ "$WORKDIR" != "localnet" ]; then
+    $WORKDIR delete || fail "$WORKDIR delete failed"
+  fi
 }
 
 tests

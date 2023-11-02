@@ -37,6 +37,13 @@ do_tests() {
 
   # Verify still healthy.
   assert_workdir_ok "$WORKDIR"
+
+  # Do 'cargo clean'
+  (
+    cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clean'"
+    cargo clean || fail "'$CARGO_DIR/cargo clean' failed"
+  )
+
 }
 
 do_tests

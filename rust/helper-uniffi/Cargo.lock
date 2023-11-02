@@ -4879,7 +4879,7 @@ dependencies = [
 
 [[package]]
 name = "suibase"
-version = "0.1.7"
+version = "0.1.6"
 dependencies = [
  "home",
  "serde_json",
