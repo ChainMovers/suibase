@@ -286,7 +286,7 @@ impl WorkdirsWatcher {
                     });
                 }
                 Err(e) => {
-                    log::error!("watcher error: {:?}", e);
+                    log::warn!("{:?}", e);
                 }
             },
             poll_watcher_config.with_poll_interval(std::time::Duration::from_secs(15)),

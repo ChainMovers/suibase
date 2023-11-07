@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
@@ -8,7 +10,7 @@ use crate::workers::ShellWorker;
 
 use anyhow::Result;
 
-use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemHandle};
+use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemBuilder, SubsystemHandle};
 
 // Design
 //
@@ -48,7 +50,8 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 struct WorkdirTracking {
     last_read_config: Option<WorkdirProxyConfig>,
     shell_worker_tx: Option<AdminControllerTx>,
-    shell_worker_handle: Option<NestedSubsystem>, // Set when the shell_worker is started.
+    shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
+                                                                                // Box<dyn StdError + Send + std::marker::Sync + 'static'>
 }
 
 impl WorkdirTracking {
@@ -72,7 +75,7 @@ impl std::fmt::Debug for WorkdirTracking {
 
 #[derive(Default)]
 struct InputPortTracking {
-    proxy_server_handle: Option<NestedSubsystem>, // Set when the proxy_server is started.
+    proxy_server_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the proxy_server is started.
     port_number: u16, // port number used when the proxy_server was started.
 }
 
@@ -164,8 +167,10 @@ impl AdminController {
             wd_tracking.shell_worker_tx = Some(shell_worker_tx);
             let shell_worker =
                 ShellWorker::new(self.globals.clone(), shell_worker_rx, Some(workdir_idx));
-            wd_tracking.shell_worker_handle =
-                Some(subsys.start("proxy-server", move |a| shell_worker.run(a)));
+            let nested = subsys.start(SubsystemBuilder::new("shell-worker", |a| {
+                shell_worker.run(a)
+            }));
+            wd_tracking.shell_worker_handle = Some(nested);
         }
 
         if wd_tracking.shell_worker_tx.is_none() {
@@ -370,9 +375,11 @@ impl AdminController {
                 let proxy_server = ProxyServer::new();
                 let globals = self.globals.proxy.clone();
                 let netmon_tx = self.netmon_tx.clone();
-                port_tracking.proxy_server_handle = Some(subsys.start("proxy-server", move |a| {
+                let nested = subsys.start(SubsystemBuilder::new("proxy-server", move |a| {
                     proxy_server.run(a, port_idx, globals, netmon_tx)
                 }));
+
+                port_tracking.proxy_server_handle = Some(nested);
                 port_tracking.port_number = port_number;
             } else {
                 // Monitor a port number change. This is a rare "fundamental" configuration change that
@@ -433,7 +440,9 @@ impl AdminController {
         {
             let admctrl_tx = self.admctrl_tx.clone();
             let workdirs_watcher = WorkdirsWatcher::new(self.globals.workdirs.clone(), admctrl_tx);
-            subsys.start("workdirs-watcher", move |a| workdirs_watcher.run(a));
+            subsys.start(SubsystemBuilder::new("workdirs-watcher", move |a| {
+                workdirs_watcher.run(a)
+            }));
         }
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {

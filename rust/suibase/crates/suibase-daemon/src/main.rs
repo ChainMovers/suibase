@@ -48,11 +48,13 @@ mod workers;
 use shared_types::Globals;
 use tokio::time::Duration;
 
-use tokio_graceful_shutdown::Toplevel;
-
 use crate::admin_controller::AdminController;
 use crate::api::APIServer;
 use crate::network_monitor::NetworkMonitor;
+use tokio_graceful_shutdown::{
+    errors::{GracefulShutdownError, SubsystemError},
+    SubsystemBuilder, Toplevel,
+};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -97,19 +99,49 @@ impl Command {
                 let clock: ClockTrigger = ClockTrigger::new(netmon_tx.clone());
 
                 // Start the subsystems.
-                Toplevel::new()
-                    .start("admctrl", move |a| admctrl.run(a))
-                    .start("netmon", move |a| netmon.run(a))
-                    .start("clock", move |a| clock.run(a))
-                    .start("apiserver", move |a| apiserver.run(a))
-                    .catch_signals()
-                    .handle_shutdown_requests(Duration::from_millis(1000))
-                    .await
-                    .map_err(Into::into)
-            }
-        }
-    }
-}
+                let errors = Toplevel::new(|s| async move {
+                    s.start(SubsystemBuilder::new("admctrl", |a| admctrl.run(a)));
+                    s.start(SubsystemBuilder::new("netmon", |a| netmon.run(a)));
+                    s.start(SubsystemBuilder::new("clock", |a| clock.run(a)));
+                    s.start(SubsystemBuilder::new("apiserver", |a| apiserver.run(a)));
+                })
+                .catch_signals()
+                .handle_shutdown_requests(Duration::from_millis(1000))
+                .await;
+
+                if let Err(e) = &errors {
+                    match e {
+                        GracefulShutdownError::SubsystemsFailed(_) => {
+                            log::error!("subsystems failed.")
+                        }
+                        GracefulShutdownError::ShutdownTimeout(_) => {
+                            log::warn!("shutdown timed out.")
+                        }
+                    };
+
+                    for subsystem_error in e.get_subsystem_errors() {
+                        match subsystem_error {
+                            SubsystemError::Failed(name, _e) => {
+                                log::error!("   subsystem '{}' failed.", name);
+                                /* TODO
+                                match e.get_error() {
+                                    SuibaseError::InternalError(data) => {
+                                        log::error!("      Failed with SuibaseError::InternalError::WithData({})", data)
+                                    }
+                                }*/
+                            }
+
+                            SubsystemError::Panicked(name) => {
+                                log::error!("   subsystem '{}' panicked.", name)
+                            }
+                        }
+                    }
+                }
+                Ok(errors?)
+            } // end Command::Run
+        } // end match self
+    } // end fn execute
+} // end of Command
 
 #[tokio::main]
 async fn main() {

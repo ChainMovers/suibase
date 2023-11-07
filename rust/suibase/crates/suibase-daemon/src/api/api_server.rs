@@ -8,12 +8,16 @@
 // A JSONRPCServer owns a jsonrpsee Server to handle the JSON-RPC requests.
 // ( https://github.com/paritytech/jsonrpsee )
 
-use tokio::time::Duration;
+use axum::async_trait;
 
 use anyhow::Result;
-use tokio_graceful_shutdown::{FutureExt, SubsystemHandle, Toplevel};
+use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::{admin_controller::AdminControllerTx, shared_types::Globals};
+use crate::{
+    admin_controller::AdminControllerTx,
+    basic_types::{AutoThread, Runnable},
+    shared_types::Globals,
+};
 
 use super::GeneralApiServer;
 use crate::api::impl_general_api::GeneralApiImpl;
@@ -32,69 +36,68 @@ use jsonrpsee::{
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
-pub struct APIServer {
+#[derive(Clone)]
+struct APIServerParams {
     globals: Globals,
     admctrl_tx: AdminControllerTx,
+}
+
+impl APIServerParams {
+    pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
+        Self {
+            globals,
+            admctrl_tx,
+        }
+    }
+}
+
+pub struct APIServer {
+    auto_thread: AutoThread<APIServerThread, APIServerParams>,
 }
 
 impl APIServer {
     pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
         Self {
-            globals,
-            admctrl_tx,
+            auto_thread: AutoThread::new(
+                "APIServer".to_string(),
+                APIServerParams::new(globals, admctrl_tx),
+            ),
         }
     }
 
     pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("APIServer started");
-        loop {
-            let inner_server: JSONRPCServer =
-                JSONRPCServer::new(self.globals.clone(), self.admctrl_tx.clone());
-
-            // Create an instance of JSONRPCServer. If it panics, then
-            // we will just create a new instance ("start a new one" == "restart").
-            let inner_server_result = Toplevel::nested(&subsys, "")
-                .start("inner", |a| inner_server.run(a))
-                .handle_shutdown_requests(Duration::from_millis(50))
-                .await;
-
-            if let Err(err) = &inner_server_result {
-                // TODO Restart the process on excess of errors for tentative recovery (e.g. memory leaks?)
-                log::error!("JSONRPCServer server: {}", err);
-                // Something went wrong, wait a couple of second before restarting
-                // the inner server, but do not block from exiting.
-                for _ in 0..4 {
-                    if subsys.is_shutdown_requested() {
-                        break;
-                    }
-                    tokio::time::sleep(Duration::from_millis(500)).await;
-                }
-            }
-
-            if subsys.is_shutdown_requested() {
-                break;
-            }
-
-            log::info!("Restarting JSON-RPC server ...");
-        }
-        log::info!("APIServer shutting down - normal exit");
-        Ok(())
+        self.auto_thread.run(subsys).await
     }
 }
 
-struct JSONRPCServer {
-    globals: Globals,
-    admctrl_tx: AdminControllerTx,
+struct APIServerThread {
+    name: String,
+    params: APIServerParams,
 }
 
-impl JSONRPCServer {
-    pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
-        Self {
-            globals,
-            admctrl_tx,
-        }
+#[async_trait]
+impl Runnable<APIServerParams> for APIServerThread {
+    fn new(name: String, params: APIServerParams) -> Self {
+        Self { name, params }
     }
 
+    async fn run(self, subsys: SubsystemHandle) -> Result<()> {
+        log::info!("APIServerThread started");
+
+        match self.run_server(&subsys).cancel_on_shutdown(&subsys).await {
+            Ok(_) => {
+                log::info!("APIServerThread shutting down - normal exit (2)");
+                Ok(())
+            }
+            Err(_cancelled_by_shutdown) => {
+                log::info!("APIServerThread shutting down - normal exit (1)");
+                Ok(())
+            }
+        }
+    }
+}
+
+impl APIServerThread {
     async fn run_server(self, _subsys: &SubsystemHandle) -> Result<()> {
         // Reference:
         // https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/cors_server.rs
@@ -119,7 +122,10 @@ impl JSONRPCServer {
         let mut all_methods = Methods::new();
 
         {
-            let api = ProxyApiImpl::new(self.globals.proxy.clone(), self.admctrl_tx.clone());
+            let api = ProxyApiImpl::new(
+                self.params.globals.proxy.clone(),
+                self.params.admctrl_tx.clone(),
+            );
             let methods = api.into_rpc();
             if let Err(e) = all_methods.merge(methods) {
                 log::error!("Error merging ProxyApiImpl methods: {}", e);
@@ -127,7 +133,8 @@ impl JSONRPCServer {
         }
 
         {
-            let api = GeneralApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
+            let api =
+                GeneralApiImpl::new(self.params.globals.clone(), self.params.admctrl_tx.clone());
             let methods = api.into_rpc();
             if let Err(e) = all_methods.merge(methods) {
                 log::error!("Error merging GeneralApiImpl methods: {}", e);
@@ -135,7 +142,8 @@ impl JSONRPCServer {
         }
 
         {
-            let api = PackagesApiImpl::new(self.globals.clone(), self.admctrl_tx.clone());
+            let api =
+                PackagesApiImpl::new(self.params.globals.clone(), self.params.admctrl_tx.clone());
             let methods = api.into_rpc();
             if let Err(e) = all_methods.merge(methods) {
                 log::error!("Error merging ModulesApiImpl methods: {}", e);
@@ -156,20 +164,5 @@ impl JSONRPCServer {
         }
 
         Ok(())
-    }
-
-    pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("JSONRPCServer server started");
-
-        match self.run_server(&subsys).cancel_on_shutdown(&subsys).await {
-            Ok(_) => {
-                log::info!("JSONRPCServer server shutting down - normal exit (2)");
-                Ok(())
-            }
-            Err(_cancelled_by_shutdown) => {
-                log::info!("JSONRPCServer server shutting down - normal exit (1)");
-                Ok(())
-            }
-        }
     }
 }

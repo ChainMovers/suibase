@@ -29,7 +29,7 @@ serde_json = { version = "1.0.95", features = [
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 
 tokio = { version = "1.28.1", features = ["full"] }
-tokio-graceful-shutdown = "0.13"
+tokio-graceful-shutdown = "0.14"
 
 tower = { version = "0.4.12", features = [
     "full",

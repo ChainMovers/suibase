@@ -12,7 +12,7 @@ use bitflags::bitflags;
 
 use anyhow::{anyhow, Result};
 use hyper::http;
-use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
+use tokio_graceful_shutdown::{FutureExt, SubsystemBuilder, SubsystemHandle};
 
 use tokio::time::{Duration, Instant};
 
@@ -793,7 +793,9 @@ impl NetworkMonitor {
         // Start another thread to initiate requests toward target servers (e.g. health check)
         let (request_worker_tx, request_worker_rx) = tokio::sync::mpsc::channel(1000);
         let request_worker = RequestWorker::new(request_worker_rx);
-        subsys.start("request-worker", move |a| request_worker.run(a));
+        subsys.start(SubsystemBuilder::new("request-worker", |a| {
+            request_worker.run(a)
+        }));
 
         // The loop to handle all incoming messages.
         match self

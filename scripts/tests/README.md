@@ -1,5 +1,9 @@
-run-all.sh: Run every other test script (.sh) in this directory and subdirectories.
+run-all.sh: Run every script (.sh) in subdirectories.
 
-Each test script can also be called indepedently to test a subset of the code.
+Each test script can also be called independently to test a subset of the code.
 
-All scripts in this directory returns 0 when there is no error found.
+Scripts return status:
+      0: No Error
+      1: Failed Test
+      2: Skipped (no test performed)
+    >=3: Test Script Failure
