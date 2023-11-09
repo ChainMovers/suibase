@@ -156,15 +156,13 @@ impl Helper {
     /// Get an address by name.
     ///
     /// Suibase localnet/devnet/testnet/mainnet workdir are created with a set of pre-defined client addresses.
+    /// These addresses are useful for testing. In particular, with a localnet, they are prefunded.
     ///
-    /// These addresses are useful for testing. In particular, with localnet they are prefunded.
-    ///
-    /// Names can be:  active | sb-[1-5]-[ed25519|scp256k1|scp256r1]
+    /// Values for the `address_name` argument can be: `active | sb-[1-5]-[ed25519|scp256k1|scp256r1]`
     ///
     /// Examples: "active", "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
     ///
-    /// "active" is same as doing "sui client active-address" for the selected workdir.
-    ///
+    /// Choosing "active" is same as doing "sui client active-address" for the selected workdir.
     pub fn client_sui_address(&self, address_name: &str) -> Result<SuiAddress, Error> {
         self.0.lock().unwrap().client_sui_address(address_name)
     }
