@@ -5,7 +5,7 @@ members = ["crates/suibase-daemon"]
 [workspace.package]
 # Bump 'version' for the suibase-daemon to self-restart after an update.
 # (this is not the Suibase package version, it is specifically for this crate).
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 
 [workspace.dependencies]
@@ -45,6 +45,8 @@ tower-http = { version = "0.3.4", features = [
     "set-header",
     "propagate-header",
 ] }
+
+tokio-tungstenite = "*"
 
 uuid = { version = "1.4.1", features = ["v4","v7","fast-rng"] }
 uuid7 = { version= "0.7.0", features = [ "uuid" ] }

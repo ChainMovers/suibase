@@ -1,18 +1,70 @@
+// Generate periodical audit message toward other threads.
 use anyhow::Result;
+use axum::async_trait;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::network_monitor::{NetMonTx, NetworkMonitor};
+use crate::{
+    basic_types::{AutoThread, Runnable},
+    network_monitor::{NetMonTx, NetworkMonitor},
+};
 use tokio::time::{interval, Duration};
-pub struct ClockTrigger {
+
+#[derive(Clone)]
+pub struct ClockTriggerParams {
     netmon_tx: NetMonTx,
 }
 
-impl ClockTrigger {
+impl ClockTriggerParams {
     pub fn new(netmon_tx: NetMonTx) -> Self {
         Self { netmon_tx }
     }
+}
 
-    async fn clock_loop(&mut self, subsys: &SubsystemHandle) {
+pub struct ClockTrigger {
+    auto_thread: AutoThread<ClockTriggerThread, ClockTriggerParams>,
+}
+
+impl ClockTrigger {
+    pub fn new(params: ClockTriggerParams) -> Self {
+        Self {
+            auto_thread: AutoThread::new("ClockTrigger".to_string(), params),
+        }
+    }
+
+    pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
+        self.auto_thread.run(subsys).await
+    }
+}
+
+struct ClockTriggerThread {
+    name: String,
+    params: ClockTriggerParams,
+}
+
+#[async_trait]
+impl Runnable<ClockTriggerParams> for ClockTriggerThread {
+    fn new(name: String, params: ClockTriggerParams) -> Self {
+        Self { name, params }
+    }
+
+    async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
+        log::info!("started");
+
+        match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
+            Ok(()) => {
+                log::info!("shutting down - normal exit (2)");
+                Ok(())
+            }
+            Err(_cancelled_by_shutdown) => {
+                log::info!("shutting down - normal exit (1)");
+                Ok(())
+            }
+        }
+    }
+}
+
+impl ClockTriggerThread {
+    async fn event_loop(&mut self, subsys: &SubsystemHandle) {
         let mut interval = interval(Duration::from_secs(1));
         let mut tick: u64 = 0;
         loop {
@@ -25,26 +77,11 @@ impl ClockTrigger {
 
             if (tick % 10) == 4 {
                 // Every 10 seconds, with first one ~4 seconds after start.
-                let result = NetworkMonitor::send_event_globals_audit(&self.netmon_tx).await;
+                let result = NetworkMonitor::send_event_globals_audit(&self.params.netmon_tx).await;
                 if let Err(e) = result {
                     log::error!("send_event_globals_audit {}", e);
                     // TODO This is bad if sustain for many seconds. Add watchdog here.
                 }
-            }
-        }
-    }
-
-    pub async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("started");
-
-        match self.clock_loop(&subsys).cancel_on_shutdown(&subsys).await {
-            Ok(()) => {
-                log::info!("shutting down - normal exit (2)");
-                Ok(())
-            }
-            Err(_cancelled_by_shutdown) => {
-                log::info!("shutting down - normal exit (1)");
-                Ok(())
             }
         }
     }

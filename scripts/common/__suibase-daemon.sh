@@ -515,30 +515,103 @@ notify_suibase_daemon_fs_change() {
 }
 export -f notify_suibase_daemon_fs_change
 
-notify_suibase_daemon_publish() {
-  # Best-effort notification to the suibase-daemon that a new modules
-  # was successfully published.
+# Step done after a network publication.
+#
+# Allows the suibase-daemon to learn about the packageid and do some
+# more sanity checks.
+#
+do_suibase_daemon_post_publish() {
   local _TOML_PATH=$1
   local _NAME=$2
-  local _ID=$3
+  local _UUID=$3
+  local _TIMESTAMP=$4
+  local _ID=$5
 
   if ! is_suibase_daemon_running; then
-    return
+    # TODO attempt to restart daemon here before failing.
+    error_exit "suibase-daemon not running. Do '$WORKDIR start' and try again."
   fi
 
   if [ -z "$WORKDIR_NAME" ]; then
-    return
+    error_exit "do_suibase_daemon_post_publish internal error: Missing WORKDIR_NAME"
+  fi
+
+  if [ -z "$_NAME" ]; then
+    error_exit "do_suibase_daemon_post_publish internal error: Missing NAME"
+  fi
+
+  if [ -z "$_UUID" ]; then
+    error_exit "do_suibase_daemon_post_publish internal error: Missing UUID"
+  fi
+
+  if [ -z "$_ID" ]; then
+    error_exit "do_suibase_daemon_post_publish internal error: Missing ID"
   fi
 
   local _HEADERS="Content-Type: application/json"
 
-  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"publish\",\"params\":{\"workdir\":\"$WORKDIR_NAME\", \"move_toml_path\": \"$_TOML_PATH\", \"package_id\": \"$_ID\", \"package_name\": \"$_NAME\"}}"
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"postPublish\",\"params\":{\"workdir\":\"$WORKDIR_NAME\", \"move_toml_path\": \"$_TOML_PATH\", \"package_name\": \"$_NAME\", \"package_uuid\": \"$_UUID\", \"package_timestamp\": \"$_TIMESTAMP\", \"package_id\": \"$_ID\"}}"
 
-  #curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
   _RESULT=$(curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
-  update_JSON_VALUE "success" "$_RESULT"
+  update_JSON_VALUE "result" "$_RESULT"
   if [ "$JSON_VALUE" != "true" ]; then
-    warn_user "notify_suibase_daemon_publish failed: [$_RESULT] [$JSON_VALUE]"
+    echo "post-publish error: [$_RESULT] [$JSON_VALUE]"
+    error_exit "A post publication operation failed. Recommended to try to publish again".
   fi
 }
-export -f notify_suibase_daemon_publish
+export -f do_suibase_daemon_post_publish
+
+# Step to perform prior to publication to a network to create
+# a unique UUID for the package.
+#
+# Will update global variables: PACKAGE_UUID and PACKAGE_TIMESTAMP
+
+# PACKAGE_TIMESTAMP is Unix EPOCH in milliseconds (remove last 3 digits for seconds).
+export PACKAGE_UUID=""
+export PACKAGE_TIMESTAMP=""
+do_suibase_daemon_pre_publish() {
+  # Best-effort notification to the suibase-daemon that a new modules
+  # was successfully published.
+  local _TOML_PATH=$1
+  local _NAME=$2
+
+  if [ -z "$WORKDIR_NAME" ]; then
+    error_exit "do_suibase_daemon_pre_publish internal error: Missing WORKDIR_NAME"
+  fi
+
+  if [ -z "$_NAME" ]; then
+    error_exit "do_suibase_daemon_pre_publish internal error: Missing NAME"
+  fi
+
+  # The suibase-daemon is needed to be working to get the PACKAGE_UUID.
+  if ! is_suibase_daemon_running; then
+    # TODO attempt to restart daemon here before failing.
+    error_exit "suibase-daemon not running. Do '$WORKDIR start' and try again."
+  fi
+
+  local _HEADERS="Content-Type: application/json"
+
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"prePublish\",\"params\":{\"workdir\":\"$WORKDIR_NAME\", \"move_toml_path\": \"$_TOML_PATH\", \"package_name\": \"$_NAME\"}}"
+
+  _RESULT=$(curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+  update_JSON_VALUE "result" "$_RESULT"
+  if [ "$JSON_VALUE" != "true" ]; then
+    error_exit "do_suibase_daemon_pre_publish failed: [$_RESULT] [$JSON_VALUE]"
+  fi
+
+  # TODO Extract the package_uuid from the result.
+  update_JSON_VALUE "info" "$_RESULT"
+  if [ -z "$JSON_VALUE" ]; then
+    error_exit "do_suibase_daemon_pre_publish failed (missing info): [$_RESULT]"
+  fi
+
+  local _INFO="$JSON_VALUE"
+  # Extract from _INFO string the PACKAGE_UUID and PACKAGE_TIMESTAMP
+  # The fields are comma seperated in the string.
+  IFS=',' read -ra INFO_ARRAY <<<"$_INFO"
+
+  # Assign array elements to variables
+  PACKAGE_UUID=${INFO_ARRAY[0]}
+  PACKAGE_TIMESTAMP=${INFO_ARRAY[1]}
+}
+export -f do_suibase_daemon_pre_publish

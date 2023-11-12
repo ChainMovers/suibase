@@ -14,8 +14,8 @@ impl From<RpcInputError> for RpcError {
     }
 }
 
-impl From<RpcServerError> for RpcError {
-    fn from(e: RpcServerError) -> Self {
+impl From<RpcSuibaseError> for RpcError {
+    fn from(e: RpcSuibaseError) -> Self {
         e.rpc_error()
     }
 }
@@ -27,9 +27,11 @@ pub enum RpcInputError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RpcServerError {
+pub enum RpcSuibaseError {
     #[error("internal error: {0}")]
     InternalError(String),
+    #[error("file access error: {0}")]
+    FileAccessError(String),
 }
 
 impl RpcInputError {
@@ -38,7 +40,7 @@ impl RpcInputError {
     }
 }
 
-impl RpcServerError {
+impl RpcSuibaseError {
     pub fn rpc_error(self) -> RpcError {
         jsonrpsee::core::Error::Call(CallError::Failed(self.into()))
     }

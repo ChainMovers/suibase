@@ -10,7 +10,7 @@ use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL
 use crate::basic_types::WorkdirIdx;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
 
-use super::{GeneralApiServer, RpcInputError, RpcServerError, StatusResponse, StatusService};
+use super::{GeneralApiServer, RpcInputError, RpcSuibaseError, StatusResponse, StatusService};
 
 use super::def_header::Versioned;
 
@@ -42,11 +42,11 @@ impl GeneralApiImpl {
                     return Ok(resp_str);
                 }
                 Err(e) => {
-                    return Err(RpcServerError::InternalError(e.to_string()).into());
+                    return Err(RpcSuibaseError::InternalError(e.to_string()).into());
                 }
             }
         }
-        Err(RpcServerError::InternalError("admctrl_tx.send failed".to_string()).into())
+        Err(RpcSuibaseError::InternalError("admctrl_tx.send failed".to_string()).into())
     }
 
     fn remove_ascii_color_code(s: &str) -> String {

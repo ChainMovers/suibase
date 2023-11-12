@@ -5,32 +5,34 @@
 //  - Validate command line.
 //  - Telemetry setup
 //  - Top level threads started here. These runs until the program terminates:
-//     - AdminController: The thread validating and applying the config changes.
-//     - NetworkMonitor: Maintains remote server stats. Info coming from multiple sources (on a mpsc channel).
-//     - APIServer: Does limited "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
-//     - EventsMonitor: Manage connection(s) to receive/dedup Sui events. Data written to FS (SQLite) for
-//                      every distinct workdir and modules.
-//     - ClockTrigger: Send periodic events (network stats recalculation, watchdog etc...)
+//     - AdminController: The "main" thread validating and applying the config changes and user actions.
+//     - NetworkMonitor: Maintains all remote server stats. Info coming from multiple sources (on a mpsc channel).
+//     - APIServer: Does "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
+//     - ClockTrigger: Send periodic audit events to other threads.
 //
 // Other threads (not started here):
 //
-//  - ProxyServer: One long-running thread instance per listening port. Async handling of all user traffic.
-//                 Uses axum::Server and reqwest::Client. Started/stopped by the AdminController.
+//  - ProxyServer:        One long-running thread instance per listening port. Async handling of all user traffic.
+//                        Uses axum::Server and reqwest::Client. Started/stopped by the AdminController.
 //
-//  - RequestWorker: Perform on-demand requests to target servers for health check+latency test.
-//                   Uses reqwest::Client. Started/stopped by the NetworkMonitor.
+//  - RequestWorker:      Perform on-demand requests to target servers for health check+latency test.
+//                        Uses reqwest::Client. Started/stopped by the NetworkMonitor.
 //
-//  - WorkdirsWatcher: Watch for changes to config files in the suibase workdirs. Send events to AdminController.
-//                     Started/stopped by the AdminController.
+//  - WorkdirsWatcher:    Watch for changes to config files in the suibase workdirs. Send events to AdminController.
+//                        Started/stopped by the AdminController.
 //
-//  - JSONRPCServer: Handles API requests. Mostly read statistics from Globals and apply user action by
-//                   exchanging messages with the AdminController. (re)started/stopped by the APIServer.
-
+//  - ShellWorker:        Perform external call to Suibase command line. One instance per workdir (by design, will
+//                        serialize all command execution). Started/stopped by the AdminController.
+//
+//  - EventsWriterWorker: Manage connection(s) to subscribe/receive/dedup Sui events. Data written to FS (SQLite).
+//                        One instance per workdir. Uses tokio-tungstenite. Started/stopped by the AdminController.
+//
 use anyhow::Result;
 
+use api::APIServerParams;
 use clap::*;
 
-use clock_trigger::ClockTrigger;
+use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
 use pretty_env_logger::env_logger::{Builder, Env};
 
@@ -94,11 +96,13 @@ impl Command {
                 let netmon =
                     NetworkMonitor::new(globals.proxy.clone(), netmon_rx, netmon_tx.clone());
 
-                let apiserver = APIServer::new(globals.clone(), admctrl_tx.clone());
+                let apiserver_params = APIServerParams::new(globals.clone(), admctrl_tx.clone());
+                let apiserver = APIServer::new(apiserver_params);
 
-                let clock: ClockTrigger = ClockTrigger::new(netmon_tx.clone());
+                let clock_params = ClockTriggerParams::new(netmon_tx.clone());
+                let clock: ClockTrigger = ClockTrigger::new(clock_params);
 
-                // Start the subsystems.
+                // Start all top levels subsystems.
                 let errors = Toplevel::new(|s| async move {
                     s.start(SubsystemBuilder::new("admctrl", |a| admctrl.run(a)));
                     s.start(SubsystemBuilder::new("netmon", |a| netmon.run(a)));
@@ -139,8 +143,8 @@ impl Command {
                 }
                 Ok(errors?)
             } // end Command::Run
-        } // end match self
-    } // end fn execute
+        }
+    }
 } // end of Command
 
 #[tokio::main]

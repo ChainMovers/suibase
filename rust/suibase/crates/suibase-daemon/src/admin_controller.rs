@@ -7,6 +7,7 @@ use crate::proxy_server::ProxyServer;
 use crate::shared_types::{Globals, InputPort, WorkdirProxyConfig};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
+use crate::workers::{EventsWriterWorker, EventsWriterWorkerParams};
 
 use anyhow::Result;
 
@@ -49,21 +50,14 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 #[derive(Default)]
 struct WorkdirTracking {
     last_read_config: Option<WorkdirProxyConfig>,
+
     shell_worker_tx: Option<AdminControllerTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
-                                                                                // Box<dyn StdError + Send + std::marker::Sync + 'static'>
+
+    events_writer_worker_tx: Option<AdminControllerTx>,
+    events_writer_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
 }
 
-impl WorkdirTracking {
-    /*
-    pub fn new() -> Self {
-        Self {
-            last_read_config: None,
-            shell_worker_tx: None,
-            shell_worker_handle: None,
-        }
-    }*/
-}
 impl std::fmt::Debug for WorkdirTracking {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WorkdirTracking")
@@ -253,7 +247,7 @@ impl AdminController {
     }
 
     async fn process_config_msg(&mut self, msg: AdminControllerMsg, subsys: &SubsystemHandle) {
-        // This process always process only one Workdir at a time.
+        // Detect any config change for one workdir, and apply it to all other runtime components.
 
         if msg.event_id != EVENT_NOTIF_CONFIG_FILE_CHANGE {
             log::error!("Unexpected event_id {:?}", msg.event_id);
@@ -266,9 +260,6 @@ impl AdminController {
             return;
         }
         let path = msg.data_string().unwrap();
-
-        // Here will be done the operation that requires a write lock on the workdirs
-        // (none for now, the workdir are hardcoded).
 
         // Load the configuration.
         let mut workdir_config = WorkdirProxyConfig::new();
@@ -399,6 +390,26 @@ impl AdminController {
                     subsys.request_shutdown();
                 }
             }
+        }
+
+        // As needed, start an events_writer_worker for this workdir.
+        if workdir_config.is_user_request_start()
+            && wd_tracking.events_writer_worker_handle.is_none()
+        {
+            let (events_writer_worker_tx, events_writer_worker_rx) =
+                tokio::sync::mpsc::channel(100);
+            wd_tracking.events_writer_worker_tx = Some(events_writer_worker_tx);
+            let events_writer_worker_params = EventsWriterWorkerParams::new(
+                self.globals.clone(),
+                events_writer_worker_rx,
+                Some(workdir_idx),
+            );
+            let events_writer_worker = EventsWriterWorker::new(events_writer_worker_params);
+            let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
+                events_writer_worker.run(a)
+            }));
+            wd_tracking.events_writer_worker_handle = Some(nested);
+            // TODO Detect "events" related config change and inform the worker about it.
         }
 
         // Remember the changes that were applied.

@@ -37,7 +37,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Clone)]
-struct APIServerParams {
+pub struct APIServerParams {
     globals: Globals,
     admctrl_tx: AdminControllerTx,
 }
@@ -56,12 +56,9 @@ pub struct APIServer {
 }
 
 impl APIServer {
-    pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
+    pub fn new(params: APIServerParams) -> Self {
         Self {
-            auto_thread: AutoThread::new(
-                "APIServer".to_string(),
-                APIServerParams::new(globals, admctrl_tx),
-            ),
+            auto_thread: AutoThread::new("APIServer".to_string(), params),
         }
     }
 
@@ -82,15 +79,15 @@ impl Runnable<APIServerParams> for APIServerThread {
     }
 
     async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("APIServerThread started");
+        log::info!("started");
 
-        match self.run_server(&subsys).cancel_on_shutdown(&subsys).await {
+        match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(_) => {
-                log::info!("APIServerThread shutting down - normal exit (2)");
+                log::info!("shutting down - normal exit (2)");
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("APIServerThread shutting down - normal exit (1)");
+                log::info!("shutting down - normal exit (1)");
                 Ok(())
             }
         }
@@ -98,7 +95,7 @@ impl Runnable<APIServerParams> for APIServerThread {
 }
 
 impl APIServerThread {
-    async fn run_server(self, _subsys: &SubsystemHandle) -> Result<()> {
+    async fn event_loop(self, _subsys: &SubsystemHandle) -> Result<()> {
         // Reference:
         // https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/cors_server.rs
         let cors = CorsLayer::new()

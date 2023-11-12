@@ -94,8 +94,11 @@ impl SuibaseWorkdir {
             self.get_pathname_published_file(root, package_name, "package-id", "json")?;
 
         // TODO: add info from inner I/O error.
-        let mut in_str = std::fs::read_to_string(&pathname)
-            .map_err(|_| Error::PublishedDataAccessError { path: pathname })?;
+        let mut in_str =
+            std::fs::read_to_string(&pathname).map_err(|_| Error::PublishedDataAccessError {
+                package_name: package_name.to_string(),
+                path: pathname,
+            })?;
 
         in_str = in_str.trim().to_string();
 
@@ -305,6 +308,27 @@ impl SuibaseWorkdir {
         let mut path_buf = PathBuf::from(workdir_path);
         path_buf.push("published-data");
         path_buf.push(package_name);
+        path_buf.push("most-recent");
+
+        let symlink = std::fs::read_link(&path_buf);
+        if let Ok(symlink_target) = symlink {
+            // Do resolve the symlink portion as part of the original path.
+            let canonical_path = std::fs::canonicalize(&path_buf);
+            if let Ok(resolved_path) = canonical_path {
+                path_buf = resolved_path;
+            } else {
+                return Err(Error::PublishedDataAccessErrorInvalidSymlink {
+                    package_name: package_name.to_string(),
+                    path: path_buf.to_string_lossy().to_string(),
+                    symlink_target: symlink_target.to_string_lossy().to_string(),
+                });
+            }
+        } else {
+            return Err(Error::PublishedDataAccessErrorSymlinkNotFound {
+                package_name: package_name.to_string(),
+                path: path_buf.to_string_lossy().to_string(),
+            });
+        }
 
         // Do an intermediate check to potentially error and provide a simplified advise
         // to publish the package (versus raising an error specific to package-id.json file).
@@ -319,6 +343,7 @@ impl SuibaseWorkdir {
             return Err(Error::PublishedDataNotFound {
                 package_name: package_name.to_string(),
                 workdir: workdir_name,
+                path: published_path,
             });
         }
 
@@ -395,7 +420,7 @@ impl SuibaseWorkdir {
                 path: pathname.to_string(),
             })?;
 
-        // Simply use the suibaseselected primary.
+        // Simply use the suibase selected primary.
         let mut link_id: u64 = 0;
         if let Some(selection) = top.get("selection") {
             if let Some(primary_id) = selection.get("primary") {

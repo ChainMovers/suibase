@@ -10,7 +10,7 @@
 //!
 //! What is Suibase?
 //!
-//! Suibase makes it easy for Sui devs to simultaneoulsly interact with multiple Sui
+//! Suibase makes it easy for Sui devs to simultaneously interact with multiple Sui
 //! networks (localnet/devnet/testnet/mainnet) without having to "switch env".
 //!
 //! Your dev setup gains stability by having a client binary match every network version.

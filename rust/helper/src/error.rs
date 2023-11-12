@@ -21,10 +21,11 @@ pub enum Error {
     #[error("suibase: Not finding keystore `{path:?}`. Run the sui client to create it?")]
     SuibaseKeystoreNotExists { path: String },
 
-    #[error("suibase: No published data found for package `{package_name:?}`. Did you do `{workdir:?}` publish?")]
+    #[error("suibase: No published data found for package `{package_name:?}` at `{path:?}`. Did you do `{workdir:?} publish`?")]
     PublishedDataNotFound {
         package_name: String,
         workdir: String,
+        path: String,
     },
 
     #[error("suibase: Missing link definition. Check suibase.yaml links section.")]
@@ -106,8 +107,18 @@ pub enum Error {
     #[error("suibase: Could not parse dns address `{address:?}` from file `{path:?}`")]
     WorkdirStateDNSParseError { path: String, address: String },
 
-    #[error("suibase: Could not open published data `{path:?}`. Was the package published with success?")]
-    PublishedDataAccessError { path: String },
+    #[error("suibase: [code:1] Could not open published data `{path:?}`. Was the package `{package_name:?}` published with success?")]
+    PublishedDataAccessError { package_name: String, path: String },
+
+    #[error("suibase: [code:2] Could not open published data `{path:?}`. Symlink value is `{symlink_target:?}`. Was the package `{package_name:?}` published with success?")]
+    PublishedDataAccessErrorInvalidSymlink {
+        package_name: String,
+        path: String,
+        symlink_target: String,
+    },
+
+    #[error("suibase: [code:3] Could not open published data `{path:?}`. Was the package `{package_name:?}` published with success?")]
+    PublishedDataAccessErrorSymlinkNotFound { package_name: String, path: String },
 
     #[error("suibase: Could not open published new objects file `{path:?}`. Was the package published with success?")]
     PublishedNewObjectAccessError { path: String },

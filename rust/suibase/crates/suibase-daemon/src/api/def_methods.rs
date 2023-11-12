@@ -255,7 +255,7 @@ impl Default for SuiEventsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SuccessResponse {
     pub header: Header,
-    pub success: bool,
+    pub result: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub info: Option<String>,
 }
@@ -264,7 +264,7 @@ impl SuccessResponse {
     pub fn new() -> Self {
         Self {
             header: Header::default(),
-            success: false,
+            result: false,
             info: None,
         }
     }
@@ -298,14 +298,16 @@ impl SuiObjectInstance {
 pub struct PackageInstance {
     pub package_id: String,
     pub package_name: String,
+    pub package_timestamp: String,
     pub init_objects: Option<Vec<SuiObjectInstance>>,
 }
 
 impl PackageInstance {
-    pub fn new(package_id: String, package_name: String) -> Self {
+    pub fn new(package_id: String, package_name: String, package_timestamp: String) -> Self {
         Self {
             package_id,
             package_name,
+            package_timestamp,
             init_objects: None,
         }
     }
@@ -315,7 +317,7 @@ impl PackageInstance {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveConfig {
-    // The key is the "output_dir" defined in the Suibase.toml.
+    // The key is the "uuid" defined in the Suibase.toml.
 
     // Last reported location of the .toml files.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -355,7 +357,7 @@ pub struct PackagesConfigResponse {
 
     // One entry per distinct Move.toml published.
     //
-    // Hashmap Key is a base32+md5sum of the "output_dir" defined
+    // Hashmap Key is a base32+md5sum of the "uuid" defined
     // in the Suibase.toml co-located with the Move.toml.
     //
     // For each MoveConfig, zero or more package instances
@@ -453,12 +455,22 @@ pub trait PackagesApi {
         data_uuid: Option<String>,
     ) -> RpcResult<PackagesConfigResponse>;
 
-    #[method(name = "publish")]
-    async fn publish(
+    #[method(name = "prePublish")]
+    async fn pre_publish(
         &self,
         workdir: String,
         move_toml_path: String,
-        package_id: String,
         package_name: String,
+    ) -> RpcResult<SuccessResponse>;
+
+    #[method(name = "postPublish")]
+    async fn post_publish(
+        &self,
+        workdir: String,
+        move_toml_path: String,
+        package_name: String,
+        package_uuid: String,
+        package_timestamp: String,
+        package_id: String,
     ) -> RpcResult<SuccessResponse>;
 }

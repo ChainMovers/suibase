@@ -6,6 +6,7 @@
 //
 // Will cleanly self-exit on SIGTERM, Ctrl-C etc...
 //
+// See api_server.rs for an example of usage.
 
 use anyhow::Result;
 use axum::async_trait;

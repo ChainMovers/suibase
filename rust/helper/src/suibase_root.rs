@@ -64,3 +64,33 @@ impl SuibaseRoot {
         self.is_installed = base_path_ok && workdirs_path_ok;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SuibaseRoot;
+
+    #[test]
+    fn test_new() {
+        let mut sb = SuibaseRoot::new();
+        assert_eq!(sb.is_installed(), true);
+        let path = sb.suibase_path();
+        assert_eq!(path.is_empty(), false);
+        assert_eq!(path.ends_with("suibase"), true);
+        let workdir_path = sb.workdirs_path();
+        assert_eq!(workdir_path.is_empty(), false);
+        assert_eq!(workdir_path.ends_with("suibase/workdirs"), true);
+    }
+
+    #[test]
+    fn test_refresh_state() {
+        let mut sb = SuibaseRoot::new();
+        sb.refresh_state();
+        assert_eq!(sb.is_installed(), true);
+        let path = sb.suibase_path();
+        assert_eq!(path.is_empty(), false);
+        assert_eq!(path.ends_with("suibase"), true);
+        let workdir_path = sb.workdirs_path();
+        assert_eq!(workdir_path.is_empty(), false);
+        assert_eq!(workdir_path.ends_with("suibase/workdirs"), true);
+    }
+}
