@@ -92,12 +92,11 @@ impl SuibaseWorkdir {
     ) -> Result<ObjectID, Error> {
         let pathname =
             self.get_pathname_published_file(root, package_name, "package-id", "json")?;
-
-        // TODO: add info from inner I/O error.
         let mut in_str =
-            std::fs::read_to_string(&pathname).map_err(|_| Error::PublishedDataAccessError {
+            std::fs::read_to_string(&pathname).map_err(|io_error| Error::PublishedDataAccessError {
                 package_name: package_name.to_string(),
                 path: pathname,
+                io_error,
             })?;
 
         in_str = in_str.trim().to_string();

@@ -1,3 +1,5 @@
+use std::io::Error as IOError;
+
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::large_enum_variant)]
 pub enum Error {
@@ -21,7 +23,11 @@ pub enum Error {
     #[error("suibase: Not finding keystore `{path:?}`. Run the sui client to create it?")]
     SuibaseKeystoreNotExists { path: String },
 
-    #[error("suibase: No published data found for package `{package_name:?}` at `{path:?}`. Did you do `{workdir:?} publish`?")]
+    #[error(
+        "suibase: No published data found for package `{package_name:?}`.\n\
+        Note that the package must have been published via `{workdir:?} publish`, and not e.g. the Sui SDK."
+        )
+    ]
     PublishedDataNotFound {
         package_name: String,
         workdir: String,
@@ -107,8 +113,13 @@ pub enum Error {
     #[error("suibase: Could not parse dns address `{address:?}` from file `{path:?}`")]
     WorkdirStateDNSParseError { path: String, address: String },
 
-    #[error("suibase: [code:1] Could not open published data `{path:?}`. Was the package `{package_name:?}` published with success?")]
-    PublishedDataAccessError { package_name: String, path: String },
+    #[error(
+        "suibase: [code:1] Could not open published data `{path:?}`.\n\
+        IO Error: {io_error:?}\
+        Was the package `{package_name:?}` published with success?",
+        )
+    ]
+    PublishedDataAccessError { package_name: String, path: String, io_error: IOError },
 
     #[error("suibase: [code:2] Could not open published data `{path:?}`. Symlink value is `{symlink_target:?}`. Was the package `{package_name:?}` published with success?")]
     PublishedDataAccessErrorInvalidSymlink {
