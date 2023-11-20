@@ -10,7 +10,10 @@ crate-type = ["cdylib"]
 doctest = false
 
 [dependencies]
-uniffi = "0.24.1"
+# When changing the uniffi version, you must also update:
+#     - version in "build-dependencies" below
+#     - UNIFFI_BINDGEN_VERSION variable in ~/suibase/pip-install
+uniffi = "0.25.0"
 sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
 home = "0.5.5"
 serde_json = "1.0"
@@ -18,7 +21,11 @@ serde_yaml = "0.9"
 thiserror = "1.0"
 
 [build-dependencies]
-uniffi = { version = "0.24.1", features = ["build"] }
+uniffi = { version = "0.25.0", features = ["build"] }
+
+[dev-dependencies]
+env_logger = "0.10"
+log = "0.4"
 
 [features]
 default = ["build-with-uniffi"]
