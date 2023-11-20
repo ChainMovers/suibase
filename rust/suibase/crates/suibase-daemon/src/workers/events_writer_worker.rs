@@ -4,11 +4,10 @@
 //
 // The events_worker is responsible to subscribe/unsubscribe events, filter them
 // and forward the validated data to its events_writer_worker parent.
-use std::{collections::HashSet, process::Command, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
-    admin_controller::{self, AdminControllerMsg, AdminControllerRx},
-    basic_types::{AutoThread, Runnable, WorkdirIdx},
+    basic_types::{self, AutoThread, GenericChannelMsg, GenericRx, Runnable, WorkdirIdx},
     shared_types::Globals,
     workers::{WebSocketWorker, WebSocketWorkerParams},
 };
@@ -16,24 +15,20 @@ use crate::{
 use anyhow::Result;
 use axum::async_trait;
 
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc::Sender, Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemBuilder, SubsystemHandle};
 
 #[derive(Clone)]
 pub struct EventsWriterWorkerParams {
-    _globals: Globals,
-    event_rx: Arc<Mutex<AdminControllerRx>>,
-    workdir_idx: Option<WorkdirIdx>,
+    globals: Globals,
+    event_rx: Arc<Mutex<GenericRx>>,
+    workdir_idx: WorkdirIdx,
 }
 
 impl EventsWriterWorkerParams {
-    pub fn new(
-        globals: Globals,
-        event_rx: AdminControllerRx,
-        workdir_idx: Option<WorkdirIdx>,
-    ) -> Self {
+    pub fn new(globals: Globals, event_rx: GenericRx, workdir_idx: WorkdirIdx) -> Self {
         Self {
-            _globals: globals,
+            globals,
             event_rx: Arc::new(Mutex::new(event_rx)),
             workdir_idx,
         }
@@ -59,11 +54,7 @@ impl EventsWriterWorker {
 struct EventsWriterThread {
     name: String,
     params: EventsWriterWorkerParams,
-    // Set of unique packaged id (string).
-    subscribed_ids: HashSet<String>,
-
-    // Last known valid sequence number processed.
-    last_seq_number: u64,
+    ws_workers_channel: Vec<Sender<GenericChannelMsg>>,
 }
 
 #[async_trait]
@@ -72,8 +63,7 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
         Self {
             name,
             params,
-            subscribed_ids: HashSet::new(),
-            last_seq_number: 0,
+            ws_workers_channel: Vec::new(),
         }
     }
 
@@ -81,15 +71,16 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
         log::info!("started");
 
         // Start a child websocket_worker thread.
-        let (_worker_tx, worker_rx) = tokio::sync::mpsc::channel(1000);
+        let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(1000);
         let ws_worker_params = WebSocketWorkerParams::new(
-            self.params._globals.clone(),
+            self.params.globals.clone(),
             worker_rx,
+            worker_tx.clone(),
             self.params.workdir_idx,
         );
         let ws_worker = WebSocketWorker::new(ws_worker_params);
         subsys.start(SubsystemBuilder::new("ws-worker", |a| ws_worker.run(a)));
-        // TODO Send a periodic audit message to the websocket_worker.
+        self.ws_workers_channel.push(worker_tx);
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
@@ -105,78 +96,57 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
 }
 
 impl EventsWriterThread {
-    async fn do_exec(&mut self, msg: AdminControllerMsg) {
-        // No error return here. Once the execution is completed, the output
-        // of the response is returned to requester with a one shot message.
-        //
-        // If the response starts with "Error:", then an error was detected.
-        //
-        // Some effects are also possible on globals, particularly
-        // for sharing large results.
-        //
-        log::info!(
-            "do_exec() msg {:?} for workdir_idx={:?}",
-            msg,
-            self.params.workdir_idx
-        );
+    async fn process_audit_msg(&mut self, msg: GenericChannelMsg) {
+        // Forward the message to each self.ws_workers_channel.
+        for tx in &self.ws_workers_channel {
+            let forward_msg = GenericChannelMsg {
+                event_id: msg.event_id,
+                data_string: msg.data_string.clone(),
+                workdir_idx: msg.workdir_idx,
+                resp_channel: None,
+            };
+            let _ = tx.send(forward_msg).await;
+        }
+    }
 
-        let resp = if msg.event_id != admin_controller::EVENT_SHELL_EXEC {
-            log::error!("Unexpected event_id {:?}", msg.event_id);
-            format!("Error: Unexpected event_id {:?}", msg.event_id)
-        } else if let Some(cmd) = &msg.data_string {
-            // Execute the command as if it was a bash script.
-            let output = Command::new("bash").arg("-c").arg(cmd).output();
-
-            match output {
-                Ok(output) => {
-                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    let resp = format!("{}{}", stdout, stderr);
-                    if output.status.success() && stderr.is_empty() {
-                        resp
-                    } else {
-                        format!("Error: {}", resp)
-                    }
-                }
-                Err(e) => {
-                    let error_msg = format!(
-                        "Error: do_exec({:?}, {:?}) error 1: {}",
-                        msg.workdir_idx, cmd, e
-                    );
-                    log::error!("{}", error_msg);
-                    error_msg
-                }
-            }
-        } else {
-            let error_msg = format!(
-                "Error: do_exec({:?}, None) error 2: No command to execute",
-                msg.workdir_idx
-            );
-            log::error!("{}", error_msg);
-            error_msg
-        };
-
-        if let Some(resp_channel) = msg.resp_channel {
-            if let Err(e) = resp_channel.send(resp) {
-                let error_msg = format!(
-                    "Error: do_exec({:?}, {:?}) error 3: {}",
-                    msg.workdir_idx, msg.data_string, e
-                );
-                log::error!("{}", error_msg);
-            }
+    async fn process_update_msg(&mut self, msg: GenericChannelMsg) {
+        // Forward the message to each self.ws_workers_channel.
+        for tx in &self.ws_workers_channel {
+            let forward_msg = GenericChannelMsg {
+                event_id: msg.event_id,
+                data_string: msg.data_string.clone(),
+                workdir_idx: msg.workdir_idx,
+                resp_channel: None,
+            };
+            let _ = tx.send(forward_msg).await;
         }
     }
 
     async fn event_loop(&mut self, subsys: &SubsystemHandle) {
+        // Take mutable ownership of the event_rx channel as long this thread is running.
+        let event_rx = Arc::clone(&self.params.event_rx);
+        let mut event_rx = event_rx.lock().await;
+
         while !subsys.is_shutdown_requested() {
             // Wait for a suibase internal message (not a websocket message!).
-            let mut event_rx = self.params.event_rx.lock().await;
             if let Some(msg) = event_rx.recv().await {
                 // Process the message.
-                drop(event_rx);
-                self.do_exec(msg).await;
+                // Process the message.
+                match msg.event_id {
+                    basic_types::EVENT_AUDIT => {
+                        self.process_audit_msg(msg).await;
+                    }
+                    basic_types::EVENT_UPDATE => {
+                        self.process_update_msg(msg).await;
+                    }
+                    _ => {
+                        // Consume unexpected messages.
+                        log::error!("Unexpected event_id {:?}", msg);
+                    }
+                }
             } else {
                 // Channel closed or shutdown requested.
+                log::info!("Received a None internal message");
                 return;
             }
         }

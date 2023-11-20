@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 log = "0.4.0"
-pretty_env_logger = "0.4"
+env_logger = "0.10"
 home = "0.5.5"
 twox-hash = "1.6.1"
 
@@ -51,3 +51,7 @@ thiserror.workspace = true
 
 tower.workspace = true
 tower-http.workspace = true
+
+[dev-dependencies]
+env_logger = "0.10"
+log = "0.4"

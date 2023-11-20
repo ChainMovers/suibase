@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::SystemTime;
 
 use axum::async_trait;
@@ -7,16 +6,14 @@ use jsonrpsee::core::{Error as RpcError, RpcResult};
 
 use chrono::Utc;
 
-use crate::admin_controller::AdminControllerTx;
+use crate::admin_controller::{AdminController, AdminControllerTx};
 use crate::api::RpcSuibaseError;
-use crate::shared_types::{Globals, GlobalsWorkdirsST};
+use crate::shared_types::{Globals, GlobalsPackagesConfigST, GlobalsWorkdirsST};
 
 use super::{
     MoveConfig, PackageInstance, PackagesApiServer, PackagesConfigResponse, RpcInputError,
     SuccessResponse, SuiEventsResponse,
 };
-
-use super::def_header::Versioned;
 
 pub struct PackagesApiImpl {
     pub globals: Globals,
@@ -144,23 +141,17 @@ impl PackagesApiServer for PackagesApiImpl {
             return Err(RpcSuibaseError::InternalError(err_msg).into());
         }
 
+        // Remove any potential leading 0x to package_id.
+        let package_id = package_id.trim_start_matches("0x").to_string();
+
         // Insert the data in the globals.
         {
             let mut globals_write_guard = self.globals.packages_config.write().await;
             let globals = &mut *globals_write_guard;
-            let globals = globals.workdirs.get_mut(workdir_idx);
 
-            if globals.ui.is_none() {
-                globals.ui = Some(Versioned::new(PackagesConfigResponse::new()));
-            }
-            let ui = globals.ui.as_mut().unwrap();
+            let move_configs =
+                GlobalsPackagesConfigST::get_mut_move_configs(&mut globals.workdirs, workdir_idx);
 
-            let config_resp = ui.get_mut_data();
-
-            if config_resp.move_configs.is_none() {
-                config_resp.move_configs = Some(HashMap::new());
-            }
-            let move_configs = config_resp.move_configs.as_mut().unwrap();
             let mut move_config = move_configs.get_mut(&package_uuid);
             if move_config.is_none() {
                 // Delete any other move_configs element where path equals move_toml_path.
@@ -188,6 +179,7 @@ impl PackagesApiServer for PackagesApiImpl {
                     resp.info = Some("Package is already the current one.".to_string());
                     return Ok(resp);
                 }
+
                 // Move current package into the list of previous packages.
                 move_config.older_packages.push(current_package);
             }
@@ -204,8 +196,17 @@ impl PackagesApiServer for PackagesApiImpl {
             {
                 move_config.path = Some(move_toml_path.clone());
             }
+        }
 
-            // TODO Create init_objects by parsing the JSON output.
+        // The writer lock on global is now released. Send an internal message to have
+        // the websocket workers do the package tracking.
+        if AdminController::send_event_audit(&self.admctrl_tx)
+            .await
+            .is_err()
+        {
+            let err_msg = "Failed to send event audit to admin controller".to_string();
+            log::error!("{}", err_msg);
+            return Err(RpcSuibaseError::InternalError(err_msg).into());
         }
 
         // Return success.

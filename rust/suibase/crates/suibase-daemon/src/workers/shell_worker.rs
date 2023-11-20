@@ -1,8 +1,7 @@
 use std::process::Command;
 
 use crate::{
-    admin_controller::{self, AdminControllerMsg, AdminControllerRx},
-    basic_types::WorkdirIdx,
+    basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx},
     shared_types::Globals,
 };
 
@@ -11,16 +10,12 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 pub struct ShellWorker {
     _globals: Globals,
-    event_rx: AdminControllerRx,
+    event_rx: GenericRx,
     workdir_idx: Option<WorkdirIdx>,
 }
 
 impl ShellWorker {
-    pub fn new(
-        globals: Globals,
-        event_rx: AdminControllerRx,
-        workdir_idx: Option<WorkdirIdx>,
-    ) -> Self {
+    pub fn new(globals: Globals, event_rx: GenericRx, workdir_idx: Option<WorkdirIdx>) -> Self {
         Self {
             _globals: globals,
             event_rx,
@@ -28,7 +23,7 @@ impl ShellWorker {
         }
     }
 
-    async fn do_exec(&mut self, msg: AdminControllerMsg) {
+    async fn do_exec(&mut self, msg: GenericChannelMsg) {
         // No error return here. Once the execution is completed, the output
         // of the response is returned to requester with a one shot message.
         //
@@ -40,10 +35,21 @@ impl ShellWorker {
         log::info!(
             "do_exec() msg {:?} for workdir_idx={:?}",
             msg,
-            self.workdir_idx
+            msg.workdir_idx
         );
 
-        let resp = if msg.event_id != admin_controller::EVENT_SHELL_EXEC {
+        let resp = if msg.workdir_idx != self.workdir_idx {
+            log::error!(
+                "do_exec() msg {:?} for workdir_idx={:?} does not match self.workdir_idx={:?}",
+                msg,
+                msg.workdir_idx,
+                self.workdir_idx
+            );
+            format!(
+                "Error: unexpected workdir_idx {:?} != {:?}",
+                msg.workdir_idx, self.workdir_idx
+            )
+        } else if msg.event_id != crate::basic_types::EVENT_EXEC {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             format!("Error: Unexpected event_id {:?}", msg.event_id)
         } else if let Some(cmd) = &msg.data_string {
@@ -80,7 +86,7 @@ impl ShellWorker {
         };
 
         if let Some(resp_channel) = msg.resp_channel {
-            if let Err(e) = resp_channel.send(resp) {
+            if let Err(e) = &resp_channel.send(resp) {
                 let error_msg = format!(
                     "Error: do_exec({:?}, {:?}) error 3: {}",
                     msg.workdir_idx, msg.data_string, e

@@ -5,7 +5,7 @@
 //  - Validate command line.
 //  - Telemetry setup
 //  - Top level threads started here. These runs until the program terminates:
-//     - AdminController: The "main" thread validating and applying the config changes and user actions.
+//     - AdminController: The "leader" thread validating and applying the config changes and user actions.
 //     - NetworkMonitor: Maintains all remote server stats. Info coming from multiple sources (on a mpsc channel).
 //     - APIServer: Does "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
 //     - ClockTrigger: Send periodic audit events to other threads.
@@ -26,6 +26,10 @@
 //
 //  - EventsWriterWorker: Manage connection(s) to subscribe/receive/dedup Sui events. Data written to FS (SQLite).
 //                        One instance per workdir. Uses tokio-tungstenite. Started/stopped by the AdminController.
+//                        Does "sandboxing" of WebSocketWorker.
+//
+//  - WebSocketWorker:    Manage subscribe/unsubscribe and receiving Sui events for a single connection.
+//                        Forward the validated Sui events to its parent EventsWriterWorker.
 //
 use anyhow::Result;
 
@@ -34,7 +38,7 @@ use clap::*;
 
 use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
-use pretty_env_logger::env_logger::{Builder, Env};
+use env_logger::{Builder, Env};
 
 mod admin_controller;
 mod api;
@@ -99,7 +103,7 @@ impl Command {
                 let apiserver_params = APIServerParams::new(globals.clone(), admctrl_tx.clone());
                 let apiserver = APIServer::new(apiserver_params);
 
-                let clock_params = ClockTriggerParams::new(netmon_tx.clone());
+                let clock_params = ClockTriggerParams::new(netmon_tx.clone(), admctrl_tx.clone());
                 let clock: ClockTrigger = ClockTrigger::new(clock_params);
 
                 // Start all top levels subsystems.
@@ -153,14 +157,13 @@ async fn main() {
     //
     // Globals are cloned by reference count.
     //
-    // Keep a reference here at main level so they will never get "deleted" until the
-    // end of the program.
+    // Keep a reference in main() so they will never get "deleted"
+    // until the end of the program.
     let main_globals = Globals::new();
 
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
 
-    //pretty_env_logger::init();
     Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let cmd: Command = Command::parse();

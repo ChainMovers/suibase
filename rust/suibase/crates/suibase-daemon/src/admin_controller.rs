@@ -9,7 +9,7 @@ use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
 use crate::workers::{EventsWriterWorker, EventsWriterWorkerParams};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemBuilder, SubsystemHandle};
 
@@ -51,10 +51,10 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 struct WorkdirTracking {
     last_read_config: Option<WorkdirProxyConfig>,
 
-    shell_worker_tx: Option<AdminControllerTx>,
+    shell_worker_tx: Option<GenericTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
 
-    events_writer_worker_tx: Option<AdminControllerTx>,
+    events_writer_worker_tx: Option<GenericTx>,
     events_writer_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
 }
 
@@ -116,9 +116,10 @@ impl std::fmt::Debug for AdminControllerMsg {
 
 // Events ID
 pub type AdminControllerEventID = u8;
-pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 1;
-pub const EVENT_DEBUG_PRINT: u8 = 2;
-pub const EVENT_SHELL_EXEC: u8 = 3;
+pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 128;
+pub const EVENT_DEBUG_PRINT: u8 = 129;
+pub const EVENT_SHELL_EXEC: u8 = 130;
+pub const EVENT_POST_PUBLISH: u8 = 131;
 
 impl AdminController {
     pub fn new(
@@ -135,6 +136,68 @@ impl AdminController {
             netmon_tx,
             wd_tracking: AutoSizeVec::new(),   // WorkdirTracking
             port_tracking: AutoSizeVec::new(), // InputPortTracking
+        }
+    }
+
+    pub async fn send_event_audit(tx_channel: &AdminControllerTx) -> Result<()> {
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_AUDIT;
+        tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
+    async fn process_audit_msg(&mut self, msg: AdminControllerMsg) {
+        if msg.event_id != EVENT_AUDIT {
+            log::error!("Unexpected event_id {:?}", msg.event_id);
+            // Do nothing. Consume the message.
+            return;
+        }
+
+        // Forward an audit message to every events writer.
+        for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
+            if wd_tracking.events_writer_worker_tx.is_none() {
+                continue;
+            }
+            let worker_tx = wd_tracking.events_writer_worker_tx.as_ref().unwrap();
+
+            let mut worker_msg = GenericChannelMsg::new();
+            worker_msg.event_id = EVENT_AUDIT;
+            worker_msg.workdir_idx = Some(workdir_idx);
+            worker_tx.send(worker_msg).await.unwrap();
+        }
+    }
+
+    pub async fn send_event_post_publish(tx_channel: &AdminControllerTx) -> Result<()> {
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_POST_PUBLISH;
+        tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
+    async fn process_post_publish_msg(&mut self, msg: AdminControllerMsg) {
+        if msg.event_id != EVENT_POST_PUBLISH {
+            log::error!("Unexpected event_id {:?}", msg.event_id);
+            return;
+        }
+
+        if msg.workdir_idx.is_none() {
+            log::error!("EVENT_POST_PUBLISH missing workdir_idx");
+            return;
+        }
+
+        let msg_workdir_idx = msg.workdir_idx.unwrap();
+        // Forward an update message to the related workdir events writer.
+        let wd_tracking = self.wd_tracking.get_mut(msg_workdir_idx);
+
+        if let Some(worker_tx) = wd_tracking.events_writer_worker_tx.as_ref() {
+            let mut worker_msg = GenericChannelMsg::new();
+            worker_msg.event_id = EVENT_UPDATE;
+            worker_msg.workdir_idx = Some(msg_workdir_idx);
+            worker_tx.send(worker_msg).await.unwrap();
         }
     }
 
@@ -174,8 +237,12 @@ impl AdminController {
         let shell_worker_tx = wd_tracking.shell_worker_tx.as_ref().unwrap();
 
         // Forward the message to the ShellWorker.
-        // TODO Error handling
-        shell_worker_tx.send(msg).await.unwrap();
+        let mut worker_msg = GenericChannelMsg::new();
+        worker_msg.event_id = EVENT_EXEC;
+        worker_msg.data_string = msg.data_string;
+        worker_msg.workdir_idx = Some(123); //msg.workdir_idx;
+        worker_msg.resp_channel = msg.resp_channel;
+        shell_worker_tx.send(worker_msg).await.unwrap();
     }
 
     async fn process_debug_print_msg(&mut self, msg: AdminControllerMsg) {
@@ -402,14 +469,13 @@ impl AdminController {
             let events_writer_worker_params = EventsWriterWorkerParams::new(
                 self.globals.clone(),
                 events_writer_worker_rx,
-                Some(workdir_idx),
+                workdir_idx,
             );
             let events_writer_worker = EventsWriterWorker::new(events_writer_worker_params);
             let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
                 events_writer_worker.run(a)
             }));
             wd_tracking.events_writer_worker_handle = Some(nested);
-            // TODO Detect "events" related config change and inform the worker about it.
         }
 
         // Remember the changes that were applied.
@@ -421,6 +487,9 @@ impl AdminController {
             // Wait for a message.
             if let Some(msg) = self.admctrl_rx.recv().await {
                 match msg.event_id {
+                    EVENT_AUDIT => {
+                        self.process_audit_msg(msg).await;
+                    }
                     EVENT_DEBUG_PRINT => {
                         self.process_debug_print_msg(msg).await;
                     }

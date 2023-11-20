@@ -13,11 +13,13 @@
 //
 // flatten everything under "workers" module.
 pub(crate) use self::events_writer_worker::*;
+pub(crate) use self::package_tracking::*;
 pub(crate) use self::request_worker::*;
 pub(crate) use self::shell_worker::*;
 pub(crate) use self::websocket_worker::*;
 
 mod events_writer_worker;
+mod package_tracking;
 mod request_worker;
 mod shell_worker;
 mod websocket_worker;

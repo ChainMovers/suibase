@@ -65,14 +65,14 @@ impl NetmonMsg {
     */
 }
 
-// Events ID
+// Events ID.
+// See GenericChannelID for guidelines to set these values.
 pub type NetmonEvent = u8;
-pub const EVENT_GLOBALS_AUDIT: u8 = 1; // Periodic read-only audit of the globals. May trig other events.
-pub const EVENT_REPORT_REQ_FAILED: u8 = 2; // proxy_server reporting stats on a request dropped (not sent after retries).
-pub const EVENT_REPORT_TGT_REQ_RESP_OK: u8 = 3; // proxy_server reporting stats on a successful request/response.
-pub const EVENT_REPORT_TGT_REQ_RESP_ERR: u8 = 4; // proxy_server reporting stats on a response indicating an error.
-pub const EVENT_REPORT_TGT_SEND_FAILED: u8 = 5; // proxy_server reporting stats on a failed send attempt.
-pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 6; // Start an async health check (a request/response test) for one server.
+pub const EVENT_REPORT_REQ_FAILED: u8 = 128; // proxy_server reporting stats on a request dropped (not sent after retries).
+pub const EVENT_REPORT_TGT_REQ_RESP_OK: u8 = 129; // proxy_server reporting stats on a successful request/response.
+pub const EVENT_REPORT_TGT_REQ_RESP_ERR: u8 = 130; // proxy_server reporting stats on a response indicating an error.
+pub const EVENT_REPORT_TGT_SEND_FAILED: u8 = 131; // proxy_server reporting stats on a failed send attempt.
+pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 132; // Start an async health check (a request/response test) for one server.
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -314,9 +314,9 @@ impl NetworkMonitor {
         }
     }
 
-    pub async fn send_event_globals_audit(tx_channel: &NetMonTx) -> Result<()> {
+    pub async fn send_event_audit(tx_channel: &NetMonTx) -> Result<()> {
         let mut msg = NetmonMsg::new();
-        msg.event_id = EVENT_GLOBALS_AUDIT;
+        msg.event_id = EVENT_AUDIT;
         msg.flags = NetmonFlags::NEED_GLOBAL_READ_MUTEX;
         tx_channel.send(msg).await.map_err(|e| {
             log::debug!("failed {}", e);
@@ -400,7 +400,7 @@ impl NetworkMonitor {
             let mut cur_msg = msg;
             loop {
                 match cur_msg.event_id {
-                    EVENT_GLOBALS_AUDIT => {
+                    EVENT_AUDIT => {
                         for (_, input_port) in input_ports.iter() {
                             if let Some(port_idx) = input_port.idx() {
                                 // Iterate every target_servers.

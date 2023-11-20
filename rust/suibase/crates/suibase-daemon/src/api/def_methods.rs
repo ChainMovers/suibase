@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::workers::PackageTrackingState;
+
 // Defines the JSON-RPC API.
 //
 // Design:
@@ -331,6 +333,8 @@ pub struct MoveConfig {
     // Useful for tracking older package id for debug browsing.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub older_packages: Vec<PackageInstance>,
+
+    pub tracking_state: u32, // Helpful for debugging.
 }
 
 impl MoveConfig {
@@ -339,6 +343,7 @@ impl MoveConfig {
             path: None,
             latest_package: None,
             older_packages: Vec::new(),
+            tracking_state: PackageTrackingState::new().into(),
         }
     }
 }
