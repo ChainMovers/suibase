@@ -31,6 +31,8 @@ enum Error {
   "WorkdirStateDNSReadError",
   "WorkdirStateDNSParseError",
   "PublishedDataAccessError",
+  "PublishedDataAccessErrorInvalidSymlink",
+  "PublishedDataAccessErrorSymlinkNotFound",
   "PublishedNewObjectAccessError",
   "WorkdirStateLinkReadError",
   "WorkdirNameNotSet",
