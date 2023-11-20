@@ -23,21 +23,15 @@ runs:
     - uses: actions/checkout@v3
     - name: Detect Changes
       uses: dorny/paths-filter@v2.11.1
-      id: diff
+      id: diff      
       with:
         filters: |
           isRust:
-            - '/rust/**'
-            - 'crates/**'
-            - '*.rs'
-            - 'Cargo.lock'
-            - 'Cargo.toml'
-            - 'rustfmt.toml'
-            - 'rust-toolchain.toml'
+            - 'rust/**'
             - '.github/workflows/rust.yml'
           isDoc:
             - 'docs/**'
-            - '*.md'
+            - 'README.md'
             - '.github/workflows/deploy-docs.yml'
           isMove:
             - 'move/sources/**'
