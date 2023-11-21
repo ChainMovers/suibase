@@ -47,12 +47,12 @@ jobs:
           haskell: true
           large-packages: true
           docker-images: true
-          swap-storage: false
-        
+          swap-storage: false      
       - name: Prepare environment
         run: |
           mkdir -p $HOME/.local/bin
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
+          rustup component add clippy
       - name: Run some suibase tests (sanity check)
         run: $HOME/suibase/scripts/tests/run-all.sh --fast --github_token ${{ secrets.GITHUB_TOKEN }}
