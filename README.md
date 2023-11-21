@@ -1,7 +1,7 @@
 [![Discord chat](https://img.shields.io/discord/1038616996062953554.svg?logo=discord&style=flat-square)](https://discord.gg/Erb6SwsVbH)
 
 [![Active Development](https://img.shields.io/badge/Maintenance%20Level-Actively%20Developed-brightgreen.svg)](https://gist.github.com/cheerfulstoic/d107229326a01ff0f333a1d3476e068d)
-[![nightly tests](https://github.com/ChainMovers/suibase/actions/workflows/nightly-tests.yaml/badge.svg)](https://github.com/ChainMovers/suibase/actions/workflows/nightly-tests.yaml)
+[![nightly tests](https://github.com/ChainMovers/suibase/actions/workflows/nightly-tests.yml/badge.svg)](https://github.com/ChainMovers/suibase/actions/workflows/nightly-tests.yml)
 
 Suibase provides a development environment for the Sui network
 
