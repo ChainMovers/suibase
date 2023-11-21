@@ -52,12 +52,12 @@ jobs:
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install curl git-all cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Sui Prerequesites (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install curl cmake git
+          brew install curl cmake
 
       - name: Prepare environment
         run: |
