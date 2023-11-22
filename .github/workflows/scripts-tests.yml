@@ -21,7 +21,7 @@ jobs:
         id: diff
 
   test:
-    name: Test on ${{ matrix.os }}
+    name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
     needs: diff
     if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
 
@@ -49,6 +49,19 @@ jobs:
 
       - name: Install Rust Toolchain+Caching
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false" # Control cache in "Rust Caching" step instead.
+
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+        env:
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.ci_workdir }}
+        with:
+          workspaces: |
+            /home/runner/work/suibase/suibase/rust/demo-app
+            /home/runner/work/suibase/suibase/rust/helper-uniffi
+            /home/runner/work/suibase/suibase/rust/helper
+            /home/runner/work/suibase/suibase/rust/suibase
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
