@@ -50,14 +50,13 @@ jobs:
       - name: Rust Caching
         uses: Swatinem/rust-cache@v2
         env:
-          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.ci_workdir }}
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.ci_workdir }}-nightly
         with:
           workspaces: |
             /home/runner/work/suibase/suibase/rust/demo-app
             /home/runner/work/suibase/suibase/rust/helper-uniffi
             /home/runner/work/suibase/suibase/rust/helper
             /home/runner/work/suibase/suibase/rust/suibase
-            /home/runner/work/suibase/suibase/workdirs/${{ matrix.ci_workdir }}/sui-repo-default
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
