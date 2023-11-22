@@ -24,13 +24,44 @@ jobs:
     strategy:
       matrix:
         os: [macOS-latest]
+        ci_workdir: [localnet]
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # 'true' means remove...
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false # Not sure if needed for heavy link... keep it for now.
+
       - uses: actions/checkout@v3
+
+      - name: Install Rust Toolchain+Caching
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Sui Prerequesites (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+
+      - name: Sui Prerequesites (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install curl cmake
+
       - name: Prepare environment
         run: |
           mkdir -p $HOME/.local/bin
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
+
       - name: Tests with Mysten Labs main branch (cutting edge)
+        env:
+          CI_WORKDIR: ${{ matrix.ci_workdir }}
         run: $HOME/suibase/scripts/tests/run-all.sh --main_branch --github_token ${{ secrets.GITHUB_TOKEN }}

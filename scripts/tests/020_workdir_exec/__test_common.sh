@@ -10,6 +10,13 @@ SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="$1"
 shift
 
+# When CI_WORKDIR is set, only that workdir will be done. Skip all others.
+if [ -n "$CI_WORKDIR" ]; then
+  if [ "$WORKDIR" != "$CI_WORKDIR" ]; then
+    return 2
+  fi
+fi
+
 # shellcheck source=SCRIPTDIR/../__scripts-lib-before-globals.sh
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
 
@@ -48,9 +55,9 @@ tests() {
   assert_workdir_ok "$WORKDIR"
 
   # Clean-up to make disk space... except for localnet.
-  if [ "$WORKDIR" != "localnet" ]; then
-    $WORKDIR delete || fail "$WORKDIR delete failed"
-  fi
+  # if [ "$WORKDIR" != "localnet" ]; then
+  #  $WORKDIR delete || fail "$WORKDIR delete failed"
+  # fi
 }
 
 tests

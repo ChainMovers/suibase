@@ -29,10 +29,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macOS-latest]
+        ci_workdir: [localnet, devnet, testnet, mainnet]
 
     steps:
-      - uses: actions/checkout@v3
-
       - name: Free Disk Space (Ubuntu)
         if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@main
@@ -45,6 +44,8 @@ jobs:
           large-packages: true
           docker-images: true
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
+
+      - uses: actions/checkout@v3
 
       - name: Install Rust Toolchain+Caching
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -66,4 +67,6 @@ jobs:
           ln -s $GITHUB_WORKSPACE $HOME/suibase
 
       - name: Run some suibase tests (sanity check)
+        env:
+          CI_WORKDIR: ${{ matrix.ci_workdir }}
         run: $HOME/suibase/scripts/tests/run-all.sh --fast --github_token ${{ secrets.GITHUB_TOKEN }}
