@@ -53,10 +53,10 @@ jobs:
           RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.ci_workdir }}-nightly
         with:
           workspaces: |
-            /home/runner/work/suibase/suibase/rust/demo-app
-            /home/runner/work/suibase/suibase/rust/helper-uniffi
-            /home/runner/work/suibase/suibase/rust/helper
-            /home/runner/work/suibase/suibase/rust/suibase
+            suibase/rust/demo-app
+            suibase/rust/helper-uniffi
+            suibase/rust/helper
+            suibase/rust/suibase
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
