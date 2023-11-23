@@ -25,6 +25,9 @@ jobs:
       matrix:
         os: [macOS-latest]
         ci_workdir: [localnet]
+        include:
+          - ci_branch: main
+            ci_workdir: localnet
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -50,13 +53,13 @@ jobs:
       - name: Rust Caching
         uses: Swatinem/rust-cache@v2
         env:
-          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.ci_workdir }}-nightly
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.os }}-${{ matrix.ci_branch }}
         with:
           workspaces: |
-            suibase/rust/demo-app
-            suibase/rust/helper-uniffi
-            suibase/rust/helper
-            suibase/rust/suibase
+            rust/demo-app
+            rust/helper-uniffi
+            rust/helper
+            rust/suibase
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
@@ -77,4 +80,5 @@ jobs:
       - name: Tests with Mysten Labs main branch (cutting edge)
         env:
           CI_WORKDIR: ${{ matrix.ci_workdir }}
+          CI_BRANCH: ${{ matrix.ci_branch }}
         run: $HOME/suibase/scripts/tests/run-all.sh --main_branch --github_token ${{ secrets.GITHUB_TOKEN }}

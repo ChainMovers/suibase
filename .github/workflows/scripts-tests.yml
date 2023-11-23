@@ -30,6 +30,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
         ci_workdir: [localnet, devnet, testnet, mainnet]
+        include:
+          - ci_branch: devnet
+            ci_workdir: localnet
+          - ci_branch: devnet
+            ci_workdir: devnet
+          - ci_branch: testnet
+            ci_workdir: testnet
+          - ci_branch: mainnet
+            ci_workdir: mainnet
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -55,13 +64,13 @@ jobs:
       - name: Rust Caching
         uses: Swatinem/rust-cache@v2
         env:
-          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.ci_workdir }}-sanity-tests
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.os }}-${{ matrix.ci_branch }}
         with:
           workspaces: |
-            /home/runner/work/suibase/suibase/rust/demo-app
-            /home/runner/work/suibase/suibase/rust/helper-uniffi
-            /home/runner/work/suibase/suibase/rust/helper
-            /home/runner/work/suibase/suibase/rust/suibase
+            rust/demo-app
+            rust/helper-uniffi
+            rust/helper
+            rust/suibase
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
@@ -82,4 +91,5 @@ jobs:
       - name: Run suibase sanity tests only
         env:
           CI_WORKDIR: ${{ matrix.ci_workdir }}
+          CI_BRANCH: ${{ matrix.ci_branch }}
         run: $HOME/suibase/scripts/tests/run-all.sh --fast --github_token ${{ secrets.GITHUB_TOKEN }}

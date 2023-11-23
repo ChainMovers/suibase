@@ -22,18 +22,27 @@ source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORK
 # shellcheck source=SCRIPTDIR/../__scripts-lib-after-globals.sh
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 
-localnet start
-localnet set-active
-
 if [ "$FAST_OPTION" = "true" ]; then
   if [[ "$CARGO_DIR" == *"demo-app"* ]]; then
+    echo "Skipping $CARGO_DIR (fast option)"
     return 2
   fi
 fi
 
+if [[ "$CARGO_DIR" == *"demo-app"* ]] || [[ "$CARGO_DIR" == *"helper"* ]]; then
+  # Skip if not localnet.
+  if [ "$WORKDIR" != "localnet" ]; then
+    echo "Skipping $CARGO_DIR (not localnet)"
+    return 2
+  fi
+fi
+
+localnet start
+localnet set-active
+
 # helper and demo-app integration tests requires the package 'demo' to be published.
 if [[ "$CARGO_DIR" == *"demo-app"* ]] || [[ "$CARGO_DIR" == *"helper"* ]]; then
-  if [ ! -d "$HOME/suibase/workdirs/localnet/published-data/demo" ]; then    
+  if [ ! -d "$HOME/suibase/workdirs/localnet/published-data/demo" ]; then
     cd "$HOME/suibase/rust/demo-app" || fail "'cd $HOME/suibase/rust/demo-app' failed"
     localnet publish
     # TODO verify that the publication was successful.
@@ -44,12 +53,6 @@ do_tests() {
   # Do 'cargo clippy', but only on Linux (somehow not always installed on Apple/Darwin).
   # TODO detect if "cargo clippy" installed instead.
   update_HOST_vars
-  if [ "$HOST_PLATFORM" = "Linux" ]; then
-    (
-      cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clippy'"
-      cargo clippy -- -D warnings || fail "'$CARGO_DIR/cargo clippy' failed"
-    )
-  fi
 
   # Do 'cargo test'
   (
@@ -57,14 +60,22 @@ do_tests() {
     cargo test || fail "'$CARGO_DIR/cargo test' failed"
   )
 
+  # Do 'cargo clippy' (after cargo test, to minimize rebuild).
+  (
+    cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clippy'"
+    cargo clippy -- -D warnings || fail "'$CARGO_DIR/cargo clippy' failed"
+  )
+
   # Verify still healthy.
   assert_workdir_ok "$WORKDIR"
 
-  # Do 'cargo clean'
-  (
-    cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clean'"
-    cargo clean || fail "'$CARGO_DIR/cargo clean' failed"
-  )
+  # Do 'cargo clean' (but not if github CI to allow artifacts caching).
+  if [ -z "$CI_WORKDIR" ]; then
+    (
+      cd "$CARGO_DIR" || fail "'cd $CARGO_DIR' failed for 'cargo clean'"
+      cargo clean || fail "'$CARGO_DIR/cargo clean' failed"
+    )
+  fi
 
 }
 
