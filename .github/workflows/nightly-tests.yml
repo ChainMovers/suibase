@@ -62,8 +62,8 @@ jobs:
             rust/helper-uniffi
             rust/helper
             rust/suibase
-          cache_provider: ${{ matrix.ci_cache_provider }}
-          cache_all_crates: ${{ matrix.ci_cache_all_crates }}
+          cache-provider: ${{ matrix.ci_cache_provider }}
+          cache-all-crates: ${{ matrix.ci_cache_all_crates }}
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'

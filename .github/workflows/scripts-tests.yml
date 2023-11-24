@@ -31,19 +31,43 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
         ci_workdir: [localnet, devnet, testnet, mainnet]
         include:
-          - ci_branch: devnet
+          - os: ubuntu-latest
+            ci_branch: devnet
             ci_workdir: localnet
             ci_cache_all_crates: false
             ci_cache_provider: github
-          - ci_branch: devnet
+          - os: ubuntu-latest
+            ci_branch: devnet
             ci_workdir: devnet
             ci_cache_all_crates: false
             ci_cache_provider: github
-          - ci_branch: testnet
+          - os: buildjet-4vcpu-ubuntu-2204
+            ci_branch: testnet
             ci_workdir: testnet
             ci_cache_all_crates: false
             ci_cache_provider: buildjet
-          - ci_branch: mainnet
+          - os: buildjet-8vcpu-ubuntu-2204
+            ci_branch: mainnet
+            ci_workdir: mainnet
+            ci_cache_all_crates: true
+            ci_cache_provider: buildjet
+          - os: macOS-latest
+            ci_branch: devnet
+            ci_workdir: localnet
+            ci_cache_all_crates: false
+            ci_cache_provider: github
+          - os: macOS-latest
+            ci_branch: devnet
+            ci_workdir: devnet
+            ci_cache_all_crates: false
+            ci_cache_provider: github
+          - os: macOS-latest
+            ci_branch: testnet
+            ci_workdir: testnet
+            ci_cache_all_crates: false
+            ci_cache_provider: buildjet
+          - os: macOS-latest
+            ci_branch: mainnet
             ci_workdir: mainnet
             ci_cache_all_crates: true
             ci_cache_provider: buildjet
@@ -79,8 +103,8 @@ jobs:
             rust/helper-uniffi
             rust/helper
             rust/suibase
-          cache_provider: ${{ matrix.ci_cache_provider }}
-          cache_all_crates: ${{ matrix.ci_cache_all_crates }}
+          cache-provider: ${{ matrix.ci_cache_provider }}
+          cache-all-crates: ${{ matrix.ci_cache_all_crates }}
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
