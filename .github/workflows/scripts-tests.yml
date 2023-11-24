@@ -33,12 +33,20 @@ jobs:
         include:
           - ci_branch: devnet
             ci_workdir: localnet
+            ci_cache_all_crates: false
+            ci_cache_provider: github
           - ci_branch: devnet
             ci_workdir: devnet
+            ci_cache_all_crates: false
+            ci_cache_provider: github
           - ci_branch: testnet
             ci_workdir: testnet
+            ci_cache_all_crates: false
+            ci_cache_provider: buildjet
           - ci_branch: mainnet
             ci_workdir: mainnet
+            ci_cache_all_crates: true
+            ci_cache_provider: buildjet
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -71,6 +79,8 @@ jobs:
             rust/helper-uniffi
             rust/helper
             rust/suibase
+          cache_provider: ${{ matrix.ci_cache_provider }}
+          cache_all_crates: ${{ matrix.ci_cache_all_crates }}
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
