@@ -31,43 +31,19 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
         ci_workdir: [localnet, devnet, testnet, mainnet]
         include:
-          - os: ubuntu-latest
-            ci_branch: devnet
+          - ci_branch: devnet
             ci_workdir: localnet
             ci_cache_all_crates: false
             ci_cache_provider: github
-          - os: ubuntu-latest
-            ci_branch: devnet
+          - ci_branch: devnet
             ci_workdir: devnet
             ci_cache_all_crates: false
             ci_cache_provider: github
-          - os: buildjet-4vcpu-ubuntu-2204
-            ci_branch: testnet
+          - ci_branch: testnet
             ci_workdir: testnet
             ci_cache_all_crates: false
             ci_cache_provider: buildjet
-          - os: buildjet-8vcpu-ubuntu-2204
-            ci_branch: mainnet
-            ci_workdir: mainnet
-            ci_cache_all_crates: true
-            ci_cache_provider: buildjet
-          - os: macOS-latest
-            ci_branch: devnet
-            ci_workdir: localnet
-            ci_cache_all_crates: false
-            ci_cache_provider: github
-          - os: macOS-latest
-            ci_branch: devnet
-            ci_workdir: devnet
-            ci_cache_all_crates: false
-            ci_cache_provider: github
-          - os: macOS-latest
-            ci_branch: testnet
-            ci_workdir: testnet
-            ci_cache_all_crates: false
-            ci_cache_provider: buildjet
-          - os: macOS-latest
-            ci_branch: mainnet
+          - ci_branch: mainnet
             ci_workdir: mainnet
             ci_cache_all_crates: true
             ci_cache_provider: buildjet
