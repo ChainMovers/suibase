@@ -74,16 +74,13 @@ export class SuibaseCommands {
   public refresh(workdir?: string) {
     //const str = "SuibaseCommands.refresh() called";
     //console.log(str);
-
     // TODO Debouncing to avoid excessive global refresh.
-
     // Do a JSON-RPC call to the suibase server API.
     //
     // If workdir is not specified, update them all.
-
     // This is a best-effort request and reactions to the
     // eventual response are handled somewhere else...
-    SuibaseExec.getInstance()?.getLinks();
+    //SuibaseExec.getInstance()?.getLinks();
   }
 
   public settings() {

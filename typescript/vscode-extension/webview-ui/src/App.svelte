@@ -1,18 +1,16 @@
-<script lang="ts">
+<script lang="ts" context="module">
   import { provideVSCodeDesignSystem, allComponents } from "@vscode/webview-ui-toolkit";
   import { VSCode } from "./lib/VSCode";
   import WorkdirsController from "./components/WorkdirsController.svelte";
   import ConsoleController from "./components/ConsoleController.svelte";
-  import { GlobalStorage } from "./lib/GlobalStorage";
-
-  // Static initializations
-  GlobalStorage.activate();
 
   // In order to use the Webview UI Toolkit web components they
   // must be registered with the browser (i.e. webview) using the
   // syntax below.
   //provideVSCodeDesignSystem().register(vsCodeButton());
   provideVSCodeDesignSystem().register(allComponents);
+
+  // Instantiate the StateLoop singleton (will also start its loop).
 
   // To register more toolkit components, simply import the component
   // registration function and call it from within the register
@@ -33,7 +31,6 @@
       command: "hello",
       text: "Hey there partner! 🤠",
     });
-    console.log("testing 1-2");
   }
 </script>
 

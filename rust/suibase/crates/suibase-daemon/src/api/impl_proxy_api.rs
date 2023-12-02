@@ -10,7 +10,7 @@ use crate::admin_controller::{
 use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{GlobalsProxyMT, ServerStats, UuidST};
 
-use super::{InfoResponse, ProxyApiServer};
+use super::{InfoResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
 
 use super::def_header::Versioned;
@@ -35,6 +35,12 @@ impl GetLinksInput {
             proxy_enabled: false,
             user_request_start: false,
         }
+    }
+}
+
+impl VersionedEq for GetLinksInput {
+    fn versioned_eq(&self, other: &Self) -> bool {
+        self == other
     }
 }
 

@@ -18,7 +18,7 @@ use crate::workers::PackageTrackingState;
 //
 // All *successful" JSON responses have a required "Header" field for data versioning.
 //
-use super::def_header::Header;
+use super::{def_header::Header, VersionedEq};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
@@ -164,7 +164,7 @@ impl StatusService {
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct StatusResponse {
+pub struct WorkdirStatusResponse {
     pub header: Header,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -197,7 +197,7 @@ pub struct StatusResponse {
     pub debug: Option<String>,
 }
 
-impl StatusResponse {
+impl WorkdirStatusResponse {
     pub fn new() -> Self {
         Self {
             header: Header::default(),
@@ -213,9 +213,21 @@ impl StatusResponse {
     }
 }
 
-impl Default for StatusResponse {
+impl Default for WorkdirStatusResponse {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl VersionedEq for WorkdirStatusResponse {
+    fn versioned_eq(&self, other: &Self) -> bool {
+        // Purposely do not include header in the comparison.
+        self.status == other.status
+            && self.status_info == other.status_info
+            && self.client_version == other.client_version
+            && self.network_version == other.network_version
+            && self.asui_selection == other.asui_selection
+            && self.services == other.services
     }
 }
 
@@ -230,14 +242,14 @@ pub struct SuiEvents {
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SuiEventsResponse {
+pub struct WorkdirSuiEventsResponse {
     pub header: Header,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<Vec<SuiEvents>>,
 }
 
-impl SuiEventsResponse {
+impl WorkdirSuiEventsResponse {
     pub fn new() -> Self {
         Self {
             header: Header::default(),
@@ -246,7 +258,7 @@ impl SuiEventsResponse {
     }
 }
 
-impl Default for SuiEventsResponse {
+impl Default for WorkdirSuiEventsResponse {
     fn default() -> Self {
         Self::new()
     }
@@ -403,6 +415,43 @@ impl Default for PackagesConfigResponse {
     }
 }
 
+impl VersionedEq for PackagesConfigResponse {
+    fn versioned_eq(&self, other: &Self) -> bool {
+        // Purposely do not include header in the comparison.
+        self.move_configs == other.move_configs
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionsResponse {
+    pub header: Header,
+    pub versions: Vec<Header>,
+}
+
+impl VersionsResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            versions: Vec::new(),
+        }
+    }
+}
+
+impl Default for VersionsResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VersionedEq for VersionsResponse {
+    fn versioned_eq(&self, other: &Self) -> bool {
+        // Purposely do not include header in the comparison.
+        self.versions == other.versions
+    }
+}
+
 #[rpc(server)]
 pub trait ProxyApi {
     /// Returns data about all the RPC/Websocket links
@@ -427,30 +476,43 @@ pub trait ProxyApi {
 
 #[rpc(server)]
 pub trait GeneralApi {
-    #[method(name = "getStatus")]
-    async fn get_status(
+    // Get version of latest for everything.
+    // (e.g. WorkdirStatusResponse, WorkdirEventsResponse etc...)
+    //
+    // Can be used by caller to detect changes by polling.
+    //
+    // Output is always JSON.
+    #[method(name = "getVersions")]
+    async fn get_versions(&self, workdir: String) -> RpcResult<VersionsResponse>;
+
+    // Get status of a specific workdir.
+    //
+    // Can optionally request a specific response version and it will
+    // be returned if it is available (only latest is available).
+    //
+    // Will return an error if requesting with outdated/invalid UUIDs.
+    // You can get the latest UUIDs with getVersions().
+    #[method(name = "getWorkdirStatus")]
+    async fn get_workdir_status(
         &self,
         workdir: String,
-        data: Option<bool>,
-        display: Option<bool>,
-        debug: Option<bool>,
         method_uuid: Option<String>,
         data_uuid: Option<String>,
-    ) -> RpcResult<StatusResponse>;
+    ) -> RpcResult<WorkdirStatusResponse>;
 }
 
 #[rpc(server)]
 pub trait PackagesApi {
-    #[method(name = "getEvents")]
-    async fn get_events(
+    #[method(name = "getWorkdirEvents")]
+    async fn get_workdir_events(
         &self,
         workdir: String,
         after_ts: Option<String>,
         last_ts: Option<String>,
-    ) -> RpcResult<SuiEventsResponse>;
+    ) -> RpcResult<WorkdirSuiEventsResponse>;
 
-    #[method(name = "getPackagesConfig")]
-    async fn get_packages_config(
+    #[method(name = "getWorkdirPackagesConfig")]
+    async fn get_workdir_packages_config(
         &self,
         workdir: String,
         data: Option<bool>,

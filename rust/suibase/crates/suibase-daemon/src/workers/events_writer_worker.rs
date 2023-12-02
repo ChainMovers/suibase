@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::{
     basic_types::{self, AutoThread, GenericChannelMsg, GenericRx, Runnable, WorkdirIdx},
     shared_types::Globals,
-    workers::{WebSocketWorker, WebSocketWorkerParams},
+    workers::{DBWorker, DBWorkerParams, WebSocketWorker, WebSocketWorkerParams},
 };
 
 use anyhow::Result;
@@ -55,6 +55,7 @@ struct EventsWriterThread {
     name: String,
     params: EventsWriterWorkerParams,
     ws_workers_channel: Vec<Sender<GenericChannelMsg>>,
+    db_worker_channel: Option<Sender<GenericChannelMsg>>,
 }
 
 #[async_trait]
@@ -64,6 +65,7 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
             name,
             params,
             ws_workers_channel: Vec::new(),
+            db_worker_channel: None,
         }
     }
 
@@ -82,6 +84,18 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
         subsys.start(SubsystemBuilder::new("ws-worker", |a| ws_worker.run(a)));
         self.ws_workers_channel.push(worker_tx);
 
+        // Start a child db_worker thread.
+        let (db_worker_tx, db_worker_rx) = tokio::sync::mpsc::channel(1000);
+        let db_worker_params = DBWorkerParams::new(
+            self.params.globals.clone(),
+            db_worker_rx,
+            db_worker_tx.clone(),
+            self.params.workdir_idx,
+        );
+        let db_worker = DBWorker::new(db_worker_params);
+        subsys.start(SubsystemBuilder::new("db-worker", |a| db_worker.run(a)));
+        self.db_worker_channel = Some(db_worker_tx);
+
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
                 log::info!("shutting down - normal exit (2)");
@@ -96,9 +110,19 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
 }
 
 impl EventsWriterThread {
-    async fn process_audit_msg(&mut self, msg: GenericChannelMsg) {
+    async fn forward_to_children(&mut self, msg: GenericChannelMsg) {
         // Forward the message to each self.ws_workers_channel.
         for tx in &self.ws_workers_channel {
+            let forward_msg = GenericChannelMsg {
+                event_id: msg.event_id,
+                data_string: msg.data_string.clone(),
+                workdir_idx: msg.workdir_idx,
+                resp_channel: None,
+            };
+            let _ = tx.send(forward_msg).await;
+        }
+        // Forward the message to the single self.db_worker_channel.
+        if let Some(tx) = &self.db_worker_channel {
             let forward_msg = GenericChannelMsg {
                 event_id: msg.event_id,
                 data_string: msg.data_string.clone(),
@@ -109,17 +133,12 @@ impl EventsWriterThread {
         }
     }
 
+    async fn process_audit_msg(&mut self, msg: GenericChannelMsg) {
+        self.forward_to_children(msg).await;
+    }
+
     async fn process_update_msg(&mut self, msg: GenericChannelMsg) {
-        // Forward the message to each self.ws_workers_channel.
-        for tx in &self.ws_workers_channel {
-            let forward_msg = GenericChannelMsg {
-                event_id: msg.event_id,
-                data_string: msg.data_string.clone(),
-                workdir_idx: msg.workdir_idx,
-                resp_channel: None,
-            };
-            let _ = tx.send(forward_msg).await;
-        }
+        self.forward_to_children(msg).await;
     }
 
     async fn event_loop(&mut self, subsys: &SubsystemHandle) {
@@ -130,7 +149,6 @@ impl EventsWriterThread {
         while !subsys.is_shutdown_requested() {
             // Wait for a suibase internal message (not a websocket message!).
             if let Some(msg) = event_rx.recv().await {
-                // Process the message.
                 // Process the message.
                 match msg.event_id {
                     basic_types::EVENT_AUDIT => {

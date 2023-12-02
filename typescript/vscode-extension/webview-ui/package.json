@@ -11,6 +11,11 @@
   "dependencies": {
     "@vscode/codicons": "^0.0.33",
     "@vscode/webview-ui-toolkit": "^1.2.2",
+    "ag-grid-community": "^30.2.1",
+    "ag-grid-svelte": "^0.3.0",
+    "async-mutex": "^0.4.0",
+    "await-to-js": "^3.0.0",
+    "dayjs": "^1.11.10",
     "sirv-cli": "^2.0.0"
   },
   "devDependencies": {

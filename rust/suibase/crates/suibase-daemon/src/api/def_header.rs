@@ -34,18 +34,30 @@ pub struct Header {
     pub key: Option<String>,
 }
 
+// A trait for comparing two objects for equivalence, excluding the header fields (if any).
+pub trait VersionedEq {
+    fn versioned_eq(&self, other: &Self) -> bool;
+}
+
+impl Header {
+    pub fn set_from_uuids(&mut self, uuids: &UuidST) {
+        self.method_uuid = Some(uuids.get_method_uuid());
+        self.data_uuid = Some(uuids.get_data_uuid());
+    }
+}
+
 // Class to conveniently add UUID versioning to any data structure.
 //
 // That versioning can be used to initialize the method_uuid and data_uuid fields of a Header
 
 // TODO Implement PartialEq and PartialOrd to use only the uuid field for comparison.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct Versioned<T> {
+pub struct Versioned<T: VersionedEq> {
     uuid: UuidST,
     data: T,
 }
 
-impl<T: Clone + PartialEq> Versioned<T> {
+impl<T: Clone + PartialEq + VersionedEq> Versioned<T> {
     pub fn new(data: T) -> Self {
         Self {
             uuid: UuidST::new(),
@@ -55,7 +67,7 @@ impl<T: Clone + PartialEq> Versioned<T> {
 
     // if data is different, then increment version, else no-op.
     pub fn set(&mut self, new_data: &T) -> UuidST {
-        if new_data != &self.data {
+        if !self.data.versioned_eq(new_data) {
             self.data = new_data.clone();
             self.uuid.increment();
         }
@@ -81,7 +93,7 @@ impl<T: Clone + PartialEq> Versioned<T> {
     }
 
     // Write version into a Header structure.
-    pub fn init_header_uuids(&self, header: &mut Header) {
+    pub fn write_uuids_into_header_param(&self, header: &mut Header) {
         header.method_uuid = Some(self.uuid.get_method_uuid());
         header.data_uuid = Some(self.uuid.get_data_uuid());
     }

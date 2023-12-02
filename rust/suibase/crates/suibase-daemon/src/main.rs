@@ -25,11 +25,14 @@
 //                        serialize all command execution). Started/stopped by the AdminController.
 //
 //  - EventsWriterWorker: Manage connection(s) to subscribe/receive/dedup Sui events. Data written to FS (SQLite).
-//                        One instance per workdir. Uses tokio-tungstenite. Started/stopped by the AdminController.
-//                        Does "sandboxing" of WebSocketWorker.
+//                        One instance per workdir. Started/stopped by the AdminController.
+//                        Does "sandboxing" of WebSocketWorker and DBWorker.
 //
-//  - WebSocketWorker:    Manage subscribe/unsubscribe and receiving Sui events for a single connection.
-//                        Forward the validated Sui events to its parent EventsWriterWorker.
+//  - WebSocketWorker:    Manage subscribe/unsubscribe and receiving Sui events for a single connection. Forwards
+//                        subscribed sui events to its parent EventsWriterWorker for dedup. Uses tokio-tungstenite.
+//
+//  - DBWorker:           Manage the embedded database file for a single workdir. Write to SQLite DB the already
+//                        validated and dedup output from its parent (EventsWriterWorker).
 //
 use anyhow::Result;
 

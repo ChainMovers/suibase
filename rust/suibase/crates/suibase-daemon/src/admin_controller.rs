@@ -240,7 +240,7 @@ impl AdminController {
         let mut worker_msg = GenericChannelMsg::new();
         worker_msg.event_id = EVENT_EXEC;
         worker_msg.data_string = msg.data_string;
-        worker_msg.workdir_idx = Some(123); //msg.workdir_idx;
+        worker_msg.workdir_idx = msg.workdir_idx;
         worker_msg.resp_channel = msg.resp_channel;
         shell_worker_tx.send(worker_msg).await.unwrap();
     }

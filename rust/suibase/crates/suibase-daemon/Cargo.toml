@@ -21,36 +21,32 @@ memchr = "2.5.0"
 
 toml_edit = { version = "0.20.0" }
 
-tokio.workspace = true
-tokio-graceful-shutdown.workspace = true
-tokio-tungstenite.workspace = true
-
 notify = { version = "6.0", default-features = false, features = [
     "macos_kqueue",
 ] }
 
-data-encoding.workspace = true
-md5.workspace = true
-chrono.workspace = true
-uuid.workspace = true
-uuid7.workspace = true
 anyhow.workspace = true
-
+chrono.workspace = true
 clap.workspace = true
-futures.workspace = true
 colored.workspace = true
-
+data-encoding.workspace = true
+futures.workspace = true
 jsonrpsee.workspace = true
 jsonrpsee-proc-macros.workspace = true
+md5.workspace = true
+rusqlite.workspace = true
 schemars.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 serde_with.workspace = true
-
 thiserror.workspace = true
-
+tokio.workspace = true
+tokio-graceful-shutdown.workspace = true
+tokio-tungstenite.workspace = true
 tower.workspace = true
 tower-http.workspace = true
+uuid.workspace = true
+uuid7.workspace = true
 
 [dev-dependencies]
 env_logger = "0.10"

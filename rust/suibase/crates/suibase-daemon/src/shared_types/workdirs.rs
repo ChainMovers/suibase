@@ -16,7 +16,14 @@ use anyhow::Result;
 
 use super::Globals;
 
-// List of workdir planned to be always supported.
+// workdir_idx are hard coded for performance.
+pub const WORKDIR_IDX_MAINNET: WorkdirIdx = 0;
+pub const WORKDIR_IDX_TESTNET: WorkdirIdx = 1;
+pub const WORKDIR_IDX_DEVNET: WorkdirIdx = 2;
+pub const WORKDIR_IDX_LOCALNET: WorkdirIdx = 3;
+
+// List of all possible workdirs planned to be supported.
+// The order is important since the position match the WORKDIR_IDX_* constants.
 pub const WORKDIRS_KEYS: [&str; 4] = ["mainnet", "testnet", "devnet", "localnet"];
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -211,7 +218,7 @@ impl Default for WorkdirProxyConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Workdir {
     idx: Option<ManagedVecUSize>,
     name: String,
@@ -362,7 +369,7 @@ impl GlobalsWorkdirsST {
     // lock on the globals).
     //
     // This is a relatively costly call, use wisely.
-    pub async fn find_workdir_idx_by_name(
+    pub async fn get_workdir_idx_by_name(
         globals: &Globals,
         workdir_name: &String,
     ) -> Option<WorkdirIdx> {
@@ -373,6 +380,19 @@ impl GlobalsWorkdirsST {
             if workdir.name() == workdir_name {
                 return Some(workdir_idx);
             }
+        }
+        None
+    }
+
+    // Utility that return a clone of the global Workdir for a given workdir_idx.
+    // Multi-thread safe.
+    // This is a relatively costly call, use wisely.
+    pub async fn get_workdir_by_idx(globals: &Globals, workdir_idx: WorkdirIdx) -> Option<Workdir> {
+        let workdirs_guard = globals.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        if let Some(workdir) = workdirs_vec.get(workdir_idx) {
+            return Some(workdir.clone());
         }
         None
     }

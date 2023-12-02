@@ -1,5 +1,3 @@
-use tokio::sync::Mutex;
-
 use axum::async_trait;
 
 use anyhow::Result;
@@ -10,15 +8,16 @@ use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL
 use crate::basic_types::WorkdirIdx;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
 
-use super::{GeneralApiServer, RpcInputError, RpcSuibaseError, StatusResponse, StatusService};
+use super::{
+    GeneralApiServer, Header, RpcInputError, RpcSuibaseError, StatusService, VersionsResponse,
+    WorkdirStatusResponse,
+};
 
 use super::def_header::Versioned;
 
 pub struct GeneralApiImpl {
     pub globals: Globals,
     pub admctrl_tx: AdminControllerTx,
-    // TODO Change this to be per workdir.
-    get_status_mutex: Mutex<tokio::time::Instant>,
 }
 
 impl GeneralApiImpl {
@@ -26,9 +25,9 @@ impl GeneralApiImpl {
         Self {
             globals,
             admctrl_tx,
-            get_status_mutex: Mutex::new(tokio::time::Instant::now()),
         }
     }
+
     async fn shell_exec(&self, workdir_idx: WorkdirIdx, cmd: String) -> Result<String> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_SHELL_EXEC;
@@ -70,7 +69,7 @@ impl GeneralApiImpl {
         &self,
         cmd: String,
         workdir_name: String,
-        resp: &mut StatusResponse,
+        resp: &mut WorkdirStatusResponse,
     ) -> bool {
         // First line is two words, first should match the workdir name followed by the status word.
         // If the workdir name does not match, then the resp.status is set to "DOWN" else the status word is stores in resp.status.
@@ -95,8 +94,13 @@ impl GeneralApiImpl {
                 if let Some(word) = words.next() {
                     if word == workdir_name {
                         // The first word matches the workdir name, so the next word is the status.
+                        // (but skip if next word is "services" which is present only for remote network workdirs).
                         if let Some(status) = words.next() {
-                            resp.status = Some(status.to_string());
+                            if status != "services" {
+                                resp.status = Some(status.to_string());
+                            } else if let Some(status) = words.next() {
+                                resp.status = Some(status.to_string());
+                            }
                         }
                     } else {
                         resp.status = Some("DOWN".to_string());
@@ -204,32 +208,86 @@ impl GeneralApiImpl {
 
         true
     }
+
+    async fn update_globals_workdir_status(
+        &self,
+        workdir: String,
+        workdir_idx: WorkdirIdx,
+        last_api_call_timestamp: &mut tokio::time::Instant,
+    ) -> Result<Header> {
+        // Debounce excessive refresh request on short period of time.
+        if last_api_call_timestamp.elapsed() < tokio::time::Duration::from_millis(50) {
+            let globals_read_guard = self.globals.get_status(workdir_idx).read().await;
+            let globals = &*globals_read_guard;
+
+            if let Some(ui) = &globals.ui {
+                return Ok(ui.get_data().header.clone());
+            }
+        };
+        *last_api_call_timestamp = tokio::time::Instant::now();
+
+        // Try to refresh the globals and return the latest UUID.
+        let mut resp = WorkdirStatusResponse::new();
+        resp.header.method = "getWorkdirStatus".to_string();
+        resp.header.key = Some(workdir.clone());
+
+        // Get an update with a "<workdir> status --json" shell call.
+        // Map it into the resp.
+        let cmd_resp = match self
+            .shell_exec(workdir_idx, format!("{} status", workdir))
+            .await
+        {
+            Ok(cmd_resp) => cmd_resp,
+            Err(e) => format!("Error: {e}"),
+        };
+
+        // Do not assumes that if shell_exec returns OK that the command was successful.
+        // The command execution may have failed, but the shell_exec itself may have succeeded.
+        // Suibase often includes "Error:" somewhere in the CLI output.
+
+        // Check if a line starts with "Error:" in cmd_resp.
+        let mut is_successful = cmd_resp
+            .lines()
+            .all(|line| !line.trim_start().starts_with("Error:"));
+
+        if is_successful {
+            is_successful =
+                self.convert_status_cmd_resp_to_status_response(cmd_resp, workdir, &mut resp);
+        }
+
+        if !is_successful {
+            // Command was not successful, make 100% sure the status is DOWN.
+            resp.status = Some("DOWN".to_string());
+        }
+
+        {
+            // Get the globals for the target workdir_idx.
+            let mut globals_read_guard = self.globals.get_status(workdir_idx).write().await;
+            let globals = &mut *globals_read_guard;
+            if let Some(ui) = &mut globals.ui {
+                // Update globals.ui with resp if different. This will update the uuid_data accordingly.
+                let uuids = ui.set(&resp);
+
+                // Make the inner header in the response have the proper uuids.
+                resp.header.set_from_uuids(&uuids);
+            } else {
+                // Initialize globals.ui with resp.
+                let new_versioned_resp = Versioned::new(resp.clone());
+                // Copy the newly created UUID in the inner response header (so the caller can use these also).
+                new_versioned_resp.write_uuids_into_header_param(&mut resp.header);
+                globals.ui = Some(new_versioned_resp);
+            }
+        }
+
+        Ok(resp.header)
+    }
 }
 
 #[async_trait]
 impl GeneralApiServer for GeneralApiImpl {
-    async fn get_status(
-        &self,
-        workdir: String,
-        data: Option<bool>,
-        display: Option<bool>,
-        debug: Option<bool>,
-        method_uuid: Option<String>,
-        data_uuid: Option<String>,
-    ) -> RpcResult<StatusResponse> {
-        // data/display/debug allow variations of how the output
-        // is produced (and they may be combined).
-        //
-        // They all default to false when not specified
-        // with the exception of data defaulting to true when
-        // the other (display and debug) are false.
-        //
-        let debug = debug.unwrap_or(false);
-        let display = display.unwrap_or(debug);
-        let data = data.unwrap_or(!(debug || display));
-
+    async fn get_versions(&self, workdir: String) -> RpcResult<VersionsResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::find_workdir_idx_by_name(&self.globals, &workdir)
+        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
             .await
         {
             Some(workdir_idx) => workdir_idx,
@@ -237,138 +295,116 @@ impl GeneralApiServer for GeneralApiImpl {
         };
 
         // Initialize some of the header fields of the response.
-        let mut resp = StatusResponse::new();
-        resp.header.method = "getStatus".to_string();
+        let mut resp = VersionsResponse::new();
+        resp.header.method = "getVersions".to_string();
         resp.header.key = Some(workdir.clone());
 
-        // TODO: Consider refactoring as follow:
-        //         get_data_if_no_change(request_uuids,resp)
-        //         set_data_when_changed(new_data: T,resp)
+        // Allow only one API request for a given workdir at the time to avoid race conditions.
+        let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
+        let api_mutex = &mut *api_mutex_guard;
 
-        // Check if GlobalsStatus need to be refresh, if not, then
-        // just return what is already loaded in-memory.
-        //let now = tokio::time::Instant::now();
-        let mut resp_ready = false;
-        let mut force_resp_init = true;
+        let last_api_call_timestamp = &mut api_mutex.last_api_call_timestamp;
+
+        // Use the internal implementation (same logic as done with get_versions).
         {
-            // Get the globals for the target workdir_idx.
-            let globals_read_guard = self.globals.status.read().await;
-            let globals = &*globals_read_guard;
-            let globals = globals.workdirs.get_if_some(workdir_idx);
+            let update_result = self
+                .update_globals_workdir_status(workdir, workdir_idx, last_api_call_timestamp)
+                .await;
 
-            if let Some(globals) = globals {
-                if let Some(ui) = &globals.ui {
-                    force_resp_init = false;
-                    if globals.last_ui_update.elapsed() < tokio::time::Duration::from_millis(200) {
-                        // There is no need for a refresh, so initialize the response now.
-                        if data && !debug && !display {
-                            // Optimization for when requesting only the JSON output.
-                            // If no change since the specified user Uuids in the request, then
-                            // return an empty response (just echo the Uuids).
-                            if let (Some(method_uuid), Some(data_uuid)) = (method_uuid, data_uuid) {
-                                let globals_data_uuid = ui.get_uuid().get_data_uuid();
-                                if data_uuid == globals_data_uuid {
-                                    let globals_method_uuid = ui.get_uuid().get_method_uuid();
-                                    if method_uuid == globals_method_uuid {
-                                        ui.init_header_uuids(&mut resp.header);
-                                        resp_ready = true;
-                                    }
-                                }
-                            }
-                        }
-
-                        if !resp_ready {
-                            // Respond with the latest version in globals.
-                            resp = ui.get_data().clone();
-                            ui.init_header_uuids(&mut resp.header);
-                            // Remove fields that are not requested.
-                            if !display {
-                                resp.display = None;
-                            }
-                            if !debug {
-                                resp.debug = None;
-                            }
-                            resp_ready = true;
-                        }
-                    }
-                }
+            // Read access to globals for versioning all components.
+            // If no change, then the version remains the same for that global component.
+            if let Ok(header) = update_result {
+                resp.versions.push(header);
             }
         }
 
-        if resp_ready {
-            return Ok(resp);
-        }
-
-        // If reaching here, then the globals may need to be refreshed.
-        {
-            // Allow only one API request at the time to modify the Status globals,
-            // Debounce excessive refresh request on short period of time.
-            let mut mutex_guard = self.get_status_mutex.lock().await;
-            let last_refresh = &mut *mutex_guard;
-            if force_resp_init || last_refresh.elapsed() >= tokio::time::Duration::from_millis(50) {
-                // Get an update with a "<workdir> status --json" shell call.
-                // Map it into the resp.
-                let cmd_resp = match self
-                    .shell_exec(workdir_idx, format!("{} status", workdir))
-                    .await
-                {
-                    Ok(cmd_resp) => cmd_resp,
-                    Err(e) => format!("Error: {e}"),
-                };
-
-                // Do not assumes that if shell_exec returns OK that the command was successful.
-                // The command execution may have failed, but the shell_exec itself may have succeeded.
-                // Suibase often includes "Error:" somewhere in the CLI output.
-
-                // Check if a line starts with "Error:" in cmd_resp.
-                let mut is_successful = cmd_resp
-                    .lines()
-                    .all(|line| !line.trim_start().starts_with("Error:"));
-
-                if is_successful {
-                    is_successful = self
-                        .convert_status_cmd_resp_to_status_response(cmd_resp, workdir, &mut resp);
-                }
-                let is_successful = is_successful; // Make is_successful immutable.
-
-                {
-                    // Get the globals for the target workdir_idx.
-                    let mut globals_read_guard = self.globals.status.write().await;
-                    let globals = &mut *globals_read_guard;
-                    let globals = globals.workdirs.get_mut(workdir_idx);
-
-                    if !is_successful {
-                        // Command was not successful, so return a DOWN status but initialize the rest to last known states
-                        // (if available uses the valid data from globals).
-                        if let Some(globals_ui) = &globals.ui {
-                            resp = globals_ui.get_data().clone();
-                        }
-                        // Force the status DOWN.
-                        // At this point, "resp.status_info" should be already set with something useful to debug.
-                        resp.status = Some("DOWN".to_string());
-                    }
-
-                    // Update globals with resp if different, and update the Uuid accordingly.
-                    // Also, initialize 'resp' with the same Uuids as stored in global.
-                    if let Some(globals_ui) = &mut globals.ui {
-                        if resp != *globals_ui.get_data() {
-                            globals_ui.set(&resp);
-                        }
-                        globals_ui.init_header_uuids(&mut resp.header);
-                    } else {
-                        let new_versioned_resp = Versioned::new(resp.clone());
-                        new_versioned_resp.init_header_uuids(&mut resp.header);
-                        globals.ui = Some(new_versioned_resp);
-                    }
-
-                    // Update the timestamps right before releasing the locks.
-                    let now = tokio::time::Instant::now();
-                    globals.last_ui_update = now;
-                    *last_refresh = now;
-                }
-            }
+        // Initialize the uuids in the response header.
+        // Use api_mutex.last_responses to detect if this response is equivalent to the previous one.
+        // If not, increment the uuid_data.
+        let last = &mut api_mutex.last_responses;
+        if let Some(last_versions) = &mut last.versions {
+            // Update globals.ui with resp if different. This will update the uuid_data accordingly.
+            let uuids = last_versions.set(&resp);
+            // Make the inner header in the response have the proper uuids.
+            resp.header.set_from_uuids(&uuids);
+        } else {
+            // First time, so initialize the versioning logic with the current response.
+            let new_versioned_resp = Versioned::new(resp.clone());
+            // Copy the newly created UUID in the inner response header (so the caller can use these also).
+            new_versioned_resp.write_uuids_into_header_param(&mut resp.header);
+            last.versions = Some(new_versioned_resp);
         }
 
         Ok(resp)
+    }
+
+    async fn get_workdir_status(
+        &self,
+        workdir: String,
+        method_uuid: Option<String>,
+        data_uuid: Option<String>,
+    ) -> RpcResult<WorkdirStatusResponse> {
+        // Verify workdir param is OK and get its corresponding workdir_idx.
+        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
+            .await
+        {
+            Some(workdir_idx) => workdir_idx,
+            None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
+        };
+
+        if method_uuid.is_none() && data_uuid.is_none() {
+            // Best-effort refresh of the status, since user is requesting for the latest.
+
+            // Allow only one API request for a given workdir at the time to avoid race conditions.
+            let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
+            let api_mutex = &mut *api_mutex_guard;
+
+            let last_api_call_timestamp = &mut api_mutex.last_api_call_timestamp;
+
+            // Use the internal implementation (same logic as done with get_versions).
+
+            let _ = self
+                .update_globals_workdir_status(
+                    workdir.clone(),
+                    workdir_idx,
+                    last_api_call_timestamp,
+                )
+                .await;
+        }
+
+        {
+            let globals_read_guard = self.globals.get_status(workdir_idx).read().await;
+            let globals = &*globals_read_guard;
+
+            if let Some(ui) = &globals.ui {
+                if method_uuid.is_some() || data_uuid.is_some() {
+                    let mut are_same_version = false;
+                    if let (Some(method_uuid), Some(data_uuid)) =
+                        (method_uuid.as_ref(), data_uuid.as_ref())
+                    {
+                        let globals_data_uuid = &ui.get_uuid().get_data_uuid();
+                        if data_uuid == globals_data_uuid {
+                            let globals_method_uuid = &ui.get_uuid().get_method_uuid();
+                            if method_uuid == globals_method_uuid {
+                                are_same_version = true;
+                            }
+                        }
+                    }
+                    if !are_same_version {
+                        // Something went wrong, but this could be normal if the globals just got updated
+                        // and the caller is not yet aware of it (assume the caller will eventually discover
+                        // the latest version with getVersions).
+                        return Err(RpcSuibaseError::OutdatedUUID().into());
+                    }
+                }
+                let resp = ui.get_data().clone();
+                //ui.write_uuids_into_header_param(&mut resp.header);
+                return Ok(resp);
+            } else {
+                return Err(
+                    RpcSuibaseError::InternalError("globals.ui was None".to_string()).into(),
+                );
+            }
+        }
     }
 }

@@ -12,7 +12,7 @@ use crate::shared_types::{Globals, GlobalsPackagesConfigST, GlobalsWorkdirsST};
 
 use super::{
     MoveConfig, PackageInstance, PackagesApiServer, PackagesConfigResponse, RpcInputError,
-    SuccessResponse, SuiEventsResponse,
+    SuccessResponse, WorkdirSuiEventsResponse,
 };
 
 pub struct PackagesApiImpl {
@@ -39,12 +39,12 @@ impl PackagesApiImpl {
 
 #[async_trait]
 impl PackagesApiServer for PackagesApiImpl {
-    async fn get_events(
+    async fn get_workdir_events(
         &self,
         workdir: String,
         _after_ts: Option<String>,
         _last_ts: Option<String>,
-    ) -> RpcResult<SuiEventsResponse> {
+    ) -> RpcResult<WorkdirSuiEventsResponse> {
         // data/display/debug allow variations of how the output
         // is produced (and they may be combined).
         //
@@ -54,16 +54,15 @@ impl PackagesApiServer for PackagesApiImpl {
         //
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let _workdir_idx =
-            match GlobalsWorkdirsST::find_workdir_idx_by_name(&self.globals, &workdir).await {
-                Some(workdir_idx) => workdir_idx,
-                None => {
-                    return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into())
-                }
-            };
+        let _workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
+            .await
+        {
+            Some(workdir_idx) => workdir_idx,
+            None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
+        };
 
         // Initialize some of the header fields of the response.
-        let mut resp = SuiEventsResponse::new();
+        let mut resp = WorkdirSuiEventsResponse::new();
         resp.header.method = "getEvents".to_string();
         resp.header.key = Some(workdir.clone());
         Ok(resp)
@@ -215,7 +214,7 @@ impl PackagesApiServer for PackagesApiImpl {
         Ok(resp)
     }
 
-    async fn get_packages_config(
+    async fn get_workdir_packages_config(
         &self,
         workdir: String,
         data: Option<bool>,
@@ -237,7 +236,7 @@ impl PackagesApiServer for PackagesApiImpl {
         let _data = data.unwrap_or(!(debug || display));
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::find_workdir_idx_by_name(&self.globals, &workdir)
+        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
             .await
         {
             Some(workdir_idx) => workdir_idx,
@@ -263,7 +262,7 @@ impl PackagesApiServer for PackagesApiImpl {
                                 // The caller requested the same data that it already have a copy of.
                                 // Respond with the same UUID as a way to say "no change".
                                 let mut resp = PackagesConfigResponse::new();
-                                ui.init_header_uuids(&mut resp.header);
+                                ui.write_uuids_into_header_param(&mut resp.header);
                                 resp_ready = Some(resp);
                             }
                         }
@@ -295,7 +294,7 @@ impl PackagesApiImpl {
         package_name: &String,
     ) -> Result<(u8, String), RpcError> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::find_workdir_idx_by_name(&self.globals, workdir)
+        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, workdir)
             .await
         {
             Some(workdir_idx) => workdir_idx,
