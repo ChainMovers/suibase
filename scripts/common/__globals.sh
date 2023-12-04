@@ -663,16 +663,15 @@ build_sui_repo_branch() {
 
     local _BIN_LIST
     if [ $is_local = true ]; then
-      _BIN_LIST="-p sui -p sui-faucet"
+      _BIN_LIST="--bin sui --bin sui-faucet"
       _DO_FINAL_SUI_FAUCET_SANITY_CHECK=true
     else
-      _BIN_LIST="-p sui"
+      _BIN_LIST="--bin sui"
     fi
     _DO_FINAL_SUI_SANITY_CHECK=true
 
     if [ -n "$PASSTHRU_OPTIONS" ]; then
-      # Check if a "-p " is specified. If not, then add the defaults to _BIN_LIST.
-      if [[ "$PASSTHRU_OPTIONS" == *"-p "* ]]; then
+      if [[ "$PASSTHRU_OPTIONS" == *"-p "* || "$PASSTHRU_OPTIONS" == *"--bin "* ]]; then
         # The caller wants to control what gets build, so clear _BIN_LIST.
         _BIN_LIST=""
         # Can't assume the caller is building these.
