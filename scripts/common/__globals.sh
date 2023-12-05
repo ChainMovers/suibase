@@ -1181,7 +1181,7 @@ create_state_as_needed() {
   fi
 
   if [ ! -f "$WORKDIRS/$WORKDIR_PARAM/.state/user_request" ]; then
-    set_key_value "user_request" "stop"
+    set_key_value "$WORKDIR_PARAM" "user_request" "stop"
   fi
 
   if [ "$WORKDIR_PARAM" != "active" ]; then
