@@ -56,14 +56,14 @@ If you do not have suibase, then do the following for the first measurements:
 ```shell
 $ git clone -b devnet https://github.com/MystenLabs/sui.git
 $ cd sui
-$ cargo build -p sui -p sui-faucet
+$ cargo build --bin sui --bin sui-faucet
 ```
 
 ... and get additional measurements with:
 
 ```shell
 $ cargo clean
-$ cargo build -p sui -p sui-faucet
+$ cargo build --bin sui --bin sui-faucet
 ```
 
 :::
