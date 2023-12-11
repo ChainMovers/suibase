@@ -13,6 +13,16 @@ publish_all() {
     exit
   fi
 
+  # Add default --gas-budget if not specified.
+  if ! has_param "" "--gas-budget" $_PASSTHRU_OPTIONS; then
+    _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --gas-budget 100000000"
+  fi
+
+  # Add --json, but only if not already specified by the caller.
+  if ! has_param "" "--json" $_PASSTHRU_OPTIONS; then
+    _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --json"
+  fi
+
   # Do a pre publication handshake with the suibase-daemon.
   # On success, will get the global PACKAGE_UUID variable set.
   # On failure, the script will exit_error.
@@ -33,7 +43,8 @@ publish_all() {
 
   # Build the Move package for publication.
   echo "Will publish using the sui client matching the network. Command line is:"
-  CMD="$SUI_EXEC client publish --gas-budget 20000000 --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS --json 2>&1 1>$INSTALL_DIR/publish-output.json"
+
+  CMD="$SUI_EXEC client publish --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS 2>&1 1>$INSTALL_DIR/publish-output.json"
 
   echo "$CMD"
   # Execute $CMD

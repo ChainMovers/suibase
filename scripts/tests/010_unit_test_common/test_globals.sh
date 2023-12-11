@@ -21,6 +21,7 @@ tests() {
   test_static_globals_var
   test_color
   test_string_utils
+  test_has_param
   cd "$HOME" || fail "cd $HOME"
   rm -rf "${WORKDIRS:?}"
   localnet create || fail "localnet create"
@@ -222,7 +223,6 @@ export FILE2_TMP
 test_file_newer_than_phase_1() {
   FILE1_TMP=$(mktemp)
 }
-export -f test_file_newer_than_phase_1
 
 test_file_newer_than_phase_2() {
   # FILE1_TMP and FILE2_TMP are two temporary files with
@@ -251,6 +251,35 @@ test_file_newer_than_phase_2() {
   # Clean up the temporary files.
   rm "$FILE1_TMP" "$FILE2_TMP"
 }
-export -f test_file_newer_than_phase_2
+
+test_has_param() {
+  if ! has_param "" "--a" "--a"; then
+    fail "has_param failed to match --a"
+  fi
+
+  if ! has_param "" "--a" "--b" "--a"; then
+    fail "has_param failed to match --a"
+  fi
+
+  if ! has_param "" "--a" "--b" "--a" "--c sdf"; then
+    fail "has_param failed to match --a"
+  fi
+
+  if ! has_param "" "--c" "--b" "--a" "--c"; then
+    fail "has_param failed to match --c"
+  fi
+
+  if ! has_param "" "--c" "--b" "--a" "--c" "c_parameter"; then
+    fail "has_param failed to match --c when having a parameter"
+  fi
+
+  if ! has_param "-c" "--c" "--b" "--a" "-c" "c_parameter"; then
+    fail "has_param failed to match -c short param"
+  fi
+
+  if has_param "-c" "--c" "--b" "--a" "-ca" "--ca" "--ac" "c"; then
+    fail "has_param unexpected matching of -c or --c"
+  fi
+}
 
 tests

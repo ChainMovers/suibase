@@ -2767,3 +2767,27 @@ is_wsl() {
   return
 }
 export -f is_wsl
+
+has_param() {
+  local _SHORT_OPT="$1"
+  local _LONG_OPT="$2"
+  # Initialize params with remaining parameters (exclude $1 and $2)
+  local _PARAMS=("${@:3}")
+
+  # If found, return true.
+  for _PARAM in "${_PARAMS[@]}"; do
+    if [ -z "$_PARAM" ]; then
+      # Should not happen... but just in case one of $_SHORT_OPT or $_LONG_OPT is empty.
+      continue
+    fi
+
+    if [[ "$_PARAM" == "$_SHORT_OPT" || "$_PARAM" == "$_LONG_OPT" ]]; then
+      true
+      return
+    fi
+  done
+
+  false
+  return
+}
+export -f has_param
