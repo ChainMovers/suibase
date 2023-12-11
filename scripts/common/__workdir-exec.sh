@@ -1015,6 +1015,9 @@ workdir_exec() {
     return
   fi
 
+  # From this point is the code when a "regen", binaries were updated or
+  # creation of the client.yaml/sui.keystore needs to be done.
+
   if $is_local; then
     # shellcheck source=SCRIPTDIR/__workdir-init-local.sh
     source "$SUIBASE_DIR/scripts/common/__workdir-init-local.sh"
@@ -1029,6 +1032,8 @@ workdir_exec() {
   # done after regen to produce the .state/dns and whatever else
   # went missing.
   repair_workdir_as_needed "$WORKDIR" # Create/repair as needed
+
+  adjust_sui_aliases "$WORKDIR"
 
   # Start the local services (will be NOOP if already running).
   start_all_services

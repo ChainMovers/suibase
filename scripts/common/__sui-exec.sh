@@ -7,7 +7,7 @@
 has_param() {
   local _SHORT_OPT="$1"
   local _LONG_OPT="$2"
-  # Initialize params with remainng parameters (exclude $1 and $2)
+  # Initialize params with remaining parameters (exclude $1 and $2)
   local _PARAMS=("${@:3}")
 
   # If found, return true.
@@ -234,15 +234,13 @@ sui_exec() {
   if [ $is_local = true ]; then
     case $SUI_SUBCOMMAND in
     "keytool")
-      # Are you getting an error : The argument '--keystore-path <KEYSTORE_PATH>' was provided
-      # more than once, but cannot be used multiple times?
-      #
-      # This is because by default lsui point to the keystore created with the localnet.
-      #
-      # TODO Fix this. Still default to workdirs, but allow user to override with its own --keystore-path.
-      #
       shift 1
-      $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+      # Append default --keystore-path, unless specified by the caller.
+      if ! has_param "" "--keystore-path" "$@"; then
+        $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+      else
+        $SUI_BIN "$SUI_SUBCOMMAND" "$@"
+      fi
       ;;
     "genesis" | "genesis-ceremony" | "start")
       # Protect the user from starting more than one sui process.
@@ -263,6 +261,15 @@ sui_exec() {
   else
     # For remote network, trap many commands that just don't make sense.
     case $SUI_SUBCOMMAND in
+    "keytool")
+      shift 1
+      # Append default --keystore-path, unless specified by the caller.
+      if ! has_param "" "--keystore-path" "$@"; then
+        $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+      else
+        $SUI_BIN "$SUI_SUBCOMMAND" "$@"
+      fi
+      ;;
     "genesis" | "genesis-ceremony" | "start" | "network")
       if [[ "$2" == "--help" || "$2" == "-h" ]]; then
         $SUI_BIN "$SUI_SUBCOMMAND" --help

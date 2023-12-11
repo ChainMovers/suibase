@@ -1091,6 +1091,225 @@ create_state_dns_as_needed() {
 }
 export -f create_state_dns_as_needed
 
+# Load the sui.aliases file into arrays.
+#
+# Allows access of every fields for every alias,
+# using only an index.
+#
+# Valid only if SUI_ALIASES_SIZE > 0
+#
+# Index goes from 0 to SUI_ALIASES_SIZE-1
+export SUI_ALIASES_SIZE
+export SUI_ALIASES_NAME
+export SUI_ALIASES_ADDRESS
+export SUI_ALIASES_KEY_SCHEME
+export SUI_ALIASES_PEER_ID
+export SUI_ALIASES_PUBLIC_KEY
+export SUI_ALIASES_FLAG
+
+update_sui_aliases_arrays() {
+  SUI_ALIASES_SIZE=0
+  SUI_ALIASES_NAME=()
+  SUI_ALIASES_ADDRESS=()
+  SUI_ALIASES_KEY_SCHEME=()
+  SUI_ALIASES_PEER_ID=()
+  SUI_ALIASES_PUBLIC_KEY=()
+  SUI_ALIASES_FLAG=()
+
+  # "keytool list" output is a JSON array of elements looking like this:
+  #
+  #[
+  #  {
+  #    "alias": "priceless-opal",
+  #    "suiAddress": "0xef6e9dd8f30dea802e0474a7996e5c772c581cc1adee45afb660f15a081d1c49",
+  #    "publicBase64Key": "AgPe4JWk+Zledatd8nbMbWTNh1sqHU/0Dy9zn9S6FVQIIQ==",
+  #    "keyScheme": "secp256r1",
+  #    "flag": 2,
+  #    "peerId": null
+  #  },
+  #  {
+  #    "alias": "chaotic-diamond",
+  #    "suiAddress": "0xf7ae71f84fabc58662bd4209a8893f462c60f247095bb35b19ff659ad0081462",
+  #    "publicBase64Key": "ALSfnL+vbyJ55c0rCuR08k8AoYxS7o4xAyaQ1Lmw977B",
+  #    "keyScheme": "ed25519",
+  #    "flag": 0,
+  #    "peerId": "b49f9cbfaf6f2279e5cd2b0ae474f24f00a18c52ee8e31032690d4b9b0f7bec1"
+  #  }
+  #  ... more elements...
+  #]
+
+  local _KEYTOOL_LIST
+  local _KEYTOOL_EXEC
+  _KEYTOOL_EXEC="env RUST_LOG=OFF $SUI_SCRIPT keytool"
+  _KEYTOOL_LIST=$($_KEYTOOL_EXEC --json list 2>&1)
+
+  # Iterate over every lines of _KEYTOOL_LIST
+  local _INSIDE_BLOCK=false
+  local _ALIAS _SUI_ADDRESS _KEY_SCHEME _PEER_ID _PUBLIC_KEY _FLAG
+
+  # Trick to read even if last line does not have EOL:
+  # https://stackoverflow.com/questions/12916352/shell-script-read-missing-last-line
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Check if the line contains an opening curly bracket
+    if [[ $line == *"{"* ]]; then
+      _INSIDE_BLOCK=true
+      unset _ALIAS _SUI_ADDRESS _KEY_SCHEME _PEER_ID _PUBLIC_KEY _FLAG
+    fi
+
+    # Check if the line contains a closing curly bracket
+    if [[ $line == *"}"* ]]; then
+      _INSIDE_BLOCK=false
+      if [ -n "$_ALIAS" ] && [ -n "$_SUI_ADDRESS" ] && [ -n "$_KEY_SCHEME" ]; then
+        # Add the fields to the arrays.
+        SUI_ALIASES_NAME+=("$_ALIAS")
+        SUI_ALIASES_ADDRESS+=("$_SUI_ADDRESS")
+        SUI_ALIASES_KEY_SCHEME+=("$_KEY_SCHEME")
+        SUI_ALIASES_PEER_ID+=("$_PEER_ID")
+        SUI_ALIASES_PUBLIC_KEY+=("$_PUBLIC_KEY")
+        SUI_ALIASES_FLAG+=("$_FLAG")
+        ((SUI_ALIASES_SIZE++))
+      fi
+    fi
+
+    # Only process lines inside a block
+    if $_INSIDE_BLOCK; then
+      # Read the fields.
+      if [[ $line == *"alias"* ]]; then
+        _ALIAS=$(echo "$line" | awk -F'"' '{print $4}')
+      elif [[ $line == *"suiAddress"* ]]; then
+        _SUI_ADDRESS=$(echo "$line" | awk -F'"' '{print $4}')
+      elif [[ $line == *"keyScheme"* ]]; then
+        _KEY_SCHEME=$(echo "$line" | awk -F'"' '{print $4}')
+      elif [[ $line == *"peerId"* ]]; then
+        _PEER_ID=$(echo "$line" | awk -F'"' '{print $4}')
+      elif [[ $line == *"publicBase64Key"* ]]; then
+        _PUBLIC_KEY=$(echo "$line" | awk -F'"' '{print $4}')
+      elif [[ $line == *"flag"* ]]; then
+        _FLAG=$(echo "$line" | awk -F': ' '{print $2}' | awk -F',' '{print $1}')
+      fi
+    fi
+  done <<<"$_KEYTOOL_LIST"
+}
+export update_sui_aliases_arrays
+
+adjust_sui_aliases() {
+  local _WORKDIR_PARAM="$1"
+
+  if [[ "${CFG_auto_key_generation:?}" == 'false' ]]; then
+    return
+  fi
+
+  # Update sui.aliases with deterministic names for key auto-created by Suibase.
+  #
+  # sui.aliases is located at $WORKDIRS/$WORKDIR_PARAM/config/sui.aliases
+  #
+  # The "suiAddress" of auto-created address are in the co-located recovery.txt file.
+  #
+  # Use the command "keytool list" to iterate and get all the fields for every alias.
+  #
+  # What does that function do?
+  # ===========================
+  # Iterate each "alias" and extract its corresponding "suiAddress" and "keyScheme" fields.
+  #
+  # If the "suiAddress" exists in the recovery.txt file, then replace the "alias" field with
+  # a deterministic name based on a counter of how many alias of a given keyScheme type
+  # were found to exists up to now.
+  #
+  # The derministic name is "sb-<count>-<keyScheme>" where <count> is the current one-base
+  # counter for the given "keyScheme" type.
+  #
+  # If the "suiAddress" does not exists in the recovery.txt file, then the corresponding
+  # "alias" is left unchanged.
+  #
+  # Implemented using a map to track the distinct "keyScheme" that are identified
+  # along the way.
+  #
+  local _SUI_ALIASES="$WORKDIRS/$_WORKDIR_PARAM/config/sui.aliases"
+  local _RECOVERY_TXT="$WORKDIRS/$_WORKDIR_PARAM/config/recovery.txt"
+  local _TEMP_FILE="$WORKDIRS/$_WORKDIR_PARAM/config/sui.aliases.tmp"
+
+  rm -f "$_TEMP_FILE"
+
+  if [ ! -f "$_SUI_ALIASES" ] || [ ! -f "$_RECOVERY_TXT" ]; then
+    return
+  fi
+
+  # Process the sui.aliases file only if "sb-1-ed25519" is not found.
+  # This is to avoid to wasting time for when the renaming was already done.
+  if grep -q "sb-1-ed25519" "$_SUI_ALIASES"; then
+    return
+  fi
+
+  update_sui_aliases_arrays
+
+  if [ $SUI_ALIASES_SIZE -eq 0 ]; then
+    return
+  fi
+
+  readarray -t recovery <"$_RECOVERY_TXT"
+
+  # Sanity test, and just do nothing if did not work (the binary might not
+  # be built, in which case the user will likely try again).
+  if [ ${#recovery[@]} -eq 0 ]; then
+    return
+  fi
+
+  # Declare a counter for each keyScheme type
+  declare -A counter
+
+  local _ALIAS
+  local _PUB_64_KEY
+  local _KEY_SCHEME
+
+  # Important: This constant must match the logic done in init_workdir when auto-generating the addresses.
+  local _AUTO_CREATED_PER_SCHEME=5
+
+  # Work with a temporary file until success.
+  \cp "$_SUI_ALIASES" "$_TEMP_FILE"
+
+  # Iterate index from 0 to SUI_ALIASES_SIZE-1
+  #
+  # Each iteration is for a unique "alias" and "suiAddress"
+  #
+  # Trick to read even if last line does not have EOL:
+  # https://stackoverflow.com/questions/12916352/shell-script-read-missing-last-line
+  for ((i = 0; i < SUI_ALIASES_SIZE; i++)); do
+    # Read the fields.
+    _ALIAS=${SUI_ALIASES_NAME[$i]}
+    _SUI_ADDRESS=${SUI_ALIASES_ADDRESS[$i]}
+    _KEY_SCHEME=${SUI_ALIASES_KEY_SCHEME[$i]}
+
+    if [ -n "$_ALIAS" ] && [ -n "$_SUI_ADDRESS" ] && [ -n "$_KEY_SCHEME" ]; then
+      # Check if the suiAddress exists in the recovery.txt file
+      for value in "${recovery[@]}"; do
+        if [[ $value == *$_SUI_ADDRESS* ]]; then
+          # echo "Found $_SUI_ADDRESS in recovery.txt"
+          # Increment the counter for this keyScheme type
+          ((counter[$_KEY_SCHEME]++))
+
+          if [[ -n ${counter[$_KEY_SCHEME]} && ${counter[$_KEY_SCHEME]} =~ ^[0-9]+$ ]]; then
+            # Replace the alias field with a deterministic name in the temporary file.
+            local _SEARCH_STRING="$_ALIAS"
+            local _ALIAS_NUMBER=$((1 + _AUTO_CREATED_PER_SCHEME - ${counter[$_KEY_SCHEME]}))
+            local _REPLACE_STRING="sb-$_ALIAS_NUMBER-$_KEY_SCHEME"
+            sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" \
+              "$_TEMP_FILE" &&
+              rm "$_TEMP_FILE.bak"
+
+            break
+          else
+            echo "Unexpected counter value for $_KEY_SCHEME"
+          fi
+        fi
+      done
+    fi
+  done
+
+  # Replace the original file with the temporary file
+  mv "$_TEMP_FILE" "$_SUI_ALIASES"
+}
+export -f adjust_sui_aliases
+
 create_state_links_as_needed() {
   WORKDIR_PARAM="$1"
 
