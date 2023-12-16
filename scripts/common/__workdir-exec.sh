@@ -80,7 +80,7 @@ usage_local() {
   echo "            Do \"$WORKDIR faucet\" for more info"
   echo
   echo_low_green "   links"
-  echo "   Get RPC server statistics."
+  echo "    Get RPC server statistics."
   echo
   echo_low_green "   set-active"
   echo
