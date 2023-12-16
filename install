@@ -166,6 +166,10 @@ main() {
   # specifying a path.
   for script_name in "${script_list[@]}"; do
     # Call into each script which should return a string echoing... its own name.
+    # (except for "sui" which could call the ~/.cargo/bin/sui binary)
+    if [ "$script_name" = "sui" ]; then
+      continue
+    fi
     test=$($script_name suibase-script-name)
     if [ "$test" != "$script_name" ]; then
       setup_error "setup of $script_name symlink failed [$test]"

@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Some application assumes a "sui" binary is installed and on the $PATH.
+#
+# These application need to be redirected to Suibase if no sui is installed
+# in ~/.cargo/bin.
+#
+# This script front-end will look into multiple location to find the most
+# suitable version to call.
+#
+# Which binary gets called?
+# =========================
+# Selection rules are:
+#   - Call the binary in ~/.cargo/bin if installed.
+#   - Try next the binary that is Suibase "active".
+#   - Try next with localnet Suibase Rust repo.
+#   - Try next in-order with mainnet, testnet and devnet Suibase Rust repo.
+#
+# When binary is from a Rust repo, favor debug before release profile.
+# (because some Sui commands works only when built 'debug').
+#
+# If there is no binary found anywhere, then the script suggest to build at
+# least one Suibase workdir.
+SUIBASE_WORKDIRS="$HOME/suibase/workdirs"
+SELECTED_SUI=""
+
+# Check for the user's ~/.cargo/bin/sui BUT do that only if this
+# script is not unexpectably ~/.cargo/bin/sui itself.
+if [ "$0" != "$HOME/.cargo/bin/sui" ]; then
+  if [ -x "$HOME/.cargo/bin/sui" ]; then
+    SELECTED_SUI="$HOME/.cargo/bin/sui"
+  fi
+fi
+
+# List of places to look for a sui binary (in order of preference).
+PATHLIST=(
+  "$SUIBASE_WORKDIRS/active/sui-repo/target/release/sui"
+  "$SUIBASE_WORKDIRS/active/sui-repo/target/debug/sui"
+  "$SUIBASE_WORKDIRS/localnet/sui-repo/target/release/sui"
+  "$SUIBASE_WORKDIRS/localnet/sui-repo/target/debug/sui"
+  "$SUIBASE_WORKDIRS/mainnet/sui-repo/target/release/sui"
+  "$SUIBASE_WORKDIRS/mainnet/sui-repo/target/debug/sui"
+  "$SUIBASE_WORKDIRS/testnet/sui-repo/target/release/sui"
+  "$SUIBASE_WORKDIRS/testnet/sui-repo/target/debug/sui"
+  "$SUIBASE_WORKDIRS/devnet/sui-repo/target/release/sui"
+  "$SUIBASE_WORKDIRS/devnet/sui-repo/target/debug/sui"
+)
+
+if [ -z "$SELECTED_SUI" ]; then
+  # Iterate the list until finding an executeable file.
+  for path in "${PATHLIST[@]}"; do
+    if [ -x "$path" ]; then
+      SELECTED_SUI="$path"
+      break
+    fi
+  done
+fi
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "suibase-script-name" ]]; then
+  echo "sui"
+  exit
+fi
+
+if [ -z "$SELECTED_SUI" ]; then
+  # Help the user.
+  echo "Error: No sui binary found"
+  echo
+  if [ ! -d "$HOME/suibase" ]; then
+    echo "Suibase need to be installed. See https://suibase.io/how-to/install"
+  else
+    echo "You need to build at least one Sui client binaries."
+    echo
+    echo " Do one of the following:"
+    echo "    'localnet start'   (Recommended)"
+    echo "    'devnet start'"
+    echo "    'testnet start'"
+    echo "    'mainnet start'"
+    echo
+  fi
+  # Clear the bash cache for path lookup of the sui binary. This
+  # is helpful if the user is struggling with cache being
+  # out-of-sync with latest intended sui location.
+  #
+  # Info: https://unix.stackexchange.com/questions/335801
+  if hash -t sui >&/dev/null; then
+    hash -d sui
+  fi
+  exit 1
+fi
+
+$SELECTED_SUI "$@"

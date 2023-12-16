@@ -22,21 +22,23 @@ main() {
 
   # Call stop on every workdirs.
   local _DIR_ENTRIES=("$SUIBASE_DIR"/workdirs/*)
-  for dir_entry in "${_DIR_ENTRIES[@]}" ; do
+  for dir_entry in "${_DIR_ENTRIES[@]}"; do
     if [ -L "$dir_entry" ]; then
       # Symlink, probably the "active", just skip it.
       continue
     fi
     if [ -d "$dir_entry" ]; then
       workdir=$(basename "$dir_entry")
-      echo "Stopping workdir [$workdir]..."
-      ("$SUIBASE_DIR/workdirs/$workdir/workdir-exec" stop)
+      if [ -f "$SUIBASE_DIR/workdirs/$workdir/workdir-exec" ]; then
+        echo "Stopping workdir [$workdir]..."
+        ("$SUIBASE_DIR/workdirs/$workdir/workdir-exec" stop)
+      fi
     fi
   done
 
   # Build the list of scripts (e.g. "localnet, devnet, tsui...")
   local script_list=()
-  for dir_entry in "$SUIBASE_DIR/"scripts/* ; do
+  for dir_entry in "$SUIBASE_DIR/"scripts/*; do
     if [ -f "$dir_entry" ] && [ -x "$dir_entry" ]; then
       script_list+=("$(basename "$dir_entry")")
     fi
@@ -57,9 +59,10 @@ main() {
   remove_bin_path "dsui"
   remove_bin_path "asui"
   remove_bin_path "csui"
+  remove_bin_path "sui"
   echo
   echo "suibase scripts uninstalled successfully for user [$username]"
   echo
 }
 
-main;
+main
