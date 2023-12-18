@@ -14,7 +14,10 @@ use crate::{
     basic_types::{
         self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
     },
-    shared_types::{Globals, GlobalsPackagesConfigST},
+    shared_types::{
+        Globals, GlobalsPackagesConfigST, WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET,
+        WORKDIR_IDX_MAINNET, WORKDIR_IDX_TESTNET,
+    },
 };
 
 use anyhow::Result;
@@ -26,7 +29,7 @@ use futures::{
 };
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
-use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 use super::package_tracking::{PackageTracking, PackageTrackingState};
 
@@ -36,6 +39,7 @@ pub struct WebSocketWorkerParams {
     event_rx: Arc<Mutex<GenericRx>>,
     event_tx: GenericTx,
     workdir_idx: WorkdirIdx,
+    workdir_name: String,
 }
 
 impl WebSocketWorkerParams {
@@ -50,6 +54,7 @@ impl WebSocketWorkerParams {
             event_rx: Arc::new(Mutex::new(event_rx)),
             event_tx,
             workdir_idx,
+            workdir_name: WORKDIRS_KEYS[workdir_idx as usize].to_string(),
         }
     }
 }
@@ -73,8 +78,8 @@ impl WebSocketWorker {
 #[derive(Debug, Default)]
 struct WebSocketManagement {
     // Active websocket connection.
-    write: Option<SplitSink<WebSocketStream<TcpStream>, Message>>,
-    read: Option<SplitStream<WebSocketStream<TcpStream>>>,
+    write: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
+    read: Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
 
     // Sequence number to use as "id" for JSON-RPC.
     // Must be incremented prior to use it in a new request.
@@ -114,7 +119,8 @@ impl Runnable<WebSocketWorkerParams> for WebSocketWorkerThread {
     }
 
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("started");
+        let output = format!("started {}", self.params.workdir_name);
+        log::info!("{}", output);
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
@@ -173,7 +179,8 @@ impl WebSocketWorkerThread {
                 if package.did_sent_subscribe_request(msg_seq_number) {
                     correlated_msg = true;
                     log::info!(
-                        "Received websocket subscribe resp: {:?} for package id {}",
+                        "Received {} subscribe resp: {:?} for package id {}",
+                        self.params.workdir_name,
                         json_msg,
                         package.id()
                     );
@@ -195,7 +202,8 @@ impl WebSocketWorkerThread {
                 // Got an expected unsubscribe response.
                 correlated_msg = true;
                 log::info!(
-                    "Received websocket unsubscribe resp: {:?} for package id {}",
+                    "Received {} unsubscribe resp: {:?} for package id {}",
+                    self.params.workdir_name,
                     json_msg,
                     package.id()
                 );
@@ -206,7 +214,11 @@ impl WebSocketWorkerThread {
             }
         }
         if !correlated_msg {
-            log::error!("Received websocket message: {:?}", json_msg);
+            log::error!(
+                "Received {} message: {:?}",
+                self.params.workdir_name,
+                json_msg
+            );
         }
 
         if trig_audit_event {
@@ -645,8 +657,19 @@ impl WebSocketWorkerThread {
 
     async fn open_websocket(&mut self) -> bool {
         // Open a websocket connection to the server for this workdir.
+
         // TODO Change this to the actual server URL from the config.
-        let socket_url = "ws://0.0.0.0:9000";
+        // For now, use hard coded Mysten Labs servers...
+        let socket_url = match self.params.workdir_idx {
+            WORKDIR_IDX_LOCALNET => "ws://0.0.0.0:9000",
+            WORKDIR_IDX_DEVNET => "wss://fullnode.devnet.sui.io:443",
+            WORKDIR_IDX_TESTNET => "wss://fullnode.testnet.sui.io:443",
+            WORKDIR_IDX_MAINNET => "wss://fullnode.mainnet.sui.io:443",
+            _ => {
+                log::error!("Unexpected workdir_idx {:?}", self.params.workdir_idx);
+                return false;
+            }
+        };
 
         match connect_async(socket_url).await {
             Ok((ws_stream, _response)) => {
@@ -689,7 +712,7 @@ impl WebSocketWorkerThread {
                         self.process_ws_msg(msg).await;
                     } else {
                         // Shutdown requested.
-                        log::info!("Received a None websocket message");
+                        log::info!("Received {} None websocket message", self.params.workdir_name);
                         return;
                     }
                 }
@@ -710,7 +733,7 @@ impl WebSocketWorkerThread {
                         }
                     } else {
                         // Channel closed or shutdown requested.
-                        log::info!("Received a None internal message");
+                        log::info!("Received {} None internal message", self.params.workdir_name );
                         return;
                     }
                 }

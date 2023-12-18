@@ -9,19 +9,20 @@ module demo::Counter {
     use sui::tx_context::{Self,TxContext};
     use sui::event;
     use sui::transfer;
+    use std::string::{Self};
 
     // Allow unit test module to use this object friend functions.
     #[test_only]
     friend demo::test_counter;
 
     // Move event emitted on every increment.
-    struct CounterChanged has copy, drop {
+    public struct CounterChanged has copy, drop {
         count: u64,  // New value.
         by_address: address, // Sender of the transaction that caused the change.
     }
 
     // Shared object that is targeted for the demo.
-    struct Counter has key, store {
+    public struct Counter has key, store {
         id: UID,
         count: u64,
     }
@@ -37,6 +38,7 @@ module demo::Counter {
     //
     // Only init() calls new to guarantee one instance per package.
     //
+    
     // It is still mark with (friend) to allow for unit testing.
     public fun new( ctx: &mut TxContext): Counter
     {
@@ -55,6 +57,13 @@ module demo::Counter {
 
     public(friend) fun inc(self: &mut Counter, ctx: &TxContext)
     {
+        // Initalize the console. Default is to enable all log levels.
+        let console = log::console::default();
+
+        // Log a message.
+        let msg = string::utf8(b"inc() called");        
+        console.info(msg);
+
         self.count = self.count + 1;
 
         let sender = tx_context::sender(ctx);

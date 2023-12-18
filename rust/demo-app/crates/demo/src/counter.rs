@@ -34,7 +34,8 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // Initialize the suibase helper.
     let suibase = Helper::new();
     suibase.select_workdir("active")?;
-    println!("Using suibase workdir [{}]", suibase.workdir()?);
+    let workdir_name = suibase.workdir()?;
+    println!("Using suibase workdir [{}]", workdir_name);
 
     // Get information from the last publication.
     let package_id = suibase.package_object_id("demo")?;
@@ -96,9 +97,23 @@ pub async fn count() -> Result<(), anyhow::Error> {
         .await?;
 
     if response.errors.is_empty() {
-        println!("Success. Transaction sent Digest {}", response.digest);
-        println!("The Counter::increment function should run on the network and emit an");
-        println!("event from package {}", package_id);
+        println!("Transaction Successful (Counter::increment call was done).");
+
+        println!("============= Explorer Links =============");
+        let network = if workdir_name == "localnet" {
+            "local"
+        } else {
+            workdir_name.as_str()
+        };
+
+        println!(
+            "Package [https://suiexplorer.com/object/{}?network={}]",
+            package_id, network
+        );
+        println!(
+            "TxBlock [https://suiexplorer.com/txblock/{}?network={}]",
+            response.digest, network
+        );
     } else {
         println!("Transaction failed. Errors:");
         for error in response.errors {

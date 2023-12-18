@@ -1,11 +1,10 @@
 [package]
-name = "demo"
+name = "Log"
 version = "0.0.1"
 edition = "2024.alpha"
 
 [dependencies]
 Sui = { local = "../../../../suibase/workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
-Log = { local = "../../../../suibase/move/@suibase/log" }
 
 [addresses]
-demo =  "0x0"
+log =  "0x0"

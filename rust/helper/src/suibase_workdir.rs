@@ -92,12 +92,13 @@ impl SuibaseWorkdir {
     ) -> Result<ObjectID, Error> {
         let pathname =
             self.get_pathname_published_file(root, package_name, "package-id", "json")?;
-        let mut in_str =
-            std::fs::read_to_string(&pathname).map_err(|io_error| Error::PublishedDataAccessError {
+        let mut in_str = std::fs::read_to_string(&pathname).map_err(|io_error| {
+            Error::PublishedDataAccessError {
                 package_name: package_name.to_string(),
                 path: pathname,
                 io_error,
-            })?;
+            }
+        })?;
 
         in_str = in_str.trim().to_string();
 
@@ -191,7 +192,7 @@ impl SuibaseWorkdir {
                             && substrings[1] == names[1]
                             && substrings[2] == names[2]
                         {
-                            if let Some(objectid_field) = created_object.get("objectid") {
+                            if let Some(objectid_field) = created_object.get("objectId") {
                                 if let Some(objectid_str) = objectid_field.as_str() {
                                     objects.push(
                                         ObjectID::from_hex_literal(objectid_str).map_err(|_| {

@@ -9,7 +9,7 @@ publish_all() {
   local _PASSTHRU_OPTIONS="${*}"
 
   if [ -z "$MOVE_TOML_PACKAGE_NAME" ]; then
-    echo "Package name could not be found"
+    echo "suibase: Package name could not be found"
     exit
   fi
 
@@ -31,7 +31,7 @@ publish_all() {
   echo "Package name=[$MOVE_TOML_PACKAGE_NAME]"
 
   local _SUB_INSTALL_DIR="$MOVE_TOML_PACKAGE_NAME/$PACKAGE_UUID/$PACKAGE_TIMESTAMP"
-  echo "Suibase output: ~/suibase/workdirs/$WORKDIR_NAME/published-data/$_SUB_INSTALL_DIR"
+  echo "Script outputs in ~/suibase/workdirs/$WORKDIR_NAME/published-data/$_SUB_INSTALL_DIR"
 
   INSTALL_DIR="$PUBLISHED_DATA_DIR/$_SUB_INSTALL_DIR"
 
@@ -42,68 +42,27 @@ publish_all() {
   sync_client_yaml
 
   # Build the Move package for publication.
-  echo "Will publish using the sui client matching the network. Command line is:"
+  echo "Will publish using sui client for $WORKDIR_NAME. Command line is:"
 
-  CMD="$SUI_EXEC client publish --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS 2>&1 1>$INSTALL_DIR/publish-output.json"
+  local _CMD="$SUI_EXEC client publish --install-dir \"$INSTALL_DIR\" \"$MOVE_TOML_DIR\" $_PASSTHRU_OPTIONS 2>&1 1>$INSTALL_DIR/publish-output.json"
 
-  echo "$CMD"
+  local _CMD_TO_DISPLAY=$_CMD
+
+  # For display purpose, replace $SUI_EXEC with user-friendly $SUI_SCRIPT (e.g. "lsui").
+  # TODO Code this without using external command.
+  _CMD_TO_DISPLAY=$(echo "$_CMD_TO_DISPLAY" | sed "s|$SUI_EXEC|$SUI_SCRIPT|g")
+
+  echo "$_CMD_TO_DISPLAY"
   # Execute $CMD
-  eval "$CMD"
-
+  echo "=============== Sui client output ========================"
+  eval "$_CMD"
   #  TODO Investigate problem with exit status here...
 
   # Create the created_objects.json file.
-  echo -n "[" >"$INSTALL_DIR/created-objects.json"
-  local _first_object_created=true
-  # Get all the objectid
-  awk '/"created":/,/],/' "$INSTALL_DIR/publish-output.json" |
-    grep objectId | sed 's/\"//g; s/,//g' | tr -d "[:blank:]" |
-    while read -r line; do
-      # Extract first hexadecimal literal found.
-      # Define the seperator (IFS) as the JSON ':'
-      local _ID=""
-      IFS=":"
-      for _i in $line; do
-        if beginswith 0x "$_i"; then
-          _ID=$_i
-          break
-        fi
-      done
-      # Best-practice to revert IFS to default.
-      unset IFS
-      #echo "$_ID"
-      if [ -n "$_ID" ]; then
-        # Get the type of the object
-        object_type=$($SUI_EXEC client object "$_ID" --json | grep "type" | sed 's/,//g' | tr -d "[:blank:]" | head -n 1)
-        if [ -z "$object_type" ]; then
-          # To be removed eventually. Version 0.27 devnet was working differently.
-          object_type=$($SUI_EXEC client object "$_ID" --json | grep "dataType" | grep "package")
-          if [ -n "$object_type" ]; then
-            _found_id=true
-          fi
-        else
-          if $_first_object_created; then
-            _first_object_created=false
-          else
-            echo "," >>"$INSTALL_DIR/created-objects.json"
-          fi
-
-          echo -n "{\"objectid\":\"$_ID\",$object_type}" >>"$INSTALL_DIR/created-objects.json"
-          #echo "ot=[$object_type]"
-          if [ "$object_type" = "\"type\":\"package\"" ]; then
-            _found_id=true
-          fi
-        fi
-
-        if $_found_id; then
-          JSON_STR="[\"$_ID\"]"
-          echo "$JSON_STR" >"$INSTALL_DIR/package-id.json"
-          _found_id=false
-        fi
-
-      fi
-    done
-  echo "]" >>"$INSTALL_DIR/created-objects.json"
+  update_SUI_PUBLISH_TXDIGEST "$INSTALL_DIR"
+  if [ -n "$SUI_PUBLISH_TXDIGEST" ]; then
+    process_object_changes "$INSTALL_DIR"
+  fi
 
   # Load back the package-id.json from the file for validation
   local _ID_PACKAGE
@@ -111,35 +70,165 @@ publish_all() {
     _ID_PACKAGE=$(sed 's/\[//g; s/\]//g; s/"//g;' "$INSTALL_DIR/package-id.json")
   fi
 
-  # echo "Package ID=[$_ID_PACKAGE]"
-
   if [ -z "$_ID_PACKAGE" ]; then
     cat "$INSTALL_DIR/publish-output.json"
-    setup_error "suibase: Publication failed."
+  fi
+  echo "============ End of Sui client output ====================="
+
+  if [ -z "$_ID_PACKAGE" ]; then
+    setup_error "Publication failed."
   fi
 
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
-  echo "suibase: Verifying new package is on network..."
-  validation=$($SUI_EXEC client object "$_ID_PACKAGE" | grep -i "package")
-  if [ -z "$validation" ]; then
-    cat "$INSTALL_DIR/publish-output.json"
-    setup_error "suibase: Unexpected object type (Not a package)"
+  echo "suibase: Verifying new package is on network."
+
+  # Retry for up to 30 seconds to allow for the propagation time of information to the RPC nodes.
+  # Check no more than once per second.
+  local _RETRY_COUNT=0
+  local _RETRY_MAX=30
+  local _RETRY_DELAY=1
+  local _VERIFIED=false
+
+  if [ "$WORKDIR_NAME" != "localnet" ]; then
+    sleep $_RETRY_DELAY
   fi
-  JSON_STR="[\"$_ID_PACKAGE\"]"
-  echo "$JSON_STR" >"$INSTALL_DIR/package-id.json"
+
+  while [ $_RETRY_COUNT -lt $_RETRY_MAX ]; do
+    _RETRY_COUNT=$((_RETRY_COUNT + 1))
+    local _ID_PACKAGE_INFO
+    _ID_PACKAGE_INFO=$($SUI_EXEC client object "$_ID_PACKAGE" | grep -i "package")
+    if [ -n "$_ID_PACKAGE_INFO" ]; then
+      _VERIFIED=true
+      break
+    else
+      echo "suibase: Verification attempt $_RETRY_COUNT of $_RETRY_MAX"
+      sleep $_RETRY_DELAY
+    fi
+  done
+
+  if [ "$_VERIFIED" = false ]; then
+    cat "$INSTALL_DIR/publish-output.json"
+    setup_error "Could not confirm package is on the network for packageId=$_ID_PACKAGE"
+  else
+    echo "suibase: Verification completed. The package is on the network."
+  fi
 
   # Update the 'latest' symlink.
   update_latest_symlinks
 
-  echo "Package ID is $JSON_STR"
-  echo "Also written in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/package-id.json]"
+  # _ID_PACKAGE_NO_OX
+  local _ID_PACKAGE_FOR_LINK
+  _ID_PACKAGE_FOR_LINK=$(echo "$_ID_PACKAGE" | sed 's/0x//g')
+  local _WORKDIR_NAME_FOR_LINK="$WORKDIR_NAME"
+  if [ "$WORKDIR_NAME" = "localnet" ]; then
+    _WORKDIR_NAME_FOR_LINK="local"
+  fi
+
+  echo "===================== Summary ============================="
   echo "Publication Successful"
+  echo "Package ID=[$_ID_PACKAGE]"
+  echo "Package ID also in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/package-id.json]"
+  echo "Created objects in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/created-objects.json]"
+  echo "Complete output in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$_SUB_INSTALL_DIR/publish-output.json]"
+  echo "================= Explorer Links =========================="
+  echo "Package [https://suiexplorer.com/object/$_ID_PACKAGE_FOR_LINK?network=$_WORKDIR_NAME_FOR_LINK]"
+  if [ -n "$SUI_PUBLISH_TXDIGEST" ]; then
+    echo "TxBlock [https://suiexplorer.com/txblock/$SUI_PUBLISH_TXDIGEST?network=$_WORKDIR_NAME_FOR_LINK]"
+  fi
 
   # Push new information to suibase-daemon.
   do_suibase_daemon_post_publish "$MOVE_TOML_DIR" "$MOVE_TOML_PACKAGE_NAME" "$PACKAGE_UUID" "$PACKAGE_TIMESTAMP" "$_ID_PACKAGE"
 }
 export -f publish_all
+
+export SUI_PUBLISH_TXDIGEST=""
+update_SUI_PUBLISH_TXDIGEST() {
+  local _INSTALL_DIR="$1"
+  unset SUI_PUBLISH_TXDIGEST
+  local _block_level=0
+  SUI_PUBLISH_TXDIGEST=$(
+    cat "$_INSTALL_DIR/publish-output.json" |
+      while read -r line || [ -n "$line" ]; do
+        # Increment _block_level when '{' is found anywhere in the line.
+        if [[ $line == *"{"* ]]; then
+          _block_level=$((_block_level + 1))
+        fi
+        # Decrement _block_level when '}' is found anywhere in the line.
+        if [[ $line == *"}"* ]]; then
+          _block_level=$((_block_level - 1))
+        fi
+        if [ $_block_level -eq 1 ]; then
+          if [[ $line == *"\"digest\":"* ]]; then
+            local _RESULT
+            _RESULT=$(echo "$line" | awk -F'"' '{print $4}')
+            echo "$_RESULT"
+            break
+          fi
+        fi
+      done
+  )
+}
+export -f update_SUI_PUBLISH_TXDIGEST
+
+process_object_changes() {
+  local _INSTALL_DIR="$1"
+
+  local _first_object_created=true
+  local _block_level=0
+
+  # Iterate every element, which have its fields delimitated by { and }.
+  # The fields to be check are when _block_level=1
+  local _TYPE=""
+  local _PACKAGE_ID=""
+  local _OBJECT_ID=""
+  local _OBJECT_TYPE=""
+
+  echo -n "[" >"$_INSTALL_DIR/created-objects.json"
+  awk '/"objectChanges":/,/],/' "$_INSTALL_DIR/publish-output.json" |
+    while read -r line || [ -n "$line" ]; do
+      # Increment _block_level when '{' is found anywhere in the line.
+      if [[ $line == *"{"* ]]; then
+        _block_level=$((_block_level + 1))
+      fi
+      # Decrement _block_level when '}' is found anywhere in the line.
+      if [[ $line == *"}"* ]]; then
+        _block_level=$((_block_level - 1))
+        if [ $_block_level -eq 0 ]; then
+          if [ "$_TYPE" = "created" ] && [ -n "$_OBJECT_TYPE" ] && [ -n "$_OBJECT_ID" ]; then
+            if $_first_object_created; then
+              _first_object_created=false
+            else
+              echo "," >>"$_INSTALL_DIR/created-objects.json"
+            fi
+            echo -n "{\"objectId\":\"$_OBJECT_ID\",\"type\":\"$_OBJECT_TYPE\"}" >>"$_INSTALL_DIR/created-objects.json"
+          elif [ "$_TYPE" = "published" ] && [ -n "$_PACKAGE_ID" ]; then
+            JSON_STR="[\"$_PACKAGE_ID\"]"
+            echo "$JSON_STR" >"$_INSTALL_DIR/package-id.json"
+          fi
+          _TYPE=""
+          _PACKAGE_ID=""
+          _OBJECT_ID=""
+          _OBJECT_TYPE=""
+        fi
+      fi
+      # When _block_level=1, then extract the fields of interest.
+      if [ $_block_level -eq 1 ]; then
+        if [[ $line == *"\"type\":"* ]]; then
+          _TYPE=$(echo "$line" | awk -F'"' '{print $4}')
+        elif [[ $line == *"\"packageId\":"* ]]; then
+          _PACKAGE_ID=$(echo "$line" | awk -F'"' '{print $4}')
+        elif [[ $line == *"\"objectId\":"* ]]; then
+          _OBJECT_ID=$(echo "$line" | awk -F'"' '{print $4}')
+        elif [[ $line == *"\"objectType\":"* ]]; then
+          _OBJECT_TYPE=$(echo "$line" | awk -F'"' '{print $4}')
+        fi
+      fi
+    done
+
+  echo "]" >>"$_INSTALL_DIR/created-objects.json"
+}
+export -f process_object_changes
 
 update_latest_symlinks() {
   # Following global variables must all be set:

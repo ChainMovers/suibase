@@ -1,0 +1,5 @@
+[meta]
+creation_timestamp = "1702406222790407 2023-12-12 13:37:02.790407773 -05:00"
+
+[packages]
+console = { uuid = "GQEYT7KTI64HPUE5Q6LL3RUGM4", uuid_custom = false }

@@ -2,17 +2,8 @@
 
 [move]
 version = 0
-manifest_digest = "29690175E60708D5080A7A63C3C9AD07948EC1DEFBBEBB7FAF4AA209A95FD558"
-deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
-
-dependencies = [
-  { name = "Log" },
-  { name = "Sui" },
-]
-
-[[move.package]]
-name = "Log"
-source = { local = "../../../../suibase/move/@suibase/log" }
+manifest_digest = "57DDACF0BFAEEAF061FC2007444DF4D8B4FE826EF3D7D5CBCB81AC6CB5325427"
+deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
 
 dependencies = [
   { name = "Sui" },
