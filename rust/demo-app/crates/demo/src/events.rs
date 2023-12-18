@@ -1,8 +1,11 @@
-// Subscribe and display all events from a Sui localnet
+// Subscribe and display events from a Sui network.
+//
+// Filter to display only events from this package.
 //
 // type 'cargo run events' to see this code in action.
 //
-// type 'cargo run count' in another terminal to trigger a "counter increment" event.
+// type 'cargo run count' in another terminal to trigger a "counter increment" event
+// from the network.
 //
 use colored::Colorize;
 use futures::StreamExt;
