@@ -2698,6 +2698,10 @@ copy_on_bin_diff() {
   local _DST="$2"
   # Copy the file _SRC to _DST if the files are binary different.
   # If _DST does not exist, then copy to create it.
+  # If _SRC does not exists, then do nothing.
+  if [ ! -f "$_SRC" ]; then
+    return
+  fi
   local _DO_COPY=false
   if [ ! -f "$_DST" ]; then
     _DO_COPY=true
@@ -2709,7 +2713,7 @@ copy_on_bin_diff() {
   if [ "$_DO_COPY" = "true" ]; then
     # Create the path/directories of the _DST as needed.
     mkdir -p "$(dirname "$_DST")"
-    cp "$_SRC" "$_DST"
+    \cp -f "$_SRC" "$_DST"
   fi
 }
 export -f copy_on_bin_diff
