@@ -10,6 +10,9 @@ Official Mysten Labs links to get you started.
 ### Sui Documentation
 https://docs.sui.io/
 
+### Tutorial
+- [Sui Foundation - Move Intro Course](https://github.com/sui-foundation/sui-move-intro-course/tree/main)
+
 ### Latest Sui Whitepapers
 - [Sui Lutris - A Blockchain combining Broadcast and Consensus](https://arxiv.org/pdf/2310.18042.pdf) ( [intro](https://tech.mystenlabs.com/sui-lutris-the-distributed-system-protocol-at-the-heart-of-sui/) )
 - [Tokenomics - The Sui Smart Contracts Platform: Economics and Incentives ](https://docs.sui.io/assets/files/tokenomics-87c5e5545e70702a338016edee57dfd9.pdf) ( [intro](https://docs.sui.io/concepts/tokenomics) )
