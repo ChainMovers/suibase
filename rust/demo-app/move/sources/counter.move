@@ -9,7 +9,8 @@ module demo::Counter {
     use sui::tx_context::{Self,TxContext};
     use sui::event;
     use sui::transfer;
-    use std::string::{Self};
+
+    use log::console::{Console};
 
     // Allow unit test module to use this object friend functions.
     #[test_only]
@@ -29,18 +30,12 @@ module demo::Counter {
 
     // The initialization function called at the moment of publication.
     fun init(ctx: &mut TxContext) {
-      let new_counter = demo::Counter::new(ctx);
+      let new_counter = Counter { id: object::new(ctx), count: 0 };
       transfer::share_object( new_counter );
     }
-
-    // Notice that for this example, the new() is not called from
-    // a transaction.
-    //
-    // Only init() calls new to guarantee one instance per package.
-    //
     
-    // It is still mark with (friend) to allow for unit testing.
-    public fun new( ctx: &mut TxContext): Counter
+    #[test_only]
+    public(friend) fun new( ctx: &mut TxContext): Counter
     {
         Counter { id: object::new(ctx), count: 0 }
     }
@@ -55,14 +50,9 @@ module demo::Counter {
         self.count
     }
 
-    public(friend) fun inc(self: &mut Counter, ctx: &TxContext)
-    {
-        // Initalize the console. Default is to enable all log levels.
-        let console = log::console::default();
-
-        // Log a message.
-        let msg = string::utf8(b"inc() called");        
-        console.info(msg);
+    public(friend) fun inc(self: &mut Counter, console: &Console, ctx: &TxContext)
+    {                
+        console.debug(b"inc called");
 
         self.count = self.count + 1;
 
@@ -73,8 +63,15 @@ module demo::Counter {
     // Transaction to increment the counter
     public entry fun increment(self: &mut Counter, ctx: &TxContext)
     {
+        // Initalize the console. Default is to enable all log levels.
+        let mut console = log::console::default();
+        log::console::set_log_level(&mut console, log::consts::Info());
+
+        // Log a message.        
+        console.info(b"increment() entry");
+
         // No check of the sender. Anyone can increment the counter.
-        demo::Counter::inc(self, ctx);
+        demo::Counter::inc(self, &console, ctx);
     }
 }
 
