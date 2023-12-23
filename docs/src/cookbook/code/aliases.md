@@ -44,10 +44,10 @@ def alias_look():
     # cfg = SuiConfig.sui_base_config()
     # Loop through aliases and print
     print()
-    for alias in client.config.aliases:
+    for alias in cfg.aliases:
         print(f"Alias:      {alias}")
-        print(f"Address:    {client.config.addr4al(alias)}")
-        print(f"PublicKey:  {client.config.pk4al(alias)}\n")
+        print(f"Address:    {cfg.addr4al(alias)}")
+        print(f"PublicKey:  {cfg.pk4al(alias)}\n")
 
 ```
 
