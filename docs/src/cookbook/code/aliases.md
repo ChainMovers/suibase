@@ -10,6 +10,7 @@ editLink: true
 
 - Sui cli `sui client` will automatically generate a alias file (~/.sui/sui_config/sui.aliases) starting in version 1.16.0
 - The alias file has a 1:1 mapping of alias names to the public key of the associated keypair
+- The alias name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)
 - Command line caveats:
     - To rename an alias you will need to edit the alias file via editor
     - There is no known alias name length
