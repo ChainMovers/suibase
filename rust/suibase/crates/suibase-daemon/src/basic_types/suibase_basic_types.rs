@@ -1,6 +1,17 @@
 // Some common types depending only on built-in or "standard" types.
 pub type EpochTimestamp = tokio::time::Instant;
 
+// Event Level (matches  consts used in the Suibase log Move module)
+pub type EventLevel = u8;
+pub const EVENT_LEVEL_INVALID: u8 = 0u8;
+pub const EVENT_LEVEL_ERROR: u8 = 1u8;
+pub const EVENT_LEVEL_WARN: u8 = 2u8;
+pub const EVENT_LEVEL_INFO: u8 = 3u8;
+pub const EVENT_LEVEL_DEBUG: u8 = 4u8;
+pub const EVENT_LEVEL_TRACE: u8 = 5u8;
+pub const EVENT_LEVEL_MIN: u8 = EVENT_LEVEL_ERROR;
+pub const EVENT_LEVEL_MAX: u8 = EVENT_LEVEL_TRACE;
+
 /*
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -39,12 +50,16 @@ pub type GenericRx = tokio::sync::mpsc::Receiver<GenericChannelMsg>;
 pub type GenericChannelEventID = u8;
 pub const EVENT_AUDIT: u8 = 1; // Fast consistency check. Globals read-only access. Should emit an EVENT_UPDATE to self for globals update.
 pub const EVENT_UPDATE: u8 = 2; // Apply Globals config changes and/or update status. Globals write access allowed.
-pub const EVENT_EXEC: u8 = 3; // Execute what is specified by the params. Globals write access allowed.
+pub const EVENT_EXEC: u8 = 3; // Execute what is specified by the params (command, data_string...). Globals write access allowed.
 
 pub struct GenericChannelMsg {
     pub event_id: GenericChannelEventID,
+
     // Params
-    pub data_string: Option<String>,
+    pub command: Option<String>,
+    pub params: Vec<String>,
+
+    pub data_json: Option<serde_json::Value>,
     pub workdir_idx: Option<WorkdirIdx>,
 
     // Optional channel to send a one-time response.
@@ -55,13 +70,20 @@ impl GenericChannelMsg {
     pub fn new() -> Self {
         Self {
             event_id: 0,
-            data_string: None,
+            command: None,
+            params: Vec::new(),
+            data_json: None,
             workdir_idx: None,
             resp_channel: None,
         }
     }
-    pub fn data_string(&self) -> Option<String> {
-        self.data_string.clone()
+
+    pub fn command(&self) -> Option<String> {
+        self.command.clone()
+    }
+
+    pub fn params(&self, index: usize) -> Option<String> {
+        self.params.get(index).cloned()
     }
 
     pub fn workdir_idx(&self) -> Option<WorkdirIdx> {
@@ -73,7 +95,8 @@ impl std::fmt::Debug for GenericChannelMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GenericChannelMsg")
             .field("event_id", &self.event_id)
-            .field("data_string", &self.data_string)
+            .field("command", &self.command)
+            .field("params", &self.params)
             .field("workdir_idx", &self.workdir_idx)
             .finish()
     }

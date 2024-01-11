@@ -64,8 +64,13 @@ pub struct PackageTracking {
     request_retry: u8,
 
     // Set when a subscription response is received. This is then
-    // used later to cleanly unsubscribe.
+    // used later to do event correlation and unsubscribe.
     unsubscribed_id: Option<String>,
+
+    // This is a cached u64 conversion of unsubscribed_id.
+    // Initialize to u64::MAX and updated whenever unsubscribed_id is set
+    // with a valid number.
+    subscription_number: u64,
 
     // sequence numbers that were used for
     // subscription request(s).
@@ -92,6 +97,7 @@ impl PackageTracking {
             request_sent_timestamp: None,
             request_retry: 0,
             unsubscribed_id: None,
+            subscription_number: u64::MAX,
             subscribe_seq_numbers: Vec::new(),
             unsubscribe_seq_numbers: Vec::new(),
             remove_request: false,
@@ -124,6 +130,10 @@ impl PackageTracking {
 
     pub fn unsubscribed_id(&self) -> Option<&String> {
         self.unsubscribed_id.as_ref()
+    }
+
+    pub fn subscription_number(&self) -> u64 {
+        self.subscription_number
     }
 
     pub fn did_sent_subscribe_request(&self, seq_number: u64) -> bool {
@@ -189,6 +199,7 @@ impl PackageTracking {
             self.subscribe_seq_numbers.clear();
             self.unsubscribe_seq_numbers.clear();
             self.unsubscribed_id = None;
+            self.subscription_number = u64::MAX;
             self.request_retry = 0;
         }
         self.state_change_timestamp = tokio::time::Instant::now();
@@ -210,6 +221,12 @@ impl PackageTracking {
     pub fn report_subscribing_response(&mut self, unsubscribe_id: String) {
         self.request_sent_timestamp = None;
         self.request_retry = 0;
+        // Convert unsubscribed_id to subscription_number (u64). The number is
+        // an integer base 10. If fails, to convert, then set to u64::MAX.
+        self.subscription_number = match unsubscribe_id.parse() {
+            Ok(number) => number,
+            Err(_e) => u64::MAX,
+        };
         self.unsubscribed_id = Some(unsubscribe_id);
     }
 
@@ -227,6 +244,7 @@ impl PackageTracking {
         self.request_sent_timestamp = None;
         self.request_retry = 0;
         self.unsubscribed_id = None;
+        self.subscription_number = u64::MAX;
     }
 
     pub fn report_remove_request(&mut self) {

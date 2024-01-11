@@ -64,11 +64,11 @@ impl RequestWorker {
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
-                log::info!("shutting down - normal exit (2)");
+                log::info!("normal thread exit (2)");
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("shutting down - normal exit (1)");
+                log::info!("normal thread exit (1)");
                 Ok(())
             }
         }

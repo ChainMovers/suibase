@@ -239,7 +239,7 @@ impl AdminController {
         // Forward the message to the ShellWorker.
         let mut worker_msg = GenericChannelMsg::new();
         worker_msg.event_id = EVENT_EXEC;
-        worker_msg.data_string = msg.data_string;
+        worker_msg.command = msg.data_string;
         worker_msg.workdir_idx = msg.workdir_idx;
         worker_msg.resp_channel = msg.resp_channel;
         shell_worker_tx.send(worker_msg).await.unwrap();
@@ -465,12 +465,15 @@ impl AdminController {
         {
             let (events_writer_worker_tx, events_writer_worker_rx) =
                 tokio::sync::mpsc::channel(100);
-            wd_tracking.events_writer_worker_tx = Some(events_writer_worker_tx);
+
             let events_writer_worker_params = EventsWriterWorkerParams::new(
                 self.globals.clone(),
                 events_writer_worker_rx,
+                events_writer_worker_tx.clone(),
                 workdir_idx,
             );
+            wd_tracking.events_writer_worker_tx = Some(events_writer_worker_tx);
+
             let events_writer_worker = EventsWriterWorker::new(events_writer_worker_params);
             let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
                 events_writer_worker.run(a)
@@ -527,11 +530,11 @@ impl AdminController {
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
-                log::info!("shutting down - normal exit (2)");
+                log::info!("normal thread exit (2)");
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("shutting down - normal exit (1)");
+                log::info!("normal thread exit (1)");
                 Ok(())
             }
         }

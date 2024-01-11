@@ -52,7 +52,7 @@ impl ShellWorker {
         } else if msg.event_id != crate::basic_types::EVENT_EXEC {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             format!("Error: Unexpected event_id {:?}", msg.event_id)
-        } else if let Some(cmd) = &msg.data_string {
+        } else if let Some(cmd) = &msg.command {
             // Execute the command as if it was a bash script.
             let output = Command::new("bash").arg("-c").arg(cmd).output();
 
@@ -89,7 +89,7 @@ impl ShellWorker {
             if let Err(e) = &resp_channel.send(resp) {
                 let error_msg = format!(
                     "Error: do_exec({:?}, {:?}) error 3: {}",
-                    msg.workdir_idx, msg.data_string, e
+                    msg.workdir_idx, msg.command, e
                 );
                 log::error!("{}", error_msg);
             }
@@ -114,11 +114,11 @@ impl ShellWorker {
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
-                log::info!("shutting down - normal exit (2)");
+                log::info!("normal thread exit (2)");
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("shutting down - normal exit (1)");
+                log::info!("normal thread exit (1)");
                 Ok(())
             }
         }

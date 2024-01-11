@@ -80,9 +80,14 @@ impl<Thread: Runnable<Parameter> + Send + 'static, Parameter: Send + Clone> Runn
                 break;
             }
 
-            log::info!("{} restarting...", inner_thread_name);
+            // Make an exception to not display "WebSocketWorker" restart
+            // because they normally restart every ~30 seconds because of
+            // "normal" connection closing from many public servers.
+            if self.name != "WebSocketWorker" {
+                log::info!("{} restarting...", inner_thread_name);
+            }
         }
-        log::info!("{} shutting down - normal exit", outer_thread_name);
+        log::info!("{} normal thread exit", outer_thread_name);
         Ok(())
     }
 }

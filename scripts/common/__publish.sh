@@ -54,7 +54,7 @@ publish_all() {
 
   echo "$_CMD_TO_DISPLAY"
   # Execute $CMD
-  echo "=============== Sui client output ========================"
+  echo "=================== Sui client output ===================="
   eval "$_CMD"
   #  TODO Investigate problem with exit status here...
 
@@ -73,15 +73,15 @@ publish_all() {
   if [ -z "$_ID_PACKAGE" ]; then
     cat "$INSTALL_DIR/publish-output.json"
   fi
-  echo "============ End of Sui client output ====================="
 
   if [ -z "$_ID_PACKAGE" ]; then
+    echo "======================= Summary =========================="
     setup_error "Publication failed."
   fi
 
   # Test the publication by retreiving object information from the network
   # using that parsed package id.
-  echo "suibase: Verifying new package is on network."
+  echo "================ Verification on Network ================="
 
   # Retry for up to 30 seconds to allow for the propagation time of information to the RPC nodes.
   # Check no more than once per second.
@@ -125,13 +125,13 @@ publish_all() {
     _WORKDIR_NAME_FOR_LINK="local"
   fi
 
-  echo "===================== Summary ============================="
+  echo "======================= Summary =========================="
   echo "Publication Successful"
   echo "Package ID=[$_ID_PACKAGE]"
   echo "Package ID also in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/package-id.json]"
   echo "Created objects in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/created-objects.json]"
   echo "Complete output in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$_SUB_INSTALL_DIR/publish-output.json]"
-  echo "================= Explorer Links =========================="
+  echo "==================== Explorer Links ======================"
   echo "Package [https://suiexplorer.com/object/$_ID_PACKAGE_FOR_LINK?network=$_WORKDIR_NAME_FOR_LINK]"
   if [ -n "$SUI_PUBLISH_TXDIGEST" ]; then
     echo "TxBlock [https://suiexplorer.com/txblock/$SUI_PUBLISH_TXDIGEST?network=$_WORKDIR_NAME_FOR_LINK]"

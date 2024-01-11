@@ -37,7 +37,8 @@ use super::package_tracking::{PackageTracking, PackageTrackingState};
 pub struct WebSocketWorkerParams {
     globals: Globals,
     event_rx: Arc<Mutex<GenericRx>>,
-    event_tx: GenericTx,
+    event_tx: GenericTx,         // To send message to self.
+    events_writer_tx: GenericTx, // To send message to parent EventsWriterWorker.
     workdir_idx: WorkdirIdx,
     workdir_name: String,
 }
@@ -47,12 +48,14 @@ impl WebSocketWorkerParams {
         globals: Globals,
         event_rx: GenericRx,
         event_tx: GenericTx,
+        events_writer_tx: GenericTx,
         workdir_idx: WorkdirIdx,
     ) -> Self {
         Self {
             globals,
             event_rx: Arc::new(Mutex::new(event_rx)),
             event_tx,
+            events_writer_tx,
             workdir_idx,
             workdir_name: WORKDIRS_KEYS[workdir_idx as usize].to_string(),
         }
@@ -119,16 +122,16 @@ impl Runnable<WebSocketWorkerParams> for WebSocketWorkerThread {
     }
 
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        let output = format!("started {}", self.params.workdir_name);
-        log::info!("{}", output);
+        // let output = format!("started {}", self.params.workdir_name);
+        // log::info!("{}", output);
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
-                log::info!("shutting down - normal exit (2)");
+                // log::info!("normal thread exit (2)");
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("shutting down - normal exit (1)");
+                log::info!("normal thread exit (1)");
                 Ok(())
             }
         }
@@ -153,6 +156,15 @@ impl WebSocketWorkerThread {
     async fn process_ws_msg(&mut self, msg: Message) {
         //log::info!("Received a websocket message: {:?}", msg);
 
+        // **********************************************************************
+        // **********************************************************************
+        // **********************************************************************
+        // **********************************************************************
+        // TODO Important !!!!!!! Replace all [] with get()... like done in DB worker
+        // **********************************************************************
+        // **********************************************************************
+        // **********************************************************************
+        // **********************************************************************
         let (json_msg, msg_seq_number) = match msg {
             Message::Text(text) => {
                 let json = serde_json::from_str(&text);
@@ -173,58 +185,215 @@ impl WebSocketWorkerThread {
         // Check for expected response (correlate using the JSON-RPC id).
         let mut trig_audit_event = false;
         let mut correlated_msg = false;
-        for package in self.packages.values_mut() {
-            let state = package.state();
-            if state == &PackageTrackingState::Subscribing {
-                if package.did_sent_subscribe_request(msg_seq_number) {
+        if msg_seq_number != 0 {
+            for package in self.packages.values_mut() {
+                let state = package.state();
+                if state == &PackageTrackingState::Subscribing {
+                    if package.did_sent_subscribe_request(msg_seq_number) {
+                        correlated_msg = true;
+                        log::info!(
+                            "Received subscribe resp. workdir={} package id={} resp={:?}",
+                            self.params.workdir_name,
+                            package.id(),
+                            json_msg,
+                        );
+                        // Got an expected subscribe response.
+                        // Extract the result string from the JSON message.
+                        let result = json_msg["result"].as_u64();
+                        if result.is_none() {
+                            log::error!(
+                                "Missing result field in subscribe JSON resp. workdir={} package id={} resp={:?}",
+                                self.params.workdir_name,
+                                package.id(),
+                                json_msg
+                            );
+                            return;
+                        }
+                        let unsubscribe_id = result.unwrap();
+                        package.report_subscribing_response(unsubscribe_id.to_string());
+                        trig_audit_event = true;
+                        break;
+                    }
+                } else if state == &PackageTrackingState::Unsubscribing
+                    && package.did_sent_unsubscribe_request(msg_seq_number)
+                {
+                    // Got an expected unsubscribe response.
                     correlated_msg = true;
                     log::info!(
-                        "Received {} subscribe resp: {:?} for package id {}",
+                        "Received unsubscribe resp. workdir={} package id={} resp={:?}",
                         self.params.workdir_name,
+                        package.id(),
                         json_msg,
-                        package.id()
                     );
-                    // Got an expected subscribe response.
-                    // Extract the result string from the JSON message.
-                    let result = json_msg["result"].as_u64();
-                    if result.is_none() {
-                        log::error!("Missing result in subscribe JSON response: {:?}", json_msg);
-                        return;
-                    }
-                    let unsubscribe_id = result.unwrap();
-                    package.report_subscribing_response(unsubscribe_id.to_string());
+
+                    package.report_unsubscribing_response();
                     trig_audit_event = true;
                     break;
                 }
-            } else if state == &PackageTrackingState::Unsubscribing
-                && package.did_sent_unsubscribe_request(msg_seq_number)
-            {
-                // Got an expected unsubscribe response.
-                correlated_msg = true;
-                log::info!(
-                    "Received {} unsubscribe resp: {:?} for package id {}",
-                    self.params.workdir_name,
-                    json_msg,
-                    package.id()
-                );
-
-                package.report_unsubscribing_response();
-                trig_audit_event = true;
-                break;
             }
         }
+
         if !correlated_msg {
-            log::error!(
-                "Received {} message: {:?}",
-                self.params.workdir_name,
-                json_msg
-            );
+            // Check if a valid Sui event message.
+            let method = json_msg["method"].as_str();
+            if method.is_none() {
+                log::error!(
+                    "Missing method in Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+            let method = method.unwrap();
+            if method != "suix_subscribeEvent" {
+                log::error!(
+                    "Unexpected method in Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+
+            let params = json_msg["params"].as_object();
+            if params.is_none() {
+                log::error!(
+                    "Missing params in Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+            let params = params.unwrap();
+            let subscription = params["subscription"].as_u64();
+            if subscription.is_none() {
+                log::error!(
+                    "Missing subscription in Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+            let subscription_number = subscription.unwrap();
+            let result = params["result"].as_object();
+            if result.is_none() {
+                log::error!(
+                    "Missing result in Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+            let result = result.unwrap();
+
+            // Find the related package uuid (Suibase ID) and name using the
+            // subscription number.
+            let mut package_uuid: Option<String> = None;
+            let mut package_name: Option<String> = None;
+            for package in self.packages.values_mut() {
+                let state = package.state();
+                if state == &PackageTrackingState::Subscribed
+                    && package.subscription_number() == subscription_number
+                {
+                    package_uuid = Some(package.uuid().clone());
+                    package_name = Some(package.name().clone());
+                    // While we are here... do a sanity check that packageId field
+                    // match what is in PackageTrackingState.
+                    let package_id = result["packageId"].as_str();
+                    if package_id.is_none() {
+                        log::error!(
+                            "Missing packageId in Sui Event message. workdir={} message={:?}",
+                            self.params.workdir_name,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let package_id = package_id.unwrap();
+                    // Verify package_id starts with "0x", and then create a slice that
+                    // remove the "0x".
+                    if !package_id.starts_with("0x") {
+                        log::error!(
+                            "Invalid packageId in Sui Event message. workdir={} message={:?}",
+                            self.params.workdir_name,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let package_id = &package_id[2..];
+                    if package.id() != package_id {
+                        log::error!(
+                                "packageId {} not matching {} in Sui Event message. workdir={} message={:?}",
+                                package.id(),
+                                package_id,
+                                self.params.workdir_name,
+                                json_msg
+                            );
+                        return;
+                    }
+                    break;
+                }
+            }
+
+            if package_uuid.is_none() {
+                log::warn!(
+                    "Unsubscribed state for subscription number {} for Sui Event message. workdir={} message={:?}",
+                    subscription_number,
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+            let package_uuid = package_uuid.unwrap();
+
+            if package_name.is_none() {
+                log::warn!(
+                    "Missing package name for subscription number {} for Sui Event message. workdir={} message={:?}",
+                    subscription_number,
+                    self.params.workdir_name,
+                    json_msg
+                );
+                return;
+            }
+            let package_name = package_name.unwrap();
+
+            // {"jsonrpc": String("2.0"),
+            //  "method": String("suix_subscribeEvent"),
+            //  "params": Object { "subscription": Number(6351273490251832),
+            //                     "result": Object {
+            //                        "id": Object {"txDigest": String("3Vua...ChrL"), "eventSeq": String("1")},
+            //                        "packageId": String("0xe065...3b08"),
+            //                        "transactionModule": String("Counter"),
+            //                        "sender": String("0xf7ae...1462"),
+            //                        "type": String("0xe065...3b08::Counter::CounterChanged"),
+            //                        "parsedJson": Object {"by_address": String("0xf7ae...1462"), "count": String("1")},
+            //                        "bcs": String("3t9dC...ELZ"),
+            //                        "timestampMs": String("1703895010111")
+            //                      }
+            //                    }
+            // }
+            // TODO Validate here if from an expected subscribed package.
+            // Forward to the parent thread for deduplication.
+            let msg = GenericChannelMsg {
+                event_id: basic_types::EVENT_EXEC,
+                command: Some("add_sui_event".to_string()),
+                params: vec![package_uuid, package_name],
+                data_json: Some(json_msg),
+                workdir_idx: Some(self.params.workdir_idx),
+                resp_channel: None,
+            };
+            if self.params.events_writer_tx.send(msg).await.is_err() {
+                log::error!(
+                    "Failed to add_sui_event for workdir_idx={}",
+                    self.params.workdir_idx
+                );
+            }
         }
 
         if trig_audit_event {
             let msg = GenericChannelMsg {
                 event_id: basic_types::EVENT_AUDIT,
-                data_string: None,
+                command: None,
+                params: Vec::new(),
+                data_json: None,
                 workdir_idx: Some(self.params.workdir_idx),
                 resp_channel: None,
             };
@@ -385,7 +554,9 @@ impl WebSocketWorkerThread {
             // Update the packages_config globals.
             let msg = GenericChannelMsg {
                 event_id: basic_types::EVENT_UPDATE,
-                data_string: None,
+                command: None,
+                params: Vec::new(),
+                data_json: None,
                 workdir_idx: Some(self.params.workdir_idx),
                 resp_channel: None,
             };
@@ -404,7 +575,7 @@ impl WebSocketWorkerThread {
         //
         // Unlike an audit, changes to packages_config globals are
         // allowed here.
-        log::info!("Received an update message: {:?}", msg);
+        //log::info!("Received an update message: {:?}", msg);
 
         // Make sure the event_id is EVENT_UPDATE.
         if msg.event_id != basic_types::EVENT_UPDATE {
@@ -478,7 +649,9 @@ impl WebSocketWorkerThread {
         if trig_audit {
             let msg = GenericChannelMsg {
                 event_id: basic_types::EVENT_AUDIT,
-                data_string: None,
+                command: None,
+                params: Vec::new(),
+                data_json: None,
                 workdir_idx: Some(self.params.workdir_idx),
                 resp_channel: None,
             };
@@ -708,8 +881,16 @@ impl WebSocketWorkerThread {
             tokio::select! {
                 msg = ws_stream_future => {
                     if let Some(msg) = msg {
-                        let msg = msg.unwrap();
-                        self.process_ws_msg(msg).await;
+                        if let Ok(msg) = msg {
+                            // Process the message.
+                            self.process_ws_msg(msg).await;
+                        } else {
+                            // Connection lost.
+                            //log::info!("Connection lost for {}", self.params.workdir_name);
+                            self.websocket.write = None;
+                            self.websocket.read = None;
+                            return;
+                        }
                     } else {
                         // Shutdown requested.
                         log::info!("Received {} None websocket message", self.params.workdir_name);

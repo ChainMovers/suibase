@@ -310,7 +310,7 @@ impl SuiObjectInstance {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageInstance {
-    pub package_id: String,
+    pub package_id: String, // Hexa (no 0x).
     pub package_name: String,
     pub package_timestamp: String,
     pub init_objects: Option<Vec<SuiObjectInstance>>,

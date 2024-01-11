@@ -52,7 +52,7 @@ module demo::Counter {
 
     public(friend) fun inc(self: &mut Counter, console: &Console, ctx: &TxContext)
     {                
-        console.debug(b"inc called");
+        console.debug(b"internal inc() called");
 
         self.count = self.count + 1;
 
@@ -68,7 +68,7 @@ module demo::Counter {
         log::console::set_log_level(&mut console, log::consts::Info());
 
         // Log a message.        
-        console.info(b"increment() entry");
+        console.info(b"increment() entry called");
 
         // No check of the sender. Anyone can increment the counter.
         demo::Counter::inc(self, &console, ctx);
