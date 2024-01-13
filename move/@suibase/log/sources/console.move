@@ -24,7 +24,7 @@ module log::console {
     use log::console_config::{Self,ConsoleConfig};
     use log::consts::{Self};
 
-    struct ConsoleEvent has copy, drop {        
+    public struct ConsoleEvent has copy, drop {
         level: u8,  // One of Error(1), Warn(2), Info(3), Debug(4) or Trace(5).
         message: String, // The message to log.
     }
@@ -41,7 +41,7 @@ module log::console {
         value: String,
     }*/
 
-    struct Console has drop {        
+    public struct Console has drop {
         // A user function either:
         //
         //  (1) Create a default Console object instance (no Logger object needed).
@@ -89,7 +89,7 @@ module log::console {
     //
     // Warn, Info, Debug and Trace levels have no effect.
     public fun default_error_only() : Console {
-        let config = console_config::new();
+        let mut config = console_config::new();
         console_config::set_log_level(&mut config, consts::Error());
         Console { config }
     }    
@@ -103,7 +103,7 @@ module log::console {
     //
     // Warn, Info, Debug and Trace levels have no effect.
     public fun default_disabled() : Console {
-        let config = console_config::new();
+        let mut config = console_config::new();
         console_config::disable(&mut config);
         Console { config }
     }    
@@ -117,23 +117,23 @@ module log::console {
 
 
     public fun error(self: &Console, message: vector<u8>) {
-        log::console::log(self, consts::Error(), message);
+        log(self, consts::Error(), message);
     }
 
     public fun warn(self: &Console, message: vector<u8>) {
-        log::console::log(self, consts::Warn(), message);
+        log(self, consts::Warn(), message);
     }
 
     public fun info(self: &Console, message: vector<u8>) {
-        log::console::log(self, consts::Info(), message);
+        log(self, consts::Info(), message);
     }
 
     public fun debug(self: &Console, message: vector<u8>) {
-        log::console::log(self, consts::Debug(), message);
+        log(self, consts::Debug(), message);
     }
 
     public fun trace(self: &Console, message: vector<u8>) {
-        log::console::log(self, consts::Trace(), message);
+        log(self, consts::Trace(), message);
     }
 
     public fun set_log_level(self: &mut Console, level: u8) {
@@ -154,34 +154,3 @@ module log::console {
 
 }
 
-// By default, the sui base scripts verify that all unit tests are passing prior
-// to publication on non-local networks (e.g. when 'devnet publish').
-#[test_only]
-module log::test_console {
-    // TODO !!!!!!!!!!!!!!
-    use sui::transfer;
-    use sui::test_scenario::{Self};
-    use Counter::{Self};
-
-    #[test]
-    fun test_simple() {
-        let creator = @0x1;
-        let scenario_val = test_scenario::begin(creator);
-        let scenario = &mut scenario_val;
-
-        test_scenario::next_tx(scenario, creator);
-        {
-            let ctx = test_scenario::ctx(scenario);
-
-            let the_counter = Counter::new(ctx);
-            assert!(Counter::count(&the_counter) == 0, 1);
-
-            Counter::inc(&mut the_counter, ctx);
-            assert!(Counter::count(&the_counter) == 1, 1);
-
-            transfer::share_object( the_counter );
-        };
-
-        test_scenario::end(scenario_val);
-    }
-}

@@ -15,11 +15,11 @@ module log::logger {
     friend log::logger_admin_cap;
 
     // One LevelStats for each log level + one for silent errors.
-    struct LevelStats has store, copy {
+    public struct LevelStats has store, copy {
       count: u64, // Increment for every event emitted at this level.
     }
 
-    struct Logger has key, store {
+    public struct Logger has key, store {
         // Shared object singleton within this package.
         // Created once in init() of this module.
         // Controlled by LoggerAdminCap.
@@ -38,8 +38,8 @@ module log::logger {
 
     public(friend) fun new( ctx: &mut TxContext ): ID {
         let console_config = console_config::new();
-        let level_stats = vector::empty<LevelStats>();
-        let i = 0u8;
+        let mut level_stats = vector::empty<LevelStats>();
+        let mut i = 0u8;
         while (i < consts::MaxLogLevel()) {
             vector::push_back(&mut level_stats, LevelStats{count: 0});
             i = i + 1;
@@ -62,7 +62,7 @@ module log::logger {
     }
 
     public(friend) fun reset_stats( self: &mut Logger) {
-        let i = 0u64;
+        let mut i = 0u64;
         // Clear stats for all log levels (index '0' is stats of silent errors).
         let max_level = (log::consts::MaxLogLevel() as u64);
         while (i <= max_level) {

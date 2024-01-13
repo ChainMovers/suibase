@@ -2,7 +2,7 @@
 module log::console_config {    
     use log::consts::{Self};
 
-    struct ConsoleConfig has drop, store {
+    public struct ConsoleConfig has drop, store {
         is_enabled: bool,
         log_level: u8,
     }

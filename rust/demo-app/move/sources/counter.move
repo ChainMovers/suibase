@@ -1,6 +1,7 @@
 // A shared object that controls an integer that can:
 //    - Be incremented by anyone.
 //    - Emits an event on change.
+//    - Emits "console" log messages for VSCode debugging.
 //
 // There is only one Counter object created per package published.
 //
@@ -33,7 +34,13 @@ module demo::Counter {
       let new_counter = Counter { id: object::new(ctx), count: 0 };
       transfer::share_object( new_counter );
     }
-    
+
+    #[test_only]
+    public(friend) fun init_for_test( ctx: &mut TxContext)
+    {
+        init(ctx);
+    }
+
     #[test_only]
     public(friend) fun new( ctx: &mut TxContext): Counter
     {
@@ -75,8 +82,6 @@ module demo::Counter {
     }
 }
 
-// By default, the sui base scripts verify that all unit tests are passing prior
-// to publication on non-local networks (e.g. when 'devnet publish').
 #[test_only]
 module demo::test_counter {
     use sui::transfer;
@@ -86,20 +91,26 @@ module demo::test_counter {
     #[test]
     fun test_simple() {
         let creator = @0x1;
-        let scenario_val = test_scenario::begin(creator);
+        let mut scenario_val = test_scenario::begin(creator);
         let scenario = &mut scenario_val;
+
+        {
+          Counter::init_for_test(test_scenario::ctx(scenario));
+        };
+
 
         test_scenario::next_tx(scenario, creator);
         {
+            let console = log::console::default();
             let ctx = test_scenario::ctx(scenario);
 
-            let the_counter = Counter::new(ctx);
+            let mut the_counter = Counter::new(ctx);
             assert!(Counter::count(&the_counter) == 0, 1);
 
-            Counter::inc(&mut the_counter, ctx);
+            Counter::inc(&mut the_counter, &console, ctx);
             assert!(Counter::count(&the_counter) == 1, 1);
 
-            transfer::share_object( the_counter );
+            transfer::public_share_object( the_counter );
         };
 
         test_scenario::end(scenario_val);

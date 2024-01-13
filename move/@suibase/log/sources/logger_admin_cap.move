@@ -9,7 +9,7 @@ module log::logger_admin_cap {
 
     friend log::init;
 
-    struct LoggerAdminCap has key {
+    public struct LoggerAdminCap has key {
         id: UID,
         owner: address,
         logger_id: ID,        
@@ -26,7 +26,7 @@ module log::logger_admin_cap {
     }
 
     #[lint_allow(self_transfer)]
-    public entry fun transfer( self: LoggerAdminCap, new_owner: address, ctx: &mut TxContext) {
+    public entry fun transfer( mut self: LoggerAdminCap, new_owner: address, ctx: &mut TxContext) {
         // TODO Add to a registry for easier management.
         // The owner can transfer only its own LoggerAdminCap.
         assert!(tx_context::sender(ctx) == self.owner, consts::ENotLogCapOwner());
