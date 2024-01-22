@@ -171,6 +171,8 @@ const secretKey = new Uint8Array(SECP256K1_SECRET_KEY);
 const keypair = Secp256k1Keypair.fromSecretKey(secretKey);
 ```
 
+:::
+
 2. From mnemonic (BIP-39)
 
 ::: code-tabs
