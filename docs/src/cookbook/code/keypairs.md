@@ -8,7 +8,7 @@ editLink: true
 
 ::: tip Fact Sheet
 
-- Sui keys, on disk for Sui binaries, are in file: `$HOME/sui_config/sui.keystore `
+- Sui keys, on disk for Sui binaries, are in file: `$HOME/.sui/sui_config/sui.keystore `
 - Keys are persisted in the file as a JSON array
 - Entries in the array are base64 encoded strings e.g.: `AIUPxQveY18QxhDDdTO0D0OD6PNV+et50068d1g/rIyl`
 - The byte count of a base64 decoded string is 33
@@ -37,13 +37,13 @@ Suggested additions:
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
 
 ```shell
 sui keytool list
 ```
 
-@tab Python
+@tab PySui
 
 ```python
 import base64
@@ -69,7 +69,7 @@ Different actions that you make with Sui libraries require a keypair. A keypair 
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
 
 ```shell
 # Create ED25519 keypair scheme
@@ -82,7 +82,7 @@ sui client new-address secp256k1
 sui client new-address secp256r1
 ```
 
-@tab Python
+@tab Pysui
 
 ```python
 from pysui.abstracts.client_keypair import SignatureScheme
@@ -109,7 +109,7 @@ print(f"secp256r1 Address: {r1_address.address} phrase: {r1_mnemonics}")
 
 ```
 
-@tab TypeScript
+@tab:active TypeScript
 
 ```ts
 
@@ -129,17 +129,17 @@ const keypair_secp256k1 = new Secp256k1Keypair();
 
 If you already have your secret, you can get your Keypair and you can use it to perform different actions.
 
-1. From Bytes
+1. From Bytes Array
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
 
 ```shell
 Not supported
 ```
 
-@tab Python
+@tab Pysui
 
 ```python
 # pysui automatically loads all keypairs from 'sui.keystore'
@@ -157,7 +157,7 @@ _ED25519_SECRET_KEYBYTES = [
 kp_ed25519 = SuiKeyPairED25519.from_bytes(bytearray(_ED25519_SECRET_KEYBYTES))
 ```
 
-@tab TypeScript
+@tab:active TypeScript
 
 ```ts
 import { Secp256k1Keypair } from "@mysten/sui.js/keypairs/secp256k1";
@@ -171,19 +171,43 @@ const secretKey = new Uint8Array(SECP256K1_SECRET_KEY);
 const keypair = Secp256k1Keypair.fromSecretKey(secretKey);
 ```
 
-:::
-
-2. From Base64 String
+2. From mnemonic (BIP-39)
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
+
+```shell
+To be done. Add your contribution here.
+```
+
+@tab Python
+
+```python
+To be done. Add your contribution here.
+```
+
+@tab:active TypeScript
+
+```ts
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+
+const keypair = Ed25519Keypair.deriveKeypair(mnemonic, "m/44'/784'/0'/0'/0'");
+```
+
+:::
+
+3. From Base64 String
+
+::: code-tabs
+
+@tab Sui CLI
 
 ```shell
 Not supported
 ```
 
-@tab Python
+@tab Pysui
 
 ```python
 # pysui automatically loads all keypairs from 'sui.keystore'
@@ -196,7 +220,7 @@ _ED25519_SECRET_KEYSTRING = "AIUPxQveY18QxhDDdTO0D0OD6PNV+et50068d1g/rIyl"
 kp_ed25519 = keypair_from_keystring(_ED25519_SECRET_KEYSTRING)
 ```
 
-@tab TypeScript
+@tab:active TypeScript
 
 ```ts
 import { fromB64 } from "@mysten/bcs";
@@ -219,13 +243,13 @@ If you are given a keypair, you can verify whether or not the secret matches the
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
 
 ```shell
 To be done. Add your contribution here.
 ```
 
-@tab Python
+@tab Pysui
 
 ```python
 To be done. Add your contribution here.
@@ -255,13 +279,13 @@ console.log(keypair.getPublicKey().toBase64() == publicKey);
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
 
 ```shell
 To be done. Add your contribution here.
 ```
 
-@tab Python
+@tab Pysui
 
 ```python
 To be done. Add your contribution here.
@@ -291,13 +315,13 @@ If you're creating a wallet, you will need to generate a mnemonic phrase so that
 
 ::: code-tabs
 
-@tab CLI
+@tab Sui CLI
 
 ```shell
 To be done. Add your contribution here.
 ```
 
-@tab:active Python
+@tab Pysui
 
 ```python
 # When creating a new address/keypair, as noted above, mnemonics are
@@ -305,43 +329,13 @@ To be done. Add your contribution here.
 # returns both the mnemonics used to generate the keypair seed  and the new address
 ```
 
-@tab TypeScript
+@tab:active TypeScript
 
 ```ts
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 
 const mnemonic = bip39.generateMnemonic(wordlist);
-```
-
-:::
-
-## How to restore a Keypair from a mnemonic phrase
-
-Some virtual wallets use mnemonics to represent their secret keys. You can convert the mnemonic to Keypairs for local testing.
-
-1. BIP-39
-
-::: code-tabs
-
-@tab CLI
-
-```shell
-To be done. Add your contribution here.
-```
-
-@tab:active Python
-
-```python
-To be done. Add your contribution here.
-```
-
-@tab TypeScript
-
-```ts
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-
-const keypair = Ed25519Keypair.deriveKeypair(mnemonic, "m/44'/784'/0'/0'/0'");
 ```
 
 :::
