@@ -1084,10 +1084,22 @@ workdir_exec() {
   # actual branch is not the same. Recommend to do an update in that case.
   if is_sui_repo_dir_default; then
     if [ -d "$SUI_REPO_DIR_DEFAULT" ] && [ "${CFG_default_repo_branch:?}" != "${CFGDEFAULT_default_repo_branch:?}" ]; then
-      # Check for mismatch.
-      local _BRANCH_NAME
-      _BRANCH_NAME=$(if cd "$SUI_REPO_DIR_DEFAULT"; then git branch --show-current; else echo "unknown"; fi)
-      if [ "$_BRANCH_NAME" != "$CFG_default_repo_branch" ]; then
+      local _IS_MISMATCH=false
+      if [ "$_USE_PRECOMPILED" == false ]; then
+        local _BRANCH_NAME
+        _BRANCH_NAME=$(if cd "$SUI_REPO_DIR_DEFAULT"; then git branch --show-current; else echo "unknown"; fi)
+        if [ "$_BRANCH_NAME" != "$CFG_default_repo_branch" ]; then
+          _IS_MISMATCH=true
+        fi
+      else
+        local _DETACHED_INFO
+        _DETACHED_INFO=$(if cd "$SUI_REPO_DIR_DEFAULT"; then git branch | grep detached; else echo "unknown"; fi)
+        if [[ "$_DETACHED_INFO" != *"$CFG_default_repo_branch"* ]]; then
+          _IS_MISMATCH=true
+        fi
+      fi
+      if [ "$_IS_MISMATCH" == true ]; then
+        _IS_MISMATCH=true
         warn_user "suibase.yaml is requesting for branch [$CFG_default_repo_branch] but the sui-repo is on [$_BRANCH_NAME]. Do '$WORKDIR update' to fix this."
       fi
     fi
