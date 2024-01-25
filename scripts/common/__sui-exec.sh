@@ -191,7 +191,21 @@ sui_exec() {
     shift 1
     local _OPT_DEFAULT_PATH=""
     local _OPT_DEFAULT_INSTALLDIR=""
+    local _SUB_SUBCOMMAND_NEW=false
+
     if [ $DISPLAY_SUI_BASE_HELP = "false" ]; then
+      if [ "$1" == "new" ]; then
+        _SUB_SUBCOMMAND_NEW=true
+      fi
+    fi
+
+    if [ "$_SUB_SUBCOMMAND_NEW" = "true" ]; then
+      # Must execute at the position the script was original called from.
+      #
+      # Do not put a default --path option, otherwise the Sui client does
+      # not create a subdir and instead put all the files at --path level.
+      cd "$USER_CWD" || setup_error "Could not cd $USER_CWD"
+    else
       if ! has_param "-p" "--path" "$@"; then
         _OPT_DEFAULT_PATH="--path $USER_CWD"
       fi
