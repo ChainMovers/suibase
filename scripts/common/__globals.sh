@@ -278,6 +278,19 @@ file_newer_than() {
 }
 export -f file_newer_than
 
+is_installed() {
+  # Check if a CLI command is installed.
+  if ! command -v "$1" &>/dev/null; then
+    # Try again with 'which' in case command -v is not working on that setup...
+    if ! which "$1" &>/dev/null; then
+      false
+      return
+    fi
+  fi
+  true
+  return
+}
+
 set_key_value() {
   local _WORKDIR=$1
   local _KEY=$2
@@ -477,14 +490,15 @@ build_sui_repo_branch() {
   # Verify Sui pre-requisites are installed.
   update_HOST_vars
   if [[ $HOST_PLATFORM == "Darwin" ]]; then
-    which brew &>/dev/null || setup_error "Need to install brew. See https://docs.sui.io/build/install#prerequisites"
+    is_installed brew || setup_error "Need to install brew. See https://docs.sui.io/build/install#prerequisites"
   fi
 
-  which curl &>/dev/null || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
-  which git &>/dev/null || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
-  which cmake &>/dev/null || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
-  which rustc &>/dev/null || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
-  which cargo &>/dev/null || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+  is_installed curl || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
+  is_installed git || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
+  is_installed cmake || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
+  is_installed rustc || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
+  is_installed cargo || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+  is_installed lsof || setup_error "Need to install 'lsof'."
 
   # Verify Rust is recent enough.
   version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"

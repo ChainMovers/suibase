@@ -293,7 +293,14 @@ update_SUIBASE_DAEMON_PID_var() {
       return
     fi
   fi
+
   # For all error case.
+
+  # Check if lsof is not installed, then inform the user to install it.
+  if ! is_installed lsof; then
+    setup_error "The CLI command 'lsof' must be installed to run Suibase"
+  fi
+
   SUIBASE_DAEMON_PID=""
 }
 export -f update_SUIBASE_DAEMON_PID_var

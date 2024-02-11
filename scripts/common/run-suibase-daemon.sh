@@ -22,14 +22,13 @@ source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
 # Check what is available, prefer flock over lockf.
 # Reference: https://github.com/Freaky/run-one/blob/master/run-one
-if which flock >/dev/null 2>&1; then
+if is_installed flock; then
   _LOCK_CMD="flock -xn"
 else
-  if which lockf >/dev/null 2>&1; then
+  if is_installed lockf; then
     _LOCK_CMD="lockf -st0"
   else
-    echo "ERROR: Neither flock nor lockf are available!"
-    exit 1
+    setup_error "Neither 'flock' or 'lockf' are available! Install one of them"
   fi
 fi
 
