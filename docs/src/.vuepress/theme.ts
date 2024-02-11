@@ -75,6 +75,14 @@ export default hopeTheme({
     },*/
     git: true,
 
+    docsearch: {
+      // your options
+      // appId, apiKey and indexName are required
+      appId: "VN5D5IVTPC",
+      apiKey: "7c6732e9f43a129ee2396d1c459db319",
+      indexName: "sui-base",
+    },
+
     // all features are enabled for demo, only preserve features you need here
     mdEnhance: {
       align: true,
