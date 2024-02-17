@@ -9,18 +9,19 @@ editLink: true
 ::: tip Fact Sheet
 
 - Sui GraphQL RPC is currently in **_beta_**
-- Sui GraphQL RPC beta operates on a snapshot of data with timestamps:
-  - testnet: "2023-12-16T19:07:30.993Z"
-  - mainnet: "2023-11-21T22:03:27.667Z"
+- Sui GraphQL RPC beta operates on both testnet and mainnet at this time
+  - testnet: "https://sui-testnet.mystenlabs.com/graphql"
+  - mainnet: "https://sui-mainnet.mystenlabs.com/graphql"
   - devnet not currently supported
+  - streaming not currently supported
 - Sui GraphQL RPC will eventually _replace_ the JSON RPC
 - Sui support and constraints defined [Here](https://docs.sui.io/references/sui-api/beta-graph-ql#using-sui-graphql-rpc)
 - PySui support for Sui GraphQL RPC:
     - Release 0.50.0 includes an 'experimental' implementation, subject to change
     - Provides Synchronous and asynchronous GraphQL clients
-    - Only 'read' queries are supported at the time of this writing
+    - Read queries, DryRun and Execute transactions are supported
     - Introduces `QueryNodes` that are the equivalent to pysui `Builders`
-    - Parity of QueryNodes to Builders is ongoing
+    - Parity of QueryNodes to Builders is complete
     - Exposes ability for developers to write their own GraphQL queries
     - SuiConfiguration must point to either Sui's `testnet` or `mainnet` RPC URLs
     - pysui GraphQL documentation is in the [Docs](https://pysui.readthedocs.io/en/latest/graphql.html)
@@ -47,7 +48,7 @@ NA
         # Initialize synchronous client (must be mainnet or testnet)
         client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=True)
 
-        print("Schema dumped to: `latest_schemaVERSION.graqhql`")
+        print("Schema dumped to: `<NETWORK>_schema-<VERSION>.graqhql`")
 
     if __name__ == "__main__":
         main()
@@ -88,6 +89,197 @@ NA at this time
         )
         # Results are mapped to dataclasses/dataclasses-json
         print(qres.to_json(indent=2))
+
+    if __name__ == "__main__":
+        # Initialize synchronous client (must be mainnet or testnet)
+        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        main(client_init)
+```
+:::
+
+## Dryrun example 1
+
+This demonstrates performing a dryRun of a transaction block
+
+::: code-tabs
+
+@tab sui
+
+```shell
+NA at this time
+```
+
+@tab pysui
+
+```python
+    #
+    """DryRun a TransactionBlock."""
+
+    import base64
+    from pysui.sui.sui_pgql.clients import SuiGQLClient
+    from pysui.sui.sui_txn import SyncTransaction
+    import pysui.sui.sui_pgql.pgql_query as qn
+    from pysui import SuiConfig
+
+    def handle_result(result: SuiRpcResult) -> SuiRpcResult:
+        """."""
+        if result.is_ok():
+            if hasattr(result.result_data, "to_json"):
+                print(result.result_data.to_json(indent=2))
+            else:
+                print(result.result_data)
+        else:
+            print(result.result_string)
+            if result.result_data and hasattr(result.result_data, "to_json"):
+                print(result.result_data.to_json(indent=2))
+            else:
+                print(result.result_data)
+        return result
+
+    def main(client: SuiGQLClient):
+        """Execute a dry run with TransactionData where gas and budget set by txer."""
+        if client.chain_environment == "testnet":
+            txer = SyncTransaction(client=SyncClient(client.config))
+            scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
+            txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+
+            tx_b64 = base64.b64encode(txer.get_transaction_data().serialize()).decode()
+            handle_result(
+                client.execute_query(
+                    with_query_node=qn.DryRunTransaction(tx_bytestr=tx_b64)
+                )
+            )
+
+    if __name__ == "__main__":
+        # Initialize synchronous client (must be mainnet or testnet)
+        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        main(client_init)
+```
+:::
+
+## Dryrun example 2
+
+This demonstrates performing a dryRun of a transactions kind
+
+::: code-tabs
+
+@tab sui
+
+```shell
+NA at this time
+```
+
+@tab pysui
+
+```python
+    #
+    """DryRun a TransactionBlock's TransactionKind."""
+
+    import base64
+    from pysui.sui.sui_pgql.clients import SuiGQLClient
+    from pysui.sui.sui_txn import SyncTransaction
+    import pysui.sui.sui_pgql.pgql_query as qn
+    from pysui import SuiConfig
+
+    def handle_result(result: SuiRpcResult) -> SuiRpcResult:
+        """."""
+        if result.is_ok():
+            if hasattr(result.result_data, "to_json"):
+                print(result.result_data.to_json(indent=2))
+            else:
+                print(result.result_data)
+        else:
+            print(result.result_string)
+            if result.result_data and hasattr(result.result_data, "to_json"):
+                print(result.result_data.to_json(indent=2))
+            else:
+                print(result.result_data)
+        return result
+
+
+    def main(client: SuiGQLClient):
+        """Execute a dry run with TransactionKind where meta data is set by caller."""
+        if client.chain_environment == "testnet":
+            txer = SyncTransaction(client=SyncClient(client.config))
+            scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
+            txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+            # Serialize the TransactionKind which performs faster
+            tx_b64 = base64.b64encode(txer.raw_kind().serialize()).decode()
+            handle_result(
+                client.execute_query(
+                    with_query_node=qn.DryRunTransactionKind(tx_bytestr=tx_b64)
+                )
+            )
+
+    if __name__ == "__main__":
+        # Initialize synchronous client (must be mainnet or testnet)
+        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        main(client_init)
+```
+:::
+
+## Execute example
+
+This demonstrates performing a execution of a transactions
+
+::: code-tabs
+
+@tab sui
+
+```shell
+NA at this time
+```
+
+@tab pysui
+
+```python
+    #
+    """Execute a TransactionBlock."""
+
+    import base64
+    from pysui.sui.sui_pgql.clients import SuiGQLClient
+    from pysui.sui.sui_txn import SyncTransaction
+    import pysui.sui.sui_pgql.pgql_query as qn
+    from pysui import SuiConfig
+
+    def handle_result(result: SuiRpcResult) -> SuiRpcResult:
+        """."""
+        if result.is_ok():
+            if hasattr(result.result_data, "to_json"):
+                print(result.result_data.to_json(indent=2))
+            else:
+                print(result.result_data)
+        else:
+            print(result.result_string)
+            if result.result_data and hasattr(result.result_data, "to_json"):
+                print(result.result_data.to_json(indent=2))
+            else:
+                print(result.result_data)
+        return result
+
+
+    def main(client: SuiGQLClient):
+        """Execute a transaction.
+
+        The result contains the digest of the transaction which can then be queried
+        for details
+        """
+        if client.chain_environment == "testnet":
+            rpc_client = SyncClient(client.config)
+            txer = SyncTransaction(client=rpc_client)
+            scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
+            txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+            tx_b64 = txer.deferred_execution(run_verification=True)
+            sig_array = txer.signer_block.get_signatures(client=rpc_client, tx_bytes=tx_b64)
+            # sig_array is a SuiArray which wraps a list, we want the list only
+            rsig_array = [x.value for x in sig_array.array]
+            handle_result(
+                client.execute_query(
+                    with_query_node=qn.ExecuteTransaction(
+                        tx_bytestr=tx_b64, sig_array=rsig_array
+                    )
+                )
+            )
 
     if __name__ == "__main__":
         # Initialize synchronous client (must be mainnet or testnet)
