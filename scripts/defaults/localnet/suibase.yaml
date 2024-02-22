@@ -45,6 +45,9 @@ sui_faucet_client_timeout_secs: 10
 default_repo_url: "https://github.com/MystenLabs/sui.git"
 default_repo_branch: "devnet"
 
+# Allow to force using a specific tag (e.g. "testnet-1.18.0")
+force_tag: ~
+
 # Specify a github_token only if you observe "rate limiting" error
 # causing suibase to fail while calling into the Github API.
 #

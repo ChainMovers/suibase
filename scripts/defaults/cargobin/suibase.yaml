@@ -19,6 +19,7 @@ sui_faucet_client_timeout_secs: 10
 # default_repo not applicable to cargobin
 default_repo_url: ~
 default_repo_branch: ~
+force_tag: ~
 
 github_token: ~
 

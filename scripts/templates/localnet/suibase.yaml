@@ -9,3 +9,4 @@
 # Examples:
 # initial_fund_per_address: 9999999999999999999
 # default_repo_branch: "main"
+# force_tag: "testnet-v1.18.1"

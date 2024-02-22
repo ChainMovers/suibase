@@ -2509,8 +2509,14 @@ update_PRECOMP_REMOTE_var() {
 
   local _OUT
   local _TAG_NAME
+  local _FORCE_TAG_NAME
   local _DOWNLOAD_URL
   local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-$_BIN_ARCH"
+
+  if [ "${CFG_force_tag:?}" != "~" ]; then
+    _FORCE_TAG_NAME="${CFG_force_tag:?}"
+    echo "suibase.yaml: Forcing to use tag '[$_FORCE_TAG_NAME]'"
+  fi
 
   for _retry_curl in 1 2 3; do
     _DOWNLOAD_URL=""
@@ -2536,7 +2542,19 @@ update_PRECOMP_REMOTE_var() {
       _TAG_NAME="${_TAG_NAME#*\"}" # Remove the first '"' and everything before
       _TAG_NAME="${_TAG_NAME%\"*}" # Remove the last '"' and everything after
 
+      local _DISPLAY_FOUND
+      _DISPLAY_FOUND=false
       if [ "$DEBUG_PARAM" = "true" ]; then
+        _DISPLAY_FOUND=true
+      fi
+
+      if [ -n "$_FORCE_TAG_NAME" ]; then
+        if [ $_retry_curl -lt 2 ]; then
+          _DISPLAY_FOUND=true
+        fi
+      fi
+
+      if [ "$_DISPLAY_FOUND" = "true" ]; then
         echo "Found $_TAG_NAME in remote repo"
       fi
 
@@ -2548,16 +2566,30 @@ update_PRECOMP_REMOTE_var() {
 
       # Stop looping if _DOWNLOAD_URL looks valid.
       if [ -n "$_DOWNLOAD_URL" ]; then
-        break
+        if [ -n "$_FORCE_TAG_NAME" ]; then
+          if [ "$_TAG_NAME" == "$_FORCE_TAG_NAME" ]; then
+            break
+          fi
+        else
+          break
+        fi
       fi
     done <<<"$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -rV)"
 
     if [ -n "$_DOWNLOAD_URL" ]; then
-      break
+      if [ -n "$_FORCE_TAG_NAME" ]; then
+        if [ "$_TAG_NAME" == "$_FORCE_TAG_NAME" ]; then
+          break
+        fi
+      else
+        break
+      fi
     fi
 
     # Something went wrong.
-    echo "Github API call result = [$_OUT]"
+    if [ "$DEBUG_PARAM" = "true" ]; then
+      echo "Github API call result = [$_OUT]"
+    fi
 
     if [[ -n ${CFG_github_token:?} ]] && [[ "$_OUT" == *"Bad credentials"* ]]; then
       setup_error "The github_token in suibase.yaml seems invalid."
@@ -2571,10 +2603,18 @@ update_PRECOMP_REMOTE_var() {
     if [ $_retry_curl -lt 2 ]; then
       warn_user "Could not retreive release information. Retrying"
     fi
+    _DOWNLOAD_URL=""
   done # curl retry loop
 
   if [ -z "$_DOWNLOAD_URL" ]; then
-    setup_error "Could not find a '$_DOWNLOAD_SUBSTRING' binary asset for $_BRANCH in [$_REPO_URL]"
+    if [ -n "$_FORCE_TAG_NAME" ]; then
+      if [ "$_TAG_NAME" != "$_FORCE_TAG_NAME" ]; then
+        echo "suibase.yaml: tag [$_FORCE_TAG_NAME] not found in remote repo"
+        setup_error "Verify force_tag in suibase.yaml is a valid tag for [$_REPO_URL]"
+      fi
+    else
+      setup_error "Could not find a '$_DOWNLOAD_SUBSTRING' binary asset for $_BRANCH in [$_REPO_URL]"
+    fi
   fi
 
   local _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
