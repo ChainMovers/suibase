@@ -2280,9 +2280,9 @@ copy_private_keys_yaml_to_keystore() {
         else
           # Extract key from JSON
           _keyvalue=$_cnvt_attempt
-          update_JSON_VALUE "base64" "$_keyvalue"
+          update_JSON_VALUE "base64WithFlag" "$_keyvalue"
           if [ -z "$_keyvalue" ]; then
-            update_JSON_VALUE "base16" "$_keyvalue"
+            update_JSON_VALUE "hexWithoutFlag" "$_keyvalue"
             if [ -z "$_keyvalue" ]; then
               error_exit "could not extract key from json [$_cnvt_attempt]"
             fi
