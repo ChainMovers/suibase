@@ -3,6 +3,7 @@
 import * as vscode from "vscode";
 
 import { SuibaseSidebar } from "./SuibaseSidebar";
+//import { SuibaseSidebar } from "./sidebar/SuibaseSidebar";
 import { SuibaseExec } from "./SuibaseExec";
 import { SuibaseCommands } from "./SuibaseCommands";
 import { BasePanel } from "./panels/BasePanel";

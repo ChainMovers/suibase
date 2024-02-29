@@ -1,8 +1,9 @@
 <script lang="ts" context="module">
   import { provideVSCodeDesignSystem, allComponents } from "@vscode/webview-ui-toolkit";
   import { VSCode } from "./lib/VSCode";
-  import WorkdirsController from "./components/WorkdirsController.svelte";
+  import WorkdirsController from "./components/DashboardController.svelte";
   import ConsoleController from "./components/ConsoleController.svelte";
+  import ExplorerController from "./components/ExplorerController.svelte";
 
   // In order to use the Webview UI Toolkit web components they
   // must be registered with the browser (i.e. webview) using the
@@ -39,6 +40,8 @@
     <WorkdirsController />
   {:else if globalThis.suibase_panel_key == "suibase.console"}
     <ConsoleController />
+  {:else if globalThis.suibase_panel_key == "explorer.console"}
+    <ExplorerController />
   {/if}
 
   <!-- svelte-ignore a11y-click-events-have-key-events -->

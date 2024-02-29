@@ -88,6 +88,7 @@
     <span class="codicon codicon-check" />
   </vscode-button>
 -->
+  <p>Explorer View</p>
   {#each workdirs as workdir}
     <div class="workdir_row">
       <h2 class="workdir">{workdir.name}</h2>

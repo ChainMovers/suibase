@@ -1,0 +1,101 @@
+{
+  "name": "suibase",
+  "displayName": "suibase",
+  "description": "Streamline Sui Move development and testing.",
+  "version": "0.0.1",
+  "repository": "https://github.com/ChainMovers/suibase",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "suibase.settings",
+        "title": "settings",
+        "icon": "$(settings-view-bar-icon)"
+      },
+      {
+        "command": "suibase.console",
+        "title": "console",
+        "icon": "$(debug-console)"
+      },
+      {
+        "command": "suibase.refresh",
+        "title": "refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "suibase.settings",
+          "when": "view == explorerPanel",
+          "group": "navigation@0"
+        },
+        {
+          "command": "suibase.console",
+          "when": "view == explorerPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "suibase.refresh",
+          "when": "view == explorerPanel",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "suibaseSidebar",
+          "title": "Suibase",
+          "icon": "media/dep.svg"
+        }
+      ]
+    },
+    "views": {
+      "suibaseSidebar": [
+        {
+          "id": "explorerView",
+          "name": "Suibase",
+          "icon": "media/dep.svg",
+          "contextualTitle": "Suibase",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "install:all": "pnpm install && cd webview-ui && pnpm install",
+    "start:webview": "cd webview-ui && pnpm run dev",
+    "build:webview": "cd webview-ui && pnpm run build",
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.82.0",
+    "@types/ws": "^8.5.5",
+    "@typescript-eslint/eslint-plugin": "^6.4.1",
+    "@typescript-eslint/parser": "^6.4.1",
+    "@vscode/test-electron": "^2.3.4",
+    "eslint": "^8.47.0",
+    "glob": "^10.3.4",
+    "mocha": "^10.2.0",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "rpc-websockets": "^7.6.0",
+    "ws": "^8.14.2"
+  }
+}
