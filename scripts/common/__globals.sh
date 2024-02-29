@@ -1121,6 +1121,10 @@ export SUI_ALIASES_PEER_ID
 export SUI_ALIASES_PUBLIC_KEY
 export SUI_ALIASES_FLAG
 
+# Numbers produced while building the array
+export SUI_ALIASES_MAX_INDEX_FOUND
+export SUI_ALIASES_EMPTY_ALIAS_FOUND
+
 update_sui_aliases_arrays() {
   SUI_ALIASES_SIZE=0
   SUI_ALIASES_NAME=()
@@ -1129,6 +1133,8 @@ update_sui_aliases_arrays() {
   SUI_ALIASES_PEER_ID=()
   SUI_ALIASES_PUBLIC_KEY=()
   SUI_ALIASES_FLAG=()
+  SUI_ALIASES_MAX_INDEX_FOUND=0
+  SUI_ALIASES_EMPTY_ALIAS_FOUND=0
 
   # "keytool list" output is a JSON array of elements looking like this:
   #
@@ -1173,7 +1179,7 @@ update_sui_aliases_arrays() {
     # Check if the line contains a closing curly bracket
     if [[ $line == *"}"* ]]; then
       _INSIDE_BLOCK=false
-      if [ -n "$_ALIAS" ] && [ -n "$_SUI_ADDRESS" ] && [ -n "$_KEY_SCHEME" ]; then
+      if [ -n "$_SUI_ADDRESS" ] && [ -n "$_KEY_SCHEME" ] && [ -n "$_PUBLIC_KEY" ]; then
         # Add the fields to the arrays.
         SUI_ALIASES_NAME+=("$_ALIAS")
         SUI_ALIASES_ADDRESS+=("$_SUI_ADDRESS")
@@ -1188,17 +1194,34 @@ update_sui_aliases_arrays() {
     # Only process lines inside a block
     if $_INSIDE_BLOCK; then
       # Read the fields.
-      if [[ $line == *"alias"* ]]; then
+      if [[ $line == *"\"alias\":"* ]]; then
         _ALIAS=$(echo "$line" | awk -F'"' '{print $4}')
-      elif [[ $line == *"suiAddress"* ]]; then
+        if [ -z "$_ALIAS" ]; then
+          ((SUI_ALIASES_EMPTY_ALIAS_FOUND++))
+        else
+          # Check if the alias string is the pattern alias-<number>.
+          # Example: "alias-1", "alias-2", etc.
+          if [[ $_ALIAS == "alias-"* ]]; then
+            # Extract the number from the alias string.
+            local _NUMBER
+            _NUMBER=$(echo "$_ALIAS" | awk -F'-' '{print $2}')
+            # Check if the number is a valid integer.
+            if [[ $_NUMBER =~ ^[0-9]+$ ]]; then
+              if [ "$_NUMBER" -gt "$SUI_ALIASES_MAX_INDEX_FOUND" ]; then
+                SUI_ALIASES_MAX_INDEX_FOUND=$_NUMBER
+              fi
+            fi
+          fi
+        fi
+      elif [[ $line == *"\"suiAddress\":"* ]]; then
         _SUI_ADDRESS=$(echo "$line" | awk -F'"' '{print $4}')
-      elif [[ $line == *"keyScheme"* ]]; then
+      elif [[ $line == *"\"keyScheme\":"* ]]; then
         _KEY_SCHEME=$(echo "$line" | awk -F'"' '{print $4}')
-      elif [[ $line == *"peerId"* ]]; then
+      elif [[ $line == *"\"peerId\":"* ]]; then
         _PEER_ID=$(echo "$line" | awk -F'"' '{print $4}')
-      elif [[ $line == *"publicBase64Key"* ]]; then
+      elif [[ $line == *"\"publicBase64Key\":"* ]]; then
         _PUBLIC_KEY=$(echo "$line" | awk -F'"' '{print $4}')
-      elif [[ $line == *"flag"* ]]; then
+      elif [[ $line == *"\"flag\":"* ]]; then
         _FLAG=$(echo "$line" | awk -F': ' '{print $2}' | awk -F',' '{print $1}')
       fi
     fi
@@ -1213,7 +1236,7 @@ adjust_sui_aliases() {
     return
   fi
 
-  # Update sui.aliases with deterministic names for key auto-created by Suibase.
+  # Update sui.aliases with deterministic names for key created by Suibase.
   #
   # sui.aliases is located at $WORKDIRS/$WORKDIR_PARAM/config/sui.aliases
   #
@@ -1238,6 +1261,11 @@ adjust_sui_aliases() {
   # Implemented using a map to track the distinct "keyScheme" that are identified
   # along the way.
   #
+  # What about address coming from add_private_keys in suibase.yaml?
+  # ================================================================
+  # They will be named alias-<number> in the order that they are listed by "keytool list".
+  #
+
   local _SUI_ALIASES="$WORKDIRS/$_WORKDIR_PARAM/config/sui.aliases"
   local _RECOVERY_TXT="$WORKDIRS/$_WORKDIR_PARAM/config/recovery.txt"
   local _TEMP_FILE="$WORKDIRS/$_WORKDIR_PARAM/config/sui.aliases.tmp"
@@ -1274,6 +1302,8 @@ adjust_sui_aliases() {
   local _ALIAS
   local _PUB_64_KEY
   local _KEY_SCHEME
+  local _NEXT_INDEX
+  _NEXT_INDEX=$((SUI_ALIASES_MAX_INDEX_FOUND + 1))
 
   # Important: This constant must match the logic done in init_workdir when auto-generating the addresses.
   local _AUTO_CREATED_PER_SCHEME=5
@@ -1292,30 +1322,92 @@ adjust_sui_aliases() {
     _ALIAS=${SUI_ALIASES_NAME[$i]}
     _SUI_ADDRESS=${SUI_ALIASES_ADDRESS[$i]}
     _KEY_SCHEME=${SUI_ALIASES_KEY_SCHEME[$i]}
+    _PUB64_KEY=${SUI_ALIASES_PUBLIC_KEY[$i]}
 
-    if [ -n "$_ALIAS" ] && [ -n "$_SUI_ADDRESS" ] && [ -n "$_KEY_SCHEME" ]; then
-      # Check if the suiAddress exists in the recovery.txt file
-      for value in "${recovery[@]}"; do
-        if [[ $value == *$_SUI_ADDRESS* ]]; then
-          # echo "Found $_SUI_ADDRESS in recovery.txt"
-          # Increment the counter for this keyScheme type
-          ((counter[$_KEY_SCHEME]++))
+    if [ -n "$_SUI_ADDRESS" ] && [ -n "$_KEY_SCHEME" ]; then
+      # echo "$_ALIAS $_PUB64_KEY"
+      if [ -z "$_ALIAS" ]; then
+        # Add a comma if there is at least one existing entry in the JSON array.
+        if grep -q "}" "$_TEMP_FILE"; then
+          # Remove the last "]" in $_TEMP_FILE. We will add it back later.
+          sed -i.bak -e 's/]/ /' "$_TEMP_FILE" &&
+            rm "$_TEMP_FILE.bak"
 
-          if [[ -n ${counter[$_KEY_SCHEME]} && ${counter[$_KEY_SCHEME]} =~ ^[0-9]+$ ]]; then
-            # Replace the alias field with a deterministic name in the temporary file.
-            local _SEARCH_STRING="$_ALIAS"
-            local _ALIAS_NUMBER=$((1 + _AUTO_CREATED_PER_SCHEME - ${counter[$_KEY_SCHEME]}))
-            local _REPLACE_STRING="sb-$_ALIAS_NUMBER-$_KEY_SCHEME"
-            sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" \
-              "$_TEMP_FILE" &&
-              rm "$_TEMP_FILE.bak"
+          # Replace the last line with "}" with "}," in $_TEMP_FILE.
+          lines=()
+          while IFS= read -r line; do
+            lines+=("$line")
+          done <"$_TEMP_FILE"
 
-            break
-          else
-            echo "Unexpected counter value for $_KEY_SCHEME"
-          fi
+          # Iterate over the lines in reverse order
+          for ((idx = ${#lines[@]} - 1; idx >= 0; idx--)); do
+            # If the line contains "}", replace "}" with "}," and break the loop
+            if [[ ${lines[idx]} == *"}"* ]]; then
+              lines[idx]="${lines[idx]%\}}}",
+              break
+            fi
+          done
+
+          # Write the lines back to the file
+          for line in "${lines[@]}"; do
+            echo "$line"
+          done >"$_TEMP_FILE"
+
+          # Append "  ]" at the end of $_TEMP_FILE.
+          echo "  ]" >>"$_TEMP_FILE"
         fi
-      done
+
+        # Append _NEXT_INDEX to $_ALIAS and increment _NEXT_INDEX
+        _ALIAS="alias-$_NEXT_INDEX"
+        _NEXT_INDEX=$((1 + _NEXT_INDEX))
+
+        # Append a new entry at the end of the JSON array in sui.aliases.
+        #
+        # Example of sui.aliases file:
+        # [{
+        #   "alias": "sb-2-secp256r1",
+        #   "public_key_base64": "AgIrMYwPbHFcj+kR4dbn0bkzU82fGQfw4QzJjhWGAUd4zQ=="
+        #  },
+        #  {
+        #    "alias": "sb-1-secp256r1",
+        #    "public_key_base64": "AgPe4JWk+Zledatd8nbMbWTNh1sqHU/0Dy9zn9S6FVQIIQ=="
+        #  }
+        # ]
+        #
+        # The alias is given by $_ALIAS and the public_key_base64 is given by $_PUB_64_KEY.
+        # Each field should be on its own line and indented as shown in the example above.
+        local _NEW_ENTRY="{\n"
+        _NEW_ENTRY+="    \"alias\": \"$_ALIAS\",\n"
+        _NEW_ENTRY+="    \"public_key_base64\": \"$_PUB64_KEY\"\n"
+        _NEW_ENTRY+="  }\n"
+
+        # Append the new entry on the line before the "]"
+        sed -i.bak -e "s/]/$_NEW_ENTRY]/" "$_TEMP_FILE" &&
+          rm "$_TEMP_FILE.bak"
+      else
+        # Check if the suiAddress exists in the recovery.txt file
+        for value in "${recovery[@]}"; do
+          if [[ $value == *$_SUI_ADDRESS* ]]; then
+            # echo "Found $_SUI_ADDRESS in recovery.txt"
+            # Increment the counter for this keyScheme type
+            ((counter[$_KEY_SCHEME]++))
+
+            if [[ -n ${counter[$_KEY_SCHEME]} && ${counter[$_KEY_SCHEME]} =~ ^[0-9]+$ ]]; then
+              # Replace the alias field with a deterministic name in the temporary file.
+              local _SEARCH_STRING="$_ALIAS"
+              local _ALIAS_NUMBER=$((1 + _AUTO_CREATED_PER_SCHEME - ${counter[$_KEY_SCHEME]}))
+              local _REPLACE_STRING="sb-$_ALIAS_NUMBER-$_KEY_SCHEME"
+              sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" \
+                "$_TEMP_FILE" &&
+                rm "$_TEMP_FILE.bak"
+
+              break
+            else
+              echo "Unexpected counter value for $_KEY_SCHEME"
+            fi
+          fi
+        done
+      fi
     fi
   done
 

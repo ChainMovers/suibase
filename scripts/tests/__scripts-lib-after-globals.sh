@@ -77,3 +77,18 @@ assert_build_ok() {
     fi
   fi
 }
+
+add_to_suibase_yaml() {
+  # Append $1 string to suibase.yaml
+  echo "$1" >>"$WORKDIRS/$WORKDIR/suibase.yaml"
+}
+
+clear_suibase_yaml() {
+  # Clear suibase.yaml, keep the file
+  echo "# Cleared by automated tests" >"$WORKDIRS/$WORKDIR/suibase.yaml"
+}
+
+clear_sui_keystore() {
+  # Clear sui.keystore, keep the file.
+  echo "[]" >"$WORKDIRS/$WORKDIR/config/sui.keystore"
+}

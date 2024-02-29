@@ -65,6 +65,18 @@ init_common_template() {
 }
 export -f init_common_template
 
+assert_file_exists() {
+  if [ ! -f "$1" ]; then
+    fail "File does not exist [$1]"
+  fi
+}
+
+assert_file_contains() {
+  if ! grep -q "$2" "$1"; then
+    fail "File '$1' does not contain '$2'"
+  fi
+}
+
 test_setup_on_sourcing() {
   # Parse command-line
   FAST_OPTION=false
