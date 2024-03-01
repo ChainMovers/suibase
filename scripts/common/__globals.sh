@@ -64,6 +64,10 @@ export SUIBASE_DAEMON_NAME="suibase-daemon"
 export SUIBASE_DAEMON_BUILD_DIR="$SUIBASE_DIR/rust/suibase"
 export SUIBASE_DAEMON_BIN="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME"
 
+export DTP_DAEMON_NAME="dtp-daemon"
+export DTP_DAEMON_BUILD_DIR="$SUIBASE_DIR/rust/suibase"
+export DTP_DAEMON_BIN="$SUIBASE_BIN_DIR/$DTP_DAEMON_NAME"
+
 export DEBUG_PARAM=false # Become true when --debug on command line.
 
 # Prefix often used when calling sui client.
@@ -1824,7 +1828,7 @@ start_sui_process() {
       else
         CHECK_ALIVE=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" client --client.config "$CLIENT_CONFIG" objects)
         # It is alive if first line either contains "Digest" or "No managed addresses". Both indicates
-        # the daemon is running and responding to requests.
+        # the sui process is running and responding to requests.
         if [[ "$CHECK_ALIVE" == *"igest"* ]] || [[ "$CHECK_ALIVE" == *"managed addresses"* ]]; then
           ALIVE=true
         fi

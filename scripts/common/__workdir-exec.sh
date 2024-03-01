@@ -410,6 +410,10 @@ workdir_exec() {
   source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
   update_SUIBASE_DAEMON_PID_var
 
+  # shellcheck source=SCRIPTDIR/__dtp-daemon.sh
+  source "$SUIBASE_DIR/scripts/common/__dtp-daemon.sh"
+  update_DTP_DAEMON_PID_var
+
   # First, take care of the easier "status" and "links" that are "read only" commands.
 
   if [ "$CMD_STATUS_REQ" = true ]; then
@@ -452,6 +456,37 @@ workdir_exec() {
       fi
     fi
 
+    # Verify from suibase.yaml if dtp services are expected.
+    # If yes, then populate STATUS/INFO.
+    local _SUPPORT_DTP
+    local _DTP_STATUS
+    local _DTP_INFO
+    if [ "${CFG_dtp_enabled:?}" == "false" ]; then
+      _SUPPORT_DTP=false
+    else
+      _SUPPORT_DTP=true
+      unset JSON_RESP
+      get_dtp_daemon_status "data"
+      update_JSON_VALUE "code" "$JSON_RESP"
+      if [ -n "$JSON_VALUE" ]; then
+        update_JSON_VALUE "message" "$JSON_RESP"
+        if [ -n "$JSON_VALUE" ]; then
+          _DTP_STATUS="DOWN"
+          _DTP_INFO="$JSON_RESP"
+        fi
+      fi
+      if [ -z "$_DTP_STATUS" ]; then
+        update_JSON_VALUE "status" "$JSON_RESP"
+        if [ -n "$JSON_VALUE" ]; then
+          _DTP_STATUS="$JSON_VALUE"
+        fi
+        update_JSON_VALUE "info" "$JSON_RESP"
+        if [ -n "$JSON_VALUE" ]; then
+          _DTP_INFO="$JSON_VALUE"
+        fi
+      fi
+    fi
+
     if $is_local; then
       update_SUI_FAUCET_VERSION_var
 
@@ -467,7 +502,6 @@ workdir_exec() {
       echo -n "localnet "
       if [ "$_USER_REQUEST" = "stop" ]; then
         echo_red "STOPPED"
-
       else
         if [ -z "$SUI_PROCESS_PID" ]; then
           echo_red "DOWN"
@@ -477,6 +511,9 @@ workdir_exec() {
             _DEGRADED=true
           fi
           if $_SUPPORT_PROXY && [ -z "$SUIBASE_DAEMON_PID" ]; then
+            _DEGRADED=true
+          fi
+          if $_SUPPORT_DTP && [ -z "$DTP_DAEMON_PID" ]; then
             _DEGRADED=true
           fi
           if [ "$_DEGRADED" = true ]; then
@@ -502,8 +539,8 @@ workdir_exec() {
         fi
       else
         echo "---"
-        echo_process "localnet process" true "$SUI_PROCESS_PID"
-        echo_process "faucet process" "$_SUPPORT_FAUCET" "$SUI_FAUCET_PROCESS_PID"
+        echo_process "Localnet process" true "$SUI_PROCESS_PID"
+        echo_process "Faucet process" "$_SUPPORT_FAUCET" "$SUI_FAUCET_PROCESS_PID"
       fi
     fi
 
@@ -525,15 +562,23 @@ workdir_exec() {
     if [ ! "$_USER_REQUEST" = "stop" ]; then
       _INFO=$(
         echo -n "http://"
+        echo_blue "${CFG_dtp_host_ip:?}"
+        echo -n ":"
+        echo_blue "${CFG_dtp_web_port_number:?}"
+      )
+      echo_process "DTP services" "$_SUPPORT_DTP" "$DTP_DAEMON_PID" "$_INFO"
+
+      _INFO=$(
+        echo -n "http://"
         echo_blue "${CFG_proxy_host_ip:?}"
         echo -n ":"
         echo_blue "${CFG_proxy_port_number:?}"
       )
-      echo_process "proxy server" "$_SUPPORT_PROXY" "$SUIBASE_DAEMON_PID" "$_INFO"
+      echo_process "Proxy server" "$_SUPPORT_PROXY" "$SUIBASE_DAEMON_PID" "$_INFO"
     fi
 
     if [ "$_SUPPORT_PROXY" = true ]; then
-      echo -n "multi-link RPC   : "
+      echo -n "Multi-link RPC   : "
       case $_MLINK_STATUS in
       "OK")
         echo_blue "OK"
@@ -548,6 +593,7 @@ workdir_exec() {
         echo
       fi
     fi
+
     echo "---"
     echo -n "client version: "
     echo_blue "$SUI_VERSION"
@@ -1110,7 +1156,7 @@ stop_all_services() {
   #
   # Exit if fails to get ALL the process stopped.
   #
-  # The suibase-daemon is an exception to the rule... it
+  # The suibase-daemon and dtp-daemon are exception to the rule... they
   # "self-exit" when no longer needed.
   #
   # Returns:
@@ -1139,6 +1185,7 @@ stop_all_services() {
     fi
     # Transition to "stop" state successful.
     notify_suibase_daemon_fs_change
+    notify_dtp_daemon_fs_change
     return 0
   fi
 
@@ -1164,6 +1211,7 @@ stop_all_services() {
 
   # Success. All process that needed to be stopped were stopped.
   notify_suibase_daemon_fs_change
+  notify_dtp_daemon_fs_change
   return 0
 }
 export -f stop_all_services
@@ -1175,7 +1223,7 @@ start_all_services() {
   # Returns:
   #   0: Success (all process needed to be started were started)
   #   1: Everything needed particular to this workdir already running
-  #      (Note: suibase-daemon is not *particular* to a workdir)
+  #      (Note: suibase-daemon and dtp-daemon are not *particular* to a workdir)
   local _OLD_USER_REQUEST
   _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
@@ -1184,13 +1232,18 @@ start_all_services() {
   # A good time to double-check if some commands from the suibase.yaml need to be applied.
   copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
 
-  # Also a good time to double-check the suibase-daemon is running (if needed).
+  # Also a good time to double-check the daemons are running (when needed).
   if ! start_suibase_daemon_as_needed; then
     setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
   fi
 
+  if ! start_dtp_daemon_as_needed; then
+    setup_error "$DTP_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
+  fi
+
   if [ "$_OLD_USER_REQUEST" != "start" ]; then
     notify_suibase_daemon_fs_change
+    notify_dtp_daemon_fs_change
   fi
 
   # Verify if all other expected process are running.
@@ -1259,7 +1312,7 @@ start_all_services() {
 is_at_least_one_service_running() {
   # Keep this function cohesive with start/stop
   #
-  # SUIBASE_DAEMON is an exception to the rule... it should always run!
+  # SUIBASE_DAEMON and DTP_DAEMON are exceptions to the rule... they should always run!
   update_SUI_FAUCET_PROCESS_PID_var
   update_SUI_PROCESS_PID_var
   if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then

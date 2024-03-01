@@ -124,10 +124,10 @@ export class SuibaseExec {
     }
 
     if (!suibaseRunning) {
-      // Start suibase by calling "~/suibase/scripts/common/run-suibase-daemon.sh"
-      const result = await execShell("~/suibase/scripts/common/run-suibase-daemon.sh");
+      // Start suibase daemon
+      const result = await execShell("~/suibase/scripts/common/run-daemon.sh suibase");
 
-      // TODO Implement retry and error handling of run-suibase-daemon.sh for faster startup.
+      // TODO Implement retry and error handling of run-daemon.sh for faster startup.
 
       // Sleep 500 milliseconds to give it a chance to start.
       await new Promise((r) => setTimeout(r, 500));

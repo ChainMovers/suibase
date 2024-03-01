@@ -534,6 +534,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "dtp-daemon"
+version = "0.0.5"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bitflags 2.4.1",
+ "chrono",
+ "clap",
+ "colored",
+ "data-encoding",
+ "env_logger",
+ "futures",
+ "home",
+ "hyper",
+ "jsonrpsee",
+ "jsonrpsee-proc-macros",
+ "log",
+ "md5",
+ "memchr",
+ "mime",
+ "notify",
+ "reqwest",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serde_yaml",
+ "thiserror",
+ "tokio",
+ "tokio-graceful-shutdown",
+ "tokio-tungstenite",
+ "toml_edit 0.20.7",
+ "tower",
+ "tower-http",
+ "twox-hash",
+ "uuid",
+ "uuid7",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

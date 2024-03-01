@@ -32,7 +32,13 @@ proxy_enabled: true
 proxy_host_ip: "0.0.0.0"
 proxy_port_number: 44341
 
+dtp_enabled: false
+dtp_host_ip: "0.0.0.0"
+dtp_web_port_number: 44380
+dtp_api_port_number: 44398
+
 suibase_api_port_number: 44399
+
 
 links:
   - alias: "sui.io"

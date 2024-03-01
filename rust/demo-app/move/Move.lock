@@ -29,8 +29,3 @@ source = { local = "../../../../suibase/workdirs/active/sui-repo/crates/sui-fram
 dependencies = [
   { name = "MoveStdlib" },
 ]
-
-[move.toolchain-version]
-compiler-version = "1.18.1"
-edition = "legacy"
-flavor = "sui"

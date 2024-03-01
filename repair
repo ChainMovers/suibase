@@ -187,10 +187,14 @@ suibase_repair() {
   if [ -z "$SUIBASE_DAEMON_VERSION_FILE" ]; then
     # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
     source "$REPAIR_SB_DIR/scripts/common/__suibase-daemon.sh"
+    update_suibase_daemon_as_needed
   fi
 
-  # Check for a suibase-daemon update and restart.
-  update_suibase_daemon_as_needed
+  if [ -z "$DTP_DAEMON_VERSION_FILE" ]; then
+    # shellcheck source=SCRIPTDIR/scripts/common/__dtp-daemon.sh
+    source "$REPAIR_SB_DIR/scripts/common/__dtp-daemon.sh"
+    update_dtp_daemon_as_needed
+  fi
 
   # Exit instruction to the user.
   local _EXIT=false

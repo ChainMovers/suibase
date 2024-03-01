@@ -33,6 +33,12 @@ proxy_enabled: false
 proxy_host_ip: "0.0.0.0"
 proxy_port_number: ~
 
+# dtp not applicable to cargobin
+dtp_enabled: false
+dtp_host_ip: "0.0.0.0"
+dtp_web_port_number: 44380
+dtp_api_port_number: 44398
+
 suibase_api_port_number: 44399
 
 links:

@@ -1,0 +1,53 @@
+[package]
+name = "dtp-daemon"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+log = "0.4.0"
+env_logger = "0.10"
+home = "0.5.5"
+twox-hash = "1.6.1"
+
+serde_yaml = "0.9"
+bitflags = "2.3"
+
+axum = "0.6"
+hyper = { version = "0.14", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+mime = "0.3.16"
+
+memchr = "2.5.0"
+
+toml_edit = { version = "0.20.0" }
+
+notify = { version = "6.0", default-features = false, features = [
+    "macos_kqueue",
+] }
+
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+colored.workspace = true
+data-encoding.workspace = true
+futures.workspace = true
+jsonrpsee.workspace = true
+jsonrpsee-proc-macros.workspace = true
+md5.workspace = true
+rusqlite.workspace = true
+schemars.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+serde_with.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-graceful-shutdown.workspace = true
+tokio-tungstenite.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+uuid.workspace = true
+uuid7.workspace = true
+
+[dev-dependencies]
+env_logger = "0.10"
+log = "0.4"

@@ -148,7 +148,7 @@ start_suibase_daemon() {
 
   if [ "${CFG_proxy_enabled:?}" = "dev" ]; then
     # Run it in the foreground and just exit when done.
-    "$HOME"/suibase/scripts/common/run-suibase-daemon.sh foreground
+    "$HOME"/suibase/scripts/common/run-daemon.sh suibase foreground
     exit
   fi
 
@@ -162,11 +162,11 @@ start_suibase_daemon() {
     #
     # Will not try if there is already another instance running.
     #
-    # run-suibase-daemon.sh is design to be flock protected and be silent.
+    # run-daemon.sh is design to be flock protected and be silent.
     # All errors will be visible through the suibase-daemon own logs or by observing
     # which PID owns the flock file. So all output of the script (if any) can
     # safely be ignored to /dev/null.
-    nohup "$HOME/suibase/scripts/common/run-suibase-daemon.sh" >/dev/null 2>&1 &
+    nohup "$HOME/suibase/scripts/common/run-daemon.sh" suibase >/dev/null 2>&1 &
 
     while [ $SECONDS -lt $end ]; do
       if is_suibase_daemon_running; then

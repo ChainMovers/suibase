@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/suibase-daemon"]
+members = ["crates/suibase-daemon", "crates/dtp-daemon"]
 
 [workspace.package]
-# Bump 'version' for the suibase-daemon to self-restart after an update.
+# Bump 'version' for the daemon to self-restart after an update.
 # (this is not the Suibase package version, it is specifically for this crate).
 version = "0.0.5"
 edition = "2021"

@@ -6,6 +6,8 @@
 #
 # (if website is down, check under ~/suibase/docs/src)
 
-# Examples:
+# Examples
+# ========
+# dtp_enabled: true
 # default_repo_branch: "main"
 # force_tag: "testnet-v1.18.1"
