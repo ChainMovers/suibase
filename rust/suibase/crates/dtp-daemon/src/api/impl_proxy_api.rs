@@ -10,7 +10,7 @@ use crate::admin_controller::{
 use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{GlobalsProxyMT, ServerStats, UuidST};
 
-use super::{InfoResponse, ProxyApiServer, VersionedEq};
+use super::{InfoResponse, PingResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
 
 use super::def_header::Versioned;
@@ -547,6 +547,123 @@ impl ProxyApiServer for ProxyApiImpl {
         let _ = self.admctrl_tx.send(msg).await;
 
         resp.info = "Success".to_string();
+        Ok(resp)
+    }
+
+    async fn ping(
+        &self,
+        workdir: String,
+        host_addr: String,
+        bytes: Option<String>,
+    ) -> RpcResult<PingResponse> {
+        let mut resp = PingResponse::new();
+
+        // Initialize some of the header fields.
+        resp.header.method = "ping".to_string();
+
+        // Find the HostConnIdx.
+        //
+        // There is a unique index in a managed vector for each remote Host addr.
+        //
+        // The following global Managed vector exists:
+        //   - One HostController for each HostIdx
+        //     Maintain by the API side for its vector of ServiceController.
+        //     Each ServiceController has a linked list of ConnsController.
+        //     Each ConsController have a linked list of RequestPending.
+        //
+        //   - On the receive side, the IPipe must quickly map its data
+        //     to its PipeController, which forward eventually to the
+        //     proper ConnsController (RequestPending).
+        //
+
+        //
+        // **** API Thread - Request Sequence ****
+        //
+        //   Get the ServiceIdx (hard coded by API or assigned from config).
+        //
+        //   Get the HostIdx (read lock lookup or assigned from config).
+        //
+        //   Get the ConnIdx (hard coded by API or assigned from config).
+        //
+        //   HConnIdx is a managed index unique for each (HostIdx,ConnIdx) pair (see autosize_vec.rs).
+        //
+        //   An array[HConnIdx] is implemented with one instance per ServiceIdx (to eliminate inter-service lock contention).
+        //
+        //   A read or write lock on array[HConnIdx] implies an outer read lock on array.
+        //
+        //   As needed, the tx thread has to open the connection:
+        //     Read lock on ConnsController[HConnIdx]
+        //       If not open, then send open request to WebSocketWorker.
+        //     Read unlock
+        //     if open request sent, block wait until confirmed open (use a oneshot channel) or timeout.
+        //
+        //   Prepare for the TX:
+        //   Write lock the TXController[HSConnIdx]
+        //     Run the TX state machine (as needed use WebSocketTXWorker for Move calls).
+        //     Find the proper IPipe and sequence number.
+        //   Write unlock
+        //
+        //   Prepare the RX side to expect a response:
+        //   Write lock the RXController[HSConnIdx]
+        //     Add PendingRequest to it.
+        //   Write unlock
+        //
+        //   Send the data once using WebSocketTXWorker (with IPipe, SeqNumber info).
+        //
+        //   Block wait on the oneshot channel for the response, failure or timeout destroy
+        //
+        // **** WebSocketTXWorker ****
+        //   - On open connection request, do
+        //       On open needed:
+        //         Call into Sui network to open the connection (until success or timeout).
+        //         Do RPC subscriptions (until success or timeout).
+        //         Create TXController[HConnIdx] and RXController[HConnIdx].
+        //         Write lock ConnsController[HConnIdx]
+        //           Mark the connection as open.
+        //         Write Unlock
+        //     Send success/failure to caller with oneshot channel. Success if already open.
+        //
+        //   - On Exec Move Call (a oneshot chanel is provided)
+        //       Send the requested operation on the websocket.
+        //       On success:
+        //         Write Lock RXControllerMoveCalls[HConnIdx]
+        //           Add PendingRequest and move ownership of oneshot channel.
+        //         Write Unlock
+
+        //       On failure:
+        //         Send failure to caller with oneshot channel.
+        //
+        // **** WebSocketRxWorker ****
+        //  On peer data receive:
+        //    Use the subscription ID to find HConnIdx (slow lookup).
+        //    (Optimization: Response could include the HConnIdx for quick tentative lookup)
+        //
+        //    Write lock RXController[HConnIdx]
+        //      Run RX State machine.
+        //      Drop if invalid or no pending request.
+        //      If valid, take ownership of the oneshot channel and delete PendingRequest.
+        //    Write unlock.
+        //    If own the oneshot channel, then send the response with the data.
+        //
+        //  On subscription-level event:
+        //    Use the subscription ID to find HConnIdx (slow lookup).
+        //    Run subscription state machine (does its own TX as needed)
+        //
+        //  On Move Call response:
+        //    Use the returned HConnIdx for fast lookup.
+        //    Write lock RXControllerMoveCalls[HConnIdx]
+        //      Drop if invalid or no pending request.
+        //      If valid, take ownership of the oneshot channel and delete PendingRequest.
+        //    Write unlock.
+        //    If own the oneshot channel, then send the response with the data.
+
+        // Get the ConnsController for the Ping service.
+        // (There is only one ConnsController for Ping
+        //  service per HostController).
+
+        // Send the ping request through the proper IPipe.
+        // (for now use always the the first IPipe).
+
         Ok(resp)
     }
 }

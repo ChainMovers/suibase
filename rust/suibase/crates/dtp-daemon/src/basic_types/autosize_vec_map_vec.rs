@@ -1,11 +1,13 @@
-use super::ManagedVecU8;
+// Note: Refactor this with managed_vec.rs.
+// The only difference is ManagedVecU8 versus ManagedVecU16.
+use super::ManagedVecU16;
 
 #[derive(Clone)]
-pub struct AutoSizeVec<T> {
+pub struct AutoSizeVecMapVec<T> {
     data: Vec<Option<T>>,
 }
 
-impl<T: Default> AutoSizeVec<T> {
+impl<T: Default> AutoSizeVecMapVec<T> {
     pub fn new() -> Self {
         Self { data: Vec::new() }
     }
@@ -22,7 +24,7 @@ impl<T: Default> AutoSizeVec<T> {
     // Use instead get_if_some() for read-only operations that do not
     // create default T object if not already in the AutoSizeVec.
     //
-    pub fn get(&mut self, leader_index: ManagedVecU8) -> &T {
+    pub fn get(&mut self, leader_index: ManagedVecU16) -> &T {
         let usize_index = usize::from(leader_index);
         // Extend the size of self.data if leader_index is out-of-bounds of self.data
         if usize_index > self.data.len() {
@@ -37,7 +39,7 @@ impl<T: Default> AutoSizeVec<T> {
         self.data.get(usize_index).and_then(|v| v.as_ref()).unwrap()
     }
 
-    pub fn get_mut(&mut self, leader_index: ManagedVecU8) -> &mut T {
+    pub fn get_mut(&mut self, leader_index: ManagedVecU16) -> &mut T {
         let usize_index = usize::from(leader_index);
         // Extend the size of self.data if leader_index is out-of-bounds of self.data
         if usize_index > self.data.len() {
@@ -55,7 +57,7 @@ impl<T: Default> AutoSizeVec<T> {
             .unwrap()
     }
 
-    pub fn get_if_some(&self, leader_index: ManagedVecU8) -> Option<&T> {
+    pub fn get_if_some(&self, leader_index: ManagedVecU16) -> Option<&T> {
         let usize_index = usize::from(leader_index);
         // Extend the size of self.data if leader_index is out-of-bounds of self.data
         if usize_index >= self.data.len() {
@@ -65,40 +67,52 @@ impl<T: Default> AutoSizeVec<T> {
     }
 
     // Implement Iter and IterMut to iterate over the used cells.
-    pub fn into_iter(self) -> impl Iterator<Item = (ManagedVecU8, T)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (ManagedVecU16, T)> {
         self.data
             .into_iter()
             .enumerate()
-            .filter_map(|(index, cell)| cell.map(|value| (index.try_into().unwrap(), value)))
+            .filter_map(|(index, cell)| {
+                cell.map(|value| {
+                    let try_into: Result<ManagedVecU16, std::num::TryFromIntError> =
+                        TryInto::try_into(index);
+                    (try_into.unwrap(), value)
+                })
+            })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (ManagedVecU8, &T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (ManagedVecU16, &T)> {
         self.data.iter().enumerate().filter_map(|(index, cell)| {
-            cell.as_ref()
-                .map(|value| (index.try_into().unwrap(), value))
+            cell.as_ref().map(|value| {
+                let try_into: Result<ManagedVecU16, std::num::TryFromIntError> =
+                    TryInto::try_into(index);
+                (try_into.unwrap(), value)
+            })
         })
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (ManagedVecU8, &mut T)> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (ManagedVecU16, &mut T)> {
         self.data
             .iter_mut()
             .enumerate()
             .filter_map(|(index, cell)| {
-                cell.as_mut()
-                    .map(|value| (index.try_into().unwrap(), value))
+                cell.as_mut().map(|value| {
+                    let try_into: Result<ManagedVecU16, std::num::TryFromIntError> =
+                        TryInto::try_into(index);
+                    (try_into.unwrap(), value)
+                })
             })
     }
 }
 
-impl Default for AutoSizeVec<u8> {
+impl Default for AutoSizeVecMapVec<u8> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-// Implement Debug for AutoSizeVec.
+// Implement Debug for AutoSizeVecMapVec.
 // Iterate only the used cell and call Display/Debug on the value.
-impl<T: std::fmt::Debug + Default> std::fmt::Debug for AutoSizeVec<T> {
+impl<T: std::fmt::Debug + Default> std::fmt::Debug for AutoSizeVecMapVec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, value) in self.iter() {
             writeln!(f, "{}: {:?}", index, value)?;
@@ -121,22 +135,22 @@ fn one_element() {
     }
 
     // Initialize with default one element, at various index.
-    let mut v1 = AutoSizeVec::<TS>::new();
+    let mut v1 = AutoSizeVecMapVec::<TS>::new();
     for idx in (0..=5).chain(u8::MAX - 2..=u8::MAX) {
-        let el1 = v1.get(idx);
+        let el1 = v1.get(idx as u16);
         assert_eq!(el1.value, u32::MAX);
     }
 
     // Modify these same elements with their own position.
     for idx in (0..=5).chain(u8::MAX - 2..=u8::MAX) {
-        let el1 = v1.get_mut(idx);
+        let el1 = v1.get_mut(idx as u16);
         assert_eq!(el1.value, u32::MAX);
         el1.value = idx as u32;
     }
 
     // Read back to verify modifications preserve in the Vec.
     for idx in (0..=5).chain(u8::MAX - 2..=u8::MAX) {
-        let el1 = v1.get(idx);
+        let el1 = v1.get(idx as u16);
         assert_eq!(el1.value, idx as u32);
     }
 }

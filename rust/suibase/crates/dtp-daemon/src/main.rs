@@ -6,33 +6,22 @@
 //  - Telemetry setup
 //  - Top level threads started here. These runs until the program terminates:
 //     - AdminController: The "leader" thread validating and applying the config changes and user actions.
-//     - NetworkMonitor: Maintains all remote server stats. Info coming from multiple sources (on a mpsc channel).
+//     - Dispatcher: Create and manage DTP connections. Parent of ConnectionWorker(s), ServerWorker(s), WebSocketWorker(s).
 //     - APIServer: Does "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
 //     - ClockTrigger: Send periodic audit events to other threads.
 //
 // Other threads (not started here):
 //
-//  - ProxyServer:        One long-running thread instance per listening port. Async handling of all user traffic.
-//                        Uses axum::Server and reqwest::Client. Started/stopped by the AdminController.
-//
-//  - RequestWorker:      Perform on-demand requests to target servers for health check+latency test.
-//                        Uses reqwest::Client. Started/stopped by the NetworkMonitor.
-//
 //  - WorkdirsWatcher:    Watch for changes to config files in the suibase workdirs. Send events to AdminController.
 //                        Started/stopped by the AdminController.
 //
-//  - ShellWorker:        Perform external call to Suibase command line. One instance per workdir (by design, will
+//  - ShellWorker:        Perform external calls to Suibase command line. One instance per workdir (by design, will
 //                        serialize all command execution). Started/stopped by the AdminController.
-//
-//  - EventsWriterWorker: Manage connection(s) to subscribe/receive/dedup Sui events. Data written to FS (SQLite).
-//                        One instance per workdir. Started/stopped by the AdminController.
-//                        Does "sandboxing" of WebSocketWorker and DBWorker.
 //
 //  - WebSocketWorker:    Manage subscribe/unsubscribe and receiving Sui events for a single connection. Forwards
 //                        subscribed sui events to its parent EventsWriterWorker for dedup. Uses tokio-tungstenite.
 //
-//  - DBWorker:           Manage the embedded database file for a single workdir. Write to SQLite DB the already
-//                        validated and dedup output from its parent (EventsWriterWorker).
+//  - ConnectionWorker:   Manage a single DTP connection.
 //
 use anyhow::Result;
 
@@ -68,8 +57,8 @@ use tokio_graceful_shutdown::{
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
 #[clap(
-    name = "suibase-daemon",
-    about = "RPC proxy for more reliable access to Sui networks and other local services",
+    name = "dtp-daemon",
+    about = "Decentralized Transport Protocol (DTP) Services",
     rename_all = "kebab-case",
     author,
     version
@@ -86,8 +75,6 @@ impl Command {
                 // Create mpsc channels (internal messaging between threads).
                 //
                 // The AdminController handles events about configuration changes
-                //
-                // The NetworkMonitor handles events about network stats and periodic health checks.
                 //
                 let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(100);
                 let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(10000);

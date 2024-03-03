@@ -5,7 +5,7 @@ use crate::shared_types::ServerStats;
 
 #[derive(Debug)]
 pub struct TargetServer {
-    idx: Option<ManagedVecUSize>,
+    idx: Option<ManagedVecU8>,
     config: Link,
     pub stats: ServerStats,
 }
@@ -62,11 +62,11 @@ impl TargetServer {
 }
 
 impl ManagedElement for TargetServer {
-    fn idx(&self) -> Option<ManagedVecUSize> {
+    fn idx(&self) -> Option<ManagedVecU8> {
         self.idx
     }
 
-    fn set_idx(&mut self, index: Option<ManagedVecUSize>) {
+    fn set_idx(&mut self, index: Option<ManagedVecU8>) {
         self.idx = index;
     }
 }

@@ -8,7 +8,7 @@ use crate::workers::PackageTrackingState;
 //
 // The API defined here is registered and served by jsonrpsee  (See api_server.rs).
 //
-// This is a thin layers and most of the heavy lifting is done in other modules.
+// This is a thin layer and most of the heavy lifting is done in other modules.
 //
 // When doing a request that can "mutate" the process (other than API statistics), a message is emit
 // toward the AdminController which will perform the mutation and emit a response with a tokio
@@ -134,6 +134,33 @@ impl InfoResponse {
         Self {
             header: Header::default(),
             info: "Unknown Error".to_string(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PingResponse {
+    pub header: Header,
+    pub bytes: String,  // Total bytes received.
+    pub sender: String, // Hex Host address of the responder (starts with 0x).
+    pub seq: String,    // Sequence number. Helps to diagnose packet loss.
+    pub result: String, // Round-trip time in microseconds.
+
+                        // On error:
+                        //  'bytes', 'sender' and 'seq' are empty strings.
+                        //  'result' is a human-readable error message.
+}
+
+impl PingResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            bytes: "".to_string(),
+            sender: "".to_string(),
+            seq: "".to_string(),
+            result: "Unknown Error".to_string(),
         }
     }
 }
@@ -472,6 +499,14 @@ pub trait ProxyApi {
 
     #[method(name = "fsChange")]
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
+
+    #[method(name = "ping")]
+    async fn ping(
+        &self,
+        workdir: String,
+        host_addr: String,
+        bytes: Option<String>,
+    ) -> RpcResult<PingResponse>;
 }
 
 #[rpc(server)]

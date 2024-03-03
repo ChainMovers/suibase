@@ -3,14 +3,20 @@
 // flatten everything under "api" module.
 pub(crate) use self::auto_thread::*;
 pub(crate) use self::autosize_vec::*;
+pub(crate) use self::autosize_vec_map_vec::*;
 pub(crate) use self::db_objects::*;
 //pub(crate) use self::error::*;
 pub(crate) use self::managed_vec::*;
+pub(crate) use self::managed_vec16::*;
+pub(crate) use self::managed_vec_map_vec::*;
 pub(crate) use self::suibase_basic_types::*;
 
 mod auto_thread;
 mod autosize_vec;
+mod autosize_vec_map_vec;
 mod db_objects;
 mod error;
 mod managed_vec;
+mod managed_vec16;
+mod managed_vec_map_vec;
 mod suibase_basic_types;

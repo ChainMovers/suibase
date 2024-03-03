@@ -225,7 +225,7 @@ impl Default for WorkdirProxyConfig {
 
 #[derive(Default, Debug, Clone)]
 pub struct Workdir {
-    idx: Option<ManagedVecUSize>,
+    idx: Option<ManagedVecU8>,
     name: String,
     path: PathBuf,
     state_path: PathBuf,
@@ -235,7 +235,7 @@ pub struct Workdir {
 }
 
 impl Workdir {
-    pub fn idx(&self) -> Option<ManagedVecUSize> {
+    pub fn idx(&self) -> Option<ManagedVecU8> {
         self.idx
     }
 
@@ -410,11 +410,11 @@ impl Default for GlobalsWorkdirsST {
 }
 
 impl ManagedElement for Workdir {
-    fn idx(&self) -> Option<ManagedVecUSize> {
+    fn idx(&self) -> Option<ManagedVecU8> {
         self.idx
     }
 
-    fn set_idx(&mut self, index: Option<ManagedVecUSize>) {
+    fn set_idx(&mut self, index: Option<ManagedVecU8>) {
         self.idx = index;
     }
 }

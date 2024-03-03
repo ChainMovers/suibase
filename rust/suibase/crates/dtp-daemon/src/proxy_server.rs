@@ -38,7 +38,7 @@ use tokio_graceful_shutdown::SubsystemHandle;
 //
 #[derive(Clone)]
 pub struct SharedStates {
-    port_idx: ManagedVecUSize,
+    port_idx: ManagedVecU8,
     client: reqwest::Client,
     netmon_tx: NetMonTx,
     globals: GlobalsProxyMT,
