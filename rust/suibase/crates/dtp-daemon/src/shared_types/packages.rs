@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{
-    api::{MoveConfig, PackagesConfigResponse, Versioned},
-    basic_types::{AutoSizeVec, WorkdirIdx},
-};
+use crate::api::{MoveConfig, PackagesConfigResponse, Versioned};
 
+use common::basic_types::{AutoSizeVec, WorkdirIdx};
 #[derive(Debug, Clone)]
 pub struct PackagesWorkdirConfig {
     // Mostly store everything in the same struct

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{basic_types::*, shared_types::InputPort};
+use crate::shared_types::InputPort;
+use common::basic_types::*;
 
 use crate::shared_types::{
     GlobalsProxyMT, RequestFailedReason, SendFailedReason, ServerStats, TargetServer,

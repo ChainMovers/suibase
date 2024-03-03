@@ -3,7 +3,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use crate::app_error::AppError;
-use crate::basic_types::*;
+use common::basic_types::*;
 
 use crate::network_monitor::{
     NetMonTx, NetmonFlags, ProxyHandlerReport, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX,
@@ -38,7 +38,7 @@ use tokio_graceful_shutdown::SubsystemHandle;
 //
 #[derive(Clone)]
 pub struct SharedStates {
-    port_idx: ManagedVecUSize,
+    port_idx: ManagedVecU8,
     client: reqwest::Client,
     netmon_tx: NetMonTx,
     globals: GlobalsProxyMT,

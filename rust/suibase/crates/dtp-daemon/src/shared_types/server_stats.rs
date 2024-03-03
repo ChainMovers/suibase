@@ -2,7 +2,7 @@
 
 use hyper::http;
 
-use crate::basic_types::*;
+use common::basic_types::*;
 
 type UpScoreBonus = f64;
 const NORMAL_SCORE_UP: UpScoreBonus = 1.15;

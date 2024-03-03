@@ -1,9 +1,8 @@
 use std::error::Error;
 
-use crate::basic_types::*;
+use common::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
-use crate::proxy_server::ProxyServer;
 use crate::shared_types::{Globals, InputPort, WorkdirProxyConfig};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;

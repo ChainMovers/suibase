@@ -1,4 +1,4 @@
-use crate::basic_types::AutoSizeVec;
+use common::basic_types::AutoSizeVec;
 
 #[derive(Debug, Clone)]
 pub struct SuiEventData {

@@ -1,4 +1,4 @@
-use crate::basic_types::*;
+use common::basic_types::*;
 
 use crate::shared_types::Link;
 use crate::shared_types::ServerStats;

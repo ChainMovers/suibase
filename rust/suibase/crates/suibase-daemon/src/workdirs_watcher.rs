@@ -1,4 +1,4 @@
-use crate::basic_types::AutoSizeVec;
+use common::basic_types::AutoSizeVec;
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};

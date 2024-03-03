@@ -35,7 +35,7 @@ use env_logger::{Builder, Env};
 mod admin_controller;
 mod api;
 mod app_error;
-mod basic_types;
+
 mod clock_trigger;
 mod network_monitor;
 mod proxy_server;

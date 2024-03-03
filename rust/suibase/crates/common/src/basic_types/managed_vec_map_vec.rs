@@ -91,25 +91,33 @@ impl<T: ManagedElement16> ManagedVecMapVec<T> {
     // TODO Verify handling of out of range index.
     pub fn push(
         &mut self,
-        mut value: T,
+        value: T,
         index1: u8,
         index2: String,
         index3: u8,
     ) -> Option<ManagedVecU16> {
-        // Lookup to get a mut on the Level3Element. It should not be defined
-        // for this (index1, index2, index3) tuple.
-
-        /* TODO
-        let level1_element = self.lookup.get_mut(index1);
-        if level1_element.is_none() {
-            self.lookup.push(Level1Element::new(), index1);
-            level1_element = self.lookup.get_mut(index1);
-        }*/
-
         // Push T into the managed_vec and get its index.
         let managed_idx = self.managed_vec.push(value);
 
-        // If fail, remove the Level3Element from the lookup.
+        if managed_idx.is_none() {
+            return None;
+        }
+
+        // Lookup to get a mut on the Level3Element. (it is created if does not exist).
+        // We will store in it the managed_idx of the newly pushed value.
+
+        let level1_element = self.lookup.get_mut(index1);
+        let mut level2_element = level1_element.data.get_mut(&index2);
+        if level2_element.is_none() {
+            // Create the level2_element
+            level1_element
+                .data
+                .insert(index2.clone(), Level2Element::default());
+            level2_element = level1_element.data.get_mut(&index2);
+        }
+        let level2_element = level2_element.unwrap();
+        let level3_element = level2_element.data.get_mut(index3);
+        level3_element.idx = managed_idx.unwrap();
 
         managed_idx
     }

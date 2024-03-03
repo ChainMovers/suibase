@@ -1,6 +1,6 @@
-use crate::basic_types::*;
 use crate::shared_types::Link;
 use crate::shared_types::TargetServer;
+use common::basic_types::*;
 
 use super::{ServerStats, WorkdirProxyConfig};
 

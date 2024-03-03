@@ -32,9 +32,9 @@ pub fn duration_to_micros(value: std::time::Duration) -> u32 {
     }
 }
 
-pub type InputPortIdx = crate::basic_types::ManagedVecU8;
-pub type TargetServerIdx = crate::basic_types::ManagedVecU8;
-pub type WorkdirIdx = crate::basic_types::ManagedVecU8;
+pub type InputPortIdx = super::ManagedVecU8;
+pub type TargetServerIdx = super::ManagedVecU8;
+pub type WorkdirIdx = super::ManagedVecU8;
 
 // Generic channel messages for simple coordination between tokio threads.
 pub type GenericTx = tokio::sync::mpsc::Sender<GenericChannelMsg>;

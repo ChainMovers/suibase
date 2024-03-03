@@ -13,11 +13,9 @@ use axum::async_trait;
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::{
-    admin_controller::AdminControllerTx,
-    basic_types::{AutoThread, Runnable},
-    shared_types::Globals,
-};
+use crate::{admin_controller::AdminControllerTx, shared_types::Globals};
+
+use common::basic_types::{AutoThread, Runnable};
 
 use super::GeneralApiServer;
 use crate::api::impl_general_api::GeneralApiImpl;

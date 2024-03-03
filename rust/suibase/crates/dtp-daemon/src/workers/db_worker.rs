@@ -10,11 +10,10 @@
 
 use std::sync::Arc;
 
-use crate::{
-    basic_types::{
-        self, AutoThread, DBTable, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
-    },
-    shared_types::{self, Globals, GlobalsWorkdirsST, Workdir},
+use crate::shared_types::{self, Globals, GlobalsWorkdirsST, Workdir};
+
+use common::basic_types::{
+    self, AutoThread, DBTable, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
 };
 
 use rusqlite::Connection;

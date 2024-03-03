@@ -5,8 +5,8 @@ use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 
 use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
-use crate::basic_types::WorkdirIdx;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
+use common::basic_types::WorkdirIdx;
 
 use super::{
     GeneralApiServer, Header, RpcInputError, RpcSuibaseError, StatusService, VersionsResponse,

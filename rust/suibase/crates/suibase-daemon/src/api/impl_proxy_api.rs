@@ -7,8 +7,8 @@ use jsonrpsee::core::RpcResult;
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{GlobalsProxyMT, ServerStats, UuidST};
+use common::basic_types::TargetServerIdx;
 
 use super::{InfoResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};

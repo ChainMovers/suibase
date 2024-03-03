@@ -18,8 +18,8 @@
 use std::sync::Arc;
 
 use crate::api::{Versioned, VersionsResponse, WorkdirStatusResponse};
-use crate::basic_types::{AutoSizeVec, ManagedVec, WorkdirIdx};
 use crate::shared_types::InputPort;
+use common::basic_types::{AutoSizeVec, ManagedVec, WorkdirIdx};
 
 use super::{workdirs, GlobalsEventsDataST, GlobalsPackagesConfigST, GlobalsWorkdirsST};
 

@@ -7,8 +7,8 @@ use jsonrpsee::core::RpcResult;
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::basic_types::TargetServerIdx;
 use crate::shared_types::{GlobalsProxyMT, ServerStats, UuidST};
+use common::basic_types::TargetServerIdx;
 
 use super::{InfoResponse, PingResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
@@ -561,7 +561,6 @@ impl ProxyApiServer for ProxyApiImpl {
         // Initialize some of the header fields.
         resp.header.method = "ping".to_string();
 
-        // Find the HostConnIdx.
         //
         // There is a unique index in a managed vector for each remote Host addr.
         //
@@ -579,32 +578,24 @@ impl ProxyApiServer for ProxyApiImpl {
         //
         // **** API Thread - Request Sequence ****
         //
-        //   Get the ServiceIdx (hard coded by API or assigned from config).
+        //   Find the HostSlaIdx.
         //
-        //   Get the HostIdx (read lock lookup or assigned from config).
-        //
-        //   Get the ConnIdx (hard coded by API or assigned from config).
-        //
-        //   HConnIdx is a managed index unique for each (HostIdx,ConnIdx) pair (see autosize_vec.rs).
-        //
-        //   An array[HConnIdx] is implemented with one instance per ServiceIdx (to eliminate inter-service lock contention).
-        //
-        //   A read or write lock on array[HConnIdx] implies an outer read lock on array.
+        //   HostSlaIdx is a U16 index unique for each (service_idx,host_addr,sla_idx) key tuple. See managed_vec_map_vec.rs.
         //
         //   As needed, the tx thread has to open the connection:
-        //     Read lock on ConnsController[HConnIdx]
+        //     Read lock on ConnsController[HostSlaIdx]
         //       If not open, then send open request to WebSocketWorker.
         //     Read unlock
         //     if open request sent, block wait until confirmed open (use a oneshot channel) or timeout.
         //
         //   Prepare for the TX:
-        //   Write lock the TXController[HSConnIdx]
+        //   Write lock the TXController[HostSlaIdx]
         //     Run the TX state machine (as needed use WebSocketTXWorker for Move calls).
         //     Find the proper IPipe and sequence number.
         //   Write unlock
         //
         //   Prepare the RX side to expect a response:
-        //   Write lock the RXController[HSConnIdx]
+        //   Write lock the RXController[HostSlaIdx]
         //     Add PendingRequest to it.
         //   Write unlock
         //
@@ -617,8 +608,8 @@ impl ProxyApiServer for ProxyApiImpl {
         //       On open needed:
         //         Call into Sui network to open the connection (until success or timeout).
         //         Do RPC subscriptions (until success or timeout).
-        //         Create TXController[HConnIdx] and RXController[HConnIdx].
-        //         Write lock ConnsController[HConnIdx]
+        //         Create TXController[HostSlaIdx] and RXController[HostSlaIdx].
+        //         Write lock ConnsController[HostSlaIdx]
         //           Mark the connection as open.
         //         Write Unlock
         //     Send success/failure to caller with oneshot channel. Success if already open.
@@ -626,7 +617,7 @@ impl ProxyApiServer for ProxyApiImpl {
         //   - On Exec Move Call (a oneshot chanel is provided)
         //       Send the requested operation on the websocket.
         //       On success:
-        //         Write Lock RXControllerMoveCalls[HConnIdx]
+        //         Write Lock RXControllerMoveCalls[HostSlaIdx]
         //           Add PendingRequest and move ownership of oneshot channel.
         //         Write Unlock
 
@@ -635,10 +626,10 @@ impl ProxyApiServer for ProxyApiImpl {
         //
         // **** WebSocketRxWorker ****
         //  On peer data receive:
-        //    Use the subscription ID to find HConnIdx (slow lookup).
-        //    (Optimization: Response could include the HConnIdx for quick tentative lookup)
+        //    Use the subscription ID to find HostSlaIdx (slow lookup).
+        //    (Optimization: Response could include the HostSlaIdx for quick tentative lookup)
         //
-        //    Write lock RXController[HConnIdx]
+        //    Write lock RXController[HostSlaIdx]
         //      Run RX State machine.
         //      Drop if invalid or no pending request.
         //      If valid, take ownership of the oneshot channel and delete PendingRequest.
@@ -646,12 +637,12 @@ impl ProxyApiServer for ProxyApiImpl {
         //    If own the oneshot channel, then send the response with the data.
         //
         //  On subscription-level event:
-        //    Use the subscription ID to find HConnIdx (slow lookup).
+        //    Use the subscription ID to find HostSlaIdx (slow lookup).
         //    Run subscription state machine (does its own TX as needed)
         //
         //  On Move Call response:
-        //    Use the returned HConnIdx for fast lookup.
-        //    Write lock RXControllerMoveCalls[HConnIdx]
+        //    Use the returned HostSlaIdx for fast lookup.
+        //    Write lock RXControllerMoveCalls[HostSlaIdx]
         //      Drop if invalid or no pending request.
         //      If valid, take ownership of the oneshot channel and delete PendingRequest.
         //    Write unlock.

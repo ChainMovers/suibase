@@ -1,9 +1,8 @@
 use std::process::Command;
 
-use crate::{
-    basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx},
-    shared_types::Globals,
-};
+use crate::shared_types::Globals;
+
+use common::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
@@ -49,7 +48,7 @@ impl ShellWorker {
                 "Error: unexpected workdir_idx {:?} != {:?}",
                 msg.workdir_idx, self.workdir_idx
             )
-        } else if msg.event_id != crate::basic_types::EVENT_EXEC {
+        } else if msg.event_id != common::basic_types::EVENT_EXEC {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             format!("Error: Unexpected event_id {:?}", msg.event_id)
         } else if let Some(cmd) = &msg.command {

@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::basic_types::*;
+use common::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
@@ -33,7 +33,7 @@ use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemBuilder, Subs
 // if the workdir is deleted.
 
 pub struct AdminController {
-    idx: Option<ManagedVecUSize>,
+    idx: Option<ManagedVecU8>,
     globals: Globals,
 
     admctrl_rx: AdminControllerRx,
@@ -293,7 +293,7 @@ impl AdminController {
             // Handle excess TargetServers to remove.
             if input_port.target_servers.len() as usize > workdir_config.links().len() {
                 // Iterate target_servers and take out the ones not in config.
-                let mut to_remove: Vec<ManagedVecUSize> = Vec::new();
+                let mut to_remove: Vec<ManagedVecU8> = Vec::new();
                 for (idx, target_server) in input_port.target_servers.iter_mut() {
                     let alias = target_server.alias();
                     if !workdir_config.links().contains_key(&alias) {
@@ -388,7 +388,7 @@ impl AdminController {
         log::info!("cfg notif {}", workdir_name);
 
         // Apply the configuration to the globals.
-        let config_applied: Option<(ManagedVecUSize, u16)> = {
+        let config_applied: Option<(ManagedVecU8, u16)> = {
             // Get a write lock on the globals.
             let mut globals_guard = self.globals.proxy.write().await;
             let globals = &mut *globals_guard;
@@ -542,10 +542,10 @@ impl AdminController {
 }
 
 impl ManagedElement for AdminController {
-    fn idx(&self) -> Option<ManagedVecUSize> {
+    fn idx(&self) -> Option<ManagedVecU8> {
         self.idx
     }
-    fn set_idx(&mut self, idx: Option<ManagedVecUSize>) {
+    fn set_idx(&mut self, idx: Option<ManagedVecU8>) {
         self.idx = idx;
     }
 }

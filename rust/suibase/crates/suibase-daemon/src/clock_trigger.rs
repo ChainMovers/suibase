@@ -5,9 +5,11 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use crate::{
     admin_controller::{AdminControllerMsg, AdminControllerTx},
-    basic_types::{self, AutoThread, Runnable},
     network_monitor::{NetMonTx, NetworkMonitor},
 };
+
+use common::basic_types::{self, AutoThread, Runnable};
+
 use tokio::time::{interval, Duration};
 
 #[derive(Clone)]

@@ -7,11 +7,12 @@
 use std::sync::Arc;
 
 use crate::{
-    basic_types::{
-        self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
-    },
     shared_types::{self, Globals},
     workers::{DBWorker, DBWorkerParams, WebSocketWorker, WebSocketWorkerParams},
+};
+
+use common::basic_types::{
+    self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
 };
 
 use anyhow::Result;

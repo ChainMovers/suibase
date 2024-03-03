@@ -1,6 +1,6 @@
-use crate::basic_types::*;
 use crate::shared_types::Link;
 use crate::shared_types::TargetServer;
+use common::basic_types::*;
 
 use super::{ServerStats, WorkdirProxyConfig};
 
@@ -9,7 +9,7 @@ use twox_hash::XxHash32;
 
 #[derive(Debug)]
 pub struct InputPort {
-    idx: Option<ManagedVecUSize>,
+    idx: Option<ManagedVecU8>,
 
     // The name of the workdir (e.g. localnet). Set once at construction.
     workdir_name: String,
@@ -380,11 +380,11 @@ impl InputPort {
 }
 
 impl ManagedElement for InputPort {
-    fn idx(&self) -> Option<ManagedVecUSize> {
+    fn idx(&self) -> Option<ManagedVecU8> {
         self.idx
     }
 
-    fn set_idx(&mut self, index: Option<ManagedVecUSize>) {
+    fn set_idx(&mut self, index: Option<ManagedVecU8>) {
         self.idx = index;
     }
 }

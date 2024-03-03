@@ -8,7 +8,7 @@
 use home::home_dir;
 use std::collections::HashMap;
 
-use crate::basic_types::*;
+use common::basic_types::*;
 
 use std::path::{Path, PathBuf};
 
