@@ -480,23 +480,7 @@ impl VersionedEq for VersionsResponse {
 }
 
 #[rpc(server)]
-pub trait ProxyApi {
-    /// Returns data about all the RPC/Websocket links
-    /// for a given workdir.
-    ///
-    /// By default fetch everything, but can reduce load
-    /// with the options.
-    #[method(name = "getLinks")]
-    async fn get_links(
-        &self,
-        workdir: String,
-        summary: Option<bool>,
-        links: Option<bool>,
-        data: Option<bool>,
-        display: Option<bool>,
-        debug: Option<bool>,
-    ) -> RpcResult<LinksResponse>;
-
+pub trait DtpApi {
     #[method(name = "fsChange")]
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
 

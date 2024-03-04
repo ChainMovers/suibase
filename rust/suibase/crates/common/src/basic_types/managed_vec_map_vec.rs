@@ -5,7 +5,7 @@ use std::collections::HashMap;
 // Similar to ManagedVec, this container is intended for high number of fast lookups on
 // a limited number of elements that are rarely added/removed.
 //
-// ManagedVevMapVect<T> provides a 3 level indexing to access 'T' elements:
+// ManagedVevMapVec<T> provides a 3 level indexing to access 'T' elements:
 //  - Index 1 (u8 key): A vector of index2_elements.
 //  - Index 2 (string key): Each index2_elements is a map of <string,index3_elements>
 //  - Index 3 (u8 key): Each index3_elements is a vector of 'T' elements.
@@ -39,23 +39,27 @@ use std::collections::HashMap;
 use super::AutoSizeVec;
 use super::{ManagedElement16, ManagedVec16, ManagedVecU16};
 
+#[derive(Debug)]
 pub struct ManagedVecMapVec<T> {
     lookup: AutoSizeVec<Level1Element>,
     managed_vec: ManagedVec16<T>,
 }
 
 // Internal structure levels.
+#[derive(Default, Debug)]
 struct Level1Element {
     data: HashMap<String, Level2Element>,
 }
+/* Note: auto-derived instead
 impl Default for Level1Element {
     fn default() -> Self {
         Level1Element {
             data: HashMap::new(),
         }
     }
-}
+} */
 
+#[derive(Debug)]
 struct Level2Element {
     data: AutoSizeVec<Level3Element>,
 }
@@ -67,17 +71,20 @@ impl Default for Level2Element {
     }
 }
 
+#[derive(Default, Debug)]
 struct Level3Element {
     // The index used for both the ManagedVecMapVec<T>::managed_vec
     // and the user defined loosely coupled AutosizeVecMapVec.
     idx: ManagedVecU16,
 }
 
+/* Note: auto-derived instead
 impl Default for Level3Element {
     fn default() -> Self {
         Level3Element { idx: 0 }
     }
 }
+ */
 
 impl<T: ManagedElement16> ManagedVecMapVec<T> {
     pub fn new() -> Self {
@@ -89,6 +96,7 @@ impl<T: ManagedElement16> ManagedVecMapVec<T> {
 
     // That is the only time the index is set and returned.
     // TODO Verify handling of out of range index.
+    #[allow(clippy::question_mark)]
     pub fn push(
         &mut self,
         value: T,
@@ -122,6 +130,14 @@ impl<T: ManagedElement16> ManagedVecMapVec<T> {
         managed_idx
     }
 
+    // Get the ManagedIdx from the key tuple (index1, index2, index3).
+    // Returns None if does not exists.
+    pub fn get_if_some(&self, index1: u8, index2: &str, index3: u8) -> Option<ManagedVecU16> {
+        let level1_element = self.lookup.get_if_some(index1)?;
+        let level2_element = level1_element.data.get(index2)?;
+        let level3_element = level2_element.data.get_if_some(index3)?;
+        Some(level3_element.idx)
+    }
     // TODO Verify getting OOB have no effect.
     pub fn get(&self, index: ManagedVecU16) -> Option<&T> {
         self.managed_vec.get(index)

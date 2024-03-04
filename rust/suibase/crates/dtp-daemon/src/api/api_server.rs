@@ -1,12 +1,11 @@
-// This is the server to handle the API of the suibase-daemon.
+// This is the server to handle the API of the dtp-daemon.
 //
 // Interaction with user is with JSON-RPC request/response messages.
 //
 // The APIServer is a thread that does a limited "sandboxing" of a
-// single JSONRPCServer thread which can be "auto-restarted" on panic.
+// single JSONRPCServer thread which auto-restart on panic.
 //
-// A JSONRPCServer owns a jsonrpsee Server to handle the JSON-RPC requests.
-// ( https://github.com/paritytech/jsonrpsee )
+// The server itself is from https://github.com/paritytech/jsonrpsee
 
 use axum::async_trait;
 
@@ -20,8 +19,8 @@ use common::basic_types::{AutoThread, Runnable};
 use super::GeneralApiServer;
 use crate::api::impl_general_api::GeneralApiImpl;
 
-use super::ProxyApiServer;
-use crate::api::impl_proxy_api::ProxyApiImpl;
+use super::DtpApiServer;
+use crate::api::impl_dtp_api::DtpApiImpl;
 
 use super::PackagesApiServer;
 use crate::api::impl_packages_api::PackagesApiImpl;
@@ -117,10 +116,7 @@ impl APIServerThread {
         let mut all_methods = Methods::new();
 
         {
-            let api = ProxyApiImpl::new(
-                self.params.globals.proxy.clone(),
-                self.params.admctrl_tx.clone(),
-            );
+            let api = DtpApiImpl::new(self.params.globals.clone(), self.params.admctrl_tx.clone());
             let methods = api.into_rpc();
             if let Err(e) = all_methods.merge(methods) {
                 log::error!("Error merging ProxyApiImpl methods: {}", e);

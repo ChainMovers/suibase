@@ -11,5 +11,5 @@ mod def_header;
 mod def_methods;
 mod impl_general_api;
 mod impl_packages_api;
-mod impl_proxy_api;
+mod impl_dtp_api;
 mod rpc_error;

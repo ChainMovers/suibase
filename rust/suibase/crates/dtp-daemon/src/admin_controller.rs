@@ -6,7 +6,7 @@ use crate::network_monitor::NetMonTx;
 use crate::shared_types::{Globals, InputPort, WorkdirProxyConfig};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
-use crate::workers::{EventsWriterWorker, EventsWriterWorkerParams};
+use crate::workers::{WebSocketWorker, WebSocketWorkerParams};
 
 use anyhow::{anyhow, Result};
 
@@ -466,7 +466,7 @@ impl AdminController {
             let (events_writer_worker_tx, events_writer_worker_rx) =
                 tokio::sync::mpsc::channel(100);
 
-            let events_writer_worker_params = EventsWriterWorkerParams::new(
+            let events_writer_worker_params = WebSocketWorkerParams::new(
                 self.globals.clone(),
                 events_writer_worker_rx,
                 events_writer_worker_tx.clone(),
@@ -474,7 +474,7 @@ impl AdminController {
             );
             wd_tracking.events_writer_worker_tx = Some(events_writer_worker_tx);
 
-            let events_writer_worker = EventsWriterWorker::new(events_writer_worker_params);
+            let events_writer_worker = WebSocketWorker::new(events_writer_worker_params);
             let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
                 events_writer_worker.run(a)
             }));

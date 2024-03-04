@@ -11,8 +11,8 @@
 //
 //  - A thread can lock read/write access on the single writer thread 'ST' instance.
 //
-//  - Although globals are not encouraged, they are carefully used here in a balanced way
-//    and as a stepping stone toward a more optimized design. Ask the dev for more details.
+//  - Although globals are not encouraged, they are carefully used here for data that
+//    is often read, but relatively rarely changed. They are protected by a read-write lock.
 //
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
@@ -21,7 +21,10 @@ use crate::api::{Versioned, VersionsResponse, WorkdirStatusResponse};
 use crate::shared_types::InputPort;
 use common::basic_types::{AutoSizeVec, ManagedVec, WorkdirIdx};
 
-use super::{workdirs, GlobalsEventsDataST, GlobalsPackagesConfigST, GlobalsWorkdirsST};
+use super::{
+    workdirs, GlobalsDTPConnsStateRxST, GlobalsDTPConnsStateST, GlobalsDTPConnsStateTxST,
+    GlobalsEventsDataST, GlobalsPackagesConfigST, GlobalsWorkdirsST,
+};
 
 #[derive(Debug)]
 pub struct GlobalsProxyST {
@@ -175,6 +178,9 @@ pub type GlobalsPackagesConfigMT = Arc<tokio::sync::RwLock<GlobalsPackagesConfig
 pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
 pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
 pub type GlobalsAPIMutexMT = Arc<tokio::sync::Mutex<GlobalsAPIMutexST>>;
+pub type GlobalsDTPConnsStateMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateST>>;
+pub type GlobalsDTPConnsStateTxMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateTxST>>;
+pub type GlobalsDTPConnsStateRxMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateRxST>>;
 
 // A convenient way to refer to all globals at once.
 //
@@ -219,6 +225,22 @@ pub struct Globals {
     pub api_mutex_devnet: GlobalsAPIMutexMT,
     pub api_mutex_testnet: GlobalsAPIMutexMT,
     pub api_mutex_mainnet: GlobalsAPIMutexMT,
+
+    // State of a DTP connection (e.g. open/closed)
+    pub dtp_conns_state_localnet: GlobalsDTPConnsStateMT,
+    pub dtp_conns_state_devnet: GlobalsDTPConnsStateMT,
+    pub dtp_conns_state_testnet: GlobalsDTPConnsStateMT,
+    pub dtp_conns_state_mainnet: GlobalsDTPConnsStateMT,
+
+    pub dtp_conns_state_tx_localnet: GlobalsDTPConnsStateTxMT,
+    pub dtp_conns_state_tx_devnet: GlobalsDTPConnsStateTxMT,
+    pub dtp_conns_state_tx_testnet: GlobalsDTPConnsStateTxMT,
+    pub dtp_conns_state_tx_mainnet: GlobalsDTPConnsStateTxMT,
+
+    pub dtp_conns_state_rx_localnet: GlobalsDTPConnsStateRxMT,
+    pub dtp_conns_state_rx_devnet: GlobalsDTPConnsStateRxMT,
+    pub dtp_conns_state_rx_testnet: GlobalsDTPConnsStateRxMT,
+    pub dtp_conns_state_rx_mainnet: GlobalsDTPConnsStateRxMT,
 }
 
 impl Globals {
@@ -240,6 +262,42 @@ impl Globals {
             api_mutex_devnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
             api_mutex_testnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
             api_mutex_mainnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
+            dtp_conns_state_localnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateST::new(),
+            )),
+            dtp_conns_state_devnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateST::new(),
+            )),
+            dtp_conns_state_testnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateST::new(),
+            )),
+            dtp_conns_state_mainnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateST::new(),
+            )),
+            dtp_conns_state_tx_localnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateTxST::new(),
+            )),
+            dtp_conns_state_tx_devnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateTxST::new(),
+            )),
+            dtp_conns_state_tx_testnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateTxST::new(),
+            )),
+            dtp_conns_state_tx_mainnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateTxST::new(),
+            )),
+            dtp_conns_state_rx_localnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateRxST::new(),
+            )),
+            dtp_conns_state_rx_devnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateRxST::new(),
+            )),
+            dtp_conns_state_rx_testnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateRxST::new(),
+            )),
+            dtp_conns_state_rx_mainnet: Arc::new(tokio::sync::RwLock::new(
+                GlobalsDTPConnsStateRxST::new(),
+            )),
         }
     }
 
@@ -286,6 +344,83 @@ impl Globals {
             workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.events_data_devnet),
             workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.events_data_testnet),
             workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.events_data_mainnet),
+            _ => None,
+        }
+    }
+
+    pub fn dtp_conns_state(&self, workdir_idx: WorkdirIdx) -> &GlobalsDTPConnsStateMT {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => &self.dtp_conns_state_localnet,
+            workdirs::WORKDIR_IDX_DEVNET => &self.dtp_conns_state_devnet,
+            workdirs::WORKDIR_IDX_TESTNET => &self.dtp_conns_state_testnet,
+            workdirs::WORKDIR_IDX_MAINNET => &self.dtp_conns_state_mainnet,
+            _ => {
+                panic!("Invalid workdir_idx {}", workdir_idx)
+            }
+        }
+    }
+
+    pub fn dtp_conns_state_as_mut(
+        &mut self,
+        workdir_idx: WorkdirIdx,
+    ) -> Option<&mut GlobalsDTPConnsStateMT> {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_localnet),
+            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_devnet),
+            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_testnet),
+            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_mainnet),
+            _ => None,
+        }
+    }
+
+    pub fn dtp_conns_state_tx(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsDTPConnsStateTxMT> {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => Some(&self.dtp_conns_state_tx_localnet),
+            workdirs::WORKDIR_IDX_DEVNET => Some(&self.dtp_conns_state_tx_devnet),
+            workdirs::WORKDIR_IDX_TESTNET => Some(&self.dtp_conns_state_tx_testnet),
+            workdirs::WORKDIR_IDX_MAINNET => Some(&self.dtp_conns_state_tx_mainnet),
+            _ => None,
+        }
+    }
+
+    pub fn dtp_conns_state_tx_as_mut(
+        &mut self,
+        workdir_idx: WorkdirIdx,
+    ) -> Option<&mut GlobalsDTPConnsStateTxMT> {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_tx_localnet),
+            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_tx_devnet),
+            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_tx_testnet),
+            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_tx_mainnet),
+            _ => None,
+        }
+    }
+
+    pub fn dtp_conns_state_rx(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsDTPConnsStateRxMT> {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => Some(&self.dtp_conns_state_rx_localnet),
+            workdirs::WORKDIR_IDX_DEVNET => Some(&self.dtp_conns_state_rx_devnet),
+            workdirs::WORKDIR_IDX_TESTNET => Some(&self.dtp_conns_state_rx_testnet),
+            workdirs::WORKDIR_IDX_MAINNET => Some(&self.dtp_conns_state_rx_mainnet),
+            _ => None,
+        }
+    }
+
+    pub fn dtp_conns_state_rx_as_mut(
+        &mut self,
+        workdir_idx: WorkdirIdx,
+    ) -> Option<&mut GlobalsDTPConnsStateRxMT> {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_rx_localnet),
+            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_rx_devnet),
+            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_rx_testnet),
+            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_rx_mainnet),
             _ => None,
         }
     }
