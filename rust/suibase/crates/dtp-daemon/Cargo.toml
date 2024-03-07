@@ -57,17 +57,18 @@ uuid7.workspace = true
 # If you prefer the "typical" rust way of independently get the latest
 # crates remotely from git, then comment out the 'path' dependencies
 # and un-comment out the 'git' ones.
-sui-sdk = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
-sui-json-rpc-types = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
-sui-keys = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
-sui-types = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
-shared-crypto = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
+#sui-sdk = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
+#sui-json-rpc-types = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
+#sui-keys = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
+#sui-types = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+#shared-crypto = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
 
 # Comment-out these "git" dependencies when using the above "path" dependencies.
-#sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
-#sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-json-rpc-types" }
-#sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-keys" }
-#sui-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-types" }
+sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "testnet" }
+sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-json-rpc-types" }
+sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-keys" }
+sui-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-types" }
+shared-crypto = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "shared-crypto" }
 
 #sui-sdk.workspace = true
 #sui-json-rpc-types.workspace = true
