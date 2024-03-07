@@ -1307,7 +1307,11 @@ adjust_sui_aliases() {
   fi
 
   # Declare a counter for each keyScheme type
-  declare -A counter
+  # This is a hard-coded hashmap from key to an integer (counter).
+  # First declare an array of key : "ed25519", "secp256k1", "secp256r1"
+  local _KEY_SCHEME_ARRAY=("ed25519" "secp256k1" "secp256r1")
+  # Now declare an array of counter : 0, 0, 0
+  local _COUNTER_ARRAY=(0 0 0)
 
   local _ALIAS
   local _PUB_64_KEY
@@ -1399,13 +1403,22 @@ adjust_sui_aliases() {
         for value in "${recovery[@]}"; do
           if [[ $value == *$_SUI_ADDRESS* ]]; then
             # echo "Found $_SUI_ADDRESS in recovery.txt"
-            # Increment the counter for this keyScheme type
-            ((counter[$_KEY_SCHEME]++))
+            # Increment the counter for this $_KEY_SCHEME
+            # Iterate _KEY_SCHEME_ARRAY to find the index to increment in _COUNTER_ARRAY
+            local _KEY_IDX=0
+            for ((idx = 0; idx < ${#_KEY_SCHEME_ARRAY[@]}; idx++)); do
+              if [ "${_KEY_SCHEME_ARRAY[$idx]}" = "$_KEY_SCHEME" ]; then
+                # Increment the counter for this $_KEY_SCHEME
+                ((_COUNTER_ARRAY[idx]++))
+                _KEY_IDX=$idx
+                break
+              fi
+            done
 
-            if [[ -n ${counter[$_KEY_SCHEME]} && ${counter[$_KEY_SCHEME]} =~ ^[0-9]+$ ]]; then
+            if [[ -n ${_COUNTER_ARRAY[$_KEY_IDX]} && ${_COUNTER_ARRAY[$_KEY_IDX]} =~ ^[0-9]+$ ]]; then
               # Replace the alias field with a deterministic name in the temporary file.
               local _SEARCH_STRING="$_ALIAS"
-              local _ALIAS_NUMBER=$((1 + _AUTO_CREATED_PER_SCHEME - ${counter[$_KEY_SCHEME]}))
+              local _ALIAS_NUMBER=$((1 + _AUTO_CREATED_PER_SCHEME - ${_COUNTER_ARRAY[$_KEY_IDX]}))
               local _REPLACE_STRING="sb-$_ALIAS_NUMBER-$_KEY_SCHEME"
               sed -i.bak -e "s/$_SEARCH_STRING/$_REPLACE_STRING/g" \
                 "$_TEMP_FILE" &&
