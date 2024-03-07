@@ -1292,7 +1292,13 @@ adjust_sui_aliases() {
     return
   fi
 
-  readarray -t recovery <"$_RECOVERY_TXT"
+  # Do the equivalent of readarray.
+  # https://stackoverflow.com/questions/30988586/creating-an-array-from-a-text-file-in-bash
+  # (Note: readarray is not available on older bash/MacOS)
+  recovery=()
+  while IFS= read -r line || [[ "$line" ]]; do
+    recovery+=("$line")
+  done <"$_RECOVERY_TXT"
 
   # Sanity test, and just do nothing if did not work (the binary might not
   # be built, in which case the user will likely try again).
