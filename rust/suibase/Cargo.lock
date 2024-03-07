@@ -1755,6 +1755,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml 0.9.27",
+ "shared-crypto",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-sdk",

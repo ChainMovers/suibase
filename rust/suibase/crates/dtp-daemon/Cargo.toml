@@ -49,10 +49,30 @@ tower-http.workspace = true
 uuid.workspace = true
 uuid7.workspace = true
 
-sui-sdk.workspace = true
-sui-json-rpc-types.workspace = true
-sui-keys.workspace = true
-sui-types.workspace = true
+# Built is done using the same workdir made active with suibase 'asui'.
+#
+# This help keeping your selected network, app and SDKs and whatnot
+# use the *same* binary versions.
+#
+# If you prefer the "typical" rust way of independently get the latest
+# crates remotely from git, then comment out the 'path' dependencies
+# and un-comment out the 'git' ones.
+sui-sdk = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-sdk/" }
+sui-json-rpc-types = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-json-rpc-types/" }
+sui-keys = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-keys/" }
+sui-types = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+shared-crypto = { path = "../../../../../suibase/workdirs/active/sui-repo/crates/shared-crypto/" }
+
+# Comment-out these "git" dependencies when using the above "path" dependencies.
+#sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
+#sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-json-rpc-types" }
+#sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-keys" }
+#sui-types = { git = "https://github.com/MystenLabs/sui", branch = "devnet", package = "sui-types" }
+
+#sui-sdk.workspace = true
+#sui-json-rpc-types.workspace = true
+#sui-keys.workspace = true
+#sui-types.workspace = true
 
 [dev-dependencies]
 # serial_test.workspace = true
