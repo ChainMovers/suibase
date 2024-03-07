@@ -30,7 +30,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use super::package_tracking::{PackageTracking, PackageTrackingState};
+use common::workers::{PackageTracking, PackageTrackingState};
 
 #[derive(Clone)]
 pub struct WebSocketWorkerIOParams {
@@ -103,7 +103,7 @@ struct WebSocketWorkerIOThread {
     thread_name: String,
     params: WebSocketWorkerIOParams,
 
-    // Key is the package_id.
+    // Key is the object address.
     packages: HashMap<String, PackageTracking>,
 
     websocket: WebSocketIOManagement,
@@ -830,17 +830,40 @@ impl WebSocketWorkerIOThread {
     async fn open_websocket(&mut self) -> bool {
         // Open a websocket connection to the server for this workdir.
 
-        // TODO Change this to the actual server URL from the config.
-        // For now, use hard coded Mysten Labs servers...
-        let socket_url = match self.params.workdir_idx {
-            WORKDIR_IDX_LOCALNET => "ws://0.0.0.0:9000",
-            WORKDIR_IDX_DEVNET => "wss://fullnode.devnet.sui.io:443",
-            WORKDIR_IDX_TESTNET => "wss://fullnode.testnet.sui.io:443",
-            WORKDIR_IDX_MAINNET => "wss://fullnode.mainnet.sui.io:443",
-            _ => {
-                log::error!("Unexpected workdir_idx {:?}", self.params.workdir_idx);
-                return false;
+        // For now, the only tested servers for websocket are Shinami 
+        // and Mysten Labs.
+
+        // TODO: Make this better config driven.
+
+        // Get the InputPort config from the globals.proxy (read-only).
+        let globals_read_guard = self.params.globals.proxy.read().await;
+        let globals = &*globals_read_guard;
+        let input_ports = &globals.input_ports;
+
+        // Iterate input_ports to find a matching workdir_idx.
+        let configured_rpc = input_ports.iter().find_map(|x| {
+            let (_, input_port) = x;
+            if input_port.workdir_idx() == self.params.workdir_idx {
+                input_port.find_target_server_rpc_by_alias("shinami.com")
+            } else {
+                None
             }
+        });
+
+        let socket_url = if let Some(configured_rpc) = configured_rpc {
+            configured_rpc
+        } else {
+            let default_rpc = match self.params.workdir_idx {
+                WORKDIR_IDX_LOCALNET => "ws://0.0.0.0:9000",
+                WORKDIR_IDX_DEVNET => "wss://fullnode.devnet.sui.io:443",
+                WORKDIR_IDX_TESTNET => "wss://fullnode.testnet.sui.io:443",
+                WORKDIR_IDX_MAINNET => "wss://fullnode.mainnet.sui.io:443",
+                _ => {
+                    log::error!("Unexpected workdir_idx {:?}", self.params.workdir_idx);
+                    return false;
+                }
+            };
+            default_rpc.to_string()
         };
 
         match connect_async(socket_url).await {

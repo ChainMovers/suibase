@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::workers::PackageTrackingState;
+use common::workers::PackageTrackingState;
 
 // Defines the JSON-RPC API.
 //

@@ -26,7 +26,8 @@ use crate::{
 };
 
 use common::basic_types::{
-    self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
+    self, AutoSizeVecMapVec, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable,
+    WorkdirIdx,
 };
 
 use anyhow::Result;
@@ -80,11 +81,19 @@ impl WebSocketWorker {
     }
 }
 
+#[derive(Default)]
+struct WebSocketSubThread {
+    is_running: bool,
+    channel: Option<Sender<GenericChannelMsg>>,
+}
+
 struct WebSocketThread {
     name: String,
     params: WebSocketWorkerParams,
-    ws_workers_channel: Vec<Sender<GenericChannelMsg>>,
-    db_worker_channel: Option<Sender<GenericChannelMsg>>,
+    worker_io: Option<WebSocketSubThread>,
+    db_worker: Option<WebSocketSubThread>,
+    workers_tx: AutoSizeVecMapVec<WebSocketSubThread>,
+    workers_rx: AutoSizeVecMapVec<WebSocketSubThread>,
 }
 
 #[async_trait]
@@ -93,28 +102,38 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
         Self {
             name,
             params,
-            ws_workers_channel: Vec::new(),
-            db_worker_channel: None,
+            worker_io: None,
+            db_worker: None,
+            workers_tx: AutoSizeVecMapVec::new(),
+            workers_rx: AutoSizeVecMapVec::new(),
         }
     }
 
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
         log::info!("started for {}", self.params.workdir_name);
 
-        // Start a child websocket_worker thread (in future, more than one might be started).
-        let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(1000);
-        let ws_worker_params = WebSocketWorkerIOParams::new(
-            self.params.globals.clone(),
-            worker_rx,
-            worker_tx.clone(),
-            self.params.event_tx.clone(),
-            self.params.workdir_idx,
-        );
-        let ws_worker = WebSocketWorkerIO::new(ws_worker_params);
-        subsys.start(SubsystemBuilder::new("ws-worker", |a| ws_worker.run(a)));
-        self.ws_workers_channel.push(worker_tx);
+        // For now, just start a single instance of each SubThread.
+
+        // Start a child io thread. This is the actual WebSocket to the outside world.
+        {
+            let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(1000);
+            let ws_worker_params = WebSocketWorkerIOParams::new(
+                self.params.globals.clone(),
+                worker_rx,
+                worker_tx.clone(),
+                self.params.event_tx.clone(),
+                self.params.workdir_idx,
+            );
+            let ws_worker = WebSocketWorkerIO::new(ws_worker_params);
+            subsys.start(SubsystemBuilder::new("ws-worker", |a| ws_worker.run(a)));
+            self.worker_io = Some(WebSocketSubThread {
+                is_running: true,
+                channel: Some(worker_tx),
+            });
+        }
 
         // Start a single child db_worker thread.
+        /* Not applicable for now
         let (db_worker_tx, db_worker_rx) = tokio::sync::mpsc::channel(1000);
         let db_worker_params = DBWorkerParams::new(
             self.params.globals.clone(),
@@ -136,28 +155,19 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
                 log::info!("normal thread exit (1)");
                 Ok(())
             }
-        }
+        }*/
+        Ok(())
     }
 }
 
 impl WebSocketThread {
     async fn forward_to_children(&mut self, msg: GenericChannelMsg) {
-        // Forward the message to each self.ws_workers_channel.
-        for tx in &self.ws_workers_channel {
-            let forward_msg = GenericChannelMsg {
-                event_id: msg.event_id,
-                command: msg.command.clone(),
-                params: msg.params.clone(),
-                data_json: msg.data_json.clone(),
-                workdir_idx: msg.workdir_idx,
-                resp_channel: None,
-            };
-            let _ = tx.send(forward_msg).await;
-        }
-        // Forward the message to the single self.db_worker_channel.
-        self.forward_to_db_worker(msg).await;
+        // TODO Forward to all children.
+        // Forward the message to the worker_io
+        self.forward_to_worker_io(msg).await;
     }
 
+    /*
     async fn forward_to_db_worker(&mut self, msg: GenericChannelMsg) {
         // Forward the message to the single self.db_worker_channel.
         if let Some(tx) = &self.db_worker_channel {
@@ -171,6 +181,23 @@ impl WebSocketThread {
             };
             let _ = tx.send(forward_msg).await;
         }
+    }*/
+
+    async fn forward_to_worker_io(&mut self, msg: GenericChannelMsg) {
+        // Forward the message to the single self.worker_io.channel.
+        if let Some(worker) = &self.worker_io {
+            if let Some(tx) = &worker.channel {
+                let forward_msg = GenericChannelMsg {
+                    event_id: msg.event_id,
+                    command: msg.command,
+                    params: msg.params,
+                    data_json: msg.data_json,
+                    workdir_idx: msg.workdir_idx,
+                    resp_channel: msg.resp_channel,
+                };
+                let _ = tx.send(forward_msg).await;
+            }
+        }
     }
 
     async fn process_audit_msg(&mut self, msg: GenericChannelMsg) {
@@ -181,10 +208,9 @@ impl WebSocketThread {
         self.forward_to_children(msg).await;
     }
 
-    async fn process_add_sui_event(&mut self, msg: GenericChannelMsg) {
-        // TODO Dedup logic to be done here, for now just forward everything since
-        //      suibase currently support only a single websocket worker per workdir.
-        self.forward_to_db_worker(msg).await;
+    async fn process_dtp_open_conn(&mut self, msg: GenericChannelMsg) {
+        // TODO Forward instead to a workers_tx once implemented.
+        self.forward_to_worker_io(msg).await;
     }
 
     async fn event_loop(&mut self, subsys: &SubsystemHandle) {
@@ -205,8 +231,8 @@ impl WebSocketThread {
                     }
                     basic_types::EVENT_EXEC => {
                         if let Some(command) = msg.command() {
-                            if command == "add_sui_event" {
-                                self.process_add_sui_event(msg).await;
+                            if command == "dtp_open_conn" {
+                                self.process_dtp_open_conn(msg).await;
                             } else {
                                 log::error!(
                                     "Received a EVENT_EXEC message with unexpected command {}",

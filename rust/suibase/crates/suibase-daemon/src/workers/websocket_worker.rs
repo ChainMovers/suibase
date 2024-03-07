@@ -30,7 +30,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use super::package_tracking::{PackageTracking, PackageTrackingState};
+use common::workers::{PackageTracking, PackageTrackingState};
 
 #[derive(Clone)]
 pub struct WebSocketWorkerParams {

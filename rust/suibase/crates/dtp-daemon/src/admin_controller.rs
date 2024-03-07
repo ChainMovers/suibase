@@ -53,8 +53,8 @@ struct WorkdirTracking {
     shell_worker_tx: Option<GenericTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
 
-    events_writer_worker_tx: Option<GenericTx>,
-    events_writer_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
+    websocket_worker_tx: Option<GenericTx>,
+    websocket_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
 }
 
 impl std::fmt::Debug for WorkdirTracking {
@@ -156,10 +156,10 @@ impl AdminController {
 
         // Forward an audit message to every events writer.
         for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
-            if wd_tracking.events_writer_worker_tx.is_none() {
+            if wd_tracking.websocket_worker_tx.is_none() {
                 continue;
             }
-            let worker_tx = wd_tracking.events_writer_worker_tx.as_ref().unwrap();
+            let worker_tx = wd_tracking.websocket_worker_tx.as_ref().unwrap();
 
             let mut worker_msg = GenericChannelMsg::new();
             worker_msg.event_id = EVENT_AUDIT;
@@ -192,7 +192,7 @@ impl AdminController {
         // Forward an update message to the related workdir events writer.
         let wd_tracking = self.wd_tracking.get_mut(msg_workdir_idx);
 
-        if let Some(worker_tx) = wd_tracking.events_writer_worker_tx.as_ref() {
+        if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
             let mut worker_msg = GenericChannelMsg::new();
             worker_msg.event_id = EVENT_UPDATE;
             worker_msg.workdir_idx = Some(msg_workdir_idx);
@@ -459,26 +459,33 @@ impl AdminController {
             }
         }*/
 
-        // As needed, start an events_writer_worker for this workdir.
-        if workdir_config.is_user_request_start()
-            && wd_tracking.events_writer_worker_handle.is_none()
-        {
-            let (events_writer_worker_tx, events_writer_worker_rx) =
-                tokio::sync::mpsc::channel(100);
+        // As needed, start a WebSocketWorker for this workdir.
+        if wd_tracking.websocket_worker_handle.is_none() {
+            if workdir_config.is_user_request_start() {
+                let (websocket_worker_tx, websocket_worker_rx) = tokio::sync::mpsc::channel(100);
 
-            let events_writer_worker_params = WebSocketWorkerParams::new(
-                self.globals.clone(),
-                events_writer_worker_rx,
-                events_writer_worker_tx.clone(),
-                workdir_idx,
-            );
-            wd_tracking.events_writer_worker_tx = Some(events_writer_worker_tx);
+                let websocket_worker_params = WebSocketWorkerParams::new(
+                    self.globals.clone(),
+                    websocket_worker_rx,
+                    websocket_worker_tx.clone(),
+                    workdir_idx,
+                );
+                wd_tracking.websocket_worker_tx = Some(websocket_worker_tx);
 
-            let events_writer_worker = WebSocketWorker::new(events_writer_worker_params);
-            let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
-                events_writer_worker.run(a)
-            }));
-            wd_tracking.events_writer_worker_handle = Some(nested);
+                let events_writer_worker = WebSocketWorker::new(websocket_worker_params);
+                let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
+                    events_writer_worker.run(a)
+                }));
+                wd_tracking.websocket_worker_handle = Some(nested);
+            }
+        } else {
+            // Send EVENT_UPDATE to the WebSocketWorker (already started).
+            if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
+                let mut worker_msg = GenericChannelMsg::new();
+                worker_msg.event_id = EVENT_UPDATE;
+                worker_msg.workdir_idx = Some(workdir_idx);
+                worker_tx.send(worker_msg).await.unwrap();
+            }
         }
 
         // Remember the changes that were applied.
