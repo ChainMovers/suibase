@@ -1629,6 +1629,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-where"
+version = "1.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+dependencies = [
+ "proc-macro2 1.0.69",
+ "quote 1.0.33",
+ "syn 2.0.38",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1727,7 +1738,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
-name = "dtp-daemon"
+name = "dtp-core"
 version = "0.0.5"
 dependencies = [
  "anyhow",
@@ -1736,8 +1747,8 @@ dependencies = [
  "chrono",
  "clap 3.2.25",
  "colored",
- "common",
  "data-encoding",
+ "derive-where",
  "env_logger",
  "futures",
  "home",
@@ -1761,6 +1772,97 @@ dependencies = [
  "sui-keys",
  "sui-sdk",
  "sui-types",
+ "thiserror",
+ "tokio",
+ "tokio-graceful-shutdown",
+ "tokio-tungstenite 0.21.0",
+ "toml_edit 0.20.7",
+ "tower",
+ "tower-http",
+ "twox-hash",
+ "uuid",
+ "uuid7",
+]
+
+[[package]]
+name = "dtp-daemon"
+version = "0.0.5"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bitflags 2.4.1",
+ "chrono",
+ "clap 3.2.25",
+ "colored",
+ "common",
+ "data-encoding",
+ "dtp-sdk",
+ "env_logger",
+ "futures",
+ "home",
+ "hyper",
+ "jsonrpsee",
+ "jsonrpsee-proc-macros",
+ "log",
+ "md5",
+ "memchr",
+ "mime",
+ "notify",
+ "reqwest",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serde_yaml 0.9.27",
+ "shared-crypto",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-sdk",
+ "sui-types",
+ "thiserror",
+ "tokio",
+ "tokio-graceful-shutdown",
+ "tokio-tungstenite 0.21.0",
+ "toml_edit 0.20.7",
+ "tower",
+ "tower-http",
+ "twox-hash",
+ "uuid",
+ "uuid7",
+]
+
+[[package]]
+name = "dtp-sdk"
+version = "0.0.5"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bitflags 2.4.1",
+ "chrono",
+ "clap 3.2.25",
+ "colored",
+ "data-encoding",
+ "dtp-core",
+ "env_logger",
+ "futures",
+ "home",
+ "hyper",
+ "jsonrpsee",
+ "jsonrpsee-proc-macros",
+ "log",
+ "md5",
+ "memchr",
+ "mime",
+ "notify",
+ "reqwest",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "serde_yaml 0.9.27",
+ "sui-sdk",
  "thiserror",
  "tokio",
  "tokio-graceful-shutdown",

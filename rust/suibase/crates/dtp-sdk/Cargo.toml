@@ -1,11 +1,10 @@
 [package]
-name = "dtp-daemon"
+name = "dtp-sdk"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-common = { path = "../common" }
-dtp-sdk = { path = "../dtp-sdk" }
+dtp-core = { path = "../dtp-core" }
 log = "0.4.0"
 env_logger = "0.10"
 home = "0.5.5"
@@ -66,19 +65,11 @@ uuid7.workspace = true
 
 # Comment-out these "git" dependencies when using the above "path" dependencies.
 sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "testnet" }
-sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-json-rpc-types" }
-sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-keys" }
-sui-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-types" }
-shared-crypto = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "shared-crypto" }
-
-#sui-sdk.workspace = true
-#sui-json-rpc-types.workspace = true
-#sui-keys.workspace = true
-#sui-types.workspace = true
+#sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-json-rpc-types" }
+#sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-keys" }
+#sui-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-types" }
+#shared-crypto = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "shared-crypto" }
 
 [dev-dependencies]
-# serial_test.workspace = true
-# cargo-husky.workspace = true
 env_logger = "0.10"
 log = "0.4"
-

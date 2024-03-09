@@ -1,11 +1,9 @@
 [package]
-name = "dtp-daemon"
+name = "dtp-core"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-common = { path = "../common" }
-dtp-sdk = { path = "../dtp-sdk" }
 log = "0.4.0"
 env_logger = "0.10"
 home = "0.5.5"
@@ -71,14 +69,8 @@ sui-keys = { git = "https://github.com/MystenLabs/sui", branch = "testnet", pack
 sui-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-types" }
 shared-crypto = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "shared-crypto" }
 
-#sui-sdk.workspace = true
-#sui-json-rpc-types.workspace = true
-#sui-keys.workspace = true
-#sui-types.workspace = true
+derive-where = "1.2.7"
 
 [dev-dependencies]
-# serial_test.workspace = true
-# cargo-husky.workspace = true
 env_logger = "0.10"
 log = "0.4"
-
