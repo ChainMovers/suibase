@@ -1,6 +1,6 @@
 use common::basic_types::*;
 
-use crate::shared_types::Link;
+use common::shared_types::Link;
 use crate::shared_types::ServerStats;
 
 #[derive(Debug)]

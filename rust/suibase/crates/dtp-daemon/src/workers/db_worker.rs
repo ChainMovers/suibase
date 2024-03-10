@@ -10,7 +10,8 @@
 
 use std::sync::Arc;
 
-use crate::shared_types::{self, Globals, GlobalsWorkdirsST, Workdir};
+use crate::shared_types::{self, Globals};
+use common::shared_types::{GlobalsWorkdirsST, Workdir};
 
 use common::basic_types::{
     self, AutoThread, DBTable, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
@@ -642,7 +643,7 @@ impl DBWorkerThread {
                     self.params.workdir_idx
                 );
             }
-            shared_types::WORKDIRS_KEYS[workdir_idx as usize]
+            common::shared_types::WORKDIRS_KEYS[workdir_idx as usize]
         } else {
             log::error!("Unexpected workdir_idx {:?}", msg);
             return;
@@ -854,7 +855,7 @@ impl DBWorkerThread {
     async fn open_db(&mut self) -> bool {
         // Get copy of latest workdir info from globals.
         let workdir =
-            GlobalsWorkdirsST::get_workdir_by_idx(&self.params.globals, self.params.workdir_idx)
+            self.params.globals.get_workdir_by_idx(self.params.workdir_idx)
                 .await;
         if workdir.is_none() {
             log::error!(
@@ -896,7 +897,7 @@ impl DBWorkerThread {
         }
 
         // Create tables that exists for each workdir.
-        for workdir_name in shared_types::WORKDIRS_KEYS.iter() {
+        for workdir_name in common::shared_types::WORKDIRS_KEYS.iter() {
             if let Err(e) =
                 DBSuibaseConfig::create_table(&conn, workdir_name.to_string(), None, None)
             {

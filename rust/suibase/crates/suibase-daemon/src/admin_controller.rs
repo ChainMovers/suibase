@@ -4,7 +4,7 @@ use common::basic_types::*;
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::shared_types::{Globals, InputPort, WorkdirProxyConfig};
+use crate::shared_types::{Globals, InputPort, WorkdirUserConfig};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
 use crate::workers::{EventsWriterWorker, EventsWriterWorkerParams};
@@ -49,7 +49,7 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 
 #[derive(Default)]
 struct WorkdirTracking {
-    last_read_config: Option<WorkdirProxyConfig>,
+    last_read_config: Option<WorkdirUserConfig>,
 
     shell_worker_tx: Option<GenericTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
@@ -263,7 +263,7 @@ impl AdminController {
             .unwrap();
     }
 
-    fn apply_workdir_config(input_port: &mut InputPort, workdir_config: &WorkdirProxyConfig) {
+    fn apply_workdir_config(input_port: &mut InputPort, workdir_config: &WorkdirUserConfig) {
         let mut at_least_one_change = false;
         if input_port.is_proxy_enabled() != workdir_config.is_proxy_enabled() {
             input_port.set_proxy_enabled(workdir_config.is_proxy_enabled());
@@ -329,7 +329,7 @@ impl AdminController {
         let path = msg.data_string().unwrap();
 
         // Load the configuration.
-        let mut workdir_config = WorkdirProxyConfig::new();
+        let mut workdir_config = WorkdirUserConfig::new();
         let workdir_idx: u8;
         let workdir_name: String;
         {
@@ -566,7 +566,7 @@ fn test_load_config_from_suibase_default() {
     assert!(workdir_search_result.is_some());
     let (_workdir_idx, workdir) = workdir_search_result.unwrap();
 
-    let mut config = WorkdirProxyConfig::new();
+    let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(
         &workdir
             .suibase_yaml_default()

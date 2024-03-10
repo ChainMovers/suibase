@@ -19,11 +19,16 @@ use std::sync::Arc;
 
 use crate::api::{Versioned, VersionsResponse, WorkdirStatusResponse};
 use crate::shared_types::InputPort;
-use common::basic_types::{AutoSizeVec, ManagedVec, WorkdirIdx};
+use common::basic_types::{ManagedVec, WorkdirIdx};
 
 use super::{
-    workdirs, GlobalsDTPConnsStateRxST, GlobalsDTPConnsStateST, GlobalsDTPConnsStateTxST,
-    GlobalsEventsDataST, GlobalsPackagesConfigST, GlobalsWorkdirsST,
+    GlobalsDTPConnsStateRxST, GlobalsDTPConnsStateST, GlobalsDTPConnsStateTxST,
+    GlobalsEventsDataST, GlobalsPackagesConfigST,
+};
+
+use common::shared_types::{
+    GlobalsWorkdirsST, Workdir, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
+    WORKDIR_IDX_TESTNET,
 };
 
 #[derive(Debug)]
@@ -73,14 +78,6 @@ impl std::default::Default for GlobalsWorkdirStatusST {
     fn default() -> Self {
         Self::new()
     }
-}
-
-#[derive(Debug, Default)]
-pub struct GlobalsWorkdirConfigST {
-    // These are variables that rarely changes and
-    // are controlled by the user (suibase.yaml
-    // files, workdir CLI operations).
-    pub precompiled_bin: bool,
 }
 
 #[derive(Debug)]
@@ -136,28 +133,15 @@ impl Default for GlobalsAPIMutexST {
 }
 
 #[derive(Debug)]
-pub struct GlobalsConfigST {
-    // These are variables that rarely changes and
-    // are controlled by the user (suibase.yaml
-    // files, workdir CLI operations).
-    pub daemon_ip: String,
-    pub daemon_port: u16,
+pub struct GlobalsWorkdirConfigST {}
 
-    // Uses same index as the ManagedVec WorkdirsST::workdirs
-    pub workdirs: AutoSizeVec<GlobalsWorkdirConfigST>,
-}
-
-impl GlobalsConfigST {
+impl GlobalsWorkdirConfigST {
     pub fn new() -> Self {
-        Self {
-            daemon_ip: "0.0.0.0".to_string(),
-            daemon_port: 44398,
-            workdirs: AutoSizeVec::new(),
-        }
+        Self {}
     }
 }
 
-impl Default for GlobalsConfigST {
+impl Default for GlobalsWorkdirConfigST {
     fn default() -> Self {
         Self::new()
     }
@@ -173,7 +157,7 @@ impl Default for GlobalsConfigST {
 
 pub type GlobalsProxyMT = Arc<tokio::sync::RwLock<GlobalsProxyST>>;
 pub type GlobalsWorkdirStatusMT = Arc<tokio::sync::RwLock<GlobalsWorkdirStatusST>>;
-pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsConfigST>>;
+pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsWorkdirConfigST>>;
 pub type GlobalsPackagesConfigMT = Arc<tokio::sync::RwLock<GlobalsPackagesConfigST>>;
 pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
 pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
@@ -199,10 +183,14 @@ pub struct Globals {
     // proxy server health status and various stats
     pub proxy: GlobalsProxyMT,
 
-    // Configuration that rarely changes driven by suibase.yaml files (e.g. port of this daemon).
-    pub config: GlobalsConfigMT,
+    // Configuration driven by the user config (suibase.yaml) and actions (e.g. localnet start/stop).
+    pub config_localnet: GlobalsConfigMT,
+    pub config_devnet: GlobalsConfigMT,
+    pub config_testnet: GlobalsConfigMT,
+    pub config_mainnet: GlobalsConfigMT,
 
-    // All workdirs path locations and user controlled state (e.g. is localnet started by the user?).
+    // All path locations, plus some user common config that applies to all workdirs (e.g. port of this daemon).
+    // These config are *rarely* changed for the lifetime of the process.
     pub workdirs: GlobalsWorkdirsMT,
 
     // All workdirs status as presented on the UI (e.g. which process are running, is the localnet down?)
@@ -247,7 +235,10 @@ impl Globals {
     pub fn new() -> Self {
         Self {
             proxy: Arc::new(tokio::sync::RwLock::new(GlobalsProxyST::new())),
-            config: Arc::new(tokio::sync::RwLock::new(GlobalsConfigST::new())),
+            config_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
+            config_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
+            config_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
+            config_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
             workdirs: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirsST::new())),
             status_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
@@ -301,23 +292,34 @@ impl Globals {
         }
     }
 
+    pub fn get_config(&self, workdir_idx: WorkdirIdx) -> &GlobalsConfigMT {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            WORKDIR_IDX_LOCALNET => &self.config_localnet,
+            WORKDIR_IDX_DEVNET => &self.config_devnet,
+            WORKDIR_IDX_TESTNET => &self.config_testnet,
+            WORKDIR_IDX_MAINNET => &self.config_mainnet,
+            _ => panic!("Invalid workdir_idx {}", workdir_idx),
+        }
+    }
+
     pub fn get_status(&self, workdir_idx: WorkdirIdx) -> &GlobalsWorkdirStatusMT {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => &self.status_localnet,
-            workdirs::WORKDIR_IDX_DEVNET => &self.status_devnet,
-            workdirs::WORKDIR_IDX_TESTNET => &self.status_testnet,
-            workdirs::WORKDIR_IDX_MAINNET => &self.status_mainnet,
+            WORKDIR_IDX_LOCALNET => &self.status_localnet,
+            WORKDIR_IDX_DEVNET => &self.status_devnet,
+            WORKDIR_IDX_TESTNET => &self.status_testnet,
+            WORKDIR_IDX_MAINNET => &self.status_mainnet,
             _ => panic!("Invalid workdir_idx {}", workdir_idx),
         }
     }
 
     pub fn get_api_mutex(&self, workdir_idx: WorkdirIdx) -> &GlobalsAPIMutexMT {
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => &self.api_mutex_localnet,
-            workdirs::WORKDIR_IDX_DEVNET => &self.api_mutex_devnet,
-            workdirs::WORKDIR_IDX_TESTNET => &self.api_mutex_testnet,
-            workdirs::WORKDIR_IDX_MAINNET => &self.api_mutex_mainnet,
+            WORKDIR_IDX_LOCALNET => &self.api_mutex_localnet,
+            WORKDIR_IDX_DEVNET => &self.api_mutex_devnet,
+            WORKDIR_IDX_TESTNET => &self.api_mutex_testnet,
+            WORKDIR_IDX_MAINNET => &self.api_mutex_mainnet,
             _ => {
                 panic!("Invalid workdir_idx {}", workdir_idx)
             }
@@ -327,10 +329,10 @@ impl Globals {
     pub fn events_data(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsEventsDataMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&self.events_data_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&self.events_data_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&self.events_data_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&self.events_data_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&self.events_data_localnet),
+            WORKDIR_IDX_DEVNET => Some(&self.events_data_devnet),
+            WORKDIR_IDX_TESTNET => Some(&self.events_data_testnet),
+            WORKDIR_IDX_MAINNET => Some(&self.events_data_mainnet),
             _ => None,
         }
     }
@@ -340,10 +342,10 @@ impl Globals {
     ) -> Option<&mut GlobalsEventsDataMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.events_data_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.events_data_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.events_data_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.events_data_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&mut self.events_data_localnet),
+            WORKDIR_IDX_DEVNET => Some(&mut self.events_data_devnet),
+            WORKDIR_IDX_TESTNET => Some(&mut self.events_data_testnet),
+            WORKDIR_IDX_MAINNET => Some(&mut self.events_data_mainnet),
             _ => None,
         }
     }
@@ -351,10 +353,10 @@ impl Globals {
     pub fn dtp_conns_state(&self, workdir_idx: WorkdirIdx) -> &GlobalsDTPConnsStateMT {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => &self.dtp_conns_state_localnet,
-            workdirs::WORKDIR_IDX_DEVNET => &self.dtp_conns_state_devnet,
-            workdirs::WORKDIR_IDX_TESTNET => &self.dtp_conns_state_testnet,
-            workdirs::WORKDIR_IDX_MAINNET => &self.dtp_conns_state_mainnet,
+            WORKDIR_IDX_LOCALNET => &self.dtp_conns_state_localnet,
+            WORKDIR_IDX_DEVNET => &self.dtp_conns_state_devnet,
+            WORKDIR_IDX_TESTNET => &self.dtp_conns_state_testnet,
+            WORKDIR_IDX_MAINNET => &self.dtp_conns_state_mainnet,
             _ => {
                 panic!("Invalid workdir_idx {}", workdir_idx)
             }
@@ -367,10 +369,10 @@ impl Globals {
     ) -> Option<&mut GlobalsDTPConnsStateMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_localnet),
+            WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_devnet),
+            WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_testnet),
+            WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_mainnet),
             _ => None,
         }
     }
@@ -378,10 +380,10 @@ impl Globals {
     pub fn dtp_conns_state_tx(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsDTPConnsStateTxMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&self.dtp_conns_state_tx_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&self.dtp_conns_state_tx_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&self.dtp_conns_state_tx_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&self.dtp_conns_state_tx_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&self.dtp_conns_state_tx_localnet),
+            WORKDIR_IDX_DEVNET => Some(&self.dtp_conns_state_tx_devnet),
+            WORKDIR_IDX_TESTNET => Some(&self.dtp_conns_state_tx_testnet),
+            WORKDIR_IDX_MAINNET => Some(&self.dtp_conns_state_tx_mainnet),
             _ => None,
         }
     }
@@ -392,10 +394,10 @@ impl Globals {
     ) -> Option<&mut GlobalsDTPConnsStateTxMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_tx_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_tx_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_tx_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_tx_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_tx_localnet),
+            WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_tx_devnet),
+            WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_tx_testnet),
+            WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_tx_mainnet),
             _ => None,
         }
     }
@@ -403,10 +405,10 @@ impl Globals {
     pub fn dtp_conns_state_rx(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsDTPConnsStateRxMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&self.dtp_conns_state_rx_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&self.dtp_conns_state_rx_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&self.dtp_conns_state_rx_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&self.dtp_conns_state_rx_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&self.dtp_conns_state_rx_localnet),
+            WORKDIR_IDX_DEVNET => Some(&self.dtp_conns_state_rx_devnet),
+            WORKDIR_IDX_TESTNET => Some(&self.dtp_conns_state_rx_testnet),
+            WORKDIR_IDX_MAINNET => Some(&self.dtp_conns_state_rx_mainnet),
             _ => None,
         }
     }
@@ -417,12 +419,44 @@ impl Globals {
     ) -> Option<&mut GlobalsDTPConnsStateRxMT> {
         // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_rx_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_rx_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_rx_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_rx_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&mut self.dtp_conns_state_rx_localnet),
+            WORKDIR_IDX_DEVNET => Some(&mut self.dtp_conns_state_rx_devnet),
+            WORKDIR_IDX_TESTNET => Some(&mut self.dtp_conns_state_rx_testnet),
+            WORKDIR_IDX_MAINNET => Some(&mut self.dtp_conns_state_rx_mainnet),
             _ => None,
         }
+    }
+
+    // Utility that returns the workdir_idx from the globals
+    // using an exact workdir_name.
+    //
+    // This is a multi-thread safe call (will get the proper
+    // lock on the globals).
+    //
+    // This is a relatively costly call, use wisely.
+    pub async fn get_workdir_idx_by_name(&self, workdir_name: &String) -> Option<WorkdirIdx> {
+        let workdirs_guard = self.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        for (workdir_idx, workdir) in workdirs_vec.iter() {
+            if workdir.name() == workdir_name {
+                return Some(workdir_idx);
+            }
+        }
+        None
+    }
+
+    // Utility that return a clone of the global Workdir for a given workdir_idx.
+    // Multi-thread safe.
+    // This is a relatively costly call, use wisely.
+    pub async fn get_workdir_by_idx(&self, workdir_idx: WorkdirIdx) -> Option<Workdir> {
+        let workdirs_guard = self.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        if let Some(workdir) = workdirs_vec.get(workdir_idx) {
+            return Some(workdir.clone());
+        }
+        None
     }
 }
 

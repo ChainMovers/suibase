@@ -27,7 +27,6 @@ use dtp_core::{
 };
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Host {
     id: ObjectID,
@@ -39,6 +38,7 @@ impl Host {
     }
 }
 
+#[derive(Debug)]
 pub struct DTP {
     netmgr: NetworkManager, // Implementation hidden in dtp-core.
 }

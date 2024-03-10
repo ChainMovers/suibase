@@ -1,8 +1,8 @@
-use crate::shared_types::Link;
 use crate::shared_types::TargetServer;
 use common::basic_types::*;
+use common::shared_types::{Link, WorkdirUserConfig};
 
-use super::{ServerStats, WorkdirProxyConfig};
+use super::ServerStats;
 
 use std::hash::Hasher;
 use twox_hash::XxHash32;
@@ -64,7 +64,7 @@ impl InputPort {
     pub fn new(
         workdir_idx: WorkdirIdx,
         workdir_name: String,
-        workdir_config: &WorkdirProxyConfig,
+        workdir_config: &WorkdirUserConfig,
     ) -> Self {
         Self {
             idx: None,

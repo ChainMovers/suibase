@@ -1,10 +1,12 @@
 use common::basic_types::{ManagedElement16, ManagedVecMapVec, ManagedVecU16};
+use dtp_sdk::{DTP,Host};
 
 #[derive(Debug)]
 // One per DTP connection.
 pub struct DTPConnStateData {
     pub idx: Option<ManagedVecU16>,
     pub is_open: bool,
+    pub dtp: Option<DTP>,
 }
 
 impl DTPConnStateData {
@@ -12,6 +14,7 @@ impl DTPConnStateData {
         Self {
             idx: None,
             is_open: false,
+            dtp: None,
         }
     }
 }

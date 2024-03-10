@@ -6,7 +6,8 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::shared_types::{GlobalsWorkdirsMT, Workdir};
+use crate::shared_types::GlobalsWorkdirsMT;
+use common::shared_types::Workdir;
 
 use notify::RecursiveMode;
 use notify::{PollWatcher, Watcher};

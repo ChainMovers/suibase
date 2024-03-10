@@ -56,10 +56,12 @@ const DEFAULT_LOCALNET_KEYSTORE_PATHNAME: &str = "../../../dtp-dev/user-localnet
 //     An API dtp-sdk::Locahost  --- owns a ----> dtp-core::LocalhostInternal
 //
 
+#[derive(Debug)]
 pub struct SuiNode {
     rpc: SuiSDKParamsRPC,
 }
 
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct NetworkManager {
     sui_nodes: Vec<SuiNode>,

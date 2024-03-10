@@ -1796,6 +1796,7 @@ dependencies = [
  "colored",
  "common",
  "data-encoding",
+ "dtp-core",
  "dtp-sdk",
  "env_logger",
  "futures",

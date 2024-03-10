@@ -1,5 +1,3 @@
-use tokio::sync::Mutex;
-
 use axum::async_trait;
 
 use jsonrpsee::core::RpcResult;
@@ -7,16 +5,10 @@ use jsonrpsee::core::RpcResult;
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::shared_types::{
-    DTPConnStateData, Globals, GlobalsDTPConnsStateMT, GlobalsDTPConnsStateRxMT,
-    GlobalsDTPConnsStateTxMT, GlobalsProxyMT, GlobalsWorkdirsST, ServerStats, UuidST,
-};
-use common::basic_types::TargetServerIdx;
+use crate::shared_types::{DTPConnStateData, Globals};
 
-use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError, VersionedEq};
-use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
-
-use super::def_header::Versioned;
+use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError};
+use super::{RpcInputError};
 
 pub struct DtpApiImpl {
     pub globals: Globals,
@@ -72,15 +64,16 @@ impl DtpApiServer for DtpApiImpl {
         // Initialize some of the header fields.
         resp.header.method = "ping".to_string();
 
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
+        let workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir)
             .await
         {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
+        // Get the default DTP client address from the suibase.yaml or active address (for this workdir).
+
         let (host_sla_idx, is_open) = {
-            // TODO Optimize with read lock check first.
             // Get the HostSlaIdx (will be created if does not exists).
             let mut conns_state_guard = self.globals.dtp_conns_state(workdir_idx).write().await;
             let conns_state = &mut *conns_state_guard;

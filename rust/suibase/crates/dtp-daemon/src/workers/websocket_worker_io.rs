@@ -10,9 +10,10 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::shared_types::{
-    Globals, GlobalsPackagesConfigST, WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET,
-    WORKDIR_IDX_MAINNET, WORKDIR_IDX_TESTNET,
+use crate::shared_types::{Globals, GlobalsPackagesConfigST};
+use common::shared_types::{
+    WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
+    WORKDIR_IDX_TESTNET,
 };
 
 use common::basic_types::{
@@ -830,7 +831,7 @@ impl WebSocketWorkerIOThread {
     async fn open_websocket(&mut self) -> bool {
         // Open a websocket connection to the server for this workdir.
 
-        // For now, the only tested servers for websocket are Shinami 
+        // For now, the only tested servers for websocket are Shinami
         // and Mysten Labs.
 
         // TODO: Make this better config driven.

@@ -53,7 +53,7 @@ impl WebSocketWorkerParams {
         workdir_idx: WorkdirIdx,
     ) -> Self {
         // For now, support only built-in workdirs ("localnet", "testnet"...).
-        let workdir_name = shared_types::WORKDIRS_KEYS[workdir_idx as usize].to_string();
+        let workdir_name = common::shared_types::WORKDIRS_KEYS[workdir_idx as usize].to_string();
 
         Self {
             globals,

@@ -4,9 +4,11 @@ use anyhow::Result;
 
 use jsonrpsee::core::RpcResult;
 
-use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
-use crate::shared_types::{Globals, GlobalsWorkdirsST};
 use common::basic_types::WorkdirIdx;
+use common::shared_types::GlobalsWorkdirsST;
+
+use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
+use crate::shared_types::Globals;
 
 use super::{
     GeneralApiServer, Header, RpcInputError, RpcSuibaseError, StatusService, VersionsResponse,
@@ -287,9 +289,7 @@ impl GeneralApiImpl {
 impl GeneralApiServer for GeneralApiImpl {
     async fn get_versions(&self, workdir: String) -> RpcResult<VersionsResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir).await {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -345,9 +345,7 @@ impl GeneralApiServer for GeneralApiImpl {
         data_uuid: Option<String>,
     ) -> RpcResult<WorkdirStatusResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir).await {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };

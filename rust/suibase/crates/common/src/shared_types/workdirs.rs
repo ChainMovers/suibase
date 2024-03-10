@@ -1,20 +1,15 @@
 // File access to the user's Suibase installation (~/suibase)
 //
-// In particular, converts suibase.yaml to roughly matching Rust structs.
-//
-// The type 'Workdirs' is intended to be a global RwLock singleton view of
-// the user filesystem (for relevant files only).
+// In particular, converts suibase.yaml to Rust structs.
 //
 use home::home_dir;
 use std::collections::HashMap;
-
-use common::basic_types::*;
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use super::Globals;
+use crate::basic_types::{ManagedElement, ManagedVec, ManagedVecU8, WorkdirIdx};
 
 // workdir_idx are hard coded for performance.
 pub const WORKDIR_IDX_MAINNET: WorkdirIdx = 0;
@@ -53,7 +48,7 @@ impl Link {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct WorkdirProxyConfig {
+pub struct WorkdirUserConfig {
     // Created from parsing/merging suibase.yaml file(s) for a single workdir,
     // except for 'user_request' which is loaded from '.state/user_request'.
     user_request: Option<String>,
@@ -64,7 +59,7 @@ pub struct WorkdirProxyConfig {
     links: HashMap<String, Link>,
 }
 
-impl WorkdirProxyConfig {
+impl WorkdirUserConfig {
     pub fn new() -> Self {
         Self {
             user_request: None,
@@ -217,7 +212,7 @@ impl WorkdirProxyConfig {
     }
 }
 
-impl Default for WorkdirProxyConfig {
+impl Default for WorkdirUserConfig {
     fn default() -> Self {
         Self::new()
     }
@@ -284,6 +279,17 @@ pub struct GlobalsWorkdirsST {
     suibase_home: String,
     path: PathBuf,
     suibase_yaml_common: PathBuf,
+
+    // Variables that rarely changes and can be controlled only by
+    // the common suibase.yaml (not the workdir specific suibase.yaml)
+    pub suibase_web_ip: String,
+    pub suibase_web_port: u16,
+
+    pub suibase_api_ip: String,
+    pub suibase_api_port: u16,
+
+    pub dtp_api_ip: String,
+    pub dtp_api_port: u16,
 }
 
 impl GlobalsWorkdirsST {
@@ -337,6 +343,16 @@ impl GlobalsWorkdirsST {
             workdirs,
             path: workdirs_path,
             suibase_yaml_common,
+
+            // TODO Get these really from the common suibase.yaml. Hard coded for now.
+            suibase_web_ip: "0.0.0.0".to_string(),
+            suibase_web_port: 44380,
+
+            suibase_api_ip: "0.0.0.0".to_string(),
+            suibase_api_port: 44399,
+
+            dtp_api_ip: "0.0.0.0".to_string(),
+            dtp_api_port: 44398,
         }
     }
 
@@ -350,6 +366,14 @@ impl GlobalsWorkdirsST {
 
     pub fn suibase_yaml_common(&self) -> &Path {
         &self.suibase_yaml_common
+    }
+
+    pub fn suibase_api_ip(&self) -> &str {
+        &self.suibase_api_ip
+    }
+
+    pub fn suibase_api_port(&self) -> u16 {
+        self.suibase_api_port
     }
 
     // Given a path string, find the corresponding workdir object.
@@ -367,40 +391,6 @@ impl GlobalsWorkdirsST {
         None
     }
 
-    // Utility that returns the workdir_idx from the globals
-    // using an exact workdir_name.
-    //
-    // This is a multi-thread safe call (will get the proper
-    // lock on the globals).
-    //
-    // This is a relatively costly call, use wisely.
-    pub async fn get_workdir_idx_by_name(
-        globals: &Globals,
-        workdir_name: &String,
-    ) -> Option<WorkdirIdx> {
-        let workdirs_guard = globals.workdirs.read().await;
-        let workdirs = &*workdirs_guard;
-        let workdirs_vec = &workdirs.workdirs;
-        for (workdir_idx, workdir) in workdirs_vec.iter() {
-            if workdir.name() == workdir_name {
-                return Some(workdir_idx);
-            }
-        }
-        None
-    }
-
-    // Utility that return a clone of the global Workdir for a given workdir_idx.
-    // Multi-thread safe.
-    // This is a relatively costly call, use wisely.
-    pub async fn get_workdir_by_idx(globals: &Globals, workdir_idx: WorkdirIdx) -> Option<Workdir> {
-        let workdirs_guard = globals.workdirs.read().await;
-        let workdirs = &*workdirs_guard;
-        let workdirs_vec = &workdirs.workdirs;
-        if let Some(workdir) = workdirs_vec.get(workdir_idx) {
-            return Some(workdir.clone());
-        }
-        None
-    }
 }
 
 impl Default for GlobalsWorkdirsST {

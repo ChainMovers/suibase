@@ -6,9 +6,11 @@ use jsonrpsee::core::{Error as RpcError, RpcResult};
 
 use chrono::Utc;
 
+use common::shared_types::GlobalsWorkdirsST;
+
 use crate::admin_controller::{AdminController, AdminControllerTx};
 use crate::api::RpcSuibaseError;
-use crate::shared_types::{Globals, GlobalsPackagesConfigST, GlobalsWorkdirsST};
+use crate::shared_types::{Globals, GlobalsPackagesConfigST};
 
 use super::{
     MoveConfig, PackageInstance, PackagesApiServer, PackagesConfigResponse, RpcInputError,
@@ -54,9 +56,7 @@ impl PackagesApiServer for PackagesApiImpl {
         //
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let _workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let _workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir).await {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -236,9 +236,7 @@ impl PackagesApiServer for PackagesApiImpl {
         let _data = data.unwrap_or(!(debug || display));
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir).await {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -294,9 +292,7 @@ impl PackagesApiImpl {
         package_name: &String,
     ) -> Result<(u8, String), RpcError> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, workdir)
-            .await
-        {
+        let workdir_idx = match self.globals.get_workdir_idx_by_name(workdir).await {
             Some(workdir_idx) => workdir_idx,
             None => {
                 return Err(

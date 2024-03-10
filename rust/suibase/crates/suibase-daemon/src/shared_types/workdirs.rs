@@ -53,7 +53,7 @@ impl Link {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct WorkdirProxyConfig {
+pub struct WorkdirUserConfig {
     // Created from parsing/merging suibase.yaml file(s) for a single workdir,
     // except for 'user_request' which is loaded from '.state/user_request'.
     user_request: Option<String>,
@@ -64,7 +64,7 @@ pub struct WorkdirProxyConfig {
     links: HashMap<String, Link>,
 }
 
-impl WorkdirProxyConfig {
+impl WorkdirUserConfig {
     pub fn new() -> Self {
         Self {
             user_request: None,
@@ -212,7 +212,7 @@ impl WorkdirProxyConfig {
     }
 }
 
-impl Default for WorkdirProxyConfig {
+impl Default for WorkdirUserConfig {
     fn default() -> Self {
         Self::new()
     }
