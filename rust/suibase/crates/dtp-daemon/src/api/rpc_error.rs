@@ -34,6 +34,10 @@ pub enum RpcSuibaseError {
     FileAccessError(String),
     #[error("outdated uuid")]
     OutdatedUUID(),
+    #[error("Problem with suibase.yaml config: {0}")]
+    InvalidConfig(String),
+    #[error("Problem getting local Host: {0}")]
+    LocalHostError(String),
 }
 
 impl RpcInputError {

@@ -20,6 +20,8 @@
 //
 // Sui SDK and DTP SDK can co-exist and be used independently.
 
+use std::{f64::consts::E, str::FromStr};
+
 use anyhow::bail;
 use dtp_core::{
     network::{HostInternal, NetworkManager},
@@ -61,6 +63,10 @@ impl DTP {
         self.netmgr.set_package_id(package_id);
     }
 
+    pub fn set_gas_address(&mut self, gas_address: SuiAddress) {
+        self.netmgr.set_gas_address(gas_address);
+    }
+
     // Light Accessors
     //   JSON-RPC: No
     //   Gas Cost: No
@@ -70,6 +76,10 @@ impl DTP {
 
     pub fn client_address(&self) -> &SuiAddress {
         self.netmgr.get_client_address()
+    }
+
+    pub fn gas_address(&self) -> &SuiAddress {
+        self.netmgr.get_gas_address()
     }
 
     pub fn localhost_id(&self) -> &Option<ObjectID> {
@@ -165,4 +175,31 @@ impl DTP {
     pub async fn init_firewall(&mut self) -> Result<(), anyhow::Error> {
         self.netmgr.init_firewall().await
     }
+}
+
+// Utility functions.
+pub fn str_to_sui_address(address: &str) -> Result<SuiAddress, anyhow::Error> {
+    // Convert to a vector of bytes. Handle potential "0x" prefix.
+    let address = match address.strip_prefix("0x") {
+        Some(x) => x,
+        None => address,
+    };
+
+    let ret_value = SuiAddress::from_str(address);
+    if let Err(e) = ret_value {
+        bail!("address invalid: {} {}", address, e.to_string())
+    }
+    Ok(ret_value.unwrap())
+}
+
+pub fn str_to_object_id(object_id: &str) -> Result<ObjectID, anyhow::Error> {
+    let object_id = match object_id.strip_prefix("0x") {
+        Some(x) => x,
+        None => object_id,
+    };
+    let ret_value = ObjectID::from_str(object_id);
+    if let Err(e) = ret_value {
+        bail!("object id invalid: {} {}", object_id, e.to_string())
+    }
+    Ok(ret_value.unwrap())
 }

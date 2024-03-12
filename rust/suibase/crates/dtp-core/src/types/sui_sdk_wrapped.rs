@@ -31,6 +31,6 @@ pub struct SuiSDKParamsRPC {
 #[derive(Debug)]
 pub struct SuiSDKParamsTxn {
     pub package_id: ObjectID,
+    pub gas_address: SuiAddress,
     pub keystore: KeystoreWrapped,
 }
-

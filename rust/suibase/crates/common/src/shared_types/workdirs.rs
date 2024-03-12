@@ -3,7 +3,8 @@
 // In particular, converts suibase.yaml to Rust structs.
 //
 use home::home_dir;
-use std::collections::HashMap;
+use log::info;
+use std::collections::{HashMap, LinkedList};
 
 use std::path::{Path, PathBuf};
 
@@ -47,7 +48,89 @@ impl Link {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct DTPService {
+    // A service in a suibase.yaml file
+    service_type: String,
+    enabled: bool,
+    client_enabled: bool,
+    server_enabled: bool,
+    alias: Option<String>,
+    gas_address: Option<String>,
+    remote_host: Option<String>,
+    client_auth: Option<String>,
+    server_auth: Option<String>,
+    local_port: Option<u16>,
+
+    // "Calculated" fields not in the config.
+    // 0 means 'wildcard' service_type and is used to configure
+    // defaults gas_address, remote_host etc...
+    service_idx: u8,
+}
+
+impl DTPService {
+    pub fn new(service_type: String) -> Self {
+        Self {
+            service_type,
+            enabled: false,
+            client_enabled: false,
+            server_enabled: false,
+            alias: None,
+            gas_address: None,
+            remote_host: None,
+            client_auth: None,
+            server_auth: None,
+            local_port: None,
+            service_idx: 0,
+        }
+    }
+
+    pub fn service_type(&self) -> &str {
+        &self.service_type
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn is_client_enabled(&self) -> bool {
+        self.client_enabled
+    }
+
+    pub fn is_server_enabled(&self) -> bool {
+        self.server_enabled
+    }
+
+    pub fn alias(&self) -> Option<&String> {
+        self.alias.as_ref()
+    }
+
+    pub fn gas_address(&self) -> Option<&String> {
+        self.gas_address.as_ref()
+    }
+
+    pub fn client_auth(&self) -> Option<&String> {
+        self.client_auth.as_ref()
+    }
+
+    pub fn server_auth(&self) -> Option<&String> {
+        self.server_auth.as_ref()
+    }
+
+    pub fn remote_host(&self) -> Option<&String> {
+        self.remote_host.as_ref()
+    }
+
+    pub fn local_port(&self) -> Option<u16> {
+        self.local_port
+    }
+
+    pub fn service_idx(&self) -> u8 {
+        self.service_idx
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkdirUserConfig {
     // Created from parsing/merging suibase.yaml file(s) for a single workdir,
     // except for 'user_request' which is loaded from '.state/user_request'.
@@ -57,6 +140,9 @@ pub struct WorkdirUserConfig {
     proxy_port_number: u16,
     links_overrides: bool,
     links: HashMap<String, Link>,
+    dtp_package_id: Option<String>, // Package ID of the DTP package for this workdir.
+    dtp_services: LinkedList<DTPService>, // Each configured service.
+    dtp_default_gas_address: Option<String>, // Pays gas when txn not related to a service.
 }
 
 impl WorkdirUserConfig {
@@ -68,6 +154,9 @@ impl WorkdirUserConfig {
             proxy_port_number: 0,
             links_overrides: false,
             links: HashMap::new(),
+            dtp_package_id: None,
+            dtp_services: LinkedList::new(),
+            dtp_default_gas_address: None,
         }
     }
 
@@ -93,6 +182,39 @@ impl WorkdirUserConfig {
 
     pub fn links(&self) -> &HashMap<String, Link> {
         &self.links
+    }
+
+    pub fn dtp_services(&self) -> &LinkedList<DTPService> {
+        &self.dtp_services
+    }
+
+    pub fn dtp_default_gas_address(&self) -> Option<String> {
+        self.dtp_default_gas_address.clone()
+    }
+
+    pub fn dtp_package_id(&self) -> Option<String> {
+        self.dtp_package_id.clone()
+    }
+
+    pub fn dtp_service_config(
+        &self,
+        service_idx: u8,
+        remote_host: Option<String>,
+    ) -> Option<DTPService> {
+        // Search in the linked list for a matching service_idx and remote_host.
+        // Log the size of the dtp_services
+        info!(
+            "on dtp_service_config() dtp_services size: {}",
+            self.dtp_services.len()
+        );
+        for dtp_service in &self.dtp_services {
+            if dtp_service.service_idx == service_idx {
+                if remote_host.is_none() || dtp_service.remote_host == remote_host {
+                    return Some(dtp_service.clone());
+                }
+            }
+        }
+        None
     }
 
     pub fn load_state_file(&mut self, path: &str) -> Result<()> {
@@ -133,13 +255,28 @@ impl WorkdirUserConfig {
         // proxy_enabled: false
         //
         // links:
-        //  - alias: "localnet"
-        //    rpc: "http://0.0.0.0:9000"
-        //    ws: "ws://0.0.0.0:9000"
-        //    priority: 12
-        //  - alias: "localnet"
-        //    enabled: false
-        //    rpc: "http://0.0.0.0:9000"
+        //   - alias: "localnet"
+        //     rpc: "http://0.0.0.0:9000"
+        //     ws: "ws://0.0.0.0:9000"
+        //     priority: 10
+        //   - alias: "localnet"
+        //     enabled: false
+        //     rpc: "http://0.0.0.0:9000"
+        //
+        // dtp_package_id: "0x9c0c8b2b487fd0dcc00cb070df45a82b302ba6bc8244edd85c82e1409ad430ca"
+        //
+        // dtp_services:
+        //   - service_type: "ping"
+        //     client_address: 0xf7ae71f84fabc58662bd4209a8893f462c60f247095bb35b19ff659ad0081462
+        //
+        //   - service_type: "json-rpc"
+        //     client_address: 0xef6e9dd8f30dea802e0474a7996e5c772c581cc1adee45afb660f15a081d1c49
+        //     remote_host: 0x6fff280505c35ab84d067f2c6a34a6182a1c4607cffea7302bcbfb7f735007ad
+        //     local_port: 45000
+        //
+        //   - service_type: "default"
+        //     client_address: 0xc7294a5cc946db818c4058c83c933ad6c28e73711bee21c7fa85553c90cb7244
+        //
         let contents = std::fs::read_to_string(path)?;
         let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
 
@@ -177,6 +314,10 @@ impl WorkdirUserConfig {
             self.proxy_port_number = proxy_port_number as u16;
         }
 
+        if let Some(dtp_package_id) = yaml["dtp_package_id"].as_str() {
+            self.dtp_package_id = Some(dtp_package_id.to_string());
+        }
+
         if let Some(links) = yaml["links"].as_sequence() {
             for link in links {
                 if let Some(alias) = link["alias"].as_str() {
@@ -204,6 +345,72 @@ impl WorkdirUserConfig {
                     };
                     // Replace if already present.
                     self.links.insert(alias.to_string(), link);
+                }
+            }
+        }
+
+        if let Some(services) = yaml["dtp_services"].as_sequence() {
+            for service in services {
+                if let Some(service_type) = service["service_type"].as_str() {
+                    // Default of "enabled" is true. Allow the user to disable a single service.
+                    let enabled = service["enabled"].as_bool().unwrap_or(true);
+
+                    // TODO A ServiceType to match the Move definition.
+                    // Validate that service_type is one of the following string,
+                    // and map it to a service_idx.
+                    //
+                    //   "json-rpc" is service_idx 2
+                    //   "ping" is service_idx 7
+                    //   "default" is valid but does not have a service_idx.
+                    let service_idx = match service_type {
+                        "json-rpc" => Some(2u8),
+                        "ping" => Some(7u8),
+                        "default" => Some(0u8),
+                        _ => None,
+                    };
+                    if service_idx.is_none() || !enabled {
+                        continue; // Skip it.
+                    }
+                    let service_idx = service_idx.unwrap();
+
+                    let gas_address = service["gas_address"].as_str().map(|s| s.to_string()); // Optional
+
+                    if service_idx == 0 {
+                        if let Some(gas_address) = gas_address {
+                            self.dtp_default_gas_address = Some(gas_address);
+                        }
+                        continue;
+                    }
+
+                    let client_auth = service["client_auth"].as_str().map(|s| s.to_string()); // Optional
+                    let server_auth = service["server_auth"].as_str().map(|s| s.to_string()); // Optional
+
+                    let alias = service["alias"].as_str().map(|s| s.to_string()); // Optional
+                    let remote_host = service["remote_host"].as_str().map(|s| s.to_string()); // Optional
+                    let local_port = service["local_port"].as_u64().map(|v| v as u16); // Optional
+
+                    let client_enabled = client_auth.is_some();
+                    let server_enabled = server_auth.is_some();
+
+                    let dtp_service = DTPService {
+                        service_type: service_type.to_string(),
+                        enabled,
+                        client_enabled,
+                        server_enabled,
+                        alias,
+                        gas_address,
+                        remote_host,
+                        client_auth,
+                        server_auth,
+                        local_port,
+                        service_idx,
+                    };
+
+                    // Insert, and ignore duplicates.
+                    if !self.dtp_services.contains(&dtp_service) {
+                        info!("Added DTP service for idx: {:?}", dtp_service);
+                        self.dtp_services.push_back(dtp_service);
+                    }
                 }
             }
         }
@@ -390,7 +597,6 @@ impl GlobalsWorkdirsST {
         }
         None
     }
-
 }
 
 impl Default for GlobalsWorkdirsST {
@@ -406,5 +612,31 @@ impl ManagedElement for Workdir {
 
     fn set_idx(&mut self, index: Option<ManagedVecU8>) {
         self.idx = index;
+    }
+}
+
+// TODO Merge Workdir into GlobalsWorkdirConfigST
+
+// User configuration for every workdir (mostly from suibase.yaml).
+#[derive(Debug)]
+pub struct GlobalsWorkdirConfigST {
+    pub user_config: WorkdirUserConfig,
+}
+
+impl GlobalsWorkdirConfigST {
+    pub fn new() -> Self {
+        Self {
+            user_config: WorkdirUserConfig::new(),
+        }
+    }
+
+    pub fn from(user_config: WorkdirUserConfig) -> Self {
+        Self { user_config }
+    }
+}
+
+impl Default for GlobalsWorkdirConfigST {
+    fn default() -> Self {
+        Self::new()
     }
 }

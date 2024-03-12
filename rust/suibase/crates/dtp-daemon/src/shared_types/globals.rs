@@ -27,8 +27,8 @@ use super::{
 };
 
 use common::shared_types::{
-    GlobalsWorkdirsST, Workdir, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
-    WORKDIR_IDX_TESTNET,
+    GlobalsWorkdirConfigST, GlobalsWorkdirsST, Workdir, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET,
+    WORKDIR_IDX_MAINNET, WORKDIR_IDX_TESTNET,
 };
 
 #[derive(Debug)]
@@ -127,21 +127,6 @@ impl GlobalsAPIMutexST {
 }
 
 impl Default for GlobalsAPIMutexST {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug)]
-pub struct GlobalsWorkdirConfigST {}
-
-impl GlobalsWorkdirConfigST {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Default for GlobalsWorkdirConfigST {
     fn default() -> Self {
         Self::new()
     }
@@ -455,6 +440,34 @@ impl Globals {
         let workdirs_vec = &workdirs.workdirs;
         if let Some(workdir) = workdirs_vec.get(workdir_idx) {
             return Some(workdir.clone());
+        }
+        None
+    }
+
+    // Utility to overwrite the global workdir config all at once.
+    // Multi-thread safe.
+    // This is a relatively costly call, use wisely.
+    pub async fn set_workdir_config_by_idx(
+        &mut self,
+        workdir_idx: WorkdirIdx,
+        workdir: GlobalsWorkdirConfigST,
+    ) {
+        let config = self.get_config(workdir_idx);
+        let mut config_guard = config.write().await;
+        *config_guard = workdir;
+    }
+
+    pub async fn get_workdir_by_name(
+        &self,
+        workdir_name: &String,
+    ) -> Option<(WorkdirIdx, Workdir)> {
+        let workdirs_guard = self.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        for (workdir_idx, workdir) in workdirs_vec.iter() {
+            if workdir.name() == workdir_name {
+                return Some((workdir_idx, workdir.clone()));
+            }
         }
         None
     }

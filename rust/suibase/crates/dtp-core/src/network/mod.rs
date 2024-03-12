@@ -103,6 +103,7 @@ impl NetworkManager {
 
         let txn = SuiSDKParamsTxn {
             package_id: ObjectID::ZERO, // TODO Revisit this when mainnet.
+            gas_address: SuiAddress::ZERO,
             keystore: KeystoreWrapped { inner: keystore },
         };
 
@@ -154,10 +155,17 @@ impl NetworkManager {
         }
         return None;
     }
+    pub fn get_gas_address(&self) -> &SuiAddress {
+        &self.sui_txn.gas_address
+    }
 
     // Mutators
     pub fn set_package_id(&mut self, package_id: ObjectID) {
         self.sui_txn.package_id = package_id;
+    }
+
+    pub fn set_gas_address(&mut self, gas_address: SuiAddress) {
+        self.sui_txn.gas_address = gas_address;
     }
 
     // Accessors that do a JSON-RPC call.

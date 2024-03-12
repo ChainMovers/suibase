@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use common::basic_types::*;
-use common::shared_types::WorkdirUserConfig;
+use common::shared_types::{GlobalsWorkdirConfigST, WorkdirUserConfig};
 
 use crate::network_monitor::NetMonTx;
 use crate::shared_types::{Globals, InputPort};
@@ -364,7 +364,6 @@ impl AdminController {
 
             let _ = workdir_config
                 .load_and_merge_from_file(&workdir.suibase_yaml_user().to_string_lossy());
-
             let _ = workdir_config.load_state_file(&workdir.suibase_state_file().to_string_lossy());
         } // Release Workdirs read lock
 
@@ -424,6 +423,12 @@ impl AdminController {
                     .map(|port_idx| (port_idx, port_number))
             }
         }; // Release Globals write lock
+
+        // Build and set the new GlobalsWorkdirConfigST.
+        let globals_config = GlobalsWorkdirConfigST::from(workdir_config.clone());
+        self.globals
+            .set_workdir_config_by_idx(workdir_idx, globals_config)
+            .await;
 
         /* Disable starting a proxy server for the dtp-daemon.
         if let Some((port_idx, port_number)) = config_applied {

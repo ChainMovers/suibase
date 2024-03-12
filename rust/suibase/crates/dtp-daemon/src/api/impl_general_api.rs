@@ -11,8 +11,8 @@ use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL
 use crate::shared_types::Globals;
 
 use super::{
-    GeneralApiServer, Header, RpcInputError, RpcSuibaseError, StatusService, VersionsResponse,
-    WorkdirStatusResponse,
+    GeneralApiServer, Header, InfoResponse, RpcInputError, RpcSuibaseError, StatusService,
+    VersionsResponse, WorkdirStatusResponse,
 };
 
 use super::def_header::Versioned;
@@ -287,6 +287,43 @@ impl GeneralApiImpl {
 
 #[async_trait]
 impl GeneralApiServer for GeneralApiImpl {
+    async fn info(
+        &self,
+        workdir: String,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<InfoResponse> {
+        // Common pattern used for controlling the output.
+        let debug = debug.unwrap_or(false);
+        let display = display.unwrap_or(debug);
+        let data = data.unwrap_or(!(debug || display));
+
+        let mut debug_out = String::new();
+        let mut display_out = String::new();
+        let mut data_out = String::new();
+
+        // Publish information for all local authority.
+        // Particularly owned object addresses.
+        //
+        // When debug true, includes most globals.
+        let mut resp = InfoResponse::new();
+
+        // Initialize some of the header fields.
+        resp.header.method = "info".to_string();
+
+        if data && !data_out.is_empty(){
+            resp.data = Some(data_out);
+        }
+        if display && !display_out.is_empty(){
+            resp.display = Some(display_out);
+        }
+        if debug && !debug_out.is_empty(){
+            resp.debug = Some(debug_out);
+        }
+        Ok(resp)
+    }
+
     async fn get_versions(&self, workdir: String) -> RpcResult<VersionsResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
         let workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir).await {

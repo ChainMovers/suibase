@@ -121,12 +121,24 @@ impl LinksResponse {
     }
 }
 
+// General purpose RPC response.
+//
+// The interpretation depends on the method.
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
     pub header: Header,
     pub info: String, // "Success" or info on failure.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>, // Human friendly representation.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>, // JSON formatted representation.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>, // Additional JSON debug information.
 }
 
 impl InfoResponse {
@@ -134,6 +146,9 @@ impl InfoResponse {
         Self {
             header: Header::default(),
             info: "Unknown Error".to_string(),
+            display: None,
+            data: None,
+            debug: None,
         }
     }
 }
@@ -142,15 +157,26 @@ impl InfoResponse {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PingResponse {
+    // On success:
+    //   'result' is "Success".
+    // On error:
+    //  'result' is a human-readable error message.
+    //  'bytes', 'sender', 'rtt' and 'seq' are empty strings.
     pub header: Header,
     pub bytes: String,  // Total bytes received.
     pub sender: String, // Hex Host address of the responder (starts with 0x).
     pub seq: String,    // Sequence number. Helps to diagnose packet loss.
-    pub result: String, // Round-trip time in microseconds.
+    pub rtt: String,    // Round-trip time in microseconds.
+    pub result: String,
 
-                        // On error:
-                        //  'bytes', 'sender' and 'seq' are empty strings.
-                        //  'result' is a human-readable error message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>, // Human friendly representation.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>, // JSON formatted representation.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>, // Additional JSON debug information.
 }
 
 impl PingResponse {
@@ -160,7 +186,11 @@ impl PingResponse {
             bytes: "".to_string(),
             sender: "".to_string(),
             seq: "".to_string(),
+            rtt: "".to_string(),
             result: "Unknown Error".to_string(),
+            display: None,
+            data: None,
+            debug: None,
         }
     }
 }
@@ -490,7 +520,19 @@ pub trait DtpApi {
         workdir: String,
         host_addr: String,
         bytes: Option<String>,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
     ) -> RpcResult<PingResponse>;
+
+    #[method(name = "publish")]
+    async fn publish(
+        &self,
+        workdir: String,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<InfoResponse>;
 }
 
 #[rpc(server)]
@@ -518,6 +560,18 @@ pub trait GeneralApi {
         method_uuid: Option<String>,
         data_uuid: Option<String>,
     ) -> RpcResult<WorkdirStatusResponse>;
+
+    // Get information for a specific workdir.
+    // By default, just a few fields for user-level operation of DTP.
+    // "debug" will provide extensive details (most globals).
+    #[method(name = "info")]
+    async fn info(
+        &self,
+        workdir: String,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<InfoResponse>;
 }
 
 #[rpc(server)]

@@ -1,14 +1,23 @@
+use std::f64::consts::E;
+use std::str::FromStr;
+
 use axum::async_trait;
 
+use axum::extract::Host;
+use dtp_sdk::DTP;
+use hyper::client;
 use jsonrpsee::core::RpcResult;
+use log::info;
+use serde_with::hex;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
 use crate::shared_types::{DTPConnStateData, Globals};
 
+use super::RpcInputError;
 use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError};
-use super::{RpcInputError};
 
 pub struct DtpApiImpl {
     pub globals: Globals,
@@ -53,34 +62,253 @@ impl DtpApiServer for DtpApiImpl {
         Ok(resp)
     }
 
+    async fn publish(
+        &self,
+        workdir: String,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<InfoResponse> {
+        // Common pattern used for controlling the output.
+        let debug = debug.unwrap_or(false);
+        let display = display.unwrap_or(debug);
+        let data = data.unwrap_or(!(debug || display));
+
+        let mut debug_out = String::new();
+        let mut display_out = String::new();
+        let mut data_out = String::new();
+
+        // Apply the suibase.yaml configuration.
+        //
+        // Make sure all Hosts under local authority exists on the network.
+        //
+        // If they exists, update them as needed.
+        //
+        // Response includes the address of all owned Host object.
+        let mut resp = InfoResponse::new();
+
+        // Initialize some of the header fields.
+        resp.header.method = "publish".to_string();
+
+        // TODO This need to be optimized (probably merge into GlobalsWorkdirConfigST)
+        let (workdir_idx, workdir) = match self.globals.get_workdir_by_name(&workdir).await {
+            Some(x) => x,
+            None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
+        };
+
+        // Iterate the WorkdirConfig DTP services. Identify every unique client_auth and server_auth.
+        let mut auths = Vec::<String>::new();
+
+        let (gas_addr, package_id) = {
+            let globals_guard = self.globals.get_config(workdir_idx).read().await;
+            let config = &*globals_guard;
+            let mut gas_addr = config.user_config.dtp_default_gas_address();
+            let dtp_services = config.user_config.dtp_services();
+            for dtp_service in dtp_services {
+                let client_auth = dtp_service.client_auth();
+                let server_auth = dtp_service.server_auth();
+                // Put the auth strings in a vector<String>, where the string is the client_auth.to_string or
+                // server_auth.to_string if not already in the vector.
+                if let Some(client_auth) = client_auth {
+                    if !auths.contains(client_auth) {
+                        auths.push(client_auth.clone());
+                    }
+                    if gas_addr.is_none() && dtp_service.gas_address().is_some() {
+                        gas_addr = dtp_service.gas_address().cloned();
+                    }
+                }
+                if let Some(server_auth) = server_auth {
+                    if !auths.contains(server_auth) {
+                        auths.push(server_auth.clone());
+                    }
+                }
+            }
+            (gas_addr, config.user_config.dtp_package_id())
+        };
+
+        if package_id.is_none() {
+            return Err(
+                RpcSuibaseError::InvalidConfig("package id not defined".to_string()).into(),
+            );
+        }
+        let package_id = dtp_sdk::str_to_object_id(&package_id.unwrap())
+            .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
+
+        if gas_addr.is_none() {
+            return Err(
+                RpcSuibaseError::InvalidConfig("gas address not defined".to_string()).into(),
+            );
+        }
+        let gas_addr = dtp_sdk::str_to_sui_address(&gas_addr.unwrap())
+            .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
+
+        // Iterate the auths. Create a DTP Client for each, then do the steps to create a Host object (if does not already exists).
+        let keystore_path = workdir
+            .path()
+            .join("suiconfig".to_string())
+            .join("sui.keystore");
+
+        let mut display_out = String::new();
+
+        for auth in auths {
+            let auth_addr = dtp_sdk::str_to_sui_address(&auth)
+                .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
+
+            let mut dtp = DTP::new(auth_addr, keystore_path.to_str()).await?;
+            dtp.add_rpc_url("http://0.0.0.0:44340").await?;
+            dtp.set_package_id(package_id);
+            dtp.set_gas_address(gas_addr);
+
+            // Make sure localhost exists for this client.
+            let mut host = dtp.get_host().await;
+
+            if let Err(_) = host {
+                host = dtp.create_host_on_network().await;
+                if let Err(e) = host {
+                    let error_message = format!(
+                        "auth addr {} package_id {} inner error [{}]",
+                        auth,
+                        package_id.to_string(),
+                        e.to_string()
+                    );
+                    return Err(RpcSuibaseError::LocalHostError(error_message).into());
+                }
+            }
+            let host = host.unwrap();
+
+            // Display the alias and the host address.
+            display_out.push_str(&format!(
+                "Auth address: {} Host Object ID: {}\n",
+                auth,
+                host.id()
+            ));
+            if debug {
+                debug_out.push_str(&format!("Host={:?}\n", host));
+            }
+        }
+        if data && !data_out.is_empty() {
+            resp.data = Some(data_out);
+        }
+        if display && !display_out.is_empty() {
+            resp.display = Some(display_out);
+        }
+        if debug && !debug_out.is_empty() {
+            resp.debug = Some(debug_out);
+        }
+        Ok(resp)
+    }
+
     async fn ping(
         &self,
         workdir: String,
         host_addr: String,
-        bytes: Option<String>,
+        _bytes: Option<String>,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
     ) -> RpcResult<PingResponse> {
+        // Common pattern used for controlling the output.
+        let debug = debug.unwrap_or(false);
+        let display = display.unwrap_or(debug);
+        let data = data.unwrap_or(!(debug || display));
+
+        let mut debug_out = String::new();
+        let mut display_out = String::new();
+        let mut data_out = String::new();
+
         let mut resp = PingResponse::new();
 
         // Initialize some of the header fields.
         resp.header.method = "ping".to_string();
 
-        let workdir_idx = match self.globals.get_workdir_idx_by_name(&workdir)
-            .await
-        {
-            Some(workdir_idx) => workdir_idx,
+        // TODO This need to be optimized (probably merge into GlobalsWorkdirConfigST)
+        let (workdir_idx, workdir) = match self.globals.get_workdir_by_name(&workdir).await {
+            Some(x) => x,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
-        // Get the default DTP client address from the suibase.yaml or active address (for this workdir).
+        // Get the default and ping specific client address from the suibase.yaml.
+        let (gas_addr, service_config, package_id) = {
+            let globals_guard = self.globals.get_config(workdir_idx).read().await;
+            let config = &*globals_guard;
+            let default_gas_addr = config.user_config.dtp_default_gas_address();
+            let service_config = config.user_config.dtp_service_config(7, None);
+            let package_id = config.user_config.dtp_package_id();
+            (default_gas_addr, service_config, package_id)
+        };
+
+        info!(
+            "ping: gas_addr: {:?} for workdir_idx: {:?} and workdir: {:?}",
+            gas_addr, workdir_idx, workdir
+        );
+
+        // If service_config is None return an error.
+        if service_config.is_none() {
+            return Err(
+                RpcSuibaseError::InvalidConfig("ping service not defined".to_string()).into(),
+            );
+        }
+        let service_config = service_config.unwrap();
+
+        // If service_config is not enabled, return an error.
+        if !service_config.is_enabled() {
+            return Err(
+                RpcSuibaseError::InvalidConfig("ping service is disabled".to_string()).into(),
+            );
+        }
+
+        // Convert package id string to an ObjectID.
+        if package_id.is_none() {
+            return Err(
+                RpcSuibaseError::InvalidConfig("package id not defined".to_string()).into(),
+            );
+        }
+        let package_id = dtp_sdk::str_to_object_id(&package_id.unwrap())
+            .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
+
+        // Convert gas_addr string to a SuiAddress.
+        if gas_addr.is_none() {
+            return Err(
+                RpcSuibaseError::InvalidConfig("gas address not defined".to_string()).into(),
+            );
+        }
+        let gas_addr = dtp_sdk::str_to_sui_address(&gas_addr.unwrap())
+            .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
         let (host_sla_idx, is_open) = {
             // Get the HostSlaIdx (will be created if does not exists).
             let mut conns_state_guard = self.globals.dtp_conns_state(workdir_idx).write().await;
             let conns_state = &mut *conns_state_guard;
+            // TODO: Validate host_addr before insertion.
             let mut host_sla_idx = conns_state.conns.get_if_some(7, &host_addr, 0);
             if host_sla_idx.is_none() {
-                // Create it.
-                let new_conn_state = DTPConnStateData::new();
+                // Create a DTP client for it.
+                let keystore_path = workdir
+                    .path()
+                    .join("suiconfig".to_string())
+                    .join("sui.keystore");
+                let mut dtp = DTP::new(gas_addr, keystore_path.to_str()).await?;
+
+                // TODO Remove hard coding
+                dtp.add_rpc_url("http://0.0.0.0:44340").await?;
+                dtp.set_package_id(package_id);
+
+                // Make sure localhost exists for this client.
+                let host = dtp.get_host().await;
+
+                if let Err(e) = host {
+                    let error_message = format!(
+                        "package_id {} inner error {}",
+                        package_id.to_string(),
+                        e.to_string()
+                    );
+                    return Err(RpcSuibaseError::LocalHostError(error_message).into());
+                }
+                let host = host.unwrap();
+
+                let mut new_conn_state = DTPConnStateData::new();
+                new_conn_state.set_dtp(dtp);
+                new_conn_state.set_localhost(host);
                 host_sla_idx = conns_state.conns.push(new_conn_state, 7, host_addr, 0);
                 if host_sla_idx.is_none() {
                     return Err(RpcSuibaseError::InternalError(
@@ -222,7 +450,15 @@ impl DtpApiServer for DtpApiImpl {
         //      If valid, take ownership of the oneshot channel and delete PendingRequest.
         //    Write unlock.
         //    If own the oneshot channel, then send the response with the data.
-
+        if data && !data_out.is_empty() {
+            resp.data = Some(data_out);
+        }
+        if display && !display_out.is_empty() {
+            resp.display = Some(display_out);
+        }
+        if debug && !debug_out.is_empty() {
+            resp.debug = Some(debug_out);
+        }
         Ok(resp)
     }
 }
