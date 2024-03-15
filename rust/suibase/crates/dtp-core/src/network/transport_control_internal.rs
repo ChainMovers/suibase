@@ -43,7 +43,7 @@ pub(crate) async fn create_best_effort_transport_control_on_network(
     };
     let keystore = &txn.keystore.inner;
 
-    let server_adm = match srv_host.admin_address() {
+    let server_adm = match srv_host.authority() {
         Some(x) => x,
         None => bail!(DTPError::DTPMissingServerAdminAddress),
     };

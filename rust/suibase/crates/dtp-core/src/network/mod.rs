@@ -351,7 +351,7 @@ impl NetworkManager {
         // The API can "catch it" as the localhost and give it special handling.
         Ok(Some(HostInternal {
             object_id: localhost_id,
-            admin_address: None,
+            authority: None,
             raw: None,
         }))
     }
@@ -423,7 +423,7 @@ impl NetworkManager {
         // The API can "catch it" as the localhost and give it special handling.
         Ok(HostInternal {
             object_id: localhost_id,
-            admin_address: None,
+            authority: None,
             raw: None,
         })
     }
