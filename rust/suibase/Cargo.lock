@@ -1759,6 +1759,7 @@ dependencies = [
  "md5",
  "memchr",
  "mime",
+ "move-core-types",
  "notify",
  "reqwest",
  "rusqlite",

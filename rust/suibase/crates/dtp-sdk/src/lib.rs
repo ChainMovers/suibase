@@ -27,6 +27,7 @@ use dtp_core::{
     network::{HostInternal, NetworkManager},
     types::PingStats,
 };
+use log::info;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
 #[derive(Debug)]
@@ -47,12 +48,12 @@ pub struct DTP {
 
 impl DTP {
     pub async fn new(
-        client_address: SuiAddress,
+        auth_address: SuiAddress,
         keystore_pathname: Option<&str>,
     ) -> Result<Self, anyhow::Error> {
         Ok(DTP {
             #[allow(clippy::needless_borrow)]
-            netmgr: NetworkManager::new(client_address, keystore_pathname).await?,
+            netmgr: NetworkManager::new(auth_address, keystore_pathname).await?,
         })
     }
 
@@ -68,7 +69,7 @@ impl DTP {
     }
 
     // Light Accessors
-    //   JSON-RPC: No
+    //   JSON-RPC: Sometimes
     //   Gas Cost: No
     pub fn package_id(&self) -> &ObjectID {
         self.netmgr.get_package_id()
@@ -92,20 +93,44 @@ impl DTP {
 
     // get_host
     //   JSON-RPC: Yes
-    //   Gas Cost: No
+    //   Gas Cost: Yes
     //
-    // Get the Host associated with the current client address (this DTP instance)
+    // Get the Host for the auth address (specified at DTP instance creation).
     //
     // On success it means the caller have administrative capability on that Host object.
     // (can setup firewall, enable services etc...)
-    pub async fn get_host(&self) -> Result<Host, anyhow::Error> {
-        if (*self.netmgr.get_localhost_id()).is_none() {
-            bail!("Create localhost object first")
+    //
+    // If the host does not exists, it will be tentatively created on the network.
+    pub async fn get_host(&mut self) -> Result<Host, anyhow::Error> {
+        info!("get_host start");
+        // Note: the netmgr do also cache the LocalhostInternal. Can it be used?
+        // For now, always retrieve latest from network.
+        let mut host_internal: Option<HostInternal> = None;
+        if self.netmgr.get_localhost_id().is_none() {
+            info!("get_host A");
+            // Best-effort find among owned object of auth.
+            let result = self.netmgr.get_localhost_by_auth().await?;
+            if let Some(result) = result {
+                host_internal = Some(result);
+                info!("get_host B");
+            }
+        } else {
+            // Get latest from likely existing Host object on the network.
+            let localhost_id = self.netmgr.get_localhost_id().unwrap();
+            host_internal = self.netmgr.get_host_by_id(localhost_id).await?;
+            info!("get_host C");
         }
-        let host_internal = self
-            .netmgr
-            .get_host(self.netmgr.get_localhost_id().unwrap())
-            .await?;
+        if host_internal.is_none() {
+            // Create a new Host object on the network.
+            host_internal = Some(self.netmgr.create_localhost_on_network().await?);
+            info!("get_host D");
+        }
+        // Should exist at this point.
+        let host_internal = host_internal.unwrap();
+
+        self.netmgr.sync_registry().await?;
+        
+        info!("get_host end");
         Ok(Host {
             id: host_internal.object_id(),
             host_internal,
@@ -120,12 +145,18 @@ impl DTP {
     //
     // The handle is used for doing various operations such as pinging the host, make
     // RPC calls and/or create connections to it.
-    pub async fn get_host_by_id(&self, host_id: ObjectID) -> Result<Host, anyhow::Error> {
-        let host_internal = self.netmgr.get_host(host_id).await?;
-        Ok(Host {
+    //
+    // Returns Ok(None) if confirmed that the host does not exists.
+    pub async fn get_host_by_id(&self, host_id: ObjectID) -> Result<Option<Host>, anyhow::Error> {
+        let host_internal = self.netmgr.get_host_by_id(host_id).await?;
+        if host_internal.is_none() {
+            return Ok(None);
+        }
+        let host_internal = host_internal.unwrap();
+        Ok(Some(Host {
             id: host_internal.object_id(),
             host_internal,
-        })
+        }))
     }
 
     // create_host_on_network
@@ -179,13 +210,15 @@ impl DTP {
 
 // Utility functions.
 pub fn str_to_sui_address(address: &str) -> Result<SuiAddress, anyhow::Error> {
-    // Convert to a vector of bytes. Handle potential "0x" prefix.
-    let address = match address.strip_prefix("0x") {
-        Some(x) => x,
-        None => address,
+    // If address does not start with "0x", append it to address.
+    // Can you please code this?
+    let address = if address.starts_with("0x") {
+        address.to_string()
+    } else {
+        format!("0x{}", address)
     };
 
-    let ret_value = SuiAddress::from_str(address);
+    let ret_value = SuiAddress::from_str(&address);
     if let Err(e) = ret_value {
         bail!("address invalid: {} {}", address, e.to_string())
     }
@@ -193,11 +226,14 @@ pub fn str_to_sui_address(address: &str) -> Result<SuiAddress, anyhow::Error> {
 }
 
 pub fn str_to_object_id(object_id: &str) -> Result<ObjectID, anyhow::Error> {
-    let object_id = match object_id.strip_prefix("0x") {
-        Some(x) => x,
-        None => object_id,
+    // If object_id does not start with "0x", append it to object_id.
+    let object_id = if object_id.starts_with("0x") {
+        object_id.to_string()
+    } else {
+        format!("0x{}", object_id)
     };
-    let ret_value = ObjectID::from_str(object_id);
+
+    let ret_value = ObjectID::from_str(&object_id);
     if let Err(e) = ret_value {
         bail!("object id invalid: {} {}", object_id, e.to_string())
     }

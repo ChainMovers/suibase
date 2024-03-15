@@ -14,12 +14,12 @@
 //   "HostMoveRaw"
 //
 
-use crate::types::{DTPError, SuiSDKParamsRPC};
-
+use log::info;
 use serde::Deserialize;
-use sui_json_rpc_types::{SuiData, SuiObjectDataOptions};
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_types::id::UID;
+
+use crate::types::SuiSDKParamsRPC;
 
 // Data structure that **must** match the Move Host object
 #[derive(Deserialize, Debug)]
@@ -41,60 +41,54 @@ pub struct HostInternal {
     pub(crate) raw: Option<HostMoveRaw>, // Data from network (as-is)
 }
 
-pub(crate) async fn fetch_host_move_object(
+pub(crate) async fn get_host_internal_by_id(
     rpc: &SuiSDKParamsRPC,
     host_object_id: ObjectID,
-) -> Result<HostMoveRaw, anyhow::Error> {
-    // TODO Revisit for robustness
-    let sui_client = rpc.sui_client.as_ref().expect("Could not create SuiClient");
-
-    let resp = sui_client
-        .inner
-        .read_api()
-        .get_object_with_options(host_object_id, SuiObjectDataOptions::default().with_bcs())
-        .await?
-        .into_object();
-
-    if let Err(e) = resp {
-        return Err(DTPError::DTPFailedFetchObject {
-            object_type: "Host".to_string(),
-            object_id: host_object_id.to_string(),
-            inner: e.to_string(),
-        }
-        .into());
+) -> Result<Option<HostInternal>, anyhow::Error> {
+    info!("get_host_internal_by_id 1");
+    let raw = super::common_rpc::fetch_raw_move_object::<HostMoveRaw>(rpc, host_object_id).await?;
+    info!("get_host_internal_by_id 2");
+    if raw.is_none() {
+        info!("get_host_internal_by_id 3");
+        return Ok(None);
     }
-
-    // Deserialize the BCS data into a HostMoveRaw
-    let resp = resp.unwrap();
-    let raw_data = resp.to_string(); // Copy to string for debug purpose... optimize this later?
-    let sui_raw_data = resp.bcs;
-    if let Some(sui_raw_data) = sui_raw_data {
-        if let Some(sui_raw_mov_obj) = sui_raw_data.try_into_move() {
-            return sui_raw_mov_obj.deserialize();
-        }
-    };
-
-    Err(DTPError::DTPFailedConvertBCS {
-        object_type: "Host".to_string(),
-        object_id: host_object_id.to_string(),
-        raw_data,
-    }
-    .into())
-}
-
-pub(crate) async fn get_host_by_id(
-    rpc: &SuiSDKParamsRPC,
-    host_object_id: ObjectID,
-) -> Result<HostInternal, anyhow::Error> {
-    let raw = fetch_host_move_object(rpc, host_object_id).await?;
+    let raw = raw.unwrap();
 
     // Map the Host Move object into the local memory representation.
     let ret = HostInternal {
-        object_id: host_object_id,
+        object_id: host_object_id.clone(),
         admin_address: Some(raw.adm),
         raw: Some(raw),
     };
-    Ok(ret)
+    Ok(Some(ret))
+}
+
+pub(crate) async fn get_host_internal_by_auth(
+    rpc: &SuiSDKParamsRPC,
+    package_id: &ObjectID,
+    address: &SuiAddress,
+) -> Result<Option<HostInternal>, anyhow::Error> {
+    // When returning Ok(None) it means that it was verified
+    // that this address does not OWN a Host object.
+    info!("get_host_internal_by_auth 1");
+    let raw = super::common_rpc::fetch_raw_move_object_by_auth::<HostMoveRaw>(
+        rpc, package_id, "host", "Host", address,
+    )
+    .await?;
+    info!("get_host_internal_by_auth 2");
+    if raw.is_none() {
+        info!("get_host_internal_by_auth 3");
+        return Ok(None);
+    }
+    let raw = raw.unwrap();
+
+    // Map the Host Move object into the local memory representation.
+    let ret = HostInternal {
+        object_id: *raw.id.object_id(),
+        admin_address: Some(raw.adm),
+        raw: Some(raw),
+    };
+    Ok(Some(ret))
 }
 
 impl HostInternal {

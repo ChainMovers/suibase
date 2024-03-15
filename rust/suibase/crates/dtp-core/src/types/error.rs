@@ -1,10 +1,10 @@
 //use sui_sdk::types::{ObjectID, SuiAddress};
 use anyhow;
 //use std::backtrace::Backtrace;
+use super::sui_sdk_wrapped::{SuiSDKParamsRPC, SuiSDKParamsTxn};
 use core::option::Option;
 use sui_sdk::types::error::SuiError;
 use thiserror;
-use super::sui_sdk_wrapped::{SuiSDKParamsRPC, SuiSDKParamsTxn};
 
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::large_enum_variant)]
@@ -28,7 +28,15 @@ pub enum DTPError {
     DTPMissingSuiClient,
 
     #[error("DTP Failed Move call {desc:?} into package {package_id:?} for client {client_address:?}. Info from sui_sdk-> {inner:?}")]
-    DTPFailedMoveCall { desc: String, package_id: String, client_address: String, inner: String },
+    DTPFailedMoveCall {
+        desc: String,
+        package_id: String,
+        client_address: String,
+        inner: String,
+    },
+
+    #[error("DTP Failed loading registry: {desc:?}")]
+    DTPFailedRegistryLoad { desc: String },
 
     #[error(
         "DTP Failed fetching object {object_type:?}::{object_id:?}. Info from sui_sdk-> {inner:?}"
@@ -64,8 +72,8 @@ pub enum DTPError {
     #[error("DTP Not yet implemented. Need it? Ask for it on DTP Discord (Not Sui Discord).")]
     DTPNotImplemented,
 
-    #[error("DTP Internal Error. Report to DTP developer please. Thanks.")]
-    DTPInternalError,
+    #[error("DTP Internal Error. {msg:?}. Report to DTP developer please. Thanks.")]
+    DTPInternalError { msg: String },
 
     #[error("DTP inner SuiError {0:?}")]
     InnerSuiError(#[from] SuiError),

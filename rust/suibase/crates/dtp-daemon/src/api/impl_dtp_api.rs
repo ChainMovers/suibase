@@ -145,7 +145,7 @@ impl DtpApiServer for DtpApiImpl {
         // Iterate the auths. Create a DTP Client for each, then do the steps to create a Host object (if does not already exists).
         let keystore_path = workdir
             .path()
-            .join("suiconfig".to_string())
+            .join("config".to_string())
             .join("sui.keystore");
 
         let mut display_out = String::new();
@@ -159,11 +159,10 @@ impl DtpApiServer for DtpApiImpl {
             dtp.set_package_id(package_id);
             dtp.set_gas_address(gas_addr);
 
-            // Make sure localhost exists for this client.
-            let mut host = dtp.get_host().await;
+            // Get localhost for this client, it will be created if does not exists.
+            let host = dtp.get_host().await;
 
             if let Err(_) = host {
-                host = dtp.create_host_on_network().await;
                 if let Err(e) = host {
                     let error_message = format!(
                         "auth addr {} package_id {} inner error [{}]",
@@ -195,6 +194,7 @@ impl DtpApiServer for DtpApiImpl {
         if debug && !debug_out.is_empty() {
             resp.debug = Some(debug_out);
         }
+        resp.info = "Success".to_string();
         Ok(resp)
     }
 
@@ -285,7 +285,7 @@ impl DtpApiServer for DtpApiImpl {
                 // Create a DTP client for it.
                 let keystore_path = workdir
                     .path()
-                    .join("suiconfig".to_string())
+                    .join("config".to_string())
                     .join("sui.keystore");
                 let mut dtp = DTP::new(gas_addr, keystore_path.to_str()).await?;
 
