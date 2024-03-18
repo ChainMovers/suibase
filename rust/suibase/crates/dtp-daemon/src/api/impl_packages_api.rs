@@ -6,8 +6,6 @@ use jsonrpsee::core::{Error as RpcError, RpcResult};
 
 use chrono::Utc;
 
-use common::shared_types::GlobalsWorkdirsST;
-
 use crate::admin_controller::{AdminController, AdminControllerTx};
 use crate::api::RpcSuibaseError;
 use crate::shared_types::{Globals, GlobalsPackagesConfigST};

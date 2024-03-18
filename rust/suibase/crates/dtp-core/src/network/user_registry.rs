@@ -11,25 +11,20 @@
 // Example:
 //   "UserRegistry"
 //   "UserRegistryInternal"
-//   "UserRegistryMoeRaw"
+//   "UserRegistryMoveRaw"
 //
 
 use log::info;
-use serde::Deserialize;
+
 use sui_sdk::{
     json::SuiJsonValue,
     types::base_types::{ObjectID, SuiAddress},
 };
-use sui_types::id::UID;
 
+use super::UserRegistryMoveRaw;
 use crate::types::{DTPError, SuiSDKParamsRPC, SuiSDKParamsTxn};
 
 // Data structure that **must** match the Move Host object
-#[derive(Deserialize, Debug)]
-pub struct UserRegistryMoveRaw {
-    id: UID,
-    host_addr: SuiAddress,
-}
 
 #[derive(Debug)]
 pub struct UserRegistryInternal {
@@ -44,7 +39,7 @@ fn raw_to_internal(raw: UserRegistryMoveRaw) -> Result<UserRegistryInternal, any
     // Convert raw.host_addr to an ObjectID.
     let result = ObjectID::from_bytes(raw.host_addr);
     if let Err(e) = result {
-        let desc = format!("host_addr ObjectIDParseError={}", e.to_string());
+        let desc = format!("host_addr ObjectIDParseError={}", e);
         return Err(DTPError::DTPFailedRegistryLoad { desc }.into());
     }
     let localhost_id = Some(result.unwrap());
@@ -114,7 +109,7 @@ pub(crate) async fn create_registry_on_network(
         SuiJsonValue::from_object_id(localhost_id),
         //SuiJsonValue::from_bcs_bytes(None, &vargs).unwrap(),
     ];
-    let new_object_id = super::common_rpc::do_move_object_create(
+    let new_object_id = super::common_rpc::do_move_call_ret_id(
         rpc,
         txn,
         "user_registry",

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::basic_types::{ManagedElement, ManagedVec, ManagedVecU8, WorkdirIdx};
+use crate::basic_types::{GenericTx, ManagedElement, ManagedVec, ManagedVecU8, WorkdirIdx};
 
 // workdir_idx are hard coded for performance.
 pub const WORKDIR_IDX_MAINNET: WorkdirIdx = 0;
@@ -208,10 +208,10 @@ impl WorkdirUserConfig {
             self.dtp_services.len()
         );
         for dtp_service in &self.dtp_services {
-            if dtp_service.service_idx == service_idx {
-                if remote_host.is_none() || dtp_service.remote_host == remote_host {
-                    return Some(dtp_service.clone());
-                }
+            if dtp_service.service_idx == service_idx
+                && (remote_host.is_none() || dtp_service.remote_host == remote_host)
+            {
+                return Some(dtp_service.clone());
             }
         }
         None
@@ -434,6 +434,12 @@ pub struct Workdir {
     suibase_state_file: PathBuf,
     suibase_yaml_user: PathBuf,
     suibase_yaml_default: PathBuf,
+    // Channels to transmit toward WebsocketWorker and its sub-threads.
+    // (All initialized by the parent WebsocketWorkdir thread)
+    pub to_websocket_worker: Option<GenericTx>,
+    pub to_websocket_worker_tx: Option<GenericTx>,
+    pub to_websocket_worker_rx: Option<GenericTx>,
+    pub to_websocket_worker_io: Option<GenericTx>,
 }
 
 impl Workdir {
@@ -540,6 +546,10 @@ impl GlobalsWorkdirsST {
                 suibase_state_file: state,
                 suibase_yaml_user: user_yaml,
                 suibase_yaml_default: default_yaml,
+                to_websocket_worker: None,
+                to_websocket_worker_tx: None,
+                to_websocket_worker_rx: None,
+                to_websocket_worker_io: None,
             });
         }
 
@@ -596,6 +606,11 @@ impl GlobalsWorkdirsST {
             }
         }
         None
+    }
+
+    // Write access to a Workdir stored in globals.
+    pub fn get_workdir_mut(&mut self, workdir_idx: WorkdirIdx) -> Option<&mut Workdir> {
+        self.workdirs.get_mut(workdir_idx)
     }
 }
 

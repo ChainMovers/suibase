@@ -20,11 +20,11 @@
 //
 // Sui SDK and DTP SDK can co-exist and be used independently.
 
-use std::{f64::consts::E, str::FromStr};
+use std::str::FromStr;
 
 use anyhow::bail;
 use dtp_core::{
-    network::{HostInternal, NetworkManager},
+    network::{HostInternal, NetworkManager, TransportControlInternalMT},
     types::PingStats,
 };
 use log::info;
@@ -39,6 +39,11 @@ impl Host {
     pub fn id(&self) -> &ObjectID {
         &self.id
     }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    tc_internal: TransportControlInternalMT, // Implementation hidden in dtp-core.
 }
 
 #[derive(Debug)]
@@ -76,7 +81,7 @@ impl DTP {
     }
 
     pub fn client_address(&self) -> &SuiAddress {
-        self.netmgr.get_client_address()
+        self.netmgr.get_auth_address()
     }
 
     pub fn gas_address(&self) -> &SuiAddress {
@@ -129,7 +134,7 @@ impl DTP {
         let host_internal = host_internal.unwrap();
 
         self.netmgr.sync_registry().await?;
-        
+
         info!("get_host end");
         Ok(Host {
             id: host_internal.object_id(),
@@ -188,6 +193,8 @@ impl DTP {
     // Ping Service
     //   JSON-RPC: Yes
     //   Gas Cost: Yes
+    //
+    // Note: This util fn not yet implemented. For now, use create_connection()/send()
     pub async fn ping_on_network(
         &mut self,
         target_host: &Host,
@@ -196,6 +203,24 @@ impl DTP {
         self.netmgr
             .ping_on_network(&target_host.host_internal)
             .await
+    }
+
+    // Create a connection to a Host.
+    //   JSON-RPC: Yes
+    //   Gas Cost: Yes
+    //
+    // Use target Host object and ServiceType.
+    pub async fn create_connection(
+        &mut self,
+        target_host: &Host,
+        service_idx: u8,
+    ) -> Result<Connection, anyhow::Error> {
+        Ok(Connection {
+            tc_internal: self
+                .netmgr
+                .create_connection(&target_host.host_internal, service_idx)
+                .await?,
+        })
     }
 
     // Initialize Firewall Service

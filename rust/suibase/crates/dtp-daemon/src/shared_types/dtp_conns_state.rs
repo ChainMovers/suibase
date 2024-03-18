@@ -1,12 +1,14 @@
 use common::basic_types::{ManagedElement16, ManagedVecMapVec, ManagedVecU16};
 use dtp_sdk::{Host, DTP};
+use tokio::sync::Mutex;
+use std::sync::Arc;
 
 #[derive(Debug)]
 // One per DTP connection.
 pub struct DTPConnStateData {
     pub idx: Option<ManagedVecU16>,
     pub is_open: bool,
-    pub dtp: Option<DTP>,
+    pub dtp: Option<Arc<Mutex<DTP>>>,
     pub localhost: Option<Host>,
 }
 
@@ -20,8 +22,8 @@ impl DTPConnStateData {
         }
     }
 
-    pub fn set_dtp(&mut self, dtp: DTP) {
-        self.dtp = Some(dtp);
+    pub fn set_dtp(&mut self, dtp: &Arc<Mutex<DTP>>) {        
+        self.dtp = Some(Arc::clone(dtp));
     }
 
     pub fn set_localhost(&mut self, localhost: Host) {

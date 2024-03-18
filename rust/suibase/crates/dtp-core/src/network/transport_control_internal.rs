@@ -1,136 +1,143 @@
+// What is the type naming convention?
+//
+// "Object"         --> Name of the object in the move package
+//
+// "ObjectInternal" --> Local memory representation, may have additional
+//                      fields not found on the network.
+//
+// "ObjectMoveRaw" --> Serialized fields as intended to be for the network
+//                     *MUST* match the Move Sui definition of a given version.
+//
+// Example:
+//   "TransportControl"
+//   "TransportControlInternal"
+//   "TransportControlMoveRaw"
+//
 use crate::types::{DTPError, SuiSDKParamsRPC, SuiSDKParamsTxn};
 
 use super::host_internal::HostInternal;
-use super::LocalhostInternal;
+use super::{ConnObjectsMoveRaw, ConnReqMoveRaw, LocalhostInternal};
 
 // Stuff needed typically for a Move Call
-use std::str::FromStr;
-use sui_keys::keystore::AccountKeystore;
+use serde_json::json;
+use std::sync::Arc;
 use sui_sdk::json::SuiJsonValue;
-use sui_sdk::types::base_types::ObjectID;
 
-use shared_crypto::intent::Intent;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
-use sui_types::transaction::Transaction;
+use sui_types::base_types::ObjectID;
 
-use anyhow::bail;
-
-// The "internal" object is a private implementation (not intended to be
-// directly exposed throught the DTP SDK).
-pub struct TransportControlInternal {
-    // Set when TC confirmed exists.
-    package_id: Option<ObjectID>,
-    object_id: Option<ObjectID>,
-
-    // Parameters used when the object was built (only set
-    // if was part of a recent operation).
-    call_args: Option<Vec<SuiJsonValue>>,
+#[derive(Debug)]
+pub struct ConnObjectsInternal {
+    // References to all objects needed to exchange data
+    // through a connection.
+    //
+    // If an end-point loose these references, they can be
+    // re-discovered using one of the related Host object.
+    pub tc: ObjectID, // TransportControl
+    pub cli_tx_pipe: ObjectID,
+    pub srv_tx_pipe: ObjectID,
+    pub cli_tx_ipipes: Vec<ObjectID>,
+    pub srv_tx_ipipes: Vec<ObjectID>,
 }
 
-pub(crate) async fn create_best_effort_transport_control_on_network(
+impl ConnObjectsInternal {
+    pub fn raw_to_internal(raw: ConnObjectsMoveRaw) -> Result<ConnObjectsInternal, anyhow::Error> {
+        let tc = match ObjectID::from_bytes(raw.tc) {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(DTPError::DTPFailedConnObjectsLoading {
+                    desc: e.to_string(),
+                }
+                .into())
+            }
+        };
+        let cli_tx_pipe = match ObjectID::from_bytes(raw.cli_tx_pipe) {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(DTPError::DTPFailedConnObjectsLoading {
+                    desc: e.to_string(),
+                }
+                .into())
+            }
+        };
+        let srv_tx_pipe = match ObjectID::from_bytes(raw.srv_tx_pipe) {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(DTPError::DTPFailedConnObjectsLoading {
+                    desc: e.to_string(),
+                }
+                .into())
+            }
+        };
+        let cli_tx_ipipes: Vec<ObjectID> = raw
+            .cli_tx_ipipes
+            .iter()
+            .map(|x| {
+                ObjectID::from_bytes(x).map_err(|e| DTPError::DTPFailedConnObjectsLoading {
+                    desc: e.to_string(),
+                })
+            })
+            .collect::<Result<Vec<ObjectID>, DTPError>>()?;
+
+        let srv_tx_ipipes: Vec<ObjectID> = raw
+            .srv_tx_ipipes
+            .iter()
+            .map(|x| {
+                ObjectID::from_bytes(x).map_err(|e| DTPError::DTPFailedConnObjectsLoading {
+                    desc: e.to_string(),
+                })
+            })
+            .collect::<Result<Vec<ObjectID>, _>>()?;
+
+        // Convert the raw Move object into the local memory representation.
+        Ok(ConnObjectsInternal {
+            tc,
+            cli_tx_pipe,
+            srv_tx_pipe,
+            cli_tx_ipipes,
+            srv_tx_ipipes,
+        })
+    }
+}
+#[derive(Debug)]
+pub struct TransportControlInternalST {
+    // Set when TC confirmed exists on network.
+    conn_objs: Option<ConnObjectsInternal>,
+}
+
+pub type TransportControlInternalMT = Arc<tokio::sync::RwLock<TransportControlInternalST>>;
+
+pub(crate) async fn open_connection_on_network(
     rpc: &SuiSDKParamsRPC,
     txn: &SuiSDKParamsTxn,
-    localhost: &LocalhostInternal,
+    cli_host: &LocalhostInternal,
     srv_host: &HostInternal,
-    _server_protocol: u16,
-    _server_port: Option<u16>,
-    _return_port: Option<u16>,
-) -> Result<TransportControlInternal, anyhow::Error> {
-    let sui_client = match rpc.sui_client.as_ref() {
-        Some(x) => &x.inner,
-        None => bail!(DTPError::DTPMissingSuiClient),
-    };
-    let keystore = &txn.keystore.inner;
-
-    let server_adm = match srv_host.authority() {
-        Some(x) => x,
-        None => bail!(DTPError::DTPMissingServerAdminAddress),
-    };
-
-    /* Params must match. See transport_control.move
-       cli_host: ID,
-       srv_host: ID,
-       server_adm: address,
-       protocol: u16,
-       port: u16,
-       return_port: u16,
-    */
-
+    service_idx: u8,
+) -> Result<TransportControlInternalMT, anyhow::Error> {
+    // Creates also the related pipe(s) and inner pipe(s).
     let call_args = vec![
-        SuiJsonValue::from_object_id(localhost.object_id()),
+        SuiJsonValue::new(json!(service_idx))?,
+        SuiJsonValue::from_object_id(cli_host.object_id()),
         SuiJsonValue::from_object_id(srv_host.object_id()),
-        SuiJsonValue::from_str(&server_adm.to_string()).unwrap(),
-        SuiJsonValue::from_str("0").unwrap(),
-        SuiJsonValue::from_str("0").unwrap(),
-        SuiJsonValue::from_str("0").unwrap(),
     ];
 
-    let function = "create_best_effort";
+    let conn_req_raw = super::common_rpc::do_move_call_ret_event::<ConnReqMoveRaw>(
+        rpc,
+        txn,
+        "api",
+        "open_connection",
+        "events",
+        "ConnReq",
+        call_args,
+    )
+    .await?;
 
-    let move_call = sui_client
-        .transaction_builder()
-        .move_call(
-            rpc.client_address,
-            txn.package_id,
-            "transport_control",
-            function,
-            vec![],
-            call_args,
-            None, // The node will pick a gas object belong to the signer if not provided.
-            1000,
-        )
-        .await
-        .map_err(|e| DTPError::DTPFailedMoveCall {
-            desc: function.to_string(),
-            client_address: rpc.client_address.to_string(),
-            package_id: txn.package_id.to_string(),
-            inner: e.to_string(),
-        })?;
-
-    // Sign transaction.
-    let signature =
-        keystore.sign_secure(&rpc.client_address, &move_call, Intent::sui_transaction())?;
-
-    let tx = Transaction::from_data(move_call, vec![signature]);
-
-    let response = sui_client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::new().with_effects(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await?;
-
-    if !response.errors.is_empty() {
-        // Return an anyhow error after adding the response.errors
-        // to the error message.
-        let mut error_message = "Response Error(s): ".to_string();
-        for error in response.errors {
-            error_message.push_str(&error.to_string());
-        }
-        bail!(DTPError::DTPFailedMoveCall {
-            desc: function.to_string(),
-            client_address: rpc.client_address.to_string(),
-            package_id: txn.package_id.to_string(),
-            inner: error_message
-        });
-    }
-
-    let _sui_id = response
-        .effects
-        .unwrap()
-        .shared_objects()
-        .first()
-        .unwrap()
-        .object_id;
-
-    // All good. Build the DTP handles.
-    let tci = TransportControlInternal {
-        package_id: None,
-        object_id: None,
-        call_args: None,
+    // Build the internal representation.
+    let conn_objs_raw = conn_req_raw.conn;
+    let conn_objs = ConnObjectsInternal::raw_to_internal(conn_objs_raw)?;
+    let tci = TransportControlInternalST {
+        conn_objs: Some(conn_objs),
     };
-    Ok(tci)
+
+    // All good. Make the TransportControlInternal thread safe.
+    Ok(Arc::new(tokio::sync::RwLock::new(tci)))
 }

@@ -52,6 +52,7 @@ pub const EVENT_AUDIT: u8 = 1; // Fast consistency check. Globals read-only acce
 pub const EVENT_UPDATE: u8 = 2; // Apply Globals config changes and/or update status. Globals write access allowed.
 pub const EVENT_EXEC: u8 = 3; // Execute what is specified by the params (command, data_string...). Globals write access allowed.
 
+#[derive(Default)]
 pub struct GenericChannelMsg {
     pub event_id: GenericChannelEventID,
 

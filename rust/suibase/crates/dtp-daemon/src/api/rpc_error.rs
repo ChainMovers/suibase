@@ -38,6 +38,10 @@ pub enum RpcSuibaseError {
     InvalidConfig(String),
     #[error("Problem getting local Host: {0}")]
     LocalHostError(String),
+    #[error("Remote Host does not exists: {0}")]
+    RemoteHostDoesNotExists(String),
+    #[error("Could not create connection. {0}")]
+    ConnectionCreationFailed(String),
 }
 
 impl RpcInputError {

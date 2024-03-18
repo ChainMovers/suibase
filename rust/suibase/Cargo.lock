@@ -1743,6 +1743,7 @@ version = "0.0.5"
 dependencies = [
  "anyhow",
  "axum",
+ "bcs",
  "bitflags 2.4.1",
  "chrono",
  "clap 3.2.25",

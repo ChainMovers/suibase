@@ -362,6 +362,11 @@ impl GlobalsWorkdirsST {
         None
     }
 
+    // Write access to a Workdir stored in globals.
+    pub async fn get_workdir_mut(&mut self, workdir_idx: WorkdirIdx) -> Option<&mut Workdir> {
+        self.workdirs.get_mut(workdir_idx)
+    }
+
     // Utility that returns the workdir_idx from the globals
     // using an exact workdir_name.
     //

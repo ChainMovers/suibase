@@ -5,7 +5,6 @@ use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 
 use common::basic_types::WorkdirIdx;
-use common::shared_types::GlobalsWorkdirsST;
 
 use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
 use crate::shared_types::Globals;
@@ -289,7 +288,7 @@ impl GeneralApiImpl {
 impl GeneralApiServer for GeneralApiImpl {
     async fn info(
         &self,
-        workdir: String,
+        _workdir: String,
         data: Option<bool>,
         display: Option<bool>,
         debug: Option<bool>,
@@ -312,13 +311,13 @@ impl GeneralApiServer for GeneralApiImpl {
         // Initialize some of the header fields.
         resp.header.method = "info".to_string();
 
-        if data && !data_out.is_empty(){
+        if data && !data_out.is_empty() {
             resp.data = Some(data_out);
         }
-        if display && !display_out.is_empty(){
+        if display && !display_out.is_empty() {
             resp.display = Some(display_out);
         }
-        if debug && !debug_out.is_empty(){
+        if debug && !debug_out.is_empty() {
             resp.debug = Some(debug_out);
         }
         Ok(resp)

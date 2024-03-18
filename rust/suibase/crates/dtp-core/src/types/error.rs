@@ -38,6 +38,9 @@ pub enum DTPError {
     #[error("DTP Failed loading registry: {desc:?}")]
     DTPFailedRegistryLoad { desc: String },
 
+    #[error("DTP Failed loading ConnObjects: {desc:?}")]
+    DTPFailedConnObjectsLoading { desc: String },
+
     #[error(
         "DTP Failed fetching object {object_type:?}::{object_id:?}. Info from sui_sdk-> {inner:?}"
     )]

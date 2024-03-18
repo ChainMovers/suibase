@@ -26,6 +26,7 @@ notify = { version = "6.0", default-features = false, features = [
 ] }
 
 anyhow.workspace = true
+bcs.workspace = true
 chrono.workspace = true
 clap.workspace = true
 colored.workspace = true

@@ -1,26 +1,10 @@
-//use std::any::Any;
-
 use crate::types::SuiSDKParamsRPC;
 use crate::types::SuiSDKParamsTxn;
 
-//use super::super::types::error::*;
 use super::host_internal::*;
 
-//use anyhow::bail;
-//use log::info;
-//use shared_crypto::intent::Intent;
-
-//use axum::extract::Host;
-//use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
-//use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
-//use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
-//use sui_types::transaction::Transaction;
-//use tower::ready_cache::cache::Equivalent;
-//use sui_sdk::types::messages::Transaction;
-//use sui_types::intent::Intent;
-//use sui_types::messages::ExecuteTransactionRequestType;
 
 #[derive(Debug)]
 pub struct LocalhostInternal {
@@ -45,7 +29,7 @@ pub(crate) async fn get_localhost_internal_by_id(
     let host_internal = host_internal.unwrap();
 
     let localhost_internal = LocalhostInternal {
-        object_id: host_id.clone(),
+        object_id: host_id,
         admin_address: rpc.client_address,
         firewall_initialized: false,
         host_internal,
@@ -59,7 +43,7 @@ pub(crate) fn create_localhost_from_host(
     rpc: &SuiSDKParamsRPC,
     host_internal: HostInternal,
 ) -> LocalhostInternal {
-    let object_id = host_internal.object_id.clone();
+    let object_id = host_internal.object_id;
     LocalhostInternal {
         object_id,
         admin_address: rpc.client_address,
@@ -76,7 +60,7 @@ pub(crate) async fn create_localhost_on_network(
     // for this user.
     let vargs: Vec<u8> = vec![];
     let call_args = vec![SuiJsonValue::from_bcs_bytes(None, &vargs).unwrap()];
-    let host_object_id = super::common_rpc::do_move_object_create(
+    let host_object_id = super::common_rpc::do_move_call_ret_id(
         rpc,
         txn,
         "api",

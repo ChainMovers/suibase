@@ -1,15 +1,13 @@
-use std::f64::consts::E;
-use std::str::FromStr;
+use std::sync::Arc;
 
 use axum::async_trait;
 
-use axum::extract::Host;
-use dtp_sdk::DTP;
-use hyper::client;
+use dtp_sdk::{Connection, DTP};
+
 use jsonrpsee::core::RpcResult;
 use log::info;
-use serde_with::hex;
-use sui_types::base_types::{ObjectID, SuiAddress};
+
+use tokio::sync::Mutex;
 
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
@@ -21,20 +19,11 @@ use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError};
 
 pub struct DtpApiImpl {
     pub globals: Globals,
-    /*pub globals_conns_state: GlobalsDTPConnsStateMT,
-    pub globals_conns_state_tx: GlobalsDTPConnsStateTxMT,
-    pub globals_conns_state_rx: GlobalsDTPConnsStateRxMT,*/
     pub admctrl_tx: AdminControllerTx,
 }
 
 impl DtpApiImpl {
-    pub fn new(
-        globals: Globals,
-        /*globals_conns_state: GlobalsDTPConnsStateMT,
-        globals_conns_state_tx: GlobalsDTPConnsStateTxMT,
-        globals_conns_state_rx: GlobalsDTPConnsStateRxMT,*/
-        admctrl_tx: AdminControllerTx,
-    ) -> Self {
+    pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
         Self {
             globals,
             admctrl_tx,
@@ -143,10 +132,7 @@ impl DtpApiServer for DtpApiImpl {
             .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
         // Iterate the auths. Create a DTP Client for each, then do the steps to create a Host object (if does not already exists).
-        let keystore_path = workdir
-            .path()
-            .join("config".to_string())
-            .join("sui.keystore");
+        let keystore_path = workdir.path().join("config").join("sui.keystore");
 
         let mut display_out = String::new();
 
@@ -162,17 +148,14 @@ impl DtpApiServer for DtpApiImpl {
             // Get localhost for this client, it will be created if does not exists.
             let host = dtp.get_host().await;
 
-            if let Err(_) = host {
-                if let Err(e) = host {
-                    let error_message = format!(
-                        "auth addr {} package_id {} inner error [{}]",
-                        auth,
-                        package_id.to_string(),
-                        e.to_string()
-                    );
-                    return Err(RpcSuibaseError::LocalHostError(error_message).into());
-                }
+            if let Err(e) = host {
+                let error_message = format!(
+                    "auth addr {} package_id {} inner error [{}]",
+                    auth, package_id, e
+                );
+                return Err(RpcSuibaseError::LocalHostError(error_message).into());
             }
+
             let host = host.unwrap();
 
             // Display the alias and the host address.
@@ -275,66 +258,130 @@ impl DtpApiServer for DtpApiImpl {
         let gas_addr = dtp_sdk::str_to_sui_address(&gas_addr.unwrap())
             .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
-        let (host_sla_idx, is_open) = {
-            // Get the HostSlaIdx (will be created if does not exists).
+        // Convert host_addr string to an ObjectID.
+        let host_id = dtp_sdk::str_to_object_id(&host_addr)
+            .map_err(|e| RpcInputError::InvalidParams("host_addr".to_string(), e.to_string()))?;
+
+        // Variables initialized while holding the GlobalsDTPConnsState mutex.
+        let mut need_to_get_localhost = false;
+        let mut dtp_access: Option<Arc<Mutex<DTP>>> = None;
+        let mut host_sla_idx: Option<u16> = None;
+        let mut conn: Option<Connection> = None;
+
+        {
             let mut conns_state_guard = self.globals.dtp_conns_state(workdir_idx).write().await;
             let conns_state = &mut *conns_state_guard;
-            // TODO: Validate host_addr before insertion.
-            let mut host_sla_idx = conns_state.conns.get_if_some(7, &host_addr, 0);
-            if host_sla_idx.is_none() {
-                // Create a DTP client for it.
-                let keystore_path = workdir
-                    .path()
-                    .join("config".to_string())
-                    .join("sui.keystore");
-                let mut dtp = DTP::new(gas_addr, keystore_path.to_str()).await?;
+
+            let mut conn_data: Option<&DTPConnStateData> = None;
+            host_sla_idx = conns_state.conns.get_if_some(7, &host_addr, 0);
+
+            if let Some(host_sla_idx) = host_sla_idx {
+                // Get the existing DtpConnStateData.
+                conn_data = conns_state.conns.get(host_sla_idx);
+                if conn_data.is_none() {
+                    return Err(RpcSuibaseError::InternalError(
+                        "Connection data unexpectedly missing".to_string(),
+                    )
+                    .into());
+                } else {
+                    let existing_conn_data = conn_data.unwrap();
+                    //TODO if existing_conn_data.is_open { initialize conn }
+                    if existing_conn_data.dtp.is_some() {
+                        // Get the existing DTP.
+                        dtp_access = Some(Arc::clone(existing_conn_data.dtp.as_ref().unwrap()));
+                    } else {
+                        return Err(RpcSuibaseError::InternalError(
+                            "DTP client unexpectedly missing".to_string(),
+                        )
+                        .into());
+                    }
+                }
+            } else {
+                // Need to create the DTP and DtpConnStateData.
+                let keystore_path = workdir.path().join("config").join("sui.keystore");
+                let mut new_dtp = DTP::new(gas_addr, keystore_path.to_str()).await?;
 
                 // TODO Remove hard coding
-                dtp.add_rpc_url("http://0.0.0.0:44340").await?;
-                dtp.set_package_id(package_id);
-
-                // Make sure localhost exists for this client.
-                let host = dtp.get_host().await;
-
-                if let Err(e) = host {
-                    let error_message = format!(
-                        "package_id {} inner error {}",
-                        package_id.to_string(),
-                        e.to_string()
-                    );
-                    return Err(RpcSuibaseError::LocalHostError(error_message).into());
-                }
-                let host = host.unwrap();
+                new_dtp.add_rpc_url("http://0.0.0.0:44340").await?;
+                new_dtp.set_gas_address(gas_addr);
+                new_dtp.set_package_id(package_id);
+                dtp_access = Some(Arc::new(Mutex::new(new_dtp)));
 
                 let mut new_conn_state = DTPConnStateData::new();
-                new_conn_state.set_dtp(dtp);
-                new_conn_state.set_localhost(host);
-                host_sla_idx = conns_state.conns.push(new_conn_state, 7, host_addr, 0);
+                new_conn_state.set_dtp(dtp_access.as_ref().unwrap());
+                host_sla_idx = conns_state
+                    .conns
+                    .push(new_conn_state, 7, host_addr.clone(), 0);
                 if host_sla_idx.is_none() {
                     return Err(RpcSuibaseError::InternalError(
                         "Max number of connections reached".to_string(),
                     )
                     .into());
                 }
+                // Further network action performed outside the Mutex.
+                need_to_get_localhost = true;
             }
-            let host_sla_idx = host_sla_idx.unwrap();
-            let conn_data = conns_state.conns.get(host_sla_idx);
-            if conn_data.is_none() {
-                return Err(RpcSuibaseError::InternalError(
-                    "Connection data unexpectedly missing".to_string(),
-                )
-                .into());
-            }
-            let conn_data = conn_data.unwrap();
-            (host_sla_idx, conn_data.is_open)
         };
 
-        if !is_open {
-            // Send request to WebSocketTXWorker to open the connection.
-            // TODO TODO TODO
+        if host_sla_idx.is_none() {
+            return Err(RpcSuibaseError::InternalError(
+                "Unexpected host_sla_idx not initialized".to_string(),
+            )
+            .into());
+        }
+        let host_sla_idx = host_sla_idx.unwrap();
+
+        if dtp_access.is_none() {
+            return Err(RpcSuibaseError::InternalError(
+                "Unexpected DTP client not initialized".to_string(),
+            )
+            .into());
+        }
+        let dtp_access = dtp_access.unwrap();
+
+        // Make sure the localhost exists (created as needed).
+        // Note: We don't need the API 'Host' handle on it.
+        if need_to_get_localhost {
+            let mut dtp = dtp_access.lock().await;
+            let host = dtp.get_host().await;
+
+            if let Err(e) = host {
+                let error_message = format!("package_id {} inner error {}", package_id, e);
+                return Err(RpcSuibaseError::LocalHostError(error_message).into());
+            }
+        };
+
+        // Get the API handle on the remote host.
+        let target_host = {
+            let dtp = dtp_access.lock().await;
+            dtp.get_host_by_id(host_id).await?
+        };
+
+        // The remote host must exist!
+        if target_host.is_none() {
+            return Err(RpcSuibaseError::RemoteHostDoesNotExists(host_addr).into());
+        }
+        let target_host = target_host.unwrap();
+
+        // If connection not open, try to recover/create one.
+        if conn.is_none() {
+            let mut dtp = dtp_access.lock().await;
+            let open_conn = dtp.create_connection(&target_host, 7).await;
+            if let Err(e) = open_conn {
+                let error_message = format!("package_id {} inner error {}", package_id, e);
+                return Err(RpcSuibaseError::ConnectionCreationFailed(error_message).into());
+            }
+            conn = Some(open_conn.unwrap());
         }
 
-        // Connection not open, try to open it.
+        // Tell the WebSocketWorker to monitor this connection.
+        // Verify with globals if WebSocketWorker is monitoring the connection.
+        // If not, spin re-checking every ~50ms for up to 1 second.
+
+        // Call into DTP to send data (will return a request handle).
+
+        // Wait block for a response using the request handle.
+        // (the handle is just a one-shot channel with timeout).
 
         // TODO: Is the server healthy?
 

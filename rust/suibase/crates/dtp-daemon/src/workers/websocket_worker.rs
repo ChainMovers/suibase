@@ -21,8 +21,8 @@
 use std::sync::Arc;
 
 use crate::{
-    shared_types::{self, Globals},
-    workers::{DBWorker, DBWorkerParams, WebSocketWorkerIO, WebSocketWorkerIOParams},
+    shared_types::Globals,
+    workers::{WebSocketWorkerIO, WebSocketWorkerIOParams},
 };
 
 use common::basic_types::{
@@ -34,7 +34,7 @@ use anyhow::Result;
 use axum::async_trait;
 
 use tokio::sync::{mpsc::Sender, Mutex};
-use tokio_graceful_shutdown::{FutureExt, SubsystemBuilder, SubsystemHandle};
+use tokio_graceful_shutdown::{SubsystemBuilder, SubsystemHandle};
 
 #[derive(Clone)]
 pub struct WebSocketWorkerParams {
@@ -114,23 +114,41 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
 
         // For now, just start a single instance of each SubThread.
 
+        let (worker_io_tx, worker_io_rx) = tokio::sync::mpsc::channel(1000);
+        let (worker_tx_tx, _worker_tx_rx) = tokio::sync::mpsc::channel(1000);
+        let (worker_rx_tx, _worker_rx_rx) = tokio::sync::mpsc::channel(1000);
+
+        // Write the channels into the globals.
+        {
+            let mut workdirs_guard = self.params.globals.workdirs.write().await;
+            let workdirs = &mut *workdirs_guard;
+            let workdir = workdirs.get_workdir_mut(self.params.workdir_idx);
+            if let Some(workdir) = workdir {
+                workdir.to_websocket_worker = Some(self.params.event_tx.clone());
+                workdir.to_websocket_worker_io = Some(worker_io_tx.clone());
+                workdir.to_websocket_worker_tx = Some(worker_tx_tx.clone());
+                workdir.to_websocket_worker_rx = Some(worker_rx_tx.clone());
+            }
+        }
+
         // Start a child io thread. This is the actual WebSocket to the outside world.
         {
-            let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(1000);
             let ws_worker_params = WebSocketWorkerIOParams::new(
                 self.params.globals.clone(),
-                worker_rx,
-                worker_tx.clone(),
+                worker_io_rx,
+                worker_io_tx,
                 self.params.event_tx.clone(),
                 self.params.workdir_idx,
             );
             let ws_worker = WebSocketWorkerIO::new(ws_worker_params);
-            subsys.start(SubsystemBuilder::new("ws-worker", |a| ws_worker.run(a)));
+            subsys.start(SubsystemBuilder::new("ws-worker-io", |a| ws_worker.run(a)));
             self.worker_io = Some(WebSocketSubThread {
                 is_running: true,
-                channel: Some(worker_tx),
+                channel: Some(worker_tx_tx),
             });
         }
+
+        // TODO Implement TX/RX threads.
 
         // Start a single child db_worker thread.
         /* Not applicable for now
