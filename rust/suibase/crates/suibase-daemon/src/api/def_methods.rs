@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::workers::PackageTrackingState;
+use common::workers::SubscriptionTrackingState;
 
 // Defines the JSON-RPC API.
 //
@@ -355,7 +355,7 @@ impl MoveConfig {
             path: None,
             latest_package: None,
             older_packages: Vec::new(),
-            tracking_state: PackageTrackingState::new().into(),
+            tracking_state: SubscriptionTrackingState::new().into(),
         }
     }
 }

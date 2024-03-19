@@ -76,8 +76,8 @@ pub(crate) async fn do_move_call(
             function,
             vec![],
             call_args,
-            None, // The node will pick a gas object belong to the signer if not provided.
-            10000000,
+            None, // The node will pick a gas object from the signer.
+            1000000000,
         )
         .await;
     if let Err(e) = move_call {
@@ -164,7 +164,7 @@ where
     let mut needed_event = Option::<T>::None;
 
     // TODO Optimize this instantiation!?
-    let tag_str = format!("0x{}::{}::{}", txn.package_id, event_module, event_type);
+    let tag_str = format!("{}::{}::{}", txn.package_id, event_module, event_type);
     let tag = StructTag::from_str(&tag_str)?;
 
     for event in events.data {
@@ -265,6 +265,11 @@ where
         None => bail!(DTPError::DTPMissingSuiClient),
     };
 
+    info!(
+        "fetch_raw_move_object start for object id{}",
+        object_id.to_string()
+    );
+
     //let object_id_str = object_id.to_string();
     let response = sui_client
         .read_api()
@@ -280,6 +285,7 @@ where
         .into());
     }
 
+    info!("fetch_raw_move_object A");
     let response = response.unwrap().into_object();
     if let Err(e) = response {
         // If the enum 'e' is of type NotExists, or Deleted return Ok(None)
@@ -298,6 +304,7 @@ where
     }
     let resp = response.unwrap();
 
+    info!("fetch_raw_move_object B");
     // Deserialize the BCS data into T
     let raw_data = resp.to_string(); // Copy to string for debug purpose... optimize this later?
     let sui_raw_data = resp.bcs;
@@ -313,9 +320,11 @@ where
                 }
                 .into());
             }
+            info!("fetch_raw_move_object end");
             return Ok(Some(ret_value.unwrap()));
         }
     };
+    info!("fetch_raw_move_object C (error end)");
 
     Err(DTPError::DTPFailedConvertBCS {
         object_type: std::any::type_name::<T>().to_string(),

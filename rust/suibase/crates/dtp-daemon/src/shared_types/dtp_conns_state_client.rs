@@ -1,18 +1,18 @@
 use common::basic_types::{ManagedElement16, ManagedVecMapVec, ManagedVecU16};
 use dtp_sdk::{Host, DTP};
-use tokio::sync::Mutex;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 // One per DTP connection.
-pub struct DTPConnStateData {
+pub struct DTPConnStateDataClient {
     pub idx: Option<ManagedVecU16>,
     pub is_open: bool,
     pub dtp: Option<Arc<Mutex<DTP>>>,
     pub localhost: Option<Host>,
 }
 
-impl DTPConnStateData {
+impl DTPConnStateDataClient {
     pub fn new() -> Self {
         Self {
             idx: None,
@@ -22,7 +22,7 @@ impl DTPConnStateData {
         }
     }
 
-    pub fn set_dtp(&mut self, dtp: &Arc<Mutex<DTP>>) {        
+    pub fn set_dtp(&mut self, dtp: &Arc<Mutex<DTP>>) {
         self.dtp = Some(Arc::clone(dtp));
     }
 
@@ -31,13 +31,13 @@ impl DTPConnStateData {
     }
 }
 
-impl std::default::Default for DTPConnStateData {
+impl std::default::Default for DTPConnStateDataClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ManagedElement16 for DTPConnStateData {
+impl ManagedElement16 for DTPConnStateDataClient {
     fn idx(&self) -> Option<ManagedVecU16> {
         self.idx
     }
@@ -48,11 +48,11 @@ impl ManagedElement16 for DTPConnStateData {
 }
 
 #[derive(Debug)]
-pub struct GlobalsDTPConnsStateST {
-    pub conns: ManagedVecMapVec<DTPConnStateData>,
+pub struct GlobalsDTPConnsStateClientST {
+    pub conns: ManagedVecMapVec<DTPConnStateDataClient>,
 }
 
-impl GlobalsDTPConnsStateST {
+impl GlobalsDTPConnsStateClientST {
     pub fn new() -> Self {
         Self {
             conns: ManagedVecMapVec::new(),
@@ -60,7 +60,7 @@ impl GlobalsDTPConnsStateST {
     }
 }
 
-impl Default for GlobalsDTPConnsStateST {
+impl Default for GlobalsDTPConnsStateClientST {
     fn default() -> Self {
         Self::new()
     }

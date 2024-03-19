@@ -69,14 +69,7 @@ pub struct GenericChannelMsg {
 
 impl GenericChannelMsg {
     pub fn new() -> Self {
-        Self {
-            event_id: 0,
-            command: None,
-            params: Vec::new(),
-            data_json: None,
-            workdir_idx: None,
-            resp_channel: None,
-        }
+        Self::default()
     }
 
     pub fn command(&self) -> Option<String> {

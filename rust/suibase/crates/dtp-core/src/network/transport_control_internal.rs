@@ -15,7 +15,7 @@
 //
 use crate::types::{DTPError, SuiSDKParamsRPC, SuiSDKParamsTxn};
 
-use super::host_internal::HostInternal;
+use super::host_internal::HostInternalST;
 use super::{ConnObjectsMoveRaw, ConnReqMoveRaw, LocalhostInternal};
 
 // Stuff needed typically for a Move Call
@@ -110,14 +110,16 @@ pub(crate) async fn open_connection_on_network(
     rpc: &SuiSDKParamsRPC,
     txn: &SuiSDKParamsTxn,
     cli_host: &LocalhostInternal,
-    srv_host: &HostInternal,
+    srv_host: &HostInternalST,
     service_idx: u8,
 ) -> Result<TransportControlInternalMT, anyhow::Error> {
     // Creates also the related pipe(s) and inner pipe(s).
+    let vargs: Vec<u8> = vec![];
     let call_args = vec![
         SuiJsonValue::new(json!(service_idx))?,
         SuiJsonValue::from_object_id(cli_host.object_id()),
         SuiJsonValue::from_object_id(srv_host.object_id()),
+        SuiJsonValue::from_bcs_bytes(None, &vargs).unwrap(),
     ];
 
     let conn_req_raw = super::common_rpc::do_move_call_ret_event::<ConnReqMoveRaw>(

@@ -4,13 +4,14 @@ use crate::types::{
 
 use log::info;
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui_keys::keystore::{FileBasedKeystore, Keystore};
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use anyhow::bail;
 
-use super::{HostInternal, LocalhostInternal, TransportControlInternalMT, UserRegistryInternal};
+use super::{HostInternalST, LocalhostInternal, TransportControlInternalMT, UserRegistryInternal};
 
 // The default location for localnet is relative to
 // this module Cargo.toml location.
@@ -45,7 +46,7 @@ pub struct SuiNode {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub struct NetworkManager {
+pub struct NetworkManagerST {
     sui_nodes: Vec<SuiNode>,
 
     sui_txn: SuiSDKParamsTxn,
@@ -58,7 +59,9 @@ pub struct NetworkManager {
     registry: Option<UserRegistryInternal>,
 }
 
-impl NetworkManager {
+pub type NetworkManagerMT = Arc<tokio::sync::RwLock<NetworkManagerST>>;
+
+impl NetworkManagerST {
     pub async fn new(
         auth_address: SuiAddress,
         keystore_pathname: Option<&str>,
@@ -94,7 +97,7 @@ impl NetworkManager {
             keystore: KeystoreWrapped { inner: keystore },
         };
 
-        Ok(NetworkManager {
+        Ok(NetworkManagerST {
             sui_nodes: vec![SuiNode { rpc }],
             sui_txn: txn,
             localhost_id: None,
@@ -166,14 +169,14 @@ impl NetworkManager {
     pub async fn get_host_by_id(
         &self,
         host_id: ObjectID,
-    ) -> Result<Option<HostInternal>, anyhow::Error> {
+    ) -> Result<Option<HostInternalST>, anyhow::Error> {
         super::get_host_internal_by_id(&self.sui_nodes[0].rpc, host_id).await
     }
 
     pub async fn get_host_by_auth(
         &self,
         address: &SuiAddress,
-    ) -> Result<Option<HostInternal>, anyhow::Error> {
+    ) -> Result<Option<HostInternalST>, anyhow::Error> {
         super::get_host_internal_by_auth(&self.sui_nodes[0].rpc, &self.sui_txn.package_id, address)
             .await
     }
@@ -279,7 +282,7 @@ impl NetworkManager {
         Ok(())
     }
 
-    pub async fn get_localhost_by_auth(&mut self) -> Result<Option<HostInternal>, anyhow::Error> {
+    pub async fn get_localhost_by_auth(&mut self) -> Result<Option<HostInternalST>, anyhow::Error> {
         // Note: The returned HostInternal is for the API Host object (which does not own a LocalhostInternal).
         //       Instead, a single instance of LocalhostInternal is cached by the netmgr.
 
@@ -297,7 +300,7 @@ impl NetworkManager {
             }
         };
 
-        let host_internal: Option<HostInternal> = if localhost_id.is_none() {
+        let host_internal: Option<HostInternalST> = if localhost_id.is_none() {
             let auth_address = self.get_auth_address();
             info!(
                 "get_localhost_by_auth from network. Fetch for auth [{}]",
@@ -339,7 +342,7 @@ impl NetworkManager {
 
         // Build a HostInternal object for the API.
         // The API can "catch it" as the localhost and give it special handling.
-        Ok(Some(HostInternal {
+        Ok(Some(HostInternalST {
             object_id: localhost_id,
             authority: None,
             raw: None,
@@ -348,7 +351,7 @@ impl NetworkManager {
 
     pub async fn load_local_client_registry(
         &mut self,
-    ) -> Result<(HostInternal, LocalhostInternal), anyhow::Error> {
+    ) -> Result<(HostInternalST, LocalhostInternal), anyhow::Error> {
         Err(DTPError::DTPNotImplemented.into())
     }
 
@@ -359,7 +362,7 @@ impl NetworkManager {
         Ok(())
     }
 
-    pub async fn create_localhost_on_network(&mut self) -> Result<HostInternal, anyhow::Error> {
+    pub async fn create_localhost_on_network(&mut self) -> Result<HostInternalST, anyhow::Error> {
         // Note: The returned HostInternal is for the API Host object (which does not own a LocalhostInternal).
         //       Instead, a single instance of LocalhostInternal is cached by the netmgr.
 
@@ -412,7 +415,7 @@ impl NetworkManager {
 
         // Create a Host for the API user with only the ObjectID set.
         // The API can "catch it" as the localhost and give it special handling.
-        Ok(HostInternal {
+        Ok(HostInternalST {
             object_id: localhost_id,
             authority: None,
             raw: None,
@@ -450,7 +453,7 @@ impl NetworkManager {
 
     pub async fn ping_on_network(
         &mut self,
-        target_host: &HostInternal,
+        target_host: &HostInternalST,
     ) -> Result<PingStats, anyhow::Error> {
         self.ensure_localhost_ready().await?;
 
@@ -478,7 +481,7 @@ impl NetworkManager {
 
     pub async fn create_connection(
         &mut self,
-        target_host: &HostInternal,
+        target_host: &HostInternalST,
         service_idx: u8,
     ) -> Result<TransportControlInternalMT, anyhow::Error> {
         // Creates a new connection even if one already exists on the network.

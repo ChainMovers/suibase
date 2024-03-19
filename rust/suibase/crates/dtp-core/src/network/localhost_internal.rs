@@ -11,7 +11,7 @@ pub struct LocalhostInternal {
     object_id: ObjectID,
     admin_address: SuiAddress,
     firewall_initialized: bool,
-    host_internal: HostInternal,
+    host_internal: HostInternalST,
 }
 
 pub(crate) async fn get_localhost_internal_by_id(
@@ -41,7 +41,7 @@ pub(crate) async fn get_localhost_internal_by_id(
 // The host is consumed.
 pub(crate) fn create_localhost_from_host(
     rpc: &SuiSDKParamsRPC,
-    host_internal: HostInternal,
+    host_internal: HostInternalST,
 ) -> LocalhostInternal {
     let object_id = host_internal.object_id;
     LocalhostInternal {
@@ -76,7 +76,7 @@ pub(crate) async fn create_localhost_on_network(
         object_id: host_object_id,
         admin_address: rpc.client_address,
         firewall_initialized: false,
-        host_internal: HostInternal::new(host_object_id),
+        host_internal: HostInternalST::new(host_object_id),
     })
 }
 

@@ -21,7 +21,7 @@
 use std::sync::Arc;
 
 use crate::{
-    shared_types::Globals,
+    shared_types::{Globals, WebSocketWorkerMsg, WebSocketWorkerRx, WebSocketWorkerTx},
     workers::{WebSocketWorkerIO, WebSocketWorkerIOParams},
 };
 
@@ -39,8 +39,8 @@ use tokio_graceful_shutdown::{SubsystemBuilder, SubsystemHandle};
 #[derive(Clone)]
 pub struct WebSocketWorkerParams {
     globals: Globals,
-    event_rx: Arc<Mutex<GenericRx>>,
-    event_tx: GenericTx,
+    event_rx: Arc<Mutex<WebSocketWorkerRx>>,
+    self_tx: WebSocketWorkerTx,
     workdir_idx: WorkdirIdx,
     workdir_name: String,
 }
@@ -48,8 +48,8 @@ pub struct WebSocketWorkerParams {
 impl WebSocketWorkerParams {
     pub fn new(
         globals: Globals,
-        event_rx: GenericRx,
-        event_tx: GenericTx,
+        event_rx: WebSocketWorkerRx,
+        event_tx: WebSocketWorkerTx,
         workdir_idx: WorkdirIdx,
     ) -> Self {
         // For now, support only built-in workdirs ("localnet", "testnet"...).
@@ -58,7 +58,7 @@ impl WebSocketWorkerParams {
         Self {
             globals,
             event_rx: Arc::new(Mutex::new(event_rx)),
-            event_tx,
+            self_tx: event_tx,
             workdir_idx,
             workdir_name,
         }
@@ -118,18 +118,21 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
         let (worker_tx_tx, _worker_tx_rx) = tokio::sync::mpsc::channel(1000);
         let (worker_rx_tx, _worker_rx_rx) = tokio::sync::mpsc::channel(1000);
 
-        // Write the channels into the globals.
+        // Add a reference to all TX channels into the globals.
         {
-            let mut workdirs_guard = self.params.globals.workdirs.write().await;
-            let workdirs = &mut *workdirs_guard;
-            let workdir = workdirs.get_workdir_mut(self.params.workdir_idx);
-            if let Some(workdir) = workdir {
-                workdir.to_websocket_worker = Some(self.params.event_tx.clone());
-                workdir.to_websocket_worker_io = Some(worker_io_tx.clone());
-                workdir.to_websocket_worker_tx = Some(worker_tx_tx.clone());
-                workdir.to_websocket_worker_rx = Some(worker_rx_tx.clone());
-            }
+            let mut channels_guard = self
+                .params
+                .globals
+                .get_channels(self.params.workdir_idx)
+                .write()
+                .await;
+            let channels = &mut *channels_guard;
+            channels.to_websocket_worker = Some(self.params.self_tx.clone());
+            channels.to_websocket_worker_tx = Some(worker_tx_tx.clone());
+            channels.to_websocket_worker_rx = Some(worker_rx_tx.clone());
         }
+
+        // Remember the channels for sub-treads.
 
         // Start a child io thread. This is the actual WebSocket to the outside world.
         {
@@ -137,7 +140,7 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
                 self.params.globals.clone(),
                 worker_io_rx,
                 worker_io_tx,
-                self.params.event_tx.clone(),
+                self.params.self_tx.clone(),
                 self.params.workdir_idx,
             );
             let ws_worker = WebSocketWorkerIO::new(ws_worker_params);
@@ -239,26 +242,34 @@ impl WebSocketThread {
         while !subsys.is_shutdown_requested() {
             // Wait for a suibase internal message (not a websocket message!).
             if let Some(msg) = event_rx.recv().await {
-                // Process the message.
-                match msg.event_id {
-                    basic_types::EVENT_AUDIT => {
-                        self.process_audit_msg(msg).await;
-                    }
-                    basic_types::EVENT_UPDATE => {
-                        self.process_update_msg(msg).await;
-                    }
-                    basic_types::EVENT_EXEC => {
-                        if let Some(command) = msg.command() {
-                            if command == "dtp_open_conn" {
-                                self.process_dtp_open_conn(msg).await;
-                            } else {
-                                log::error!(
+                match msg {
+                    WebSocketWorkerMsg::Generic(msg) => {
+                        // Process the message.
+                        match msg.event_id {
+                            basic_types::EVENT_AUDIT => {
+                                self.process_audit_msg(msg).await;
+                            }
+                            basic_types::EVENT_UPDATE => {
+                                self.process_update_msg(msg).await;
+                            }
+                            basic_types::EVENT_EXEC => {
+                                if let Some(command) = msg.command() {
+                                    if command == "dtp_open_conn" {
+                                        self.process_dtp_open_conn(msg).await;
+                                    } else {
+                                        log::error!(
                                     "Received a EVENT_EXEC message with unexpected command {}",
                                     command
                                 );
+                                    }
+                                } else {
+                                    log::error!("Received a EVENT_EXEC message without command");
+                                }
                             }
-                        } else {
-                            log::error!("Received a EVENT_EXEC message without command");
+                            _ => {
+                                // Consume unexpected messages.
+                                log::error!("Unexpected event_id {:?}", msg);
+                            }
                         }
                     }
                     _ => {

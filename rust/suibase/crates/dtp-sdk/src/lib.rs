@@ -20,35 +20,49 @@
 //
 // Sui SDK and DTP SDK can co-exist and be used independently.
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::bail;
 use dtp_core::{
-    network::{HostInternal, NetworkManager, TransportControlInternalMT},
+    network::{
+        HostInternalMT, HostInternalST, NetworkManagerMT, NetworkManagerST,
+        TransportControlInternalMT,
+    },
     types::PingStats,
 };
 use log::info;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Host {
+    // Host can be cheaply cloned and safely sent/shared between multiple threads.
+    //
+    // User can have multiple Host object instance. Instances with the same ObjectID
+    // share the same internal data (reference counted with Arc::Mutex).
+
+    // Convenient read-only vars that do not change for the lifetime of this object.
     id: ObjectID,
-    host_internal: HostInternal, // Implementation hidden in dtp-core.
+
+    // Multi-thread safe implementation hidden in dtp-core.
+    host_internal: HostInternalMT,
 }
+
 impl Host {
-    pub fn id(&self) -> &ObjectID {
+    pub fn object_id(&self) -> &ObjectID {
         &self.id
     }
 }
 
 #[derive(Debug)]
 pub struct Connection {
-    tc_internal: TransportControlInternalMT, // Implementation hidden in dtp-core.
+    // Multi-thread safe implementation hidden in dtp-core.
+    tc_internal: TransportControlInternalMT,
 }
 
 #[derive(Debug)]
 pub struct DTP {
-    netmgr: NetworkManager, // Implementation hidden in dtp-core.
+    // Multi-thread safe implementation hidden in dtp-core.
+    netmgr: NetworkManagerMT,
 }
 
 impl DTP {
@@ -56,44 +70,72 @@ impl DTP {
         auth_address: SuiAddress,
         keystore_pathname: Option<&str>,
     ) -> Result<Self, anyhow::Error> {
+        let netmgr = Arc::new(tokio::sync::RwLock::new(
+            NetworkManagerST::new(auth_address, keystore_pathname).await?,
+        ));
         Ok(DTP {
             #[allow(clippy::needless_borrow)]
-            netmgr: NetworkManager::new(auth_address, keystore_pathname).await?,
+            netmgr,
         })
     }
 
-    // Light Mutators
+    // Mutators
     //   JSON-RPC: No
     //   Gas Cost: No
-    pub fn set_package_id(&mut self, package_id: ObjectID) {
-        self.netmgr.set_package_id(package_id);
+    // TODO Refactor into a DTP builder to avoid error prone need for caller to do "await".
+    pub async fn set_package_id(&mut self, package_id: ObjectID) {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        netmgr.set_package_id(package_id);
     }
 
-    pub fn set_gas_address(&mut self, gas_address: SuiAddress) {
-        self.netmgr.set_gas_address(gas_address);
+    pub async fn set_gas_address(&mut self, gas_address: SuiAddress) {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        netmgr.set_gas_address(gas_address);
     }
 
-    // Light Accessors
+    // Mutators
     //   JSON-RPC: Sometimes
     //   Gas Cost: No
-    pub fn package_id(&self) -> &ObjectID {
-        self.netmgr.get_package_id()
-    }
-
-    pub fn client_address(&self) -> &SuiAddress {
-        self.netmgr.get_auth_address()
-    }
-
-    pub fn gas_address(&self) -> &SuiAddress {
-        self.netmgr.get_gas_address()
-    }
-
-    pub fn localhost_id(&self) -> &Option<ObjectID> {
-        self.netmgr.get_localhost_id()
-    }
-
     pub async fn add_rpc_url(&mut self, http_url: &str) -> Result<(), anyhow::Error> {
-        self.netmgr.add_rpc_url(http_url).await
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        netmgr.add_rpc_url(http_url).await
+    }
+
+    // Accessors
+    //   JSON-RPC: No
+    //   Gas Cost: No
+    pub async fn package_id(&self) -> ObjectID {
+        let netmgr_guard = self.netmgr.write().await;
+        let netmgr = &*netmgr_guard;
+
+        *netmgr.get_package_id()
+    }
+
+    pub async fn client_address(&self) -> SuiAddress {
+        let netmgr_guard = self.netmgr.write().await;
+        let netmgr = &*netmgr_guard;
+
+        *netmgr.get_auth_address()
+    }
+
+    pub async fn gas_address(&self) -> SuiAddress {
+        let netmgr_guard = self.netmgr.write().await;
+        let netmgr = &*netmgr_guard;
+
+        *netmgr.get_gas_address()
+    }
+
+    pub async fn localhost_id(&self) -> Option<ObjectID> {
+        let netmgr_guard = self.netmgr.write().await;
+        let netmgr = &*netmgr_guard;
+
+        *netmgr.get_localhost_id()
     }
 
     // get_host
@@ -107,38 +149,41 @@ impl DTP {
     //
     // If the host does not exists, it will be tentatively created on the network.
     pub async fn get_host(&mut self) -> Result<Host, anyhow::Error> {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
         info!("get_host start");
         // Note: the netmgr do also cache the LocalhostInternal. Can it be used?
         // For now, always retrieve latest from network.
-        let mut host_internal: Option<HostInternal> = None;
-        if self.netmgr.get_localhost_id().is_none() {
+        let mut host_internal: Option<HostInternalST> = None;
+        if netmgr.get_localhost_id().is_none() {
             info!("get_host A");
             // Best-effort find among owned object of auth.
-            let result = self.netmgr.get_localhost_by_auth().await?;
+            let result = netmgr.get_localhost_by_auth().await?;
             if let Some(result) = result {
                 host_internal = Some(result);
                 info!("get_host B");
             }
         } else {
             // Get latest from likely existing Host object on the network.
-            let localhost_id = self.netmgr.get_localhost_id().unwrap();
-            host_internal = self.netmgr.get_host_by_id(localhost_id).await?;
+            let localhost_id = netmgr.get_localhost_id().unwrap();
+            host_internal = netmgr.get_host_by_id(localhost_id).await?;
             info!("get_host C");
         }
         if host_internal.is_none() {
             // Create a new Host object on the network.
-            host_internal = Some(self.netmgr.create_localhost_on_network().await?);
+            host_internal = Some(netmgr.create_localhost_on_network().await?);
             info!("get_host D");
         }
         // Should exist at this point.
         let host_internal = host_internal.unwrap();
 
-        self.netmgr.sync_registry().await?;
+        netmgr.sync_registry().await?;
 
         info!("get_host end");
         Ok(Host {
             id: host_internal.object_id(),
-            host_internal,
+            host_internal: Arc::new(tokio::sync::RwLock::new(host_internal)),
         })
     }
 
@@ -153,14 +198,17 @@ impl DTP {
     //
     // Returns Ok(None) if confirmed that the host does not exists.
     pub async fn get_host_by_id(&self, host_id: ObjectID) -> Result<Option<Host>, anyhow::Error> {
-        let host_internal = self.netmgr.get_host_by_id(host_id).await?;
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        let host_internal = netmgr.get_host_by_id(host_id).await?;
         if host_internal.is_none() {
             return Ok(None);
         }
         let host_internal = host_internal.unwrap();
         Ok(Some(Host {
             id: host_internal.object_id(),
-            host_internal,
+            host_internal: Arc::new(tokio::sync::RwLock::new(host_internal)),
         }))
     }
 
@@ -183,10 +231,13 @@ impl DTP {
     // and attempts to create more should fail.
     //
     pub async fn create_host_on_network(&mut self) -> Result<Host, anyhow::Error> {
-        let host_internal = self.netmgr.create_localhost_on_network().await?;
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        let host_internal = netmgr.create_localhost_on_network().await?;
         Ok(Host {
             id: host_internal.object_id(),
-            host_internal,
+            host_internal: Arc::new(tokio::sync::RwLock::new(host_internal)),
         })
     }
 
@@ -199,10 +250,14 @@ impl DTP {
         &mut self,
         target_host: &Host,
     ) -> Result<PingStats, anyhow::Error> {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        let target_host_guard = target_host.host_internal.read().await;
+        let target_host_internal = &*target_host_guard;
+
         // Process with the Ping.
-        self.netmgr
-            .ping_on_network(&target_host.host_internal)
-            .await
+        netmgr.ping_on_network(&target_host_internal).await
     }
 
     // Create a connection to a Host.
@@ -215,10 +270,15 @@ impl DTP {
         target_host: &Host,
         service_idx: u8,
     ) -> Result<Connection, anyhow::Error> {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        let target_host_guard = target_host.host_internal.read().await;
+        let target_host_internal = &*target_host_guard;
+
         Ok(Connection {
-            tc_internal: self
-                .netmgr
-                .create_connection(&target_host.host_internal, service_idx)
+            tc_internal: netmgr
+                .create_connection(&target_host_internal, service_idx)
                 .await?,
         })
     }
@@ -229,7 +289,10 @@ impl DTP {
     //
     // The firewall will be configureable from this point, but not yet enabled.
     pub async fn init_firewall(&mut self) -> Result<(), anyhow::Error> {
-        self.netmgr.init_firewall().await
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        netmgr.init_firewall().await
     }
 }
 

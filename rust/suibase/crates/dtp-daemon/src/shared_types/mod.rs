@@ -3,7 +3,8 @@
 // This is a submodule specific to suibase-daemon.
 //
 // flatten everything under "shared_type" module.
-pub(crate) use self::dtp_conns_state::*;
+pub(crate) use self::channels::*;
+pub(crate) use self::dtp_conns_state_client::*;
 pub(crate) use self::dtp_conns_state_rx::*;
 pub(crate) use self::dtp_conns_state_tx::*;
 pub(crate) use self::events::*;
@@ -14,7 +15,8 @@ pub(crate) use self::server_stats::*;
 pub(crate) use self::target_server::*;
 pub(crate) use self::uuid::*;
 
-mod dtp_conns_state;
+mod channels;
+mod dtp_conns_state_client;
 mod dtp_conns_state_rx;
 mod dtp_conns_state_tx;
 mod events;

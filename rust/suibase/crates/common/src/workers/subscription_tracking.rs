@@ -1,6 +1,6 @@
 // State machine used by websocket_worker to track package subscription with a single server.
 #[derive(Debug, Clone, PartialEq)]
-pub enum PackageTrackingState {
+pub enum SubscriptionTrackingState {
     // Valid state transitions:
     //  - *start state* -> Disconnected
     //  - Disconnected  -> Subscribing, ReadyToDelete
@@ -21,43 +21,44 @@ pub enum PackageTrackingState {
     ReadyToDelete, // No longer needed, unsubscription was confirmed (or timeout)
 }
 
-impl PackageTrackingState {
+impl SubscriptionTrackingState {
     pub fn new() -> Self {
         Self::Disconnected
     }
 }
 
-impl Default for PackageTrackingState {
+impl Default for SubscriptionTrackingState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl From<PackageTrackingState> for u32 {
-    fn from(val: PackageTrackingState) -> Self {
+impl From<SubscriptionTrackingState> for u32 {
+    fn from(val: SubscriptionTrackingState) -> Self {
         match val {
-            PackageTrackingState::Disconnected => 0,
-            PackageTrackingState::Subscribing => 1,
-            PackageTrackingState::Subscribed => 2,
-            PackageTrackingState::Unsubscribing => 3,
-            PackageTrackingState::ReadyToDelete => 4,
+            SubscriptionTrackingState::Disconnected => 0,
+            SubscriptionTrackingState::Subscribing => 1,
+            SubscriptionTrackingState::Subscribed => 2,
+            SubscriptionTrackingState::Unsubscribing => 3,
+            SubscriptionTrackingState::ReadyToDelete => 4,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct PackageTracking {
+#[derive(Debug, Default)]
+pub struct SubscriptionTracking {
     // Set once on instantiation.
     toml_path: String,
     name: String,
     uuid: String,
     id: String,
+    is_package: bool,
 
     // State machine.
-    state: PackageTrackingState,
+    state: SubscriptionTrackingState,
 
     // Time of last state change (init to creation time).
-    state_change_timestamp: tokio::time::Instant,
+    state_change_timestamp: Option<tokio::time::Instant>,
 
     // Stats on requests sent.
     request_sent_timestamp: Option<tokio::time::Instant>,
@@ -84,16 +85,37 @@ pub struct PackageTracking {
     remove_request: bool,
 }
 
-impl PackageTracking {
-    pub fn new(toml_path: String, name: String, uuid: String, id: String) -> Self {
+impl SubscriptionTracking {
+    pub fn new_for_package(toml_path: String, name: String, uuid: String, id: String) -> Self {
         let now = tokio::time::Instant::now();
         Self {
             toml_path,
             name,
             uuid,
+            is_package: true,
             id,
-            state: PackageTrackingState::Disconnected,
-            state_change_timestamp: now,
+            state: SubscriptionTrackingState::Disconnected,
+            state_change_timestamp: Some(now),
+            request_sent_timestamp: None,
+            request_retry: 0,
+            unsubscribed_id: None,
+            subscription_number: u64::MAX,
+            subscribe_seq_numbers: Vec::new(),
+            unsubscribe_seq_numbers: Vec::new(),
+            remove_request: false,
+        }
+    }
+
+    pub fn new_for_object(id: String) -> Self {
+        let now = tokio::time::Instant::now();
+        Self {
+            toml_path: String::new(),
+            name: String::new(),
+            uuid: String::new(),
+            is_package: false,
+            id,
+            state: SubscriptionTrackingState::Disconnected,
+            state_change_timestamp: Some(now),
             request_sent_timestamp: None,
             request_retry: 0,
             unsubscribed_id: None,
@@ -112,12 +134,16 @@ impl PackageTracking {
         &self.name
     }
 
-    pub fn state(&self) -> &PackageTrackingState {
+    pub fn state(&self) -> &SubscriptionTrackingState {
         &self.state
     }
 
     pub fn uuid(&self) -> &String {
         &self.uuid
+    }
+
+    pub fn is_package(&self) -> bool {
+        self.is_package
     }
 
     pub fn id(&self) -> &String {
@@ -146,11 +172,11 @@ impl PackageTracking {
 
     pub fn can_be_deleted(&self) -> bool {
         match self.state {
-            PackageTrackingState::Disconnected | PackageTrackingState::ReadyToDelete => {
+            SubscriptionTrackingState::Disconnected | SubscriptionTrackingState::ReadyToDelete => {
                 // If the package is not subscribed (or about to), it can be deleted.
                 true
             }
-            PackageTrackingState::Subscribing | PackageTrackingState::Subscribed => {
+            SubscriptionTrackingState::Subscribing | SubscriptionTrackingState::Subscribed => {
                 // If the package tracking is trying to subscribe (or already subscribed),
                 // it cannot immediately be deleted.
                 //
@@ -159,7 +185,7 @@ impl PackageTracking {
                 // eventual ReadyToDelete.
                 false
             }
-            PackageTrackingState::Unsubscribing => {
+            SubscriptionTrackingState::Unsubscribing => {
                 // If the package is trying to unsubscribe, it cannot be deleted
                 // until response or timeout.
                 false
@@ -175,7 +201,7 @@ impl PackageTracking {
     }
 
     pub fn is_subscribe_request_pending_response(&self) -> bool {
-        self.state == PackageTrackingState::Subscribing
+        self.state == SubscriptionTrackingState::Subscribing
             && self.request_sent_timestamp.is_some()
             && self.unsubscribed_id.is_none()
     }
@@ -184,7 +210,7 @@ impl PackageTracking {
         self.remove_request
     }
 
-    pub fn change_state_to(&mut self, new_state: PackageTrackingState) -> bool {
+    pub fn change_state_to(&mut self, new_state: SubscriptionTrackingState) -> bool {
         if self.state == new_state {
             return false; // Nothing to do.
         }
@@ -194,7 +220,7 @@ impl PackageTracking {
             new_state,
             self.id
         );
-        if new_state == PackageTrackingState::Disconnected {
+        if new_state == SubscriptionTrackingState::Disconnected {
             self.request_sent_timestamp = None;
             self.subscribe_seq_numbers.clear();
             self.unsubscribe_seq_numbers.clear();
@@ -202,7 +228,7 @@ impl PackageTracking {
             self.subscription_number = u64::MAX;
             self.request_retry = 0;
         }
-        self.state_change_timestamp = tokio::time::Instant::now();
+        self.state_change_timestamp = Some(tokio::time::Instant::now());
         self.state = new_state;
         true
     }

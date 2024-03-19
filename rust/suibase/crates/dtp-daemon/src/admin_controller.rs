@@ -1,10 +1,11 @@
 use std::error::Error;
 
+use axum::extract::ws;
 use common::basic_types::*;
 use common::shared_types::{GlobalsWorkdirConfigST, WorkdirUserConfig};
 
 use crate::network_monitor::NetMonTx;
-use crate::shared_types::{Globals, InputPort};
+use crate::shared_types::{Globals, InputPort, WebSocketWorkerMsg, WebSocketWorkerTx};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
 use crate::workers::{WebSocketWorker, WebSocketWorkerParams};
@@ -54,7 +55,7 @@ struct WorkdirTracking {
     shell_worker_tx: Option<GenericTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
 
-    websocket_worker_tx: Option<GenericTx>,
+    websocket_worker_tx: Option<WebSocketWorkerTx>,
     websocket_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
 }
 
@@ -155,17 +156,19 @@ impl AdminController {
             return;
         }
 
-        // Forward an audit message to every events writer.
+        // Forward an audit message to every websocket thread.
         for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
             if wd_tracking.websocket_worker_tx.is_none() {
                 continue;
             }
             let worker_tx = wd_tracking.websocket_worker_tx.as_ref().unwrap();
 
-            let mut worker_msg = GenericChannelMsg::new();
-            worker_msg.event_id = EVENT_AUDIT;
-            worker_msg.workdir_idx = Some(workdir_idx);
-            worker_tx.send(worker_msg).await.unwrap();
+            let mut msg = GenericChannelMsg::new();
+            msg.event_id = EVENT_AUDIT;
+            msg.workdir_idx = Some(workdir_idx);
+
+            let ws_msg = WebSocketWorkerMsg::Generic(msg);
+            worker_tx.send(ws_msg).await.unwrap();
         }
     }
 
@@ -194,10 +197,11 @@ impl AdminController {
         let wd_tracking = self.wd_tracking.get_mut(msg_workdir_idx);
 
         if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
-            let mut worker_msg = GenericChannelMsg::new();
-            worker_msg.event_id = EVENT_UPDATE;
-            worker_msg.workdir_idx = Some(msg_workdir_idx);
-            worker_tx.send(worker_msg).await.unwrap();
+            let mut msg = GenericChannelMsg::new();
+            msg.event_id = EVENT_UPDATE;
+            msg.workdir_idx = Some(msg_workdir_idx);
+            let ws_msg = WebSocketWorkerMsg::Generic(msg);
+            worker_tx.send(ws_msg).await.unwrap();
         }
     }
 
@@ -487,10 +491,11 @@ impl AdminController {
         } else {
             // Send EVENT_UPDATE to the WebSocketWorker (already started).
             if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
-                let mut worker_msg = GenericChannelMsg::new();
-                worker_msg.event_id = EVENT_UPDATE;
-                worker_msg.workdir_idx = Some(workdir_idx);
-                worker_tx.send(worker_msg).await.unwrap();
+                let mut msg = GenericChannelMsg::new();
+                msg.event_id = EVENT_UPDATE;
+                msg.workdir_idx = Some(workdir_idx);
+                let ws_msg = WebSocketWorkerMsg::Generic(msg);
+                worker_tx.send(ws_msg).await.unwrap();
             }
         }
 

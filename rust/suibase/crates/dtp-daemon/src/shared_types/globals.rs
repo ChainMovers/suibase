@@ -19,11 +19,11 @@ use std::sync::Arc;
 
 use crate::api::{Versioned, VersionsResponse, WorkdirStatusResponse};
 use crate::shared_types::InputPort;
-use common::basic_types::{ManagedVec, WorkdirIdx};
+use common::basic_types::{GenericTx, ManagedVec, WorkdirIdx};
 
 use super::{
-    GlobalsDTPConnsStateRxST, GlobalsDTPConnsStateST, GlobalsDTPConnsStateTxST,
-    GlobalsEventsDataST, GlobalsPackagesConfigST,
+    GlobalsDTPConnsStateClientST, GlobalsDTPConnsStateRxST, GlobalsDTPConnsStateTxST,
+    GlobalsEventsDataST, GlobalsPackagesConfigST, WebSocketWorkerIOTx, WebSocketWorkerTx,
 };
 
 use common::shared_types::{
@@ -75,6 +75,33 @@ impl GlobalsWorkdirStatusST {
 }
 
 impl std::default::Default for GlobalsWorkdirStatusST {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GlobalsChannelsST {
+    // Channels to transmit toward threads.
+    // One instance of GlobalsChannelsST exists for every workdir.
+    pub to_websocket_worker: Option<WebSocketWorkerTx>,
+    pub to_websocket_worker_io: Option<WebSocketWorkerIOTx>,
+    pub to_websocket_worker_tx: Option<GenericTx>,
+    pub to_websocket_worker_rx: Option<GenericTx>,
+}
+
+impl GlobalsChannelsST {
+    pub fn new() -> Self {
+        Self {
+            to_websocket_worker: None,
+            to_websocket_worker_io: None,
+            to_websocket_worker_tx: None,
+            to_websocket_worker_rx: None,
+        }
+    }
+}
+
+impl std::default::Default for GlobalsChannelsST {
     fn default() -> Self {
         Self::new()
     }
@@ -143,11 +170,12 @@ impl Default for GlobalsAPIMutexST {
 pub type GlobalsProxyMT = Arc<tokio::sync::RwLock<GlobalsProxyST>>;
 pub type GlobalsWorkdirStatusMT = Arc<tokio::sync::RwLock<GlobalsWorkdirStatusST>>;
 pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsWorkdirConfigST>>;
+pub type GlobalsChannelsMT = Arc<tokio::sync::RwLock<GlobalsChannelsST>>;
 pub type GlobalsPackagesConfigMT = Arc<tokio::sync::RwLock<GlobalsPackagesConfigST>>;
 pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
 pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
 pub type GlobalsAPIMutexMT = Arc<tokio::sync::Mutex<GlobalsAPIMutexST>>;
-pub type GlobalsDTPConnsStateMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateST>>;
+pub type GlobalsDTPConnsStateMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateClientST>>;
 pub type GlobalsDTPConnsStateTxMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateTxST>>;
 pub type GlobalsDTPConnsStateRxMT = Arc<tokio::sync::RwLock<GlobalsDTPConnsStateRxST>>;
 
@@ -173,6 +201,13 @@ pub struct Globals {
     pub config_devnet: GlobalsConfigMT,
     pub config_testnet: GlobalsConfigMT,
     pub config_mainnet: GlobalsConfigMT,
+
+    // Channels toward some "permanent" threads (once set, a channel never
+    // changes for the lifetime of the process).
+    pub channels_localnet: GlobalsChannelsMT,
+    pub channels_devnet: GlobalsChannelsMT,
+    pub channels_testnet: GlobalsChannelsMT,
+    pub channels_mainnet: GlobalsChannelsMT,
 
     // All path locations, plus some user common config that applies to all workdirs (e.g. port of this daemon).
     // These config are *rarely* changed for the lifetime of the process.
@@ -224,6 +259,10 @@ impl Globals {
             config_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
             config_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
             config_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new())),
+            channels_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsChannelsST::new())),
+            channels_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsChannelsST::new())),
+            channels_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsChannelsST::new())),
+            channels_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsChannelsST::new())),
             workdirs: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirsST::new())),
             status_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
@@ -239,16 +278,16 @@ impl Globals {
             api_mutex_testnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
             api_mutex_mainnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
             dtp_conns_state_localnet: Arc::new(tokio::sync::RwLock::new(
-                GlobalsDTPConnsStateST::new(),
+                GlobalsDTPConnsStateClientST::new(),
             )),
             dtp_conns_state_devnet: Arc::new(tokio::sync::RwLock::new(
-                GlobalsDTPConnsStateST::new(),
+                GlobalsDTPConnsStateClientST::new(),
             )),
             dtp_conns_state_testnet: Arc::new(tokio::sync::RwLock::new(
-                GlobalsDTPConnsStateST::new(),
+                GlobalsDTPConnsStateClientST::new(),
             )),
             dtp_conns_state_mainnet: Arc::new(tokio::sync::RwLock::new(
-                GlobalsDTPConnsStateST::new(),
+                GlobalsDTPConnsStateClientST::new(),
             )),
             dtp_conns_state_tx_localnet: Arc::new(tokio::sync::RwLock::new(
                 GlobalsDTPConnsStateTxST::new(),
@@ -284,6 +323,17 @@ impl Globals {
             WORKDIR_IDX_DEVNET => &self.config_devnet,
             WORKDIR_IDX_TESTNET => &self.config_testnet,
             WORKDIR_IDX_MAINNET => &self.config_mainnet,
+            _ => panic!("Invalid workdir_idx {}", workdir_idx),
+        }
+    }
+
+    pub fn get_channels(&self, workdir_idx: WorkdirIdx) -> &GlobalsChannelsMT {
+        // Use hard coded workdir_idx to dispatch the right data.
+        match workdir_idx {
+            WORKDIR_IDX_LOCALNET => &self.channels_localnet,
+            WORKDIR_IDX_DEVNET => &self.channels_devnet,
+            WORKDIR_IDX_TESTNET => &self.channels_testnet,
+            WORKDIR_IDX_MAINNET => &self.channels_mainnet,
             _ => panic!("Invalid workdir_idx {}", workdir_idx),
         }
     }

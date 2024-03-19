@@ -434,12 +434,6 @@ pub struct Workdir {
     suibase_state_file: PathBuf,
     suibase_yaml_user: PathBuf,
     suibase_yaml_default: PathBuf,
-    // Channels to transmit toward WebsocketWorker and its sub-threads.
-    // (All initialized by the parent WebsocketWorkdir thread)
-    pub to_websocket_worker: Option<GenericTx>,
-    pub to_websocket_worker_tx: Option<GenericTx>,
-    pub to_websocket_worker_rx: Option<GenericTx>,
-    pub to_websocket_worker_io: Option<GenericTx>,
 }
 
 impl Workdir {
@@ -546,10 +540,6 @@ impl GlobalsWorkdirsST {
                 suibase_state_file: state,
                 suibase_yaml_user: user_yaml,
                 suibase_yaml_default: default_yaml,
-                to_websocket_worker: None,
-                to_websocket_worker_tx: None,
-                to_websocket_worker_rx: None,
-                to_websocket_worker_io: None,
             });
         }
 

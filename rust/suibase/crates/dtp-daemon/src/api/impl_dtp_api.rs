@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::async_trait;
 
+use common::basic_types::GenericChannelMsg;
 use dtp_sdk::{Connection, DTP};
 
 use jsonrpsee::core::RpcResult;
@@ -12,7 +13,10 @@ use tokio::sync::Mutex;
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::shared_types::{DTPConnStateData, Globals};
+use crate::shared_types::{
+    DTPConnStateDataClient, ExtendedWebSocketWorkerIOMsg, Globals, WebSocketWorkerIOMsg,
+};
+use crate::workers::WebSocketWorker;
 
 use super::RpcInputError;
 use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError};
@@ -115,12 +119,23 @@ impl DtpApiServer for DtpApiImpl {
             (gas_addr, config.user_config.dtp_package_id())
         };
 
+        // Convert package id string to an ObjectID.
         if package_id.is_none() {
             return Err(
                 RpcSuibaseError::InvalidConfig("package id not defined".to_string()).into(),
             );
         }
-        let package_id = dtp_sdk::str_to_object_id(&package_id.unwrap())
+        let package_id = package_id.unwrap();
+        info!("Using package_id: {}", package_id);
+        // Sanity check the package id.
+        if package_id == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+            return Err(RpcSuibaseError::InvalidConfig(
+                "package id is unexpectedly 0x0".to_string(),
+            )
+            .into());
+        }
+
+        let package_id = dtp_sdk::str_to_object_id(&package_id)
             .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
         if gas_addr.is_none() {
@@ -142,8 +157,8 @@ impl DtpApiServer for DtpApiImpl {
 
             let mut dtp = DTP::new(auth_addr, keystore_path.to_str()).await?;
             dtp.add_rpc_url("http://0.0.0.0:44340").await?;
-            dtp.set_package_id(package_id);
-            dtp.set_gas_address(gas_addr);
+            dtp.set_package_id(package_id).await;
+            dtp.set_gas_address(gas_addr).await;
 
             // Get localhost for this client, it will be created if does not exists.
             let host = dtp.get_host().await;
@@ -158,11 +173,33 @@ impl DtpApiServer for DtpApiImpl {
 
             let host = host.unwrap();
 
+            // Send a message to WebSocketWorker to monitor this Host for events (if not already done).
+            {
+                // Get the target channel if it exists.
+                let channel = {
+                    let channels_guard = self.globals.get_channels(workdir_idx).read().await;
+                    let channels = &*channels_guard;
+                    channels.to_websocket_worker_io.clone()
+                };
+                if let Some(channel) = channel {
+                    let mut msg = GenericChannelMsg::new();
+                    msg.event_id = common::basic_types::EVENT_EXEC;
+                    msg.command = Some("localhost_update".to_string());
+                    let ext_msg = ExtendedWebSocketWorkerIOMsg {
+                        generic: msg,
+                        localhost: Some(host.clone()),
+                        ..Default::default()
+                    };
+                    let ws_msg = WebSocketWorkerIOMsg::Extended(ext_msg);
+                    let _ = channel.send(ws_msg).await;
+                }
+            }
+
             // Display the alias and the host address.
             display_out.push_str(&format!(
                 "Auth address: {} Host Object ID: {}\n",
                 auth,
-                host.id()
+                host.object_id()
             ));
             if debug {
                 debug_out.push_str(&format!("Host={:?}\n", host));
@@ -246,7 +283,16 @@ impl DtpApiServer for DtpApiImpl {
                 RpcSuibaseError::InvalidConfig("package id not defined".to_string()).into(),
             );
         }
-        let package_id = dtp_sdk::str_to_object_id(&package_id.unwrap())
+        let package_id = package_id.unwrap();
+        // Sanity check the package id.
+        if package_id == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+            return Err(RpcSuibaseError::InvalidConfig(
+                "package id is unexpectedly 0x0".to_string(),
+            )
+            .into());
+        }
+
+        let package_id = dtp_sdk::str_to_object_id(&package_id)
             .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
         // Convert gas_addr string to a SuiAddress.
@@ -272,7 +318,7 @@ impl DtpApiServer for DtpApiImpl {
             let mut conns_state_guard = self.globals.dtp_conns_state(workdir_idx).write().await;
             let conns_state = &mut *conns_state_guard;
 
-            let mut conn_data: Option<&DTPConnStateData> = None;
+            let mut conn_data: Option<&DTPConnStateDataClient> = None;
             host_sla_idx = conns_state.conns.get_if_some(7, &host_addr, 0);
 
             if let Some(host_sla_idx) = host_sla_idx {
@@ -303,11 +349,11 @@ impl DtpApiServer for DtpApiImpl {
 
                 // TODO Remove hard coding
                 new_dtp.add_rpc_url("http://0.0.0.0:44340").await?;
-                new_dtp.set_gas_address(gas_addr);
-                new_dtp.set_package_id(package_id);
+                new_dtp.set_gas_address(gas_addr).await;
+                new_dtp.set_package_id(package_id).await;
                 dtp_access = Some(Arc::new(Mutex::new(new_dtp)));
 
-                let mut new_conn_state = DTPConnStateData::new();
+                let mut new_conn_state = DTPConnStateDataClient::new();
                 new_conn_state.set_dtp(dtp_access.as_ref().unwrap());
                 host_sla_idx = conns_state
                     .conns
@@ -354,6 +400,7 @@ impl DtpApiServer for DtpApiImpl {
         // Get the API handle on the remote host.
         let target_host = {
             let dtp = dtp_access.lock().await;
+            info!("In API doing get_host_by_id for host_id: {:?}", host_id);
             dtp.get_host_by_id(host_id).await?
         };
 
