@@ -33,6 +33,9 @@ use dtp_core::{
 use log::info;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
+// Re-export ConnObjectsInternal for debug purposes.
+pub use dtp_core::network::ConnObjectsInternal;
+
 #[derive(Debug, Clone)]
 pub struct Host {
     // Host can be cheaply cloned and safely sent/shared between multiple threads.
@@ -57,6 +60,14 @@ impl Host {
 pub struct Connection {
     // Multi-thread safe implementation hidden in dtp-core.
     tc_internal: TransportControlInternalMT,
+}
+
+impl Connection {
+    pub async fn get_conn_objects(&self) -> Option<ConnObjectsInternal> {
+        let tc_guard = self.tc_internal.read().await;
+        let tc = &*tc_guard;
+        tc.get_conn_objects()
+    }
 }
 
 #[derive(Debug)]

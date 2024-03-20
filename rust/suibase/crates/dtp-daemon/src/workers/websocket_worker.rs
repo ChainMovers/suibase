@@ -26,8 +26,7 @@ use crate::{
 };
 
 use common::basic_types::{
-    self, AutoSizeVecMapVec, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable,
-    WorkdirIdx,
+    self, AutoSizeVecMapVec, AutoThread, GenericChannelMsg, Runnable, WorkdirIdx,
 };
 
 use anyhow::Result;

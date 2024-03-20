@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::basic_types::{GenericTx, ManagedElement, ManagedVec, ManagedVecU8, WorkdirIdx};
+use crate::basic_types::{ManagedElement, ManagedVec, ManagedVecU8, WorkdirIdx};
 
 // workdir_idx are hard coded for performance.
 pub const WORKDIR_IDX_MAINNET: WorkdirIdx = 0;

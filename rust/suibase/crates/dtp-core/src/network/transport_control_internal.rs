@@ -25,7 +25,7 @@ use sui_sdk::json::SuiJsonValue;
 
 use sui_types::base_types::ObjectID;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConnObjectsInternal {
     // References to all objects needed to exchange data
     // through a connection.
@@ -39,69 +39,76 @@ pub struct ConnObjectsInternal {
     pub srv_tx_ipipes: Vec<ObjectID>,
 }
 
-impl ConnObjectsInternal {
-    pub fn raw_to_internal(raw: ConnObjectsMoveRaw) -> Result<ConnObjectsInternal, anyhow::Error> {
-        let tc = match ObjectID::from_bytes(raw.tc) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(DTPError::DTPFailedConnObjectsLoading {
-                    desc: e.to_string(),
-                }
-                .into())
+pub fn conn_objects_raw_to_internal(
+    raw: ConnObjectsMoveRaw,
+) -> Result<ConnObjectsInternal, anyhow::Error> {
+    let tc = match ObjectID::from_bytes(raw.tc) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(DTPError::DTPFailedConnObjectsLoading {
+                desc: e.to_string(),
             }
-        };
-        let cli_tx_pipe = match ObjectID::from_bytes(raw.cli_tx_pipe) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(DTPError::DTPFailedConnObjectsLoading {
-                    desc: e.to_string(),
-                }
-                .into())
+            .into())
+        }
+    };
+    let cli_tx_pipe = match ObjectID::from_bytes(raw.cli_tx_pipe) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(DTPError::DTPFailedConnObjectsLoading {
+                desc: e.to_string(),
             }
-        };
-        let srv_tx_pipe = match ObjectID::from_bytes(raw.srv_tx_pipe) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(DTPError::DTPFailedConnObjectsLoading {
-                    desc: e.to_string(),
-                }
-                .into())
+            .into())
+        }
+    };
+    let srv_tx_pipe = match ObjectID::from_bytes(raw.srv_tx_pipe) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(DTPError::DTPFailedConnObjectsLoading {
+                desc: e.to_string(),
             }
-        };
-        let cli_tx_ipipes: Vec<ObjectID> = raw
-            .cli_tx_ipipes
-            .iter()
-            .map(|x| {
-                ObjectID::from_bytes(x).map_err(|e| DTPError::DTPFailedConnObjectsLoading {
-                    desc: e.to_string(),
-                })
+            .into())
+        }
+    };
+    let cli_tx_ipipes: Vec<ObjectID> = raw
+        .cli_tx_ipipes
+        .iter()
+        .map(|x| {
+            ObjectID::from_bytes(x).map_err(|e| DTPError::DTPFailedConnObjectsLoading {
+                desc: e.to_string(),
             })
-            .collect::<Result<Vec<ObjectID>, DTPError>>()?;
-
-        let srv_tx_ipipes: Vec<ObjectID> = raw
-            .srv_tx_ipipes
-            .iter()
-            .map(|x| {
-                ObjectID::from_bytes(x).map_err(|e| DTPError::DTPFailedConnObjectsLoading {
-                    desc: e.to_string(),
-                })
-            })
-            .collect::<Result<Vec<ObjectID>, _>>()?;
-
-        // Convert the raw Move object into the local memory representation.
-        Ok(ConnObjectsInternal {
-            tc,
-            cli_tx_pipe,
-            srv_tx_pipe,
-            cli_tx_ipipes,
-            srv_tx_ipipes,
         })
-    }
+        .collect::<Result<Vec<ObjectID>, DTPError>>()?;
+
+    let srv_tx_ipipes: Vec<ObjectID> = raw
+        .srv_tx_ipipes
+        .iter()
+        .map(|x| {
+            ObjectID::from_bytes(x).map_err(|e| DTPError::DTPFailedConnObjectsLoading {
+                desc: e.to_string(),
+            })
+        })
+        .collect::<Result<Vec<ObjectID>, _>>()?;
+
+    // Convert the raw Move object into the local memory representation.
+    Ok(ConnObjectsInternal {
+        tc,
+        cli_tx_pipe,
+        srv_tx_pipe,
+        cli_tx_ipipes,
+        srv_tx_ipipes,
+    })
 }
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 pub struct TransportControlInternalST {
     // Set when TC confirmed exists on network.
-    conn_objs: Option<ConnObjectsInternal>,
+    conn_objects: Option<ConnObjectsInternal>,
+}
+
+impl TransportControlInternalST {
+    pub fn get_conn_objects(&self) -> Option<ConnObjectsInternal> {
+        self.conn_objects.clone()
+    }
 }
 
 pub type TransportControlInternalMT = Arc<tokio::sync::RwLock<TransportControlInternalST>>;
@@ -135,9 +142,9 @@ pub(crate) async fn open_connection_on_network(
 
     // Build the internal representation.
     let conn_objs_raw = conn_req_raw.conn;
-    let conn_objs = ConnObjectsInternal::raw_to_internal(conn_objs_raw)?;
+    let conn_objs = conn_objects_raw_to_internal(conn_objs_raw)?;
     let tci = TransportControlInternalST {
-        conn_objs: Some(conn_objs),
+        conn_objects: Some(conn_objs),
     };
 
     // All good. Make the TransportControlInternal thread safe.

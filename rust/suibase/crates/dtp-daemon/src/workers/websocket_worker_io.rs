@@ -20,10 +20,7 @@ use common::shared_types::{
     WORKDIR_IDX_TESTNET,
 };
 
-use common::basic_types::{
-    self, AutoSizeVecMapVec, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable,
-    WorkdirIdx,
-};
+use common::basic_types::{self, AutoThread, GenericChannelMsg, Runnable, WorkdirIdx};
 
 use anyhow::Result;
 use axum::async_trait;
@@ -32,6 +29,7 @@ use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
+use log::info;
 use sui_types::base_types::ObjectID;
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
@@ -108,15 +106,24 @@ impl WebSocketIOManagement {
 
 #[derive(Debug, Default)]
 struct InnerPipeTracking {
-    subs: SubscriptionTrackingState,
+    subs: SubscriptionTracking,
 }
 
 #[derive(Debug, Default)]
-struct ConnTracking {
+struct ClientConnTracking {
     // For convenience. Set once on instantiation.
-    host_sla_idx: u16,
+    // host_sla_idx: u16,
 
     // To track events from localhost InnerPipes.
+    ipipe_trackings: HashMap<ObjectID, InnerPipeTracking>,
+}
+
+#[derive(Debug, Default)]
+struct ServerConnTracking {
+    // For convenience. Set once on instantiation.
+    //host_sla_idx: u16,
+
+    // To track events from InnerPipes for an incoming connection.
     ipipe_trackings: HashMap<ObjectID, InnerPipeTracking>,
 }
 
@@ -124,14 +131,26 @@ struct WebSocketWorkerIOThread {
     thread_name: String,
     params: WebSocketWorkerIOParams,
 
-    // Key is the object address.
+    // Key is the object address ("0x" string).
     package_subs: HashMap<String, SubscriptionTracking>,
 
-    // To track events from localhost Host objects.
+    // To track events from localhost objects.
     localhost_subs: HashMap<ObjectID, SubscriptionTracking>,
 
-    // Tracking for DTP connections (key is the host_sla_idx).
-    conns: AutoSizeVecMapVec<ConnTracking>,
+    // Pipes/InnerPipes Tracking
+    //
+    // Key is the TransportControl address ("0x" string).
+    //
+    // This is only for the pipes intended to be used
+    // for incoming traffic/events.
+    //
+    // In other word, only for the pipes/ipipes *owned*
+    // by the localhost(s).
+    //
+    // The dtp-daemon can be both client and server (on different
+    // connections), so there is two maps.
+    cli_conns: HashMap<String, ClientConnTracking>,
+    srv_conns: HashMap<String, ServerConnTracking>,
 
     websocket: WebSocketIOManagement,
 }
@@ -144,7 +163,8 @@ impl Runnable<WebSocketWorkerIOParams> for WebSocketWorkerIOThread {
             params,
             package_subs: HashMap::new(),
             localhost_subs: HashMap::new(),
-            conns: AutoSizeVecMapVec::new(),
+            cli_conns: HashMap::new(),
+            srv_conns: HashMap::new(),
             websocket: WebSocketIOManagement::new(),
         }
     }
@@ -220,8 +240,6 @@ impl WebSocketWorkerIOThread {
         // Check for expected response (correlate using the JSON-RPC id).
         let mut trig_audit_event = false;
         let mut is_correlated_msg = false;
-        let mut is_package_msg: bool = false;
-        let mut is_localhost_msg: bool = false;
         if msg_seq_number != 0 {
             for tracker in self.package_subs.values_mut() {
                 let (a, b) = Self::tracker_update_state_correlation(
@@ -232,7 +250,6 @@ impl WebSocketWorkerIOThread {
                 );
                 if a {
                     is_correlated_msg = true;
-                    is_package_msg = true;
                 }
                 if b {
                     trig_audit_event = true;
@@ -250,16 +267,57 @@ impl WebSocketWorkerIOThread {
                     );
                     if a {
                         is_correlated_msg = true;
-                        is_localhost_msg = true;
                     }
                     if b {
                         trig_audit_event = true;
                     }
                 }
             }
+
+            if !is_correlated_msg {
+                // Check with ipipes subscriptions.
+                for tracker in self.cli_conns.values_mut() {
+                    for ipipe in tracker.ipipe_trackings.values_mut() {
+                        let (a, b) = Self::tracker_update_state_correlation(
+                            &mut ipipe.subs,
+                            &json_msg,
+                            msg_seq_number,
+                            &self.params.workdir_name,
+                        );
+                        if a {
+                            is_correlated_msg = true;
+                        }
+                        if b {
+                            trig_audit_event = true;
+                        }
+                    }
+                }
+            }
+
+            if !is_correlated_msg {
+                // Check with ipipes subscriptions.
+                for tracker in self.srv_conns.values_mut() {
+                    for ipipe in tracker.ipipe_trackings.values_mut() {
+                        let (a, b) = Self::tracker_update_state_correlation(
+                            &mut ipipe.subs,
+                            &json_msg,
+                            msg_seq_number,
+                            &self.params.workdir_name,
+                        );
+                        if a {
+                            is_correlated_msg = true;
+                        }
+                        if b {
+                            trig_audit_event = true;
+                        }
+                    }
+                }
+            }
         }
 
         if !is_correlated_msg {
+            info!("Processing uncorrelated message: {:?}", json_msg);
+
             // Check if a valid Sui event message.
             let method = json_msg["method"].as_str();
             if method.is_none() {

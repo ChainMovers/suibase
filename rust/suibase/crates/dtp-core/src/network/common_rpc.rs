@@ -159,11 +159,9 @@ where
     // Get the expected event effect.
     let events = response.events.unwrap();
 
-    // Iterate the object changes, look for the "host::Host" object.
-    let mut created_object_id = Option::<ObjectID>::None;
-    let mut needed_event = Option::<T>::None;
+    // Iterate the object changes, look for the "event_module::event_type".
 
-    // TODO Optimize this instantiation!?
+    // TODO Optimize this?
     let tag_str = format!("{}::{}::{}", txn.package_id, event_module, event_type);
     let tag = StructTag::from_str(&tag_str)?;
 
