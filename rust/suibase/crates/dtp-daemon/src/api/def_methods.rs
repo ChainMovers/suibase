@@ -163,10 +163,15 @@ pub struct PingResponse {
     //  'result' is a human-readable error message.
     //  'bytes', 'sender', 'rtt' and 'seq' are empty strings.
     pub header: Header,
-    pub bytes: String,  // Total bytes received.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub bytes: String, // Total bytes received.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub sender: String, // Hex Host address of the responder (starts with 0x).
-    pub seq: String,    // Sequence number. Helps to diagnose packet loss.
-    pub rtt: String,    // Round-trip time in microseconds.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub seq: String, // Sequence number. Helps to diagnose packet loss.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub rtt: String, // Round-trip time in microseconds.
+
     pub result: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]

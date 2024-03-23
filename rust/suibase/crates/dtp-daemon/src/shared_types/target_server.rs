@@ -1,7 +1,7 @@
 use common::basic_types::*;
 
-use common::shared_types::Link;
 use crate::shared_types::ServerStats;
+use common::shared_types::Link;
 
 #[derive(Debug)]
 pub struct TargetServer {
@@ -32,6 +32,13 @@ impl TargetServer {
     pub fn rpc(&self) -> String {
         self.config
             .rpc
+            .as_ref()
+            .map_or_else(String::new, |rpc| rpc.clone())
+    }
+
+    pub fn ws(&self) -> String {
+        self.config
+            .ws
             .as_ref()
             .map_or_else(String::new, |rpc| rpc.clone())
     }

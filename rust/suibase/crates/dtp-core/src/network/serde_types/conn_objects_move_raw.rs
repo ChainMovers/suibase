@@ -10,6 +10,8 @@ pub struct ConnObjectsMoveRaw {
     // If an end-point loose these references, they can be
     // re-discovered using one of the related Host object.
     pub tc: SuiAddress, // TransportControl
+    pub cli_auth: SuiAddress,
+    pub srv_auth: SuiAddress,
     pub cli_tx_pipe: SuiAddress,
     pub srv_tx_pipe: SuiAddress,
     pub cli_tx_ipipes: Vec<SuiAddress>,

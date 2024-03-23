@@ -1,14 +1,9 @@
 // Must match Move object definition(s) on network
-use super::super::common_rpc::WeakRef;
+
 use serde::Deserialize;
 
 use sui_sdk::types::base_types::SuiAddress;
 use sui_types::id::UID;
-
-#[derive(Deserialize, Debug)]
-pub struct Connection {
-    pub tc: WeakRef, // Reference on the TransportControl (for slow discovery).
-}
 
 #[derive(Deserialize, Debug)]
 pub struct ConnAcceptedStats {

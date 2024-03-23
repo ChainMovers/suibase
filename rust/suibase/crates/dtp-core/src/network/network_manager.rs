@@ -11,7 +11,10 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use anyhow::bail;
 
-use super::{HostInternalST, LocalhostInternal, TransportControlInternalMT, UserRegistryInternal};
+use super::{
+    HostInternalST, LocalhostInternal, TransportControlInternalMT, TransportControlInternalST,
+    UserRegistryInternal,
+};
 
 // The default location for localnet is relative to
 // this module Cargo.toml location.
@@ -184,7 +187,7 @@ impl NetworkManagerST {
     async fn get_localhost_id_from_registry(&mut self) -> Result<Option<ObjectID>, anyhow::Error> {
         // Returns Ok(None) if confirmed there is no registry on network.
         // Uses cached UserRegistryInternal when already loaded.
-        let _ = self.load_user_registry().await?;
+        self.load_user_registry().await?;
         if let Some(registry) = &self.registry {
             if let Some(host_id) = registry.localhost_id() {
                 return Ok(Some(host_id));
@@ -264,7 +267,7 @@ impl NetworkManagerST {
 
         if self.registry.is_none() {
             // Load the registry to check if matching or need to be created.
-            let _ = self.load_user_registry().await?;
+            self.load_user_registry().await?;
             if self.registry.is_none() {
                 let new_registry = super::create_registry_on_network(
                     &self.sui_nodes[0].rpc,
@@ -500,6 +503,38 @@ impl NetworkManagerST {
         .await?;
 
         Ok(tci)
+    }
+
+    pub async fn send_request(
+        &mut self,
+        conn: &TransportControlInternalST,
+        data: Vec<u8>,
+    ) -> Result<(), anyhow::Error> {
+        // Creates a new connection even if one already exists on the network.
+        self.ensure_localhost_ready().await?;
+
+        // TODO Ensure ready to receive data.
+
+        // Identify the TX pipe to use from the ConnObjects.
+        let conn_objects = conn.get_conn_objects();
+        if conn_objects.is_none() {
+            bail!(DTPError::DTPInternalError {
+                msg: "send_request 1".to_string()
+            })
+        }
+        let conn_objects = conn_objects.unwrap();
+        if conn_objects.cli_tx_ipipes.is_empty() {
+            bail!(DTPError::DTPInternalError {
+                msg: "send_request 2".to_string()
+            })
+        }
+
+        // For now, we just always use the first ipipe.
+        let cli_tx_pipe = conn_objects.cli_tx_ipipes[0];
+
+        // Do the send_request move call.
+        super::send_request_on_network(&self.sui_nodes[0].rpc, &self.sui_txn, cli_tx_pipe, data)
+            .await
     }
 }
 

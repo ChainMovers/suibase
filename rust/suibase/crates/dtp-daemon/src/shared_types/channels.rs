@@ -15,7 +15,10 @@ pub enum WebSocketWorkerIOMsg {
 #[derive(Default, Debug)]
 pub struct ExtendedWebSocketWorkerIOMsg {
     pub generic: GenericChannelMsg,
+    pub sender: Option<String>,  // Sui address of an auth sending data.
+    pub package: Option<String>, // Sui address of the related DTP package (multiple publication can co-exists).
     pub localhost: Option<dtp_sdk::Host>,
+    pub conn: Option<dtp_sdk::Connection>,
 }
 
 pub type WebSocketWorkerTx = tokio::sync::mpsc::Sender<WebSocketWorkerMsg>;

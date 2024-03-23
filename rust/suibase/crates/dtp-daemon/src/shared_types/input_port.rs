@@ -283,6 +283,15 @@ impl InputPort {
         None
     }
 
+    pub fn find_target_server_ws_by_alias(&self, alias: &str) -> Option<String> {
+        for (_, target_server) in self.target_servers.iter() {
+            if target_server.alias() == alias {
+                return Some(target_server.ws());
+            }
+        }
+        None
+    }
+
     pub fn uri(&self, server_idx: TargetServerIdx) -> Option<String> {
         self.target_servers.get(server_idx).map(|ts| ts.rpc())
     }

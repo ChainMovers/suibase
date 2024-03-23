@@ -298,9 +298,9 @@ impl GeneralApiServer for GeneralApiImpl {
         let display = display.unwrap_or(debug);
         let data = data.unwrap_or(!(debug || display));
 
-        let mut debug_out = String::new();
-        let mut display_out = String::new();
-        let mut data_out = String::new();
+        let debug_out = String::new();
+        let display_out = String::new();
+        let data_out = String::new();
 
         // Publish information for all local authority.
         // Particularly owned object addresses.

@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use axum::extract::ws;
 use common::basic_types::*;
 use common::shared_types::{GlobalsWorkdirConfigST, WorkdirUserConfig};
 
@@ -391,7 +390,7 @@ impl AdminController {
         log::info!("cfg notif {}", workdir_name);
 
         // Apply the configuration to the globals.
-        let config_applied: Option<(ManagedVecU8, u16)> = {
+        let _config_applied: Option<(ManagedVecU8, u16)> = {
             // Get a write lock on the globals.
             let mut globals_guard = self.globals.proxy.write().await;
             let globals = &mut *globals_guard;

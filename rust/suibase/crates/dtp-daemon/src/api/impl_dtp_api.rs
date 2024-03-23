@@ -16,7 +16,6 @@ use crate::admin_controller::{
 use crate::shared_types::{
     DTPConnStateDataClient, ExtendedWebSocketWorkerIOMsg, Globals, WebSocketWorkerIOMsg,
 };
-use crate::workers::WebSocketWorker;
 
 use super::RpcInputError;
 use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError};
@@ -68,8 +67,8 @@ impl DtpApiServer for DtpApiImpl {
         let data = data.unwrap_or(!(debug || display));
 
         let mut debug_out = String::new();
-        let mut display_out = String::new();
-        let mut data_out = String::new();
+        //let mut display_out = String::new();
+        let data_out = String::new();
 
         // Apply the suibase.yaml configuration.
         //
@@ -185,9 +184,11 @@ impl DtpApiServer for DtpApiImpl {
                     let mut msg = GenericChannelMsg::new();
                     msg.event_id = common::basic_types::EVENT_EXEC;
                     msg.command = Some("localhost_update".to_string());
+                    msg.workdir_idx = Some(workdir_idx);
                     let ext_msg = ExtendedWebSocketWorkerIOMsg {
                         generic: msg,
                         localhost: Some(host.clone()),
+                        package: Some(package_id.to_string()),
                         ..Default::default()
                     };
                     let ws_msg = WebSocketWorkerIOMsg::Extended(ext_msg);
@@ -232,9 +233,9 @@ impl DtpApiServer for DtpApiImpl {
         let display = display.unwrap_or(debug);
         let data = data.unwrap_or(!(debug || display));
 
-        let mut debug_out = String::new();
-        let mut display_out = String::new();
-        let mut data_out = String::new();
+        let debug_out = String::new();
+        let display_out = String::new();
+        let data_out = String::new();
 
         let mut resp = PingResponse::new();
 
@@ -310,15 +311,15 @@ impl DtpApiServer for DtpApiImpl {
 
         // Variables initialized while holding the GlobalsDTPConnsState mutex.
         let mut need_to_get_localhost = false;
-        let mut dtp_access: Option<Arc<Mutex<DTP>>> = None;
-        let mut host_sla_idx: Option<u16> = None;
+        let dtp_access: Option<Arc<Mutex<DTP>>>;
+        let mut host_sla_idx: Option<u16>;
         let mut conn: Option<Connection> = None;
 
         {
             let mut conns_state_guard = self.globals.dtp_conns_state(workdir_idx).write().await;
             let conns_state = &mut *conns_state_guard;
 
-            let mut conn_data: Option<&DTPConnStateDataClient> = None;
+            let conn_data: Option<&DTPConnStateDataClient>;
             host_sla_idx = conns_state.conns.get_if_some(7, &host_addr, 0);
 
             if let Some(host_sla_idx) = host_sla_idx {
@@ -375,7 +376,7 @@ impl DtpApiServer for DtpApiImpl {
             )
             .into());
         }
-        let host_sla_idx = host_sla_idx.unwrap();
+        let _host_sla_idx = host_sla_idx.unwrap();
 
         if dtp_access.is_none() {
             return Err(RpcSuibaseError::InternalError(
@@ -418,14 +419,59 @@ impl DtpApiServer for DtpApiImpl {
                 let error_message = format!("package_id {} inner error {}", package_id, e);
                 return Err(RpcSuibaseError::ConnectionCreationFailed(error_message).into());
             }
-            conn = Some(open_conn.unwrap());
+            let open_conn = open_conn.unwrap();
+            info!(
+                "impl_dtp_api: Connection.conn_objects = {:?}",
+                open_conn.get_conn_objects().await
+            );
+            conn = Some(open_conn);
+        }
+        let mut conn = conn.unwrap();
+
+        // Inform the WebSocketWorkerIO to monitor the ipipes for this connection.
+        let channel = {
+            let channels_guard = self.globals.get_channels(workdir_idx).read().await;
+            let channels = &*channels_guard;
+            info!(
+                "impl_dtp_api: channels.to_websocket_worker_io = {:?}",
+                channels.to_websocket_worker_io
+            );
+            channels.to_websocket_worker_io.clone()
+        };
+
+        if let Some(channel) = channel {
+            // TODO Optimize. This should not be sent every time.
+            let mut msg = GenericChannelMsg::new();
+            msg.event_id = common::basic_types::EVENT_EXEC;
+            msg.command = Some("conn_update".to_string());
+            msg.workdir_idx = Some(workdir_idx);
+            let ext_msg = ExtendedWebSocketWorkerIOMsg {
+                generic: msg,
+                package: Some(package_id.to_string()),
+                conn: Some(conn.clone()),
+                ..Default::default()
+            };
+            let ws_msg = WebSocketWorkerIOMsg::Extended(ext_msg);
+            let _ = channel.send(ws_msg).await;
+            info!("impl_dtp_api: sent conn_update to WebSocketWorkerIO");
         }
 
-        // Tell the WebSocketWorker to monitor this connection.
-        // Verify with globals if WebSocketWorker is monitoring the connection.
-        // If not, spin re-checking every ~50ms for up to 1 second.
+        // TODO Somehow verify if WebSocketWorkerIO is monitoring the connection.
+
+        // Prepare WebSocketWorker to expect a response and know the one-short return channel.
+
+        // TODO Remove this, replace with proper sync.
+        // Sleep for a while to allow subscription to take effect.
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         // Call into DTP to send data (will return a request handle).
+        let _ = {
+            let mut dtp = dtp_access.lock().await;
+            dtp.send_request(&mut conn, "ping".as_bytes().to_vec())
+                .await?
+        };
+
+        info!("impl_dtp_api: Called dtp.send_request");
 
         // Wait block for a response using the request handle.
         // (the handle is just a one-shot channel with timeout).
@@ -553,6 +599,7 @@ impl DtpApiServer for DtpApiImpl {
         if debug && !debug_out.is_empty() {
             resp.debug = Some(debug_out);
         }
+        resp.result = "Success".to_string();
         Ok(resp)
     }
 }

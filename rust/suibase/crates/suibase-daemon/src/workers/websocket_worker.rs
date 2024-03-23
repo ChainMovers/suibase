@@ -191,9 +191,8 @@ impl WebSocketWorkerThread {
                     if package.did_sent_subscribe_request(msg_seq_number) {
                         correlated_msg = true;
                         log::info!(
-                            "Received subscribe resp. workdir={} package id={} resp={:?}",
+                            "Received subscribe resp. workdir={} resp={:?}",
                             self.params.workdir_name,
-                            package.id(),
                             json_msg,
                         );
                         // Got an expected subscribe response.
@@ -201,9 +200,8 @@ impl WebSocketWorkerThread {
                         let result = json_msg["result"].as_u64();
                         if result.is_none() {
                             log::error!(
-                                "Missing result field in subscribe JSON resp. workdir={} package id={} resp={:?}",
+                                "Missing result field in subscribe JSON resp. workdir={} resp={:?}",
                                 self.params.workdir_name,
-                                package.id(),
                                 json_msg
                             );
                             return;
@@ -219,9 +217,8 @@ impl WebSocketWorkerThread {
                     // Got an expected unsubscribe response.
                     correlated_msg = true;
                     log::info!(
-                        "Received unsubscribe resp. workdir={} package id={} resp={:?}",
+                        "Received unsubscribe resp. workdir={} resp={:?}",
                         self.params.workdir_name,
-                        package.id(),
                         json_msg,
                     );
 
@@ -288,13 +285,13 @@ impl WebSocketWorkerThread {
             // subscription number.
             let mut package_uuid: Option<String> = None;
             let mut package_name: Option<String> = None;
-            for package in self.package_subs.values_mut() {
-                let state = package.state();
+            for tracker in self.package_subs.values_mut() {
+                let state = tracker.state();
                 if state == &SubscriptionTrackingState::Subscribed
-                    && package.subscription_number() == subscription_number
+                    && tracker.subscription_number() == subscription_number
                 {
-                    package_uuid = Some(package.uuid().clone());
-                    package_name = Some(package.name().clone());
+                    package_uuid = Some(tracker.uuid().clone());
+                    package_name = Some(tracker.name().clone());
                     // While we are here... do a sanity check that packageId field
                     // match what is in PackageTrackingState.
                     let package_id = result["packageId"].as_str();
@@ -318,11 +315,15 @@ impl WebSocketWorkerThread {
                         return;
                     }
                     let package_id = &package_id[2..];
-                    if package.id() != package_id {
+                    let expected_package_id = tracker
+                        .package_filter()
+                        .map(|s| s.clone())
+                        .unwrap_or_else(|| "".to_string());
+                    if package_id != expected_package_id {
                         log::error!(
                                 "packageId {} not matching {} in Sui Event message. workdir={} message={:?}",
-                                package.id(),
                                 package_id,
+                                expected_package_id,
                                 self.params.workdir_name,
                                 json_msg
                             );
@@ -463,7 +464,7 @@ impl WebSocketWorkerThread {
                     let toml_path = move_config.path.as_ref().unwrap().clone();
 
                     // Create a new PackagesTracking.
-                    let package_tracking = SubscriptionTracking::new_for_package(
+                    let package_tracking = SubscriptionTracking::new_for_managed_package(
                         toml_path,
                         latest.package_name.clone(),
                         uuid.to_string(),
@@ -625,7 +626,7 @@ impl WebSocketWorkerThread {
                     let toml_path = move_config.path.as_ref().unwrap().clone();
 
                     // Create a new PackagesTracking.
-                    let package_tracking = SubscriptionTracking::new_for_package(
+                    let package_tracking = SubscriptionTracking::new_for_managed_package(
                         toml_path,
                         latest.package_name.clone(),
                         uuid.to_string(),
@@ -664,7 +665,7 @@ impl WebSocketWorkerThread {
     }
 
     async fn try_to_subscribe(
-        package: &mut SubscriptionTracking,
+        tracker: &mut SubscriptionTracking,
         websocket: &mut WebSocketManagement,
     ) -> bool {
         // Send a subscribe message, unless there is one already recently pending.
@@ -673,16 +674,16 @@ impl WebSocketWorkerThread {
         //
         // Return true if there is a state change.
         let mut state_change = false;
-        match package.state() {
+        match tracker.state() {
             SubscriptionTrackingState::Disconnected => {
                 // Valid state when calling this function.
-                if package.change_state_to(SubscriptionTrackingState::Subscribing) {
+                if tracker.change_state_to(SubscriptionTrackingState::Subscribing) {
                     state_change = true;
                 }
             }
             SubscriptionTrackingState::Subscribing => {
-                if package.unsubscribed_id().is_some() {
-                    if package.change_state_to(SubscriptionTrackingState::Subscribed) {
+                if tracker.unsubscribed_id().is_some() {
+                    if tracker.change_state_to(SubscriptionTrackingState::Subscribed) {
                         state_change = true;
                     }
                     return state_change;
@@ -697,20 +698,29 @@ impl WebSocketWorkerThread {
         let mut send_subscribe_message = true;
 
         // Don't do it if one was already sent in last 2 seconds.
-        if package.secs_since_last_request() < 2 {
+        if tracker.secs_since_last_request() < 2 {
             send_subscribe_message = false;
         }
 
         if send_subscribe_message {
+            if tracker.package_filter().is_none() {
+                log::error!("Missing package_filter in SubscriptionTracking");
+                return false;
+            }
+            let package_id = tracker
+                .package_filter()
+                .map(|s| s.clone())
+                .unwrap_or_else(|| "".to_string());
+
             // Check if retrying and log error only on first retry and once in a while after.
-            if package.request_retry() % 3 == 1 {
-                log::error!("Failed to subscribe package_id={}", package.id());
+            if tracker.request_retry() % 3 == 1 {
+                log::error!("Failed to subscribe package_id={}", package_id);
             }
             websocket.seq_number += 1;
-            package.report_subscribing_request(websocket.seq_number);
+            tracker.report_subscribing_request(websocket.seq_number);
             let msg = Message::Text(Self::subscribe_request_format(
                 websocket.seq_number,
-                &package.id().clone(), // Must not have leading 0x
+                &package_id, // Must not have leading 0x
             ));
 
             if let Some(ref mut write) = websocket.write {
@@ -727,7 +737,7 @@ impl WebSocketWorkerThread {
     }
 
     async fn try_to_unsubscribe(
-        package: &mut SubscriptionTracking,
+        tracker: &mut SubscriptionTracking,
         websocket: &mut WebSocketManagement,
     ) -> bool {
         // If subscribed, then send a unsubscribe message, unless there is one
@@ -737,10 +747,10 @@ impl WebSocketWorkerThread {
         // After being confirmed unsubscribe (or timeout) the PackageTracking state
         // becomes ReadyToDelete.
         let mut state_change = false;
-        match package.state() {
+        match tracker.state() {
             SubscriptionTrackingState::Disconnected => {
                 // No subscription on-going...
-                if package.change_state_to(SubscriptionTrackingState::ReadyToDelete) {
+                if tracker.change_state_to(SubscriptionTrackingState::ReadyToDelete) {
                     state_change = true;
                 }
                 return state_change;
@@ -750,21 +760,21 @@ impl WebSocketWorkerThread {
                 // no response receive yet), then let the subscription a chance to complete.
                 // This will allow for a clean unsubscribe later.
                 // Check for a subscription timeout transition to avoid being block forever.
-                if package.is_subscribe_request_pending_response()
-                    && package.secs_since_last_request() >= 2
+                if tracker.is_subscribe_request_pending_response()
+                    && tracker.secs_since_last_request() >= 2
                 {
                     // Do nothing... to give a chance for the subscription to succeed.
                     state_change = false;
                     return state_change;
                 }
 
-                if package.change_state_to(SubscriptionTrackingState::Unsubscribing) {
+                if tracker.change_state_to(SubscriptionTrackingState::Unsubscribing) {
                     state_change = true;
                 }
                 return state_change;
             }
             SubscriptionTrackingState::Subscribed => {
-                if package.change_state_to(SubscriptionTrackingState::Unsubscribing) {
+                if tracker.change_state_to(SubscriptionTrackingState::Unsubscribing) {
                     state_change = true;
                 }
                 return state_change;
@@ -773,8 +783,8 @@ impl WebSocketWorkerThread {
             SubscriptionTrackingState::Unsubscribing => {
                 // Ready to delete if unsubscribed_id is clear or timeout.
                 // The unsubscribed_id is clear when receiving a unsubscribe response.
-                if package.unsubscribed_id().is_none() || package.request_retry() > 10 {
-                    if package.change_state_to(SubscriptionTrackingState::ReadyToDelete) {
+                if tracker.unsubscribed_id().is_none() || tracker.request_retry() > 10 {
+                    if tracker.change_state_to(SubscriptionTrackingState::ReadyToDelete) {
                         state_change = true;
                     }
                     return state_change;
@@ -789,8 +799,8 @@ impl WebSocketWorkerThread {
         };
 
         // If there is no known unsubscribed_id, then no point to try to unsubscribe.
-        if package.unsubscribed_id().is_none() {
-            if package.change_state_to(SubscriptionTrackingState::ReadyToDelete) {
+        if tracker.unsubscribed_id().is_none() {
+            if tracker.change_state_to(SubscriptionTrackingState::ReadyToDelete) {
                 state_change = true;
             }
             return state_change;
@@ -798,20 +808,20 @@ impl WebSocketWorkerThread {
 
         let mut send_unsubscribe_message = true;
         // Don't do it if one was already sent in last 2 seconds.
-        if package.secs_since_last_request() < 2 {
+        if tracker.secs_since_last_request() < 2 {
             send_unsubscribe_message = false;
         }
 
         if send_unsubscribe_message {
             // Periodically report an error on too many retry.
-            if package.request_retry() % 3 == 1 {
-                log::error!("Failed to unsubscribe package_id={}", package.id());
+            if tracker.request_retry() % 3 == 1 {
+                log::error!("Failed to unsubscribe");
             }
             websocket.seq_number += 1;
-            package.report_unsubscribing_request(websocket.seq_number);
+            tracker.report_unsubscribing_request(websocket.seq_number);
             let msg = Message::Text(Self::unsubscribe_request_format(
                 websocket.seq_number,
-                package.unsubscribed_id().unwrap(), // Must not have leading 0x
+                tracker.unsubscribed_id().unwrap(), // Must not have leading 0x
             ));
 
             if let Some(ref mut write) = websocket.write {

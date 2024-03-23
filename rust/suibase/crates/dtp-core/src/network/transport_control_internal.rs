@@ -23,16 +23,18 @@ use serde_json::json;
 use std::sync::Arc;
 use sui_sdk::json::SuiJsonValue;
 
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 #[derive(Debug, Clone)]
 pub struct ConnObjectsInternal {
-    // References to all objects needed to exchange data
+    // References to all info needed to exchange data
     // through a connection.
     //
     // If an end-point loose these references, they can be
     // re-discovered using one of the related Host object.
     pub tc: ObjectID, // TransportControl
+    pub cli_auth: SuiAddress,
+    pub srv_auth: SuiAddress,
     pub cli_tx_pipe: ObjectID,
     pub srv_tx_pipe: ObjectID,
     pub cli_tx_ipipes: Vec<ObjectID>,
@@ -51,6 +53,7 @@ pub fn conn_objects_raw_to_internal(
             .into())
         }
     };
+
     let cli_tx_pipe = match ObjectID::from_bytes(raw.cli_tx_pipe) {
         Ok(x) => x,
         Err(e) => {
@@ -92,6 +95,8 @@ pub fn conn_objects_raw_to_internal(
     // Convert the raw Move object into the local memory representation.
     Ok(ConnObjectsInternal {
         tc,
+        cli_auth: raw.cli_auth,
+        srv_auth: raw.srv_auth,
         cli_tx_pipe,
         srv_tx_pipe,
         cli_tx_ipipes,
@@ -101,11 +106,15 @@ pub fn conn_objects_raw_to_internal(
 
 #[derive(Debug, Clone)]
 pub struct TransportControlInternalST {
+    service_idx: u8,
     // Set when TC confirmed exists on network.
     conn_objects: Option<ConnObjectsInternal>,
 }
 
 impl TransportControlInternalST {
+    pub fn get_service_idx(&self) -> u8 {
+        self.service_idx
+    }
     pub fn get_conn_objects(&self) -> Option<ConnObjectsInternal> {
         self.conn_objects.clone()
     }
@@ -144,9 +153,27 @@ pub(crate) async fn open_connection_on_network(
     let conn_objs_raw = conn_req_raw.conn;
     let conn_objs = conn_objects_raw_to_internal(conn_objs_raw)?;
     let tci = TransportControlInternalST {
+        service_idx,
         conn_objects: Some(conn_objs),
     };
 
     // All good. Make the TransportControlInternal thread safe.
     Ok(Arc::new(tokio::sync::RwLock::new(tci)))
+}
+
+pub(crate) async fn send_request_on_network(
+    rpc: &SuiSDKParamsRPC,
+    txn: &SuiSDKParamsTxn,
+    ipipe: ObjectID,
+    data: Vec<u8>,
+) -> Result<(), anyhow::Error> {
+    // Creates also the related pipe(s) and inner pipe(s).
+    let vargs: Vec<u8> = vec![];
+    let call_args = vec![
+        SuiJsonValue::from_object_id(ipipe),
+        SuiJsonValue::new(json!(data))?,
+        SuiJsonValue::from_bcs_bytes(None, &vargs).unwrap(),
+    ];
+
+    super::common_rpc::do_move_call_no_ret(rpc, txn, "api", "send_request", call_args).await
 }

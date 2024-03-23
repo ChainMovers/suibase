@@ -30,7 +30,7 @@ use dtp_core::{
     },
     types::PingStats,
 };
-use log::info;
+
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 
 // Re-export ConnObjectsInternal for debug purposes.
@@ -44,7 +44,8 @@ pub struct Host {
     // share the same internal data (reference counted with Arc::Mutex).
 
     // Convenient read-only vars that do not change for the lifetime of this object.
-    id: ObjectID,
+    id: ObjectID,         // ID of the Host object on the network.
+    package_id: ObjectID, // DTP package ID for this Host object.
 
     // Multi-thread safe implementation hidden in dtp-core.
     host_internal: HostInternalMT,
@@ -54,9 +55,13 @@ impl Host {
     pub fn object_id(&self) -> &ObjectID {
         &self.id
     }
+
+    pub fn package_id(&self) -> &ObjectID {
+        &self.package_id
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Connection {
     // Multi-thread safe implementation hidden in dtp-core.
     tc_internal: TransportControlInternalMT,
@@ -163,37 +168,32 @@ impl DTP {
         let mut netmgr_guard = self.netmgr.write().await;
         let netmgr = &mut *netmgr_guard;
 
-        info!("get_host start");
         // Note: the netmgr do also cache the LocalhostInternal. Can it be used?
         // For now, always retrieve latest from network.
         let mut host_internal: Option<HostInternalST> = None;
         if netmgr.get_localhost_id().is_none() {
-            info!("get_host A");
             // Best-effort find among owned object of auth.
             let result = netmgr.get_localhost_by_auth().await?;
             if let Some(result) = result {
                 host_internal = Some(result);
-                info!("get_host B");
             }
         } else {
             // Get latest from likely existing Host object on the network.
             let localhost_id = netmgr.get_localhost_id().unwrap();
             host_internal = netmgr.get_host_by_id(localhost_id).await?;
-            info!("get_host C");
         }
         if host_internal.is_none() {
             // Create a new Host object on the network.
             host_internal = Some(netmgr.create_localhost_on_network().await?);
-            info!("get_host D");
         }
         // Should exist at this point.
         let host_internal = host_internal.unwrap();
 
         netmgr.sync_registry().await?;
 
-        info!("get_host end");
         Ok(Host {
             id: host_internal.object_id(),
+            package_id: *netmgr.get_package_id(),
             host_internal: Arc::new(tokio::sync::RwLock::new(host_internal)),
         })
     }
@@ -219,6 +219,7 @@ impl DTP {
         let host_internal = host_internal.unwrap();
         Ok(Some(Host {
             id: host_internal.object_id(),
+            package_id: *netmgr.get_package_id(),
             host_internal: Arc::new(tokio::sync::RwLock::new(host_internal)),
         }))
     }
@@ -248,6 +249,7 @@ impl DTP {
         let host_internal = netmgr.create_localhost_on_network().await?;
         Ok(Host {
             id: host_internal.object_id(),
+            package_id: *netmgr.get_package_id(),
             host_internal: Arc::new(tokio::sync::RwLock::new(host_internal)),
         })
     }
@@ -268,7 +270,7 @@ impl DTP {
         let target_host_internal = &*target_host_guard;
 
         // Process with the Ping.
-        netmgr.ping_on_network(&target_host_internal).await
+        netmgr.ping_on_network(target_host_internal).await
     }
 
     // Create a connection to a Host.
@@ -289,16 +291,34 @@ impl DTP {
 
         Ok(Connection {
             tc_internal: netmgr
-                .create_connection(&target_host_internal, service_idx)
+                .create_connection(target_host_internal, service_idx)
                 .await?,
         })
+    }
+
+    // Send data into a connection.
+    //   JSON-RPC: Yes
+    //   Gas Cost: Yes
+    //
+    pub async fn send_request(
+        &mut self,
+        conn: &mut Connection,
+        data: Vec<u8>,
+    ) -> Result<(), anyhow::Error> {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        let mut conn_guard = conn.tc_internal.write().await;
+        let conn = &mut *conn_guard;
+
+        netmgr.send_request(conn, data).await
     }
 
     // Initialize Firewall Service
     //   JSON-RPC: Yes
     //   Gas Cost: Yes
     //
-    // The firewall will be configureable from this point, but not yet enabled.
+    // The firewall will be configurable from this point, but not yet enabled.
     pub async fn init_firewall(&mut self) -> Result<(), anyhow::Error> {
         let mut netmgr_guard = self.netmgr.write().await;
         let netmgr = &mut *netmgr_guard;

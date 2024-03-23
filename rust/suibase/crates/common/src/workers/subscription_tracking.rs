@@ -47,12 +47,15 @@ impl From<SubscriptionTrackingState> for u32 {
 
 #[derive(Debug, Default)]
 pub struct SubscriptionTracking {
-    // Set once on instantiation.
+    // Set once on instantiation for managed packages.
     toml_path: String,
     name: String,
     uuid: String,
-    id: String,
-    is_package: bool,
+
+    is_managed_package: bool, // Package exists locally and has a suibase.toml file.
+    package_filter: Option<String>, // Package ID ("0x" string)
+    sender_filter: Option<String>, // Sender address ("0x" string)
+    src_addr_filter: Option<String>, // For "src_addr" field in msg.
 
     // State machine.
     state: SubscriptionTrackingState,
@@ -86,14 +89,16 @@ pub struct SubscriptionTracking {
 }
 
 impl SubscriptionTracking {
-    pub fn new_for_package(toml_path: String, name: String, uuid: String, id: String) -> Self {
+    pub fn new(package_id: String, src_addr: Option<String>, sender_addr: Option<String>) -> Self {
         let now = tokio::time::Instant::now();
         Self {
-            toml_path,
-            name,
-            uuid,
-            is_package: true,
-            id,
+            toml_path: String::new(),
+            name: String::new(),
+            uuid: String::new(),
+            is_managed_package: false,
+            package_filter: Some(package_id),
+            sender_filter: sender_addr,
+            src_addr_filter: src_addr,
             state: SubscriptionTrackingState::Disconnected,
             state_change_timestamp: Some(now),
             request_sent_timestamp: None,
@@ -106,14 +111,21 @@ impl SubscriptionTracking {
         }
     }
 
-    pub fn new_for_object(id: String) -> Self {
+    pub fn new_for_managed_package(
+        toml_path: String,
+        name: String,
+        uuid: String,
+        id: String,
+    ) -> Self {
         let now = tokio::time::Instant::now();
         Self {
-            toml_path: String::new(),
-            name: String::new(),
-            uuid: String::new(),
-            is_package: false,
-            id,
+            toml_path,
+            name,
+            uuid,
+            is_managed_package: true,
+            package_filter: Some(id),
+            sender_filter: None,
+            src_addr_filter: None,
             state: SubscriptionTrackingState::Disconnected,
             state_change_timestamp: Some(now),
             request_sent_timestamp: None,
@@ -142,12 +154,20 @@ impl SubscriptionTracking {
         &self.uuid
     }
 
-    pub fn is_package(&self) -> bool {
-        self.is_package
+    pub fn is_managed_package(&self) -> bool {
+        self.is_managed_package
     }
 
-    pub fn id(&self) -> &String {
-        &self.id // That is the hexadecimal package id.
+    pub fn package_filter(&self) -> Option<&String> {
+        self.package_filter.as_ref()
+    }
+
+    pub fn sender_filter(&self) -> Option<&String> {
+        self.sender_filter.as_ref()
+    }
+
+    pub fn src_addr_filter(&self) -> Option<&String> {
+        self.src_addr_filter.as_ref()
     }
 
     pub fn request_retry(&self) -> u8 {
@@ -215,10 +235,12 @@ impl SubscriptionTracking {
             return false; // Nothing to do.
         }
         log::info!(
-            "package_tracking: state change {:?} -> {:?} for package id 0x{}",
+            "package_tracking: state change {:?} -> {:?} for filters package {:?} sender {:?} src_addr {:?}",
             self.state,
             new_state,
-            self.id
+            self.package_filter,
+            self.sender_filter,
+            self.src_addr_filter
         );
         if new_state == SubscriptionTrackingState::Disconnected {
             self.request_sent_timestamp = None;

@@ -132,6 +132,23 @@ pub(crate) async fn do_move_call(
     Ok(response)
 }
 
+pub(crate) async fn do_move_call_no_ret(
+    rpc: &SuiSDKParamsRPC,
+    txn: &SuiSDKParamsTxn,
+    call_module: &str,            // e.g. api
+    function: &str,               // e.g. open_connection
+    call_args: Vec<SuiJsonValue>, // Can be empty vec![]
+) -> Result<(), anyhow::Error> {
+    let options = SuiTransactionBlockResponseOptions::new();
+    let response = do_move_call(rpc, txn, call_module, function, call_args, options).await;
+    if let Err(e) = response {
+        // TODO Append event_type info to error.
+        return Err(e);
+    }
+    let _ = response.unwrap();
+    Ok(())
+}
+
 // Function that perform a move call and deserialize an expected single event 'T' effect.
 // Returns Ok(None) if the call succeed, but the event was not emitted.
 pub(crate) async fn do_move_call_ret_event<T>(
@@ -263,11 +280,6 @@ where
         None => bail!(DTPError::DTPMissingSuiClient),
     };
 
-    info!(
-        "fetch_raw_move_object start for object id{}",
-        object_id.to_string()
-    );
-
     //let object_id_str = object_id.to_string();
     let response = sui_client
         .read_api()
@@ -283,7 +295,6 @@ where
         .into());
     }
 
-    info!("fetch_raw_move_object A");
     let response = response.unwrap().into_object();
     if let Err(e) = response {
         // If the enum 'e' is of type NotExists, or Deleted return Ok(None)
@@ -302,7 +313,6 @@ where
     }
     let resp = response.unwrap();
 
-    info!("fetch_raw_move_object B");
     // Deserialize the BCS data into T
     let raw_data = resp.to_string(); // Copy to string for debug purpose... optimize this later?
     let sui_raw_data = resp.bcs;
@@ -318,11 +328,9 @@ where
                 }
                 .into());
             }
-            info!("fetch_raw_move_object end");
             return Ok(Some(ret_value.unwrap()));
         }
     };
-    info!("fetch_raw_move_object C (error end)");
 
     Err(DTPError::DTPFailedConvertBCS {
         object_type: std::any::type_name::<T>().to_string(),
@@ -342,7 +350,6 @@ pub(crate) async fn fetch_raw_move_object_by_auth<T>(
 where
     T: DeserializeOwned,
 {
-    info!("fetch_raw_move_object_by_auth start");
     // Returns Ok(None) when confirmed 'address' does **not** own an instance of T.
     let sui_client = match rpc.sui_client.as_ref() {
         Some(x) => &x.inner,
@@ -350,10 +357,6 @@ where
     };
 
     let object_type = format!("{}::{}::{}", package_id, module, object_type);
-    info!(
-        "fetch_raw_move_object_by_auth: object_type: {}",
-        object_type
-    );
     let tag = StructTag::from_str(&object_type);
     if let Err(e) = tag {
         return Err(DTPError::DTPFailedFetchObject {
@@ -365,7 +368,6 @@ where
     }
     let tag = tag.unwrap();
 
-    info!("fetch_raw_move_object_by_auth A");
     let mut objects: Vec<SuiObjectResponse> = Vec::new();
     let mut cursor = None;
     loop {
@@ -401,9 +403,7 @@ where
         }
     }
 
-    info!("fetch_raw_move_object_by_auth B");
     if objects.is_empty() {
-        info!("fetch_raw_move_object_by_auth C");
         return Ok(None);
     }
 
@@ -425,18 +425,14 @@ where
         }
     }
     let resp = response.unwrap();
-    info!("fetch_raw_move_object_by_auth D");
 
     // Deserialize the BCS data into T
     let raw_data = resp.to_string(); // Copy to string for debug purpose... optimize this later?
     let sui_raw_data = resp.bcs;
     if let Some(sui_raw_data) = sui_raw_data {
-        info!("fetch_raw_move_object_by_auth E");
         if let Some(sui_raw_mov_obj) = sui_raw_data.try_into_move() {
-            info!("fetch_raw_move_object_by_auth F");
             let ret_value: Result<T, anyhow::Error> = sui_raw_mov_obj.deserialize();
             if let Err(e) = ret_value {
-                info!("fetch_raw_move_object_by_auth G");
                 let raw_data = format!("{},inner error[{}]", raw_data, e);
                 return Err(DTPError::DTPFailedConvertBCS {
                     object_type: std::any::type_name::<T>().to_string(),
@@ -445,7 +441,6 @@ where
                 }
                 .into());
             }
-            info!("fetch_raw_move_object_by_auth end");
             return Ok(Some(ret_value.unwrap()));
         }
     };

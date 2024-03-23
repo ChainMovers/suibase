@@ -127,6 +127,7 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
                 .await;
             let channels = &mut *channels_guard;
             channels.to_websocket_worker = Some(self.params.self_tx.clone());
+            channels.to_websocket_worker_io = Some(worker_io_tx.clone());
             channels.to_websocket_worker_tx = Some(worker_tx_tx.clone());
             channels.to_websocket_worker_rx = Some(worker_rx_tx.clone());
         }
