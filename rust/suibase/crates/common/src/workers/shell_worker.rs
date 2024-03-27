@@ -1,28 +1,31 @@
+// Thread to run shell commands, particularly Suibase scripts.
+//
+// One ShellWorker should be instantiated for each workdir. This will allow commands to:
+//   - Run concurrently when for different workdir.
+//   - Run sequentially when for the same workdir.
+//
 use std::process::Command;
-
-use crate::shared_types::Globals;
-
-use common::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
+use crate::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
+
 pub struct ShellWorker {
-    _globals: Globals,
+
     event_rx: GenericRx,
     workdir_idx: Option<WorkdirIdx>,
 }
 
 impl ShellWorker {
-    pub fn new(globals: Globals, event_rx: GenericRx, workdir_idx: Option<WorkdirIdx>) -> Self {
+    pub fn new(event_rx: GenericRx, workdir_idx: Option<WorkdirIdx>) -> Self {
         Self {
-            _globals: globals,
             event_rx,
             workdir_idx,
         }
     }
 
-    async fn do_exec(&mut self, msg: GenericChannelMsg) {
+    fn do_exec(&mut self, msg: GenericChannelMsg) {
         // No error return here. Once the execution is completed, the output
         // of the response is returned to requester with a one shot message.
         //
@@ -48,7 +51,7 @@ impl ShellWorker {
                 "Error: unexpected workdir_idx {:?} != {:?}",
                 msg.workdir_idx, self.workdir_idx
             )
-        } else if msg.event_id != common::basic_types::EVENT_EXEC {
+        } else if msg.event_id != crate::basic_types::EVENT_EXEC {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             format!("Error: Unexpected event_id {:?}", msg.event_id)
         } else if let Some(cmd) = &msg.command {
@@ -100,7 +103,7 @@ impl ShellWorker {
             // Wait for a message.
             if let Some(msg) = self.event_rx.recv().await {
                 // Process the message.
-                self.do_exec(msg).await;
+                self.do_exec(msg);
             } else {
                 // Channel closed or shutdown requested.
                 return;

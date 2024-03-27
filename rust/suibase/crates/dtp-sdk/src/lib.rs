@@ -73,6 +73,12 @@ impl Connection {
         let tc = &*tc_guard;
         tc.get_conn_objects()
     }
+
+    pub async fn get_tc_address(&self) -> Option<String> {
+        let tc_guard = self.tc_internal.read().await;
+        let tc = &*tc_guard;
+        tc.get_tc_address()
+    }
 }
 
 #[derive(Debug)]
@@ -312,6 +318,30 @@ impl DTP {
         let conn = &mut *conn_guard;
 
         netmgr.send_request(conn, data).await
+    }
+
+    // Send a Datagram on an existing connection.
+    //   JSON-RPC: Yes
+    //   Gas Cost: Yes
+    //
+    // This is used by the server to send response to a client
+    // when it has already all the info needed to reply.
+    //
+    // Note: Early implementation. This will be simplified eventually.
+    pub async fn low_level_send_response(
+        &mut self,
+        resp_ipipe_address: SuiAddress,
+        req_ipipe_idx: u8,
+        req_seq_num: u64,
+        data: Vec<u8>,
+        cid: u64,
+    ) -> Result<(), anyhow::Error> {
+        let mut netmgr_guard = self.netmgr.write().await;
+        let netmgr = &mut *netmgr_guard;
+
+        netmgr
+            .low_level_send_response(resp_ipipe_address, req_ipipe_idx, req_seq_num, data, cid)
+            .await
     }
 
     // Initialize Firewall Service

@@ -4,6 +4,7 @@ use crate::types::{
 
 use log::info;
 use std::path::PathBuf;
+//use std::str::FromStr;
 use std::sync::Arc;
 use sui_keys::keystore::{FileBasedKeystore, Keystore};
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
@@ -507,7 +508,7 @@ impl NetworkManagerST {
 
     pub async fn send_request(
         &mut self,
-        conn: &TransportControlInternalST,
+        conn: &mut TransportControlInternalST,
         data: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
         // Creates a new connection even if one already exists on the network.
@@ -532,9 +533,42 @@ impl NetworkManagerST {
         // For now, we just always use the first ipipe.
         let cli_tx_pipe = conn_objects.cli_tx_ipipes[0];
 
+        // Determine the correlation ID for this request.
+        let cid = conn.get_next_cid();
+
         // Do the send_request move call.
-        super::send_request_on_network(&self.sui_nodes[0].rpc, &self.sui_txn, cli_tx_pipe, data)
-            .await
+        super::send_request_on_network(
+            &self.sui_nodes[0].rpc,
+            &self.sui_txn,
+            cli_tx_pipe,
+            data,
+            cid,
+        )
+        .await
+    }
+
+    pub async fn low_level_send_response(
+        &mut self,
+        resp_ipipe_address: SuiAddress,
+        req_ipipe_idx: u8,
+        req_seq_num: u64,
+        data: Vec<u8>,
+        cid: u64,
+    ) -> Result<(), anyhow::Error> {
+        // For now, we just always use the first ipipe.
+        let ipipe = ObjectID::from_address(resp_ipipe_address.into());
+
+        // Do the send_request move call.
+        super::send_response_on_network(
+            &self.sui_nodes[0].rpc,
+            &self.sui_txn,
+            ipipe,
+            req_ipipe_idx,
+            req_seq_num,
+            data,
+            cid,
+        )
+        .await
     }
 }
 
@@ -550,13 +584,13 @@ mod tests {
     }
 
     #[test]
-    fn instantiate_hostinternal() -> Result<(), anyhow::Error> {
+    fn instantiate_host_internal() -> Result<(), anyhow::Error> {
         // TODO
         Ok(())
     }
 
     #[test]
-    fn instantiate_localhostinternal() -> Result<(), anyhow::Error> {
+    fn instantiate_localhost_internal() -> Result<(), anyhow::Error> {
         // TODO
         Ok(())
     }

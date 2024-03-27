@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
+use anyhow::bail;
 use axum::async_trait;
 
-use common::basic_types::GenericChannelMsg;
+use common::basic_types::{GenericChannelMsg, ManagedVecU16, WorkdirIdx};
 use dtp_sdk::{Connection, DTP};
 
 use jsonrpsee::core::RpcResult;
@@ -14,11 +15,21 @@ use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
 use crate::shared_types::{
-    DTPConnStateDataClient, ExtendedWebSocketWorkerIOMsg, Globals, WebSocketWorkerIOMsg,
+    DTPConnStateDataClient, DTPConnStateDataServer, ExtendedWebSocketWorkerIOMsg, Globals,
+    WebSocketWorkerIOMsg,
 };
 
 use super::RpcInputError;
 use super::{DtpApiServer, InfoResponse, PingResponse, RpcSuibaseError};
+
+// Internal structure used by "publish".
+struct ConfiguredService {
+    pub service_idx: u8,
+    pub client_auth: Option<String>,
+    pub server_auth: Option<String>,
+    pub gas_address: Option<String>,
+    //pub dtp: Arc<Mutex<DTP>>,
+}
 
 pub struct DtpApiImpl {
     pub globals: Globals,
@@ -31,6 +42,140 @@ impl DtpApiImpl {
             globals,
             admctrl_tx,
         }
+    }
+    pub async fn create_subs_callback(
+        &self,
+        workdir_idx: WorkdirIdx,
+        host_sla_idx: ManagedVecU16,
+    ) -> u64 {
+        let mut conns_state_guard = self
+            .globals
+            .dtp_conns_state_client(workdir_idx)
+            .write()
+            .await;
+        let conns_state = &mut *conns_state_guard;
+
+        conns_state.create_subs_callback(host_sla_idx)
+    }
+
+    pub async fn block_for_subs_callback(
+        &self,
+        workdir_idx: WorkdirIdx,
+        host_sla_idx: ManagedVecU16,
+        cid: u64,
+    ) -> Result<(), anyhow::Error> {
+        if cid == 0 {
+            bail!("Invalid cid=0");
+        }
+        // Get the oneshot channel.
+        let channel = {
+            let mut conns_state_guard = self
+                .globals
+                .dtp_conns_state_client(workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+            log::error!("DEBUG DEBUG conns_state {:?}", conns_state);
+            conns_state.get_subs_callback(cid)
+        };
+
+        if channel.is_none() {
+            bail!("Missing cid={} from conns_state", cid);
+        }
+        let channel = channel.unwrap();
+        match channel.await {
+            Ok(msg) => {
+                if msg.cid == cid {
+                    log::info!("impl_dtp_api proper subs cid received");
+                } else {
+                    log::error!("Invalid response from callback: {:?}", msg);
+                }
+            }
+            Err(e) => {
+                log::error!("Error waiting for callback: {:?}", e);
+            }
+        }
+        {
+            let mut conns_state_guard = self
+                .globals
+                .dtp_conns_state_client(workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+            conns_state.delete_subs_callback(host_sla_idx);
+        };
+
+        Ok(())
+    }
+
+    pub async fn create_send_callback(
+        &self,
+        workdir_idx: WorkdirIdx,
+        host_sla_idx: ManagedVecU16,
+        tc: String,
+    ) -> u64 {
+        let mut conns_state_guard = self
+            .globals
+            .dtp_conns_state_client(workdir_idx)
+            .write()
+            .await;
+        let conns_state = &mut *conns_state_guard;
+
+        conns_state.create_send_callback(host_sla_idx, tc)
+    }
+
+    pub async fn block_for_send_callback(
+        &self,
+        workdir_idx: WorkdirIdx,
+        host_sla_idx: ManagedVecU16,
+        tc: String,
+        cid: u64,
+    ) -> Result<String, anyhow::Error> {
+        if cid == 0 {
+            bail!("Invalid cid=0");
+        }
+        // Get the oneshot channel.
+        let channel = {
+            let mut conns_state_guard = self
+                .globals
+                .dtp_conns_state_client(workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+
+            conns_state.get_send_callback(cid)
+        };
+
+        if channel.is_none() {
+            bail!("Missing cid={} from conns_state", cid);
+        }
+        let channel = channel.unwrap();
+        let response = match channel.await {
+            Ok(msg) => {
+                if msg.cid == cid {
+                    log::info!("impl_dtp_api proper subs cid received");
+                } else {
+                    log::error!("Invalid response from callback: {:?}", msg);
+                }
+                msg.response
+            }
+            Err(e) => {
+                log::error!("Error waiting for callback: {:?}", e);
+                "".to_string()
+            }
+        };
+
+        {
+            let mut conns_state_guard = self
+                .globals
+                .dtp_conns_state_client(workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+            conns_state.delete_send_callback(host_sla_idx, tc);
+        };
+
+        Ok(response)
     }
 }
 
@@ -88,34 +233,48 @@ impl DtpApiServer for DtpApiImpl {
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
-        // Iterate the WorkdirConfig DTP services. Identify every unique client_auth and server_auth.
-        let mut auths = Vec::<String>::new();
+        // Iterate the WorkdirConfig DTP services.
+        //   - Identify every unique client and server authority.
+        //   - Identify every service.
+        let mut services = Vec::<ConfiguredService>::new();
 
-        let (gas_addr, package_id) = {
+        let (_gas_addr_default, package_id) = {
             let globals_guard = self.globals.get_config(workdir_idx).read().await;
             let config = &*globals_guard;
-            let mut gas_addr = config.user_config.dtp_default_gas_address();
+
+            let gas_addr_default = config.user_config.dtp_default_gas_address();
+
+            if gas_addr_default.is_none() {
+                return Err(RpcSuibaseError::InvalidConfig(
+                    "default gas address not defined".to_string(),
+                )
+                .into());
+            }
+
             let dtp_services = config.user_config.dtp_services();
             for dtp_service in dtp_services {
-                let client_auth = dtp_service.client_auth();
-                let server_auth = dtp_service.server_auth();
-                // Put the auth strings in a vector<String>, where the string is the client_auth.to_string or
-                // server_auth.to_string if not already in the vector.
-                if let Some(client_auth) = client_auth {
-                    if !auths.contains(client_auth) {
-                        auths.push(client_auth.clone());
-                    }
-                    if gas_addr.is_none() && dtp_service.gas_address().is_some() {
-                        gas_addr = dtp_service.gas_address().cloned();
-                    }
-                }
-                if let Some(server_auth) = server_auth {
-                    if !auths.contains(server_auth) {
-                        auths.push(server_auth.clone());
-                    }
-                }
+                let gas_address = match dtp_service.gas_address() {
+                    Some(addr) => Some(addr.clone()),
+                    None => gas_addr_default.clone(),
+                };
+                services.push(ConfiguredService {
+                    service_idx: dtp_service.service_idx(),
+                    client_auth: dtp_service.client_auth().cloned(),
+                    server_auth: dtp_service.server_auth().cloned(),
+                    gas_address,
+                    /*
+                    dtp: Arc::new(Mutex::new(
+                        DTP::new(
+                            dtp_sdk::str_to_sui_address(&dtp_service.gas_address().unwrap())
+                                .unwrap(),
+                            workdir.path().join("config").join("sui.keystore").to_str(),
+                        )
+                        .await
+                        .unwrap(),
+                    )),*/
+                });
             }
-            (gas_addr, config.user_config.dtp_package_id())
+            (gas_addr_default, config.user_config.dtp_package_id())
         };
 
         // Convert package id string to an ObjectID.
@@ -137,40 +296,153 @@ impl DtpApiServer for DtpApiImpl {
         let package_id = dtp_sdk::str_to_object_id(&package_id)
             .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
-        if gas_addr.is_none() {
-            return Err(
-                RpcSuibaseError::InvalidConfig("gas address not defined".to_string()).into(),
-            );
-        }
-        let gas_addr = dtp_sdk::str_to_sui_address(&gas_addr.unwrap())
-            .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
-
         // Iterate the auths. Create a DTP Client for each, then do the steps to create a Host object (if does not already exists).
         let keystore_path = workdir.path().join("config").join("sui.keystore");
 
         let mut display_out = String::new();
 
-        for auth in auths {
-            let auth_addr = dtp_sdk::str_to_sui_address(&auth)
+        for service in services {
+            let is_client = service.client_auth.is_some();
+            let is_server = service.server_auth.is_some();
+
+            if !is_client && !is_server {
+                return Err(
+                    RpcSuibaseError::InvalidConfig("auth declaration missing".to_string()).into(),
+                );
+            }
+            if is_client && is_server {
+                return Err(RpcSuibaseError::InvalidConfig(
+                    "a service declaration cannot be server and client at same time".to_string(),
+                )
+                .into());
+            }
+
+            let auth_addr = if is_client {
+                dtp_sdk::str_to_sui_address(&service.client_auth.unwrap())
+                    .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?
+            } else {
+                dtp_sdk::str_to_sui_address(&service.server_auth.unwrap())
+                    .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?
+            };
+
+            let gas_addr = dtp_sdk::str_to_sui_address(&service.gas_address.unwrap())
                 .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
+            // Get the host on network, it will be created if does not exists.
             let mut dtp = DTP::new(auth_addr, keystore_path.to_str()).await?;
             dtp.add_rpc_url("http://0.0.0.0:44340").await?;
             dtp.set_package_id(package_id).await;
             dtp.set_gas_address(gas_addr).await;
 
-            // Get localhost for this client, it will be created if does not exists.
             let host = dtp.get_host().await;
 
             if let Err(e) = host {
                 let error_message = format!(
                     "auth addr {} package_id {} inner error [{}]",
-                    auth, package_id, e
+                    auth_addr, package_id, e
                 );
                 return Err(RpcSuibaseError::LocalHostError(error_message).into());
             }
 
             let host = host.unwrap();
+            let host_addr_str = host.object_id().to_string();
+
+            if is_client {
+                info!(
+                    "Publishing Client auth_addr: {} with gas_address {}",
+                    auth_addr, gas_addr
+                );
+                // Create the ConnStateDataClient if does not already exists.
+                // Goal is to initialize the DTP for it.
+                let mut conns_state_guard = self
+                    .globals
+                    .dtp_conns_state_client(workdir_idx)
+                    .write()
+                    .await;
+                let conns_state = &mut *conns_state_guard;
+
+                let mut host_sla_idx =
+                    conns_state
+                        .conns
+                        .get_if_some(service.service_idx, &host_addr_str, 0);
+
+                if host_sla_idx.is_none() {
+                    let mut new_conn_state = DTPConnStateDataClient::new();
+                    new_conn_state.set_dtp(&Arc::new(Mutex::new(dtp)));
+                    new_conn_state.set_host(host.clone());
+                    host_sla_idx = conns_state.conns.push(
+                        new_conn_state,
+                        service.service_idx,
+                        host_addr_str.clone(),
+                        0,
+                    );
+                    if host_sla_idx.is_none() {
+                        return Err(RpcSuibaseError::InternalError(
+                            "Max number of connections reached".to_string(),
+                        )
+                        .into());
+                    }
+                    info!(
+                        "Created Client host_sla_idx {} for service_idx={} host_addr={} gas_addr={}",
+                        host_sla_idx.unwrap(),
+                        service.service_idx,
+                        host_addr_str,
+                        gas_addr
+                    );
+                }
+            } else {
+                // Create the ConnStateDataServer if does not already exists.
+                let mut conns_state_guard = self
+                    .globals
+                    .dtp_conns_state_server(workdir_idx)
+                    .write()
+                    .await;
+                let conns_state = &mut *conns_state_guard;
+
+                let mut host_sla_idx =
+                    conns_state
+                        .conns
+                        .get_if_some(service.service_idx, &host_addr_str, 0);
+
+                if host_sla_idx.is_none() {
+                    let mut new_conn_state = DTPConnStateDataServer::new();
+                    new_conn_state.set_dtp(&Arc::new(Mutex::new(dtp)));
+                    new_conn_state.set_host(host.clone());
+                    host_sla_idx = conns_state.conns.push(
+                        new_conn_state,
+                        service.service_idx,
+                        host_addr_str.clone(),
+                        0,
+                    );
+                    if host_sla_idx.is_none() {
+                        return Err(RpcSuibaseError::InternalError(
+                            "Max number of connections reached".to_string(),
+                        )
+                        .into());
+                    }
+                    info!(
+                        "Created Server host_sla_idx {} for service_idx={} host_addr={} gas_addr={}",
+                        host_sla_idx.unwrap(),
+                        service.service_idx,
+                        host_addr_str,
+                        gas_addr
+                    );
+
+                    // Sanity check that it can be retrieved!
+                    let test_host_sla_idx =
+                        conns_state
+                            .conns
+                            .get_if_some(service.service_idx, &host_addr_str, 0);
+                    if test_host_sla_idx.is_none() {
+                        return Err(RpcSuibaseError::InternalError(
+                            "Bug could not get back the host_sla_idx!".to_string(),
+                        )
+                        .into());
+                    }
+                } else {
+                    info!("Existing Server host_sla_idx {}", host_sla_idx.unwrap());
+                }
+            }
 
             // Send a message to WebSocketWorker to monitor this Host for events (if not already done).
             {
@@ -199,7 +471,7 @@ impl DtpApiServer for DtpApiImpl {
             // Display the alias and the host address.
             display_out.push_str(&format!(
                 "Auth address: {} Host Object ID: {}\n",
-                auth,
+                auth_addr,
                 host.object_id()
             ));
             if debug {
@@ -223,7 +495,7 @@ impl DtpApiServer for DtpApiImpl {
         &self,
         workdir: String,
         host_addr: String,
-        _bytes: Option<String>,
+        message: Option<String>,
         data: Option<bool>,
         display: Option<bool>,
         debug: Option<bool>,
@@ -316,7 +588,11 @@ impl DtpApiServer for DtpApiImpl {
         let mut conn: Option<Connection> = None;
 
         {
-            let mut conns_state_guard = self.globals.dtp_conns_state(workdir_idx).write().await;
+            let mut conns_state_guard = self
+                .globals
+                .dtp_conns_state_client(workdir_idx)
+                .write()
+                .await;
             let conns_state = &mut *conns_state_guard;
 
             let conn_data: Option<&DTPConnStateDataClient>;
@@ -376,7 +652,7 @@ impl DtpApiServer for DtpApiImpl {
             )
             .into());
         }
-        let _host_sla_idx = host_sla_idx.unwrap();
+        let host_sla_idx = host_sla_idx.unwrap();
 
         if dtp_access.is_none() {
             return Err(RpcSuibaseError::InternalError(
@@ -427,6 +703,28 @@ impl DtpApiServer for DtpApiImpl {
             conn = Some(open_conn);
         }
         let mut conn = conn.unwrap();
+        let tc_address = conn.get_tc_address().await;
+        if tc_address.is_none() {
+            return Err(RpcSuibaseError::InternalError(
+                "TC address missing in Connection object".to_string(),
+            )
+            .into());
+        }
+        let tc_address = tc_address.unwrap();
+
+        // Create the send callback (get a oneshot channel).
+        /*
+        let cid = {
+            let mut conns_state_guard = self
+                .globals
+                .dtp_conns_state_client(workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+
+            conns_state.create_subs_callback(workdir_idx, host_sla_idx).await
+        };*/
+        let cid = self.create_subs_callback(workdir_idx, host_sla_idx).await;
 
         // Inform the WebSocketWorkerIO to monitor the ipipes for this connection.
         let channel = {
@@ -445,10 +743,12 @@ impl DtpApiServer for DtpApiImpl {
             msg.event_id = common::basic_types::EVENT_EXEC;
             msg.command = Some("conn_update".to_string());
             msg.workdir_idx = Some(workdir_idx);
+
             let ext_msg = ExtendedWebSocketWorkerIOMsg {
                 generic: msg,
                 package: Some(package_id.to_string()),
                 conn: Some(conn.clone()),
+                host_sla_idx: Some(host_sla_idx),
                 ..Default::default()
             };
             let ws_msg = WebSocketWorkerIOMsg::Extended(ext_msg);
@@ -456,22 +756,44 @@ impl DtpApiServer for DtpApiImpl {
             info!("impl_dtp_api: sent conn_update to WebSocketWorkerIO");
         }
 
+        self.block_for_subs_callback(workdir_idx, host_sla_idx, cid)
+            .await?;
+
         // TODO Somehow verify if WebSocketWorkerIO is monitoring the connection.
 
         // Prepare WebSocketWorker to expect a response and know the one-short return channel.
 
         // TODO Remove this, replace with proper sync.
         // Sleep for a while to allow subscription to take effect.
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        //tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         // Call into DTP to send data (will return a request handle).
+
+        // Get the TransportControl address from conn (tc)
+        let cid = self
+            .create_send_callback(workdir_idx, host_sla_idx, tc_address.clone())
+            .await;
+
+        let message = if message.is_none() {
+            "ping".to_string()
+        } else {
+            message.unwrap()
+        };
+
         let _ = {
             let mut dtp = dtp_access.lock().await;
-            dtp.send_request(&mut conn, "ping".as_bytes().to_vec())
+            dtp.send_request(&mut conn, message.as_bytes().to_vec())
                 .await?
         };
 
-        info!("impl_dtp_api: Called dtp.send_request");
+        // Block wait on response.
+        let response = self
+            .block_for_send_callback(workdir_idx, host_sla_idx, tc_address, cid)
+            .await;
+        if let Err(e) = response {
+            return Err(RpcSuibaseError::InternalError(e.to_string()).into());
+        }
+        let response = response.unwrap();
 
         // Wait block for a response using the request handle.
         // (the handle is just a one-shot channel with timeout).
@@ -599,7 +921,8 @@ impl DtpApiServer for DtpApiImpl {
         if debug && !debug_out.is_empty() {
             resp.debug = Some(debug_out);
         }
-        resp.result = "Success".to_string();
+        //resp.result = "Success".to_string();
+        resp.result = response;
         Ok(resp)
     }
 }

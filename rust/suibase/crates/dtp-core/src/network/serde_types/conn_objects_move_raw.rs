@@ -14,6 +14,6 @@ pub struct ConnObjectsMoveRaw {
     pub srv_auth: SuiAddress,
     pub cli_tx_pipe: SuiAddress,
     pub srv_tx_pipe: SuiAddress,
-    pub cli_tx_ipipes: Vec<SuiAddress>,
+    pub cli_tx_ipipes: Vec<SuiAddress>, // Note: req_ipipe_idx works on this vector.
     pub srv_tx_ipipes: Vec<SuiAddress>,
 }

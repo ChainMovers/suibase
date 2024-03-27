@@ -524,7 +524,7 @@ pub trait DtpApi {
         &self,
         workdir: String,
         host_addr: String,
-        bytes: Option<String>,
+        message: Option<String>,
         data: Option<bool>,
         display: Option<bool>,
         debug: Option<bool>,

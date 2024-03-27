@@ -1,20 +1,24 @@
-// MTSafeUUID provides:
-//   - a get() function that returns both a method_uuid (UUID v4) and a data_uuid (UUID v7).
-//   - The method_uuid is initialized once on process startup and changes whenever a data_uuid is
-//     unexpectedly sorted lower than the previous one generated (e.g. system time went backward).
-//   - Multi-thread protection (Mutex protected).
+// UuidST provides a time-ordered sortable UUID implementation
 //
-// SingleThreadUUID is same, except the user is responsible for Mutex access.
+// This is helpful for better "locality" of closely related events (e.g. database access performance).
 //
+// In addition, the UUIDv7 is made robust with a UUIDv4 to help detect rare but possible
+// problems (e.g. system time went backward).
+//
+// Related RFC Standard:
+//    https://datatracker.ietf.org/doc/draft-ietf-uuidrev-rfc4122bis/14/
+//
+// .. or Google "UUIDv7" for more information.
+
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
-pub struct UuidST {
-    method_uuid: Uuid,
-    data_uuid: Uuid,
+pub struct SafeUuid {
+    method_uuid: Uuid, // UUIDv4
+    data_uuid: Uuid,   // UUIDv7
 }
 
-impl UuidST {
+impl SafeUuid {
     pub fn new() -> Self {
         Self {
             method_uuid: Uuid::new_v4(),
@@ -55,7 +59,7 @@ impl UuidST {
     }
 }
 
-impl Default for UuidST {
+impl Default for SafeUuid {
     fn default() -> Self {
         Self::new()
     }
@@ -69,7 +73,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_one_thread_uuid() {
-        let single_thread_uuid = UuidST::new();
+        let single_thread_uuid = SafeUuid::new();
         let mt_safe_uuid = Arc::new(tokio::sync::Mutex::new(single_thread_uuid));
         let mut locked_uuid = mt_safe_uuid.lock().await;
         let mut prev_data_uuid = locked_uuid.data_uuid;
@@ -91,7 +95,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_two_threads_uuid() {
-        let single_thread_uuid = UuidST::new();
+        let single_thread_uuid = SafeUuid::new();
         let mt_safe_uuid = Arc::new(tokio::sync::Mutex::new(single_thread_uuid));
         let mt_safe_uuid_clone = mt_safe_uuid.clone();
 
@@ -140,7 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ordering() {
-        let mut a = UuidST::new();
+        let mut a = SafeUuid::new();
         for _ in 0..100000 {
             let prev_a = a.clone();
             a.increment();

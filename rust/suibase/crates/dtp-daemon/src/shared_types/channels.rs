@@ -15,8 +15,9 @@ pub enum WebSocketWorkerIOMsg {
 #[derive(Default, Debug)]
 pub struct ExtendedWebSocketWorkerIOMsg {
     pub generic: GenericChannelMsg,
-    pub sender: Option<String>,  // Sui address of an auth sending data.
+    pub sender: Option<String>,    // Sui address of an auth sending data.
     pub package: Option<String>, // Sui address of the related DTP package (multiple publication can co-exists).
+    pub host_sla_idx: Option<u16>, // Unique identifier for each (Host, Service, Service Level Agreement instance).
     pub localhost: Option<dtp_sdk::Host>,
     pub conn: Option<dtp_sdk::Connection>,
 }

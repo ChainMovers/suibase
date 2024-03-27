@@ -107,6 +107,13 @@ pub fn conn_objects_raw_to_internal(
 #[derive(Debug, Clone)]
 pub struct TransportControlInternalST {
     service_idx: u8,
+    // Correlation ID.
+    //
+    // Unique for each request within the scope of this process.
+    //
+    // In other word, it can only be used for matching responses with requests
+    // originating from this process.
+    cid_cnt: u64,
     // Set when TC confirmed exists on network.
     conn_objects: Option<ConnObjectsInternal>,
 }
@@ -117,6 +124,19 @@ impl TransportControlInternalST {
     }
     pub fn get_conn_objects(&self) -> Option<ConnObjectsInternal> {
         self.conn_objects.clone()
+    }
+
+    pub fn get_tc_address(&self) -> Option<String> {
+        if self.conn_objects.is_none() {
+            return None;
+        }
+        let conn_objects = self.conn_objects.as_ref().unwrap();
+        Some(conn_objects.tc.to_string())
+    }
+
+    pub fn get_next_cid(&mut self) -> u64 {
+        self.cid_cnt += 1;
+        self.cid_cnt
     }
 }
 
@@ -154,6 +174,7 @@ pub(crate) async fn open_connection_on_network(
     let conn_objs = conn_objects_raw_to_internal(conn_objs_raw)?;
     let tci = TransportControlInternalST {
         service_idx,
+        cid_cnt: 0,
         conn_objects: Some(conn_objs),
     };
 
@@ -166,14 +187,39 @@ pub(crate) async fn send_request_on_network(
     txn: &SuiSDKParamsTxn,
     ipipe: ObjectID,
     data: Vec<u8>,
+    cid: u64,
 ) -> Result<(), anyhow::Error> {
     // Creates also the related pipe(s) and inner pipe(s).
     let vargs: Vec<u8> = vec![];
     let call_args = vec![
         SuiJsonValue::from_object_id(ipipe),
         SuiJsonValue::new(json!(data))?,
+        SuiJsonValue::new(json!(cid.to_string()))?, // TODO inefficient conversion, but needed for U64!?!?
         SuiJsonValue::from_bcs_bytes(None, &vargs).unwrap(),
     ];
 
     super::common_rpc::do_move_call_no_ret(rpc, txn, "api", "send_request", call_args).await
+}
+
+pub(crate) async fn send_response_on_network(
+    rpc: &SuiSDKParamsRPC,
+    txn: &SuiSDKParamsTxn,
+    ipipe: ObjectID,
+    req_ipipe_idx: u8,
+    req_seq_num: u64,
+    data: Vec<u8>,
+    cid: u64,
+) -> Result<(), anyhow::Error> {
+    // Creates also the related pipe(s) and inner pipe(s).
+    let vargs: Vec<u8> = vec![];
+    let call_args = vec![
+        SuiJsonValue::from_object_id(ipipe),
+        SuiJsonValue::new(json!(req_ipipe_idx.to_string()))?,
+        SuiJsonValue::new(json!(req_seq_num.to_string()))?,
+        SuiJsonValue::new(json!(data))?,
+        SuiJsonValue::new(json!(cid.to_string()))?, // TODO inefficient conversion, but needed for U64!?!?
+        SuiJsonValue::from_bcs_bytes(None, &vargs).unwrap(),
+    ];
+
+    super::common_rpc::do_move_call_no_ret(rpc, txn, "api", "send_response", call_args).await
 }

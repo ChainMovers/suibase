@@ -8,6 +8,7 @@
 //
 // The thread is auto-restart in case of panic.
 
+use std::str::FromStr;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::shared_types::{
@@ -20,18 +21,21 @@ use common::shared_types::{
     WORKDIR_IDX_TESTNET,
 };
 
-use common::basic_types::{self, AutoThread, GenericChannelMsg, Runnable, WorkdirIdx};
+use common::basic_types::{
+    self, AutoThread, GenericChannelMsg, ManagedElement16, ManagedVecU16, Runnable, WorkdirIdx,
+};
 
 use anyhow::{bail, Result};
 use axum::async_trait;
 
+use dtp_sdk::DTP;
 use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
 use log::info;
 use serde_json::{Map, Value};
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
@@ -107,6 +111,7 @@ impl WebSocketIOManagement {
 
 #[derive(Debug, Default)]
 struct InnerPipeTracking {
+    host_sla_idx: u16,
     subs: SubscriptionTracking,
 }
 
@@ -115,7 +120,7 @@ type InnerPipeTrackingMap = HashMap<String, InnerPipeTracking>;
 #[derive(Debug, Default)]
 struct ClientConnTracking {
     // For convenience. Set once on instantiation.
-    // host_sla_idx: u16,
+    host_sla_idx: ManagedVecU16,
 
     // To track events from localhost InnerPipes.
     // The key is an InnerPipe address ("0x" string).
@@ -126,7 +131,7 @@ type ClientConnTrackingMap = HashMap<String, ClientConnTracking>;
 #[derive(Debug, Default)]
 struct ServerConnTracking {
     // For convenience. Set once on instantiation.
-    //host_sla_idx: u16,
+    host_sla_idx: u16,
 
     // To track events from InnerPipes for an incoming connection.
     // The key is an InnerPipe address ("0x" string).
@@ -135,6 +140,11 @@ struct ServerConnTracking {
 type ServerConnTrackingMap = HashMap<String, ServerConnTracking>;
 
 struct WebSocketWorkerIOThread {
+    // Important:
+    //   This object is deleted when the websocket close or
+    //   this thread panic/restart (for any reason).
+    //
+    //   Use globals to persist data outside this thread.
     thread_name: String,
     params: WebSocketWorkerIOParams,
 
@@ -317,6 +327,25 @@ impl WebSocketWorkerIOThread {
                         if b {
                             trig_audit_event = true;
                         }
+                        if is_correlated_msg && trig_audit_event {
+                            // TODO Check if the response is "success".
+                            // Assume this is a valid response to the subscription request.
+                            // Get the host_sla_idx and trig a response for it if exists in the globals.
+                            let host_sla_idx = ipipe.host_sla_idx;
+                            {
+                                {
+                                    let mut conns_state_guard = self
+                                        .params
+                                        .globals
+                                        .dtp_conns_state_client(self.params.workdir_idx)
+                                        .write()
+                                        .await;
+                                    let conns_state = &mut *conns_state_guard;
+
+                                    conns_state.trigger_subs_callback(host_sla_idx);
+                                }
+                            };
+                        }
                     }
                 }
             }
@@ -490,64 +519,114 @@ impl WebSocketWorkerIOThread {
                 0
             };
             let dtp_src_addr = if is_dtp_message {
-                src_addr_candidate.unwrap()
+                src_addr_candidate.unwrap().to_string()
             } else {
-                ""
+                "".to_string()
             };
 
-            // Extract TransportController field (when applicable).
-            let tc_addr = if dtp_src == 1 || dtp_src == 2 {
-                let tc_ref = parsed_json.get("tc_ref");
-                if tc_ref.is_none() {
-                    log::error!(
-                        "Missing tc_ref in DTP Sui Event message. workdir={} message={:?}",
-                        self.params.workdir_name,
-                        json_msg
-                    );
-                    return;
-                }
-                let tc_ref = tc_ref.unwrap().as_object();
-                if tc_ref.is_none() {
-                    log::error!(
-                        "Invalid tc_ref in DTP Sui Event message. workdir={} message={:?}",
-                        self.params.workdir_name,
-                        json_msg
-                    );
-                    return;
-                }
-                let tc_ref = tc_ref.unwrap();
-                // Get the reference field in tc_ref.
-                let tc_addr = tc_ref.get("reference");
-                if tc_addr.is_none() {
-                    log::error!(
-                        "Missing reference in tc_ref in DTP Sui Event message. workdir={} message={:?}",
-                        self.params.workdir_name,
-                        json_msg
-                    );
-                    return;
-                }
-                let tc_addr = tc_addr.unwrap().as_str();
-                if tc_addr.is_none() {
-                    log::error!(
-                        "Invalid reference in tc_ref in DTP Sui Event message. workdir={} message={:?}",
-                        self.params.workdir_name,
-                        json_msg
-                    );
-                    return;
-                }
-                tc_addr.unwrap()
-            } else {
-                ""
-            };
+            // Extract common fields when from a DTP object.
+            let (service_idx, tc_addr, cli_host_addr, srv_host_addr, peer_ipipe_addr) =
+                if dtp_src == 1 || dtp_src == 2 {
+                    let tc_ref = dtp_core::network::WeakRef::from_json("tc_ref", parsed_json);
+                    if let Err(e) = tc_ref {
+                        log::error!(
+                            "For workdir {} error {} outer message={:?}",
+                            self.params.workdir_name,
+                            e,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let tc_ref = tc_ref.unwrap().get_reference().to_string();
+
+                    let cli_host_ref =
+                        dtp_core::network::WeakRef::from_json("cli_host_ref", parsed_json);
+                    if let Err(e) = cli_host_ref {
+                        log::error!(
+                            "For workdir {} error {} outer message={:?}",
+                            self.params.workdir_name,
+                            e,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let cli_host_ref = cli_host_ref.unwrap().get_reference().to_string();
+
+                    let srv_host_ref =
+                        dtp_core::network::WeakRef::from_json("srv_host_ref", parsed_json);
+                    if let Err(e) = srv_host_ref {
+                        log::error!(
+                            "For workdir {} error {} outer message={:?}",
+                            self.params.workdir_name,
+                            e,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let srv_host_ref = srv_host_ref.unwrap().get_reference().to_string();
+
+                    let peer_ipipe_ref =
+                        dtp_core::network::WeakRef::from_json("peer_ipipe_ref", parsed_json);
+                    if let Err(e) = peer_ipipe_ref {
+                        log::error!(
+                            "For workdir {} error {} outer message={:?}",
+                            self.params.workdir_name,
+                            e,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let peer_ipipe_ref = peer_ipipe_ref.unwrap().get_reference().to_string();
+
+                    let service_idx = parsed_json.get("service_idx");
+                    if service_idx.is_none() {
+                        log::error!(
+                            "Missing service_idx in DTP Sui Event message. workdir={} message={:?}",
+                            self.params.workdir_name,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let service_idx = service_idx.unwrap().as_u64();
+                    if service_idx.is_none() {
+                        log::error!(
+                            "Invalid service_idx in DTP Sui Event message. workdir={} message={:?}",
+                            self.params.workdir_name,
+                            json_msg
+                        );
+                        return;
+                    }
+                    let service_idx = service_idx.unwrap() as u8;
+
+                    (
+                        service_idx,
+                        tc_ref,
+                        cli_host_ref,
+                        srv_host_ref,
+                        peer_ipipe_ref,
+                    )
+                } else {
+                    (
+                        0u8,
+                        "".to_string(),
+                        "".to_string(),
+                        "".to_string(),
+                        "".to_string(),
+                    )
+                };
 
             // Process differently depending of the source
             // TODO Add Host support for when dtp_src == 3
             if dtp_src == 1 {
                 let _rx_result = self
-                    .handle_ws_msg_for_cli_ipipe(
+                    .handle_ws_msg_from_cli_ipipe(
                         subscription_number,
-                        tc_addr,
-                        dtp_src_addr,
+                        service_idx,
+                        &peer_ipipe_addr,
+                        &cli_host_addr,
+                        &srv_host_addr,
+                        &tc_addr,
+                        &dtp_src_addr,
                         parsed_json,
                     )
                     .await;
@@ -555,8 +634,8 @@ impl WebSocketWorkerIOThread {
                 let _rx_result = self
                     .handle_ws_msg_for_srv_ipipe(
                         subscription_number,
-                        tc_addr,
-                        dtp_src_addr,
+                        &tc_addr,
+                        &dtp_src_addr,
                         parsed_json,
                     )
                     .await;
@@ -587,19 +666,145 @@ impl WebSocketWorkerIOThread {
         }
     }
 
-    async fn handle_ws_msg_for_cli_ipipe(
+    async fn handle_ws_msg_from_cli_ipipe(
         &mut self,
         subscription_number: u64,
-        tc_id: &str,
-        src_addr: &str,
+        service_idx: u8,
+        peer_ipipe_addr: &String,
+        _cli_host_addr: &String,
+        srv_host_addr: &String,
+        _tc_addr: &String,
+        src_addr: &String,
         parsed_json: &Map<String, Value>,
     ) -> Result<(), anyhow::Error> {
-        // If a matching request, forward the data into the one-shot response channel.
-        // Consume the pending request.
-        info!(
-            "REQUEST Received subscription_number={} tc_id={} src_addr={} msg={:?}",
-            subscription_number, tc_id, src_addr, parsed_json
-        );
+        // TODO Forward to an async TX thread to contact the server and respond back.
+
+        // Get the cid for that request from the parsed_json.
+        let cid = parsed_json.get("cid");
+        if cid.is_none() {
+            log::error!(
+                "Missing cid in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let cid = cid.unwrap().as_str();
+        if cid.is_none() {
+            log::error!(
+                "Invalid cid in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        // Convert cid string to u64
+        let cid = u64::from_str(cid.unwrap());
+        if cid.is_err() {
+            log::error!(
+                "Invalid cid conversion in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let cid = cid.unwrap();
+
+        // Verify the user data is provided. Convert it to bytes.
+        let data = parsed_json.get("data");
+        if data.is_none() {
+            log::error!(
+                "Missing data in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let data = data.unwrap().as_array();
+        if data.is_none() {
+            log::error!(
+                "Invalid data in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let data = data.unwrap();
+        // Map the Vec<Value> to a Vec<Byte>
+        let mut data_bytes: Vec<u8> = Vec::new();
+        for value in data {
+            let value = value.as_u64();
+            if value.is_none() {
+                log::error!(
+                    "Invalid data value in DTP Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    parsed_json
+                );
+                return Ok(());
+            }
+            let value = value.unwrap();
+            data_bytes.push(value as u8);
+        }
+
+        // Get an handle on the DTP for that service.
+        let dtp_access: Option<Arc<Mutex<DTP>>>;
+        {
+            let mut conns_state_guard = self
+                .params
+                .globals
+                .dtp_conns_state_server(self.params.workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+
+            let host_sla_idx = conns_state
+                .conns
+                .get_if_some(service_idx, &srv_host_addr, 0);
+
+            if host_sla_idx.is_none() {
+                // TODO It should have been created on "publish", but can be created here as needed.
+                // For now, just error out.
+                log::error!("REQUEST processing failed. Missing host_sla_idx in GlobalsConnsStateServerST for service_idx={} host_addr={}", 
+                service_idx, srv_host_addr);
+
+                return Ok(());
+            }
+            let host_sla_idx = host_sla_idx.unwrap();
+
+            let conn_data = conns_state.conns.get(host_sla_idx);
+            if conn_data.is_none() {
+                log::error!(
+                    "REQUEST processing failed. Missing conn data in GlobalsConnsStateServerST"
+                );
+                return Ok(());
+            }
+            let existing_conn_data = conn_data.unwrap();
+            if existing_conn_data.dtp.is_none() {
+                log::error!("REQUEST processing failed. Missing DTP in GlobalsConnsStateServerST");
+                return Ok(());
+            }
+            dtp_access = Some(Arc::clone(existing_conn_data.dtp.as_ref().unwrap()));
+        }
+
+        let dtp_access = dtp_access.unwrap();
+        {
+            let mut dtp = dtp_access.lock().await;
+            // Convert resp_ipipe_addr to a String.
+            let resp_ipipe_addr = SuiAddress::from_str(peer_ipipe_addr)?;
+            let resp_result = dtp
+                .low_level_send_response(resp_ipipe_addr, 0, 0, data_bytes, cid)
+                .await;
+            if resp_result.is_err() {
+                log::error!(
+                    "Failed to send response to DTP. workdir={} error={}",
+                    self.params.workdir_name,
+                    resp_result.err().unwrap()
+                );
+            }
+            // For now just reply back to the client directly here.
+            info!("REQUEST processing success");
+        }
+
         Ok(())
     }
 
@@ -610,8 +815,69 @@ impl WebSocketWorkerIOThread {
         src_addr: &str,
         parsed_json: &Map<String, Value>,
     ) -> Result<(), anyhow::Error> {
-        // TODO Forward to an async TX thread to contact the server and respond back.
-        // For now just reply back to the client directly here.
+        // Get the user data. For now convert to a string.
+        let data = parsed_json.get("data");
+        if data.is_none() {
+            log::error!(
+                "Missing data in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let data = data.unwrap().as_array();
+        if data.is_none() {
+            log::error!(
+                "Invalid data in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let data = data.unwrap();
+
+        // Map the Vec<Value> to a Vec<Byte>
+        let mut data_bytes: Vec<u8> = Vec::new();
+        for value in data {
+            let value = value.as_u64();
+            if value.is_none() {
+                log::error!(
+                    "Invalid data value in DTP Sui Event message. workdir={} message={:?}",
+                    self.params.workdir_name,
+                    parsed_json
+                );
+                return Ok(());
+            }
+            let value = value.unwrap();
+            data_bytes.push(value as u8);
+        }
+        // Convert data_bytes to a string.
+        let data = String::from_utf8(data_bytes);
+        if data.is_err() {
+            log::error!(
+                "Invalid data conversion in DTP Sui Event message. workdir={} message={:?}",
+                self.params.workdir_name,
+                parsed_json
+            );
+            return Ok(());
+        }
+        let data = data.unwrap();
+
+        // Extract the reply as a string.
+        // If a matching request, forward the data into the one-shot response channel.
+        // Consume the pending request.
+        {
+            let mut conns_state_guard = self
+                .params
+                .globals
+                .dtp_conns_state_client(self.params.workdir_idx)
+                .write()
+                .await;
+            let conns_state = &mut *conns_state_guard;
+
+            conns_state.trigger_send_callback(tc_id.to_string(), data);
+        }
+
         info!(
             "RESPONSE Received subscription_number={} tc_id={} src_addr={} msg={:?}",
             subscription_number, tc_id, src_addr, parsed_json
@@ -732,12 +998,13 @@ impl WebSocketWorkerIOThread {
         if state == &SubscriptionTrackingState::Subscribing {
             if tracker.did_sent_subscribe_request(msg_seq_number) {
                 is_correlated_msg = true;
-                log::info!(
+
+                /*log::info!(
                     "Received subscribe resp. workdir={} tracker={:?} resp={:?}",
                     workdir_name,
                     tracker,
                     json_msg,
-                );
+                );*/
                 // Got an expected subscribe response.
                 // Extract the result string from the JSON message.
                 let result = json_msg["result"].as_u64();
@@ -841,7 +1108,7 @@ impl WebSocketWorkerIOThread {
             return;
         }
 
-        log::info!("Received an audit message: {:?}", msg);
+        /*log::info!("Received an audit message: {:?}", msg);*/
         let mut state_change = false;
         {
             // Get a reader lock on the globals packages_config.
@@ -1214,6 +1481,12 @@ impl WebSocketWorkerIOThread {
         }
         let conn_objs = conn_obj.unwrap();
 
+        if msg.host_sla_idx.is_none() {
+            log::error!("process_conn_update - Missing host_sla_idx");
+            return;
+        }
+        let host_sla_idx = msg.host_sla_idx.unwrap();
+
         let mut trigger_audit = false;
 
         let tc_object_id = conn_objs.tc.to_string();
@@ -1230,9 +1503,13 @@ impl WebSocketWorkerIOThread {
                         Some(ipipe_addr.clone()),
                         Some(conn_objs.cli_auth.to_string()),
                     );
-                    conn_tracking
-                        .ipipe_trackings
-                        .insert(ipipe_addr, InnerPipeTracking { subs: tracker });
+                    conn_tracking.ipipe_trackings.insert(
+                        ipipe_addr,
+                        InnerPipeTracking {
+                            host_sla_idx,
+                            subs: tracker,
+                        },
+                    );
                 }
                 self.cli_conns
                     .insert(tc_object_id.to_string(), conn_tracking);
@@ -1249,9 +1526,13 @@ impl WebSocketWorkerIOThread {
                             Some(ipipe_addr.clone()),
                             Some(conn_objs.cli_auth.to_string()),
                         );
-                        conn_tracking
-                            .ipipe_trackings
-                            .insert(ipipe_addr, InnerPipeTracking { subs: tracker });
+                        conn_tracking.ipipe_trackings.insert(
+                            ipipe_addr,
+                            InnerPipeTracking {
+                                host_sla_idx,
+                                subs: tracker,
+                            },
+                        );
                         trigger_audit = true;
                     }
                 }
@@ -1271,9 +1552,13 @@ impl WebSocketWorkerIOThread {
                         Some(ipipe_addr.clone()),
                         Some(conn_objs.srv_auth.to_string()),
                     );
-                    conn_tracking
-                        .ipipe_trackings
-                        .insert(ipipe_addr, InnerPipeTracking { subs: tracker });
+                    conn_tracking.ipipe_trackings.insert(
+                        ipipe_addr,
+                        InnerPipeTracking {
+                            host_sla_idx,
+                            subs: tracker,
+                        },
+                    );
                 }
                 self.srv_conns
                     .insert(tc_object_id.to_string(), conn_tracking);
@@ -1289,9 +1574,13 @@ impl WebSocketWorkerIOThread {
                             Some(ipipe_addr.clone()),
                             Some(conn_objs.srv_auth.to_string()),
                         );
-                        conn_tracking
-                            .ipipe_trackings
-                            .insert(ipipe_addr, InnerPipeTracking { subs: tracker });
+                        conn_tracking.ipipe_trackings.insert(
+                            ipipe_addr,
+                            InnerPipeTracking {
+                                host_sla_idx,
+                                subs: tracker,
+                            },
+                        );
                         trigger_audit = true;
                     }
                 }
@@ -1368,9 +1657,9 @@ impl WebSocketWorkerIOThread {
                 // https://docs.rs/tungstenite/latest/tungstenite/protocol/struct.WebSocket.html#method.send
                 if let Err(e) = write.send(msg).await {
                     log::error!("subscribe write.send error: {:?}", e);
-                } else {
-                    log::info!("subscribe write.send success");
-                }
+                } /*else {
+                      log::info!("subscribe write.send success");
+                  }*/
             }
         }
 

@@ -15,11 +15,10 @@
 pub(crate) use self::db_worker::*;
 pub(crate) use self::events_writer_worker::*;
 pub(crate) use self::request_worker::*;
-pub(crate) use self::shell_worker::*;
 pub(crate) use self::websocket_worker::*;
 
 mod db_worker;
 mod events_writer_worker;
 mod request_worker;
-mod shell_worker;
+
 mod websocket_worker;

@@ -6,6 +6,7 @@ use anyhow::bail;
 use log::info;
 use move_core_types::language_storage::StructTag;
 use serde::Deserialize;
+use serde_json::{Map, Value};
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{
     SuiData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
@@ -44,6 +45,54 @@ pub struct WeakRef {
     // Reference is an address, which can easily be converted from/to Object ID.
     flags: u8,
     reference: SuiAddress,
+}
+
+impl WeakRef {
+    // Utility function to instantiate a WeakRef from its JSON object representation.
+    pub fn from_json(key: &str, json: &Map<String, Value>) -> Result<WeakRef, String> {
+        let ref_json = json.get(key);
+        if ref_json.is_none() {
+            return Err(format!(
+                "Missing {} in DTP Sui Event message. message={:?}",
+                key, json
+            ));
+        }
+        let ref_json = ref_json.unwrap().as_object();
+        if ref_json.is_none() {
+            return Err(format!(
+                "Invalid {} in DTP Sui Event message. message={:?}",
+                key, json
+            ));
+        }
+        let ref_json = ref_json.unwrap();
+        // Get the reference field in tc_ref.
+        let ref_addr = ref_json.get("reference");
+        if ref_addr.is_none() {
+            return Err(format!(
+                "Missing reference in {} in DTP Sui Event message. message={:?}",
+                key, json
+            ));
+        }
+        let ref_addr = ref_addr.unwrap().as_str();
+        if ref_addr.is_none() {
+            return Err(format!(
+                "Invalid reference in {} in DTP Sui Event message. message={:?}",
+                key, json
+            ));
+        }
+
+        // TODO Validate + remove potential panic + properly handle flags.
+        let reference = SuiAddress::from_str(ref_addr.unwrap()).unwrap();
+
+        Ok(WeakRef {
+            flags: 0,
+            reference,
+        })
+    }
+
+    pub fn get_reference(&self) -> SuiAddress {
+        self.reference
+    }
 }
 
 // Perform a mostly generic move call.

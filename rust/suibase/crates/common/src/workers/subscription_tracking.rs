@@ -1,4 +1,7 @@
-// State machine used by websocket_worker to track package subscription with a single server.
+// State machine to track package/object subscription
+//
+// This is intended to be used by websocket threads.
+//
 #[derive(Debug, Clone, PartialEq)]
 pub enum SubscriptionTrackingState {
     // Valid state transitions:

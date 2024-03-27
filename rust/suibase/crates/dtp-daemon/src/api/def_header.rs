@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::shared_types::UuidST;
+use common::basic_types::SafeUuid;
 
 #[serde_as]
 #[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub trait VersionedEq {
 }
 
 impl Header {
-    pub fn set_from_uuids(&mut self, uuids: &UuidST) {
+    pub fn set_from_uuids(&mut self, uuids: &SafeUuid) {
         self.method_uuid = Some(uuids.get_method_uuid());
         self.data_uuid = Some(uuids.get_data_uuid());
     }
@@ -53,20 +53,20 @@ impl Header {
 // TODO Implement PartialEq and PartialOrd to use only the uuid field for comparison.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Versioned<T: VersionedEq> {
-    uuid: UuidST,
+    uuid: SafeUuid,
     data: T,
 }
 
 impl<T: Clone + PartialEq + VersionedEq> Versioned<T> {
     pub fn new(data: T) -> Self {
         Self {
-            uuid: UuidST::new(),
+            uuid: SafeUuid::new(),
             data,
         }
     }
 
     // if data is different, then increment version, else no-op.
-    pub fn set(&mut self, new_data: &T) -> UuidST {
+    pub fn set(&mut self, new_data: &T) -> SafeUuid {
         if !self.data.versioned_eq(new_data) {
             self.data = new_data.clone();
             self.uuid.increment();
@@ -79,7 +79,7 @@ impl<T: Clone + PartialEq + VersionedEq> Versioned<T> {
         &self.data
     }
 
-    pub fn get_uuid(&self) -> &UuidST {
+    pub fn get_uuid(&self) -> &SafeUuid {
         &self.uuid
     }
 
@@ -88,7 +88,7 @@ impl<T: Clone + PartialEq + VersionedEq> Versioned<T> {
         &mut self.data
     }
 
-    pub fn get_mut_uuid(&mut self) -> &mut UuidST {
+    pub fn get_mut_uuid(&mut self) -> &mut SafeUuid {
         &mut self.uuid
     }
 

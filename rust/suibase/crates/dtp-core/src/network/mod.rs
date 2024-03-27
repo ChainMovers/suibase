@@ -8,6 +8,7 @@
 //    use dtp_core::network::host_internal::HostInternal;
 //    use dtp_core::network::localhost_internal::LocalhostInternal;
 //pub use self::common_rpc::*;
+pub use self::common_rpc::*;
 pub use self::host_internal::*;
 pub use self::localhost_internal::*;
 pub use self::network_manager::*;

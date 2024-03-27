@@ -190,11 +190,11 @@ impl WebSocketWorkerThread {
                 if state == &SubscriptionTrackingState::Subscribing {
                     if package.did_sent_subscribe_request(msg_seq_number) {
                         correlated_msg = true;
-                        log::info!(
+                        /*log::info!(
                             "Received subscribe resp. workdir={} resp={:?}",
                             self.params.workdir_name,
                             json_msg,
-                        );
+                        );*/
                         // Got an expected subscribe response.
                         // Extract the result string from the JSON message.
                         let result = json_msg["result"].as_u64();

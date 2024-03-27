@@ -7,8 +7,8 @@ use jsonrpsee::core::RpcResult;
 use crate::admin_controller::{
     AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
 };
-use crate::shared_types::{GlobalsProxyMT, ServerStats, UuidST};
-use common::basic_types::TargetServerIdx;
+use crate::shared_types::{GlobalsProxyMT, ServerStats};
+use common::basic_types::{SafeUuid, TargetServerIdx};
 
 use super::{InfoResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
@@ -248,7 +248,7 @@ impl ProxyApiServer for ProxyApiImpl {
 
         // Variables initialized during the read lock.
         let mut inputs = GetLinksInput::new();
-        let mut inputs_version: Option<UuidST> = None;
+        let mut inputs_version: Option<SafeUuid> = None;
 
         {
             // Get read lock access to the globals and just quickly copy what is needed.

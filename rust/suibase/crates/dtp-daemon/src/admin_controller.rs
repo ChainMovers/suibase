@@ -20,18 +20,8 @@ use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemBuilder, Subs
 //     (implemented by dequeuing and processing one event at the time).
 //   - Handle events to hot-reload the suibase.yaml
 //   - Handle events for various user actions (e.g. from JSONRPCServer).
-//   - Responsible to keep one "ProxyServer" and "ShellProcessor" running per workdir.
+//   - Responsible to keep one "ShellProcessor" running per workdir.
 //
-// globals.proxy: InputPort Instantiation
-// =======================================
-// One InputPort is instantiated per workdir (localnet, devnet, testnet ...).
-//
-// Once instantiated, it is never deleted. Subsequently, the ProxyServer is also started
-// and never stopped. It can be disabled/re-enabled though.
-//
-// The ProxyServer function can be disabled at workdir granularity by the user config and/or
-// if the workdir is deleted.
-
 pub struct AdminController {
     idx: Option<ManagedVecU8>,
     globals: Globals,

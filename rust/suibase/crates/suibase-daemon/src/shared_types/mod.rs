@@ -9,7 +9,6 @@ pub(crate) use self::input_port::*;
 pub(crate) use self::packages::*;
 pub(crate) use self::server_stats::*;
 pub(crate) use self::target_server::*;
-pub(crate) use self::uuid::*;
 pub(crate) use self::workdirs::*;
 
 mod events;
@@ -18,5 +17,4 @@ mod input_port;
 mod packages;
 mod server_stats;
 mod target_server;
-mod uuid;
 mod workdirs;

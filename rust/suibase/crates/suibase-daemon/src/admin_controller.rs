@@ -6,8 +6,8 @@ use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
 use crate::shared_types::{Globals, InputPort, WorkdirUserConfig};
 use crate::workdirs_watcher::WorkdirsWatcher;
-use crate::workers::ShellWorker;
 use crate::workers::{EventsWriterWorker, EventsWriterWorkerParams};
+use common::workers::ShellWorker;
 
 use anyhow::{anyhow, Result};
 
@@ -222,8 +222,7 @@ impl AdminController {
         if wd_tracking.shell_worker_handle.is_none() {
             let (shell_worker_tx, shell_worker_rx) = tokio::sync::mpsc::channel(100);
             wd_tracking.shell_worker_tx = Some(shell_worker_tx);
-            let shell_worker =
-                ShellWorker::new(self.globals.clone(), shell_worker_rx, Some(workdir_idx));
+            let shell_worker = ShellWorker::new(shell_worker_rx, Some(workdir_idx));
             let nested = subsys.start(SubsystemBuilder::new("shell-worker", |a| {
                 shell_worker.run(a)
             }));
