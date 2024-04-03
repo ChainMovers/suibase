@@ -459,7 +459,11 @@ impl AdminController {
         }
 
         // As needed, start an events_writer_worker for this workdir.
-        if workdir_config.is_user_request_start() && wd_tracking.websocket_worker_handle.is_none() {
+        // For now, only localnet is supported.
+        if workdir_name == "localnet"
+            && workdir_config.is_user_request_start()
+            && wd_tracking.websocket_worker_handle.is_none()
+        {
             let (websocket_worker_tx, websocket_worker_rx) = tokio::sync::mpsc::channel(100);
 
             let websocket_worker_params = EventsWriterWorkerParams::new(

@@ -10,7 +10,7 @@ export default hopeTheme({
     url: "https://suibase.io",
   },
 
-  iconAssets: "iconfont",
+  iconAssets: "iconify",
 
   logo: "/logo.png",
 

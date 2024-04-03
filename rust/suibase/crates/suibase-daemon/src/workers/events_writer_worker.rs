@@ -1,9 +1,11 @@
-// Dedup all Sui events for a single workdir. The dedup results are written to SQLite.
+// Dedup all Sui events for a single workdir.
+//
+// The dedup results are written to SQLite or a log file.
 //
 // This thread process the data coming from one (may be more later) events_worker child.
 //
 // The events_worker is responsible to subscribe/unsubscribe events, filter them
-// and forward the validated data to its events_writer_worker parent.
+// and forward the validated data to this events_writer_worker parent.
 use std::sync::Arc;
 
 use crate::{

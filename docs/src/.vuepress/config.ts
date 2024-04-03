@@ -21,7 +21,7 @@ export default defineUserConfig({
       lang: "en-US",
       title: "suibase.io",
       description:
-        "Sui Network Open-Source Development Tools and Community Cookbook",
+        "Open-Source Sui Development Tools",
     },
   },
 
