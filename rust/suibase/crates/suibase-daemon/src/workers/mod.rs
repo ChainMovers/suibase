@@ -14,7 +14,7 @@
 // flatten everything under "workers" module.
 pub(crate) use self::db_worker::*;
 pub(crate) use self::events_writer_worker::*;
-pub(crate) use self::log_worker::*;
+//pub(crate) use self::log_worker::*;
 pub(crate) use self::request_worker::*;
 pub(crate) use self::websocket_worker::*;
 

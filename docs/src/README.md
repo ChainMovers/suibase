@@ -53,7 +53,7 @@ actions:
 <div class="vp-feature-wrapper" style="transition: transform 0.25s ease-in-out 0.24s, opacity 0.25s ease-in-out 0.24s; transform: translateY(0px); opacity: 1;">
 <div class="vp-features">
 
-<a class="route-link vp-feature-item link" href="/intro.md" aria-label="Fast Installation" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/how-to/install.html" aria-label="Fast Installation" style="text-decoration: none">
   <h3 class="vp-feature-title">    
     <iconify-icon class="font-icon icon" icon="fluent-mdl2:installation"></iconify-icon>
     <span style="position: relative; top: 3px">Fast Installation</span>
@@ -63,7 +63,7 @@ actions:
   </p>
 </a>
 
-<a class="route-link vp-feature-item link" href="/intro.md" aria-label="Open-Source and Free" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/intro.html" aria-label="Open-Source and Free" style="text-decoration: none">
   <h3 class="vp-feature-title">    
     <iconify-icon class="font-icon icon" icon="fluent-emoji-flat:free-button"></iconify-icon>
     <span style="position: relative; top: 3px">Open-Source and Free</span>
@@ -73,7 +73,7 @@ actions:
   </p>
 </a>
 
-<a class="route-link vp-feature-item link" href="/how-to/localnet.md" aria-label="A &quotBetter&quot Localnet" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/how-to/localnet.html" aria-label="A &quotBetter&quot Localnet" style="text-decoration: none">
   <h3 class="vp-feature-title">    
     <iconify-icon class="font-icon icon" icon="octicon:thumbsup-16"></iconify-icon>
     <span style="position: relative; top: 3px">A &quotBetter&quot Localnet</span>
@@ -83,7 +83,7 @@ actions:
   </p>
 </a>
 
-<a class="route-link vp-feature-item link" href="/how-to/proxy.md" aria-label="Proxy Server" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/how-to/proxy.html" aria-label="Proxy Server" style="text-decoration: none">
   <h3 class="vp-feature-title">    
     <iconify-icon class="font-icon icon" icon="lucide:network"></iconify-icon>
     <span style="position: relative; top: 3px">Proxy Server</span>
@@ -93,7 +93,7 @@ actions:
   </p>
 </a>
 
-<a class="route-link vp-feature-item link" href="/intro.md" aria-label="Version Matching" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/intro.html" aria-label="Version Matching" style="text-decoration: none">
   <h3 class="vp-feature-title">    
     <iconify-icon class="font-icon icon" icon="fluent:plug-disconnected-48-regular"></iconify-icon>
     <span style="position: relative; top: 3px">Version Matching</span>

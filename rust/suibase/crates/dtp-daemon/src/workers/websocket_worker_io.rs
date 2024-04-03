@@ -22,7 +22,7 @@ use common::shared_types::{
 };
 
 use common::basic_types::{
-    self, AutoThread, GenericChannelMsg, ManagedElement16, ManagedVecU16, Runnable, WorkdirIdx,
+    self, AutoThread, GenericChannelMsg, ManagedVecU16, Runnable, WorkdirIdx,
 };
 
 use anyhow::{bail, Result};
@@ -668,13 +668,13 @@ impl WebSocketWorkerIOThread {
 
     async fn handle_ws_msg_from_cli_ipipe(
         &mut self,
-        subscription_number: u64,
+        _subscription_number: u64,
         service_idx: u8,
         peer_ipipe_addr: &String,
         _cli_host_addr: &String,
         srv_host_addr: &String,
         _tc_addr: &String,
-        src_addr: &String,
+        _src_addr: &String,
         parsed_json: &Map<String, Value>,
     ) -> Result<(), anyhow::Error> {
         // TODO Forward to an async TX thread to contact the server and respond back.

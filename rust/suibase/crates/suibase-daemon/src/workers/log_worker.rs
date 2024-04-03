@@ -12,13 +12,11 @@
 // The thread is auto-restart in case of panic.
 use std::sync::Arc;
 
-use crate::shared_types::{self, Globals, GlobalsWorkdirsST, Workdir};
+use crate::shared_types::{self, Globals, Workdir};
 
 use common::basic_types::{
-    self, AutoThread, DBTable, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
+    self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
 };
-
-use rusqlite::Connection;
 
 use axum::async_trait;
 
@@ -185,7 +183,7 @@ impl LogWorkerThread {
             log::error!("Unexpected event_id {:?}", msg);
             return;
         }
-        let workdir_name = if let Some(workdir_idx) = msg.workdir_idx {
+        let _workdir_name = if let Some(workdir_idx) = msg.workdir_idx {
             if workdir_idx != self.params.workdir_idx {
                 log::error!(
                     "Unexpected workdir_idx {:?} (expected {:?})",
@@ -200,14 +198,14 @@ impl LogWorkerThread {
         };
 
         // Producer of add_sui_event should always set the Suibase uuid in msg.data_string.
-        let package_uuid = if let Some(package_uuid) = msg.params(0) {
+        let _package_uuid = if let Some(package_uuid) = msg.params(0) {
             package_uuid
         } else {
             log::error!("Missing Suibase package UUID in params(0) {:?}", msg);
             return;
         };
 
-        let package_name = if let Some(package_name) = msg.params(1) {
+        let _package_name = if let Some(package_name) = msg.params(1) {
             package_name
         } else {
             log::error!("Missing package name in params(1) {:?}", msg);
@@ -266,7 +264,7 @@ impl LogWorkerThread {
             log::error!("Invalid packageId {:?}", data_json);
             return;
         }
-        let package_id = package_id[2..].to_string();
+        let _package_id = package_id[2..].to_string();
 
         let timestamp_ms: u64 =
             if let Some(timestamp_ms) = result_json.get("timestampMs").and_then(|v| v.as_str()) {
@@ -337,7 +335,7 @@ impl LogWorkerThread {
         };
 
         // Append event into log (should be already created).
-        let name_suffix = format!("{}_{}", sub_table_name, event_level);
+        let _name_suffix = format!("{}_{}", sub_table_name, event_level);
         let event_json = if is_console {
             serde_json::json!({
                 "sender": event_sender,
