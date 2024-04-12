@@ -15,7 +15,7 @@ _CUR_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*suibase \(.*\)
 # Check if there are significant local changes. If any, protect the user
 # from doing further git operations.
 # shellcheck disable=SC2126
-if [ ! "$(git status --porcelain | grep -v "Cargo.lock" | grep -v "??" | wc -l)" -eq "0" ]; then
+if [ ! "$(git status --porcelain | grep -v "Cargo.lock" | grep -v "Move.lock" | grep -v "??" | wc -l)" -eq "0" ]; then
   if [ -n "$_CUR_VER" ]; then
     echo "Current version $_CUR_VER"
     echo
