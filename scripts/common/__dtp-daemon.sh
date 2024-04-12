@@ -306,7 +306,9 @@ update_DTP_DAEMON_PID_var() {
 export -f update_DTP_DAEMON_PID_var
 
 update_dtp_daemon_as_needed() {
-  start_dtp_daemon_as_needed "force-update"
+  if [ "${CFG_dtp_enabled:?}" = "true" ]; then
+    start_dtp_daemon_as_needed "force-update"
+  fi
 }
 export -f update_dtp_daemon_as_needed
 

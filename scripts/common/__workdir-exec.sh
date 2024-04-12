@@ -560,13 +560,15 @@ workdir_exec() {
 
     # Append the information common to all.
     if [ ! "$_USER_REQUEST" = "stop" ]; then
-      _INFO=$(
-        echo -n "http://"
-        echo_blue "${CFG_dtp_host_ip:?}"
-        echo -n ":"
-        echo_blue "${CFG_dtp_web_port_number:?}"
-      )
-      echo_process "DTP services" "$_SUPPORT_DTP" "$DTP_DAEMON_PID" "$_INFO"
+      if [ "${CFG_dtp_enabled:?}" = "true" ]; then
+        _INFO=$(
+          echo -n "http://"
+          echo_blue "${CFG_dtp_host_ip:?}"
+          echo -n ":"
+          echo_blue "${CFG_dtp_web_port_number:?}"
+        )
+        echo_process "DTP services" "$_SUPPORT_DTP" "$DTP_DAEMON_PID" "$_INFO"
+      fi
 
       _INFO=$(
         echo -n "http://"
