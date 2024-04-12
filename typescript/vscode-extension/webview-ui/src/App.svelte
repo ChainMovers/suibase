@@ -30,22 +30,25 @@
   function handleHowdyClick() {
     VSCode.postMessage({
       command: "hello",
-      text: "Hey there partner! 🤠",
+      text: "Howdy!",
     });
   }
 </script>
 
 <main>
-  {#if globalThis.suibase_panel_key == "suibase.settings"}
+  {#if globalThis.suibase_view_key == "suibase.settings"}
     <WorkdirsController />
-  {:else if globalThis.suibase_panel_key == "suibase.console"}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <vscode-button on:click={handleHowdyClick}>Config Howdy!</vscode-button>
+  {:else if globalThis.suibase_view_key == "suibase.console"}
     <ConsoleController />
-  {:else if globalThis.suibase_panel_key == "explorer.console"}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <vscode-button on:click={handleHowdyClick}>Console Howdy!</vscode-button>
+  {:else if globalThis.suibase_view_key == "suibase.sidebar"}
     <ExplorerController />
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <vscode-button on:click={handleHowdyClick}>Explorer Howdy!</vscode-button>
   {/if}
-
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <vscode-button on:click={handleHowdyClick}>Howdy!</vscode-button>
 </main>
 
 <style>

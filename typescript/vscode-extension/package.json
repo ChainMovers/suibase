@@ -34,17 +34,17 @@
       "view/title": [
         {
           "command": "suibase.settings",
-          "when": "view == suibaseTreeView",
+          "when": "view == explorerView",
           "group": "navigation@0"
         },
         {
           "command": "suibase.console",
-          "when": "view == suibaseTreeView",
+          "when": "view == explorerView",
           "group": "navigation@1"
         },
         {
           "command": "suibase.refresh",
-          "when": "view == suibaseTreeView",
+          "when": "view == explorerView",
           "group": "navigation@2"
         }
       ]
@@ -61,10 +61,11 @@
     "views": {
       "suibaseSidebar": [
         {
-          "id": "suibaseTreeView",
+          "id": "explorerView",
           "name": "Suibase",
           "icon": "media/dep.svg",
-          "contextualTitle": "Suibase"
+          "contextualTitle": "Suibase",
+          "type": "webview"
         }
       ]
     }
@@ -98,4 +99,3 @@
     "ws": "^8.14.2"
   }
 }
-

@@ -1,11 +1,11 @@
-import { BasePanel } from "./BasePanel";
+import { BaseWebview } from "../bases/BaseWebview";
 
 /**
  * This class manages the state and behavior of the ConsolePanel webview.
  *
  * This is a singleton.
  */
-export class ConsolePanel extends BasePanel {
+export class ConsolePanel extends BaseWebview {
   private static instance?: ConsolePanel;
 
   /**
@@ -15,7 +15,7 @@ export class ConsolePanel extends BasePanel {
     super("suibase.console", "Sui Console");
   }
 
-  // Note: Does not use the activate/deactivate pattern (the BasePanel does).
+  // Note: Does not use the activate/deactivate pattern (the BaseWebview does).
   //       Instead this subclass uses a render()/dispose() for its lifetime.
   //
   //       This is because activate() always happens once and early while render()
@@ -26,10 +26,10 @@ export class ConsolePanel extends BasePanel {
     if (!ConsolePanel.instance) {
       ConsolePanel.instance = new ConsolePanel();
     }
-    ConsolePanel.instance.render();
+    ConsolePanel.instance.renderPanel();
   }
 
-  // Dispose is a callback triggered by VSCode (see BasePanel).
+  // Dispose is a callback triggered by VSCode (see BaseView).
   protected dispose() {
     console.log("ConsolePanel.dispose() called");
     if (ConsolePanel.instance) {

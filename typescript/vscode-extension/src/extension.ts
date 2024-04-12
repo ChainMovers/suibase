@@ -2,11 +2,10 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 
-import { SuibaseSidebar } from "./SuibaseSidebar";
-//import { SuibaseSidebar } from "./sidebar/SuibaseSidebar";
+import { SuibaseSidebar } from "./sidebar/SuibaseSidebar";
 import { SuibaseExec } from "./SuibaseExec";
 import { SuibaseCommands } from "./SuibaseCommands";
-import { BasePanel } from "./panels/BasePanel";
+import { BaseWebview } from "./bases/BaseWebview";
 
 // This method is called when the extension is activated by VSCode.
 export function activate(context: vscode.ExtensionContext) {
@@ -15,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Low-level APIs
   SuibaseExec.activate(context);
-  BasePanel.activate(context);
+  BaseWebview.activate(context);
 
   // "Business logic" enabled next.
   SuibaseCommands.activate(context);
@@ -36,7 +35,7 @@ export function deactivate() {
   SuibaseCommands.deactivate();
 
   // Low-level APIs disabled last.
-  BasePanel.deactivate();
+  BaseWebview.deactivate();
   SuibaseExec.deactivate();
 
   console.log("extension deactivate() completed");

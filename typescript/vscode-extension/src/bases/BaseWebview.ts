@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { Disposable, WebviewPanel, window, Uri, ViewColumn } from "vscode";
+import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn } from "vscode";
 import { getUri } from "../utilities/getUri";
 import { getNonce } from "../utilities/getNonce";
 
@@ -8,52 +8,107 @@ import { getNonce } from "../utilities/getNonce";
  *
  * Responsibilities include:
  * - Creating and rendering the webview.
- * - Setting the HTML, CSS and Typescript content of the webview panel
- * - Properly cleaning up and disposing of webview resources when the panel is closed
+ * - Setting the HTML, CSS and Typescript content of the webview.
+ * - Properly cleaning up and disposing of webview resources when closed
  * - Setting message listeners so data can be passed between the webview and extension
  */
-export class BasePanel {
-  // Create a map of BasePanel instances, each keyed by a unique string.
-  // They all share the same extension context.
-  //private static instances: Map<string, BasePanel>;
+export class BaseWebview implements vscode.WebviewViewProvider {
   private static context?: vscode.ExtensionContext;
 
   // Instance variables initialized in constructor()
-  private readonly panelKey: string;
-  private readonly panelTitle: string;
+  private readonly key: string;
+  private readonly title: string;
   private readonly extensionUri: Uri;
+  private readonly extensionUris: Uri[] = [];
 
   // Instance variables initialized on first render()
+  private webview: Webview | undefined;
   private panel: WebviewPanel | undefined;
   private disposables: Disposable[] = [];
 
+  // Allow the subclasses read-access to the panel variable.
+  protected getWebview() {
+    if (!this.panel) {
+      return this.webview;
+    }
+    return this.panel.webview;
+  }
+
+  protected getPanel() {
+    return this.panel;
+  }
+
+  // Every view in the extension should have a unique key.
+  //
+  // This key is used to identify the view when the html is rendered.
+  protected getKey() {
+    return this.key;
+  }
+
+  protected getTitle() {
+    return this.title;
+  }
+
+  /*
+  protected getExtensionUri() {
+    return this.extensionUri;
+  }*/
+
   /**
-   * The BasePanel class private constructor (called only from the render method).
-   *
-   * @param panel A reference to the webview panel
-   * @param extensionUri The URI of the directory containing the extension
+   * The BaseWebview class private constructor (called only from the derived class).
    */
-  protected constructor(panelKey: string, panelTitle: string) {
-    if (!BasePanel.context) {
+  protected constructor(key: string, title: string) {
+    if (!BaseWebview.context) {
       console.log("Error: BasePanel.constructor called before activate()");
       this.extensionUri = Uri.parse("file:///undefined");
     } else {
-      this.extensionUri = BasePanel.context.extensionUri;
+      this.extensionUri = BaseWebview.context.extensionUri;
+      this.extensionUris = [
+        Uri.joinPath(BaseWebview.context.extensionUri, "out"),
+        Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/public/build"),
+        Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/node_modules/@vscode/codicons/dist"),
+      ];
     }
 
-    this.panelKey = panelKey;
-    this.panelTitle = panelTitle;
+    this.key = key;
+    this.title = title;
 
     // Set an event listener to listen for messages passed from the webview context
     this._setWebviewMessageListener();
   }
 
   public static activate(context: vscode.ExtensionContext) {
-    BasePanel.context = context;
+    BaseWebview.context = context;
   }
 
   public static deactivate() {
-    BasePanel.context = undefined;
+    BaseWebview.context = undefined;
+  }
+
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ) {
+    this.webview = webviewView.webview;
+
+    webviewView.webview.options = {
+      // Allow scripts in the webview
+      enableScripts: true,
+
+      localResourceRoots: this.extensionUris,
+    };
+
+    webviewView.webview.html = this._getWebviewContent();
+    /*
+    webviewView.webview.onDidReceiveMessage((data) => {
+      switch (data.type) {
+        case "colorSelected": {
+          vscode.window.activeTextEditor?.insertSnippet(new vscode.SnippetString(`#${data.value}`));
+          break;
+        }
+      }
+    });*/
   }
 
   /**
@@ -64,18 +119,18 @@ export class BasePanel {
    * @param panelKey A unique string that identifies the webview panel.
    * @param panelTitle The title shown for this webview panel.
    */
-  protected render() {
+  protected renderPanel() {
     // Look if there is already a BasePanel instance for the given key.
     if (this.panel !== undefined) {
       // If the webview panel already exists reveal it
       this.panel.reveal(ViewColumn.One);
-      console.log("BasePanel _panel.reveal() called");
+      console.log("BaseWebview render_panel reveal() called");
     } else {
       // If a webview panel does not already exist create and show a new one
       // "this" here is the subclass that extends BasePanel.
       this.panel = window.createWebviewPanel(
-        this.panelKey, // Panel view type, must match what is in package.json
-        this.panelTitle,
+        this.key, // Panel view type, must match what is in package.json
+        this.title,
         // The editor column the panel should be displayed in
         ViewColumn.One,
         // Extra panel configurations
@@ -83,11 +138,7 @@ export class BasePanel {
           // Enable JavaScript in the webview
           enableScripts: true,
           // Restrict the webview to only load resources from the `out` and `webview-ui/build` directories
-          localResourceRoots: [
-            Uri.joinPath(this.extensionUri, "out"),
-            Uri.joinPath(this.extensionUri, "webview-ui/public/build"),
-            Uri.joinPath(this.extensionUri, "webview-ui/node_modules/@vscode/codicons/dist"),
-          ],
+          localResourceRoots: this.extensionUris,
         }
       );
 
@@ -135,28 +186,20 @@ export class BasePanel {
    * rendered within the webview panel
    */
   private _getWebviewContent() {
-    if (!this.panel) {
-      // Should never happen, but just in case... show an error in the panel so the user can see (and report).
-      return "Error: Missing webview panel instance";
+    let webview = this.getWebview();
+    if (!webview) {
+      // Should never happen, but just in case... show an error so the user can see (and report).
+      return "Error: Missing webview instance";
     }
+
     // The CSS file from the Svelte build output
-    const stylesUri = getUri(this.panel.webview, this.extensionUri, [
-      "webview-ui",
-      "public",
-      "build",
-      "bundle.css",
-    ]);
+    const stylesUri = getUri(webview, this.extensionUri, ["webview-ui", "public", "build", "bundle.css"]);
 
     // The JS file from the Svelte build output
-    const scriptUri = getUri(this.panel.webview, this.extensionUri, [
-      "webview-ui",
-      "public",
-      "build",
-      "bundle.js",
-    ]);
+    const scriptUri = getUri(webview, this.extensionUri, ["webview-ui", "public", "build", "bundle.js"]);
 
     // The icon library being used.
-    const iconsUri = getUri(this.panel.webview, this.extensionUri, [
+    const iconsUri = getUri(webview, this.extensionUri, [
       "webview-ui",
       "node_modules",
       "@vscode/codicons",
@@ -167,7 +210,7 @@ export class BasePanel {
     const nonce = getNonce();
 
     // Origin for Content security policy source.
-    const cspSource = this.panel.webview.cspSource;
+    const cspSource = webview.cspSource;
 
     // Tip: Install the es6-string-html VS Code extension to enable code highlighting below
 
@@ -184,7 +227,7 @@ export class BasePanel {
           <link rel="stylesheet" type="text/css" href="${iconsUri}" />      
 
           <script nonce="${nonce}">
-            var suibase_panel_key = '${this.panelKey}';
+            var suibase_view_key = '${this.key}';
           </script>
           <script defer nonce="${nonce}" src="${scriptUri}"></script>
         </head>
@@ -203,8 +246,7 @@ export class BasePanel {
    */
   private _setWebviewMessageListener() {
     if (!this.panel) {
-      console.log("Error: webview panel instance missing");
-      return;
+      return; // For now, only panel supports message passing.
     }
 
     this.panel.webview.onDidReceiveMessage(

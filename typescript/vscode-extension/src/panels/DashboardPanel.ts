@@ -1,11 +1,11 @@
-import { BasePanel } from "./BasePanel";
+import { BaseWebview } from "../bases/BaseWebview";
 
 /**
  * This class manages the state and behavior of the DashboardPanel webview.
  *
  * This is a singleton.
  */
-export class DashboardPanel extends BasePanel {
+export class DashboardPanel extends BaseWebview {
   private static instance?: DashboardPanel;
 
   /**
@@ -27,10 +27,10 @@ export class DashboardPanel extends BasePanel {
     if (!DashboardPanel.instance) {
       DashboardPanel.instance = new DashboardPanel();
     }
-    DashboardPanel.instance.render();
+    DashboardPanel.instance.renderPanel();
   }
 
-  // Dispose is a callback triggered by VSCode (see BasePanel).
+  // Dispose is a callback triggered by VSCode (see BaseWebview).
   protected dispose() {
     console.log("DashboardPanel.dispose() called");
     if (DashboardPanel.instance) {
