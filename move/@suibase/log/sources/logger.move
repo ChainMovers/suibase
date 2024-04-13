@@ -1,18 +1,11 @@
 // Simple storage of configuration variables for a Console object.
 module log::logger {    
-    
-    use sui::object::{Self, ID, UID};
-    use std::vector::{Self};
-    use sui::tx_context::{TxContext};
-    use sui::transfer::{Self};
-    
-
     use log::console_config::{Self,ConsoleConfig};
     use log::consts::{Self};
 
-    friend log::init;
-    friend log::console;
-    friend log::logger_admin_cap;
+    //friend log::init;
+    //friend log::console;
+    //friend log::logger_admin_cap;
 
     // One LevelStats for each log level + one for silent errors.
     public struct LevelStats has store, copy {
@@ -36,7 +29,7 @@ module log::logger {
         reset_stats_count: u64,        
     }
 
-    public(friend) fun new( ctx: &mut TxContext ): ID {
+    public(package) fun new( ctx: &mut TxContext ): ID {
         let console_config = console_config::new();
         let mut level_stats = vector::empty<LevelStats>();
         let mut i = 0u8;
@@ -57,11 +50,11 @@ module log::logger {
         ret_value
     }
 
-    public(friend) fun id( self: &Logger): ID {
+    public(package) fun id( self: &Logger): ID {
         object::uid_to_inner(&self.id)
     }
 
-    public(friend) fun reset_stats( self: &mut Logger) {
+    public(package) fun reset_stats( self: &mut Logger) {
         let mut i = 0u64;
         // Clear stats for all log levels (index '0' is stats of silent errors).
         let max_level = (log::consts::MaxLogLevel() as u64);
@@ -74,15 +67,15 @@ module log::logger {
         self.reset_stats_count = self.reset_stats_count + 1;
     }
 
-    public(friend) fun set_log_level( self: &mut Logger, level: u8) {
+    public(package) fun set_log_level( self: &mut Logger, level: u8) {
         console_config::set_log_level(&mut self.console_config, level);
     }
 
-    public(friend) fun enable( self: &mut Logger) {
+    public(package) fun enable( self: &mut Logger) {
         console_config::enable(&mut self.console_config);
     }
 
-    public(friend) fun disable( self: &mut Logger) {
+    public(package) fun disable( self: &mut Logger) {
         console_config::disable(&mut self.console_config);
     }    
 }

@@ -1,6 +1,4 @@
 module log::init {
-    //use sui::object::{Self};
-    use sui::tx_context::{TxContext};
 
     use log::logger::{Self};
     use log::logger_admin_cap::{Self};

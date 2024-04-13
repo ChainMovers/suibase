@@ -1,13 +1,9 @@
 // Simple storage of configuration variables for a Console object.
 module log::logger_admin_cap {    
-    
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{Self,TxContext};
-
     use log::consts::{Self};
     use log::logger::{Self, Logger};
 
-    friend log::init;
+    //public(package) log::init;
 
     public struct LoggerAdminCap has key {
         id: UID,
@@ -16,7 +12,7 @@ module log::logger_admin_cap {
     }
 
     #[lint_allow(self_transfer)]
-    public(friend) fun new( logger_id: ID, ctx: &mut TxContext) {
+    public(package) fun new( logger_id: ID, ctx: &mut TxContext) {
         let new_cap = LoggerAdminCap {
             id: object::new(ctx),
             owner: tx_context::sender(ctx),

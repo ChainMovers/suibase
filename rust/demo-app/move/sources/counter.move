@@ -5,17 +5,14 @@
 //
 // There is only one Counter object created per package published.
 //
-module demo::Counter {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self,TxContext};
-    use sui::event;
-    use sui::transfer;
+module demo::Counter {        
+    use sui::event;    
 
     use log::console::{Console};
 
     // Allow unit test module to use this object friend functions.
-    #[test_only]
-    friend demo::test_counter;
+    //#[test_only]
+    //public(package) demo::test_counter;
 
     // Move event emitted on every increment.
     public struct CounterChanged has copy, drop {
@@ -36,28 +33,28 @@ module demo::Counter {
     }
 
     #[test_only]
-    public(friend) fun init_for_test( ctx: &mut TxContext)
+    public(package) fun init_for_test( ctx: &mut TxContext)
     {
         init(ctx);
     }
 
     #[test_only]
-    public(friend) fun new( ctx: &mut TxContext): Counter
+    public(package) fun new( ctx: &mut TxContext): Counter
     {
         Counter { id: object::new(ctx), count: 0 }
     }
 
-    public(friend) fun delete( self: Counter )
+    public(package) fun delete( self: Counter )
     {
         let Counter { id, count: _ } =  self;
         object::delete(id);
     }
 
-    public(friend) fun count(self: &Counter): u64 {
+    public(package) fun count(self: &Counter): u64 {
         self.count
     }
 
-    public(friend) fun inc(self: &mut Counter, console: &Console, ctx: &TxContext)
+    public(package) fun inc(self: &mut Counter, console: &Console, ctx: &TxContext)
     {                
         console.debug(b"internal inc() called");
 
@@ -84,7 +81,6 @@ module demo::Counter {
 
 #[test_only]
 module demo::test_counter {
-    use sui::transfer;
     use sui::test_scenario::{Self};
     use demo::Counter::{Self};
 

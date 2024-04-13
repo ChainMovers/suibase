@@ -81,6 +81,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
             call_args,
             None, // The node will pick a gas object belong to the signer if not provided.
             2000000,
+            None,
         )
         .await?;
 
