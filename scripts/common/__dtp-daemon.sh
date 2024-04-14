@@ -393,6 +393,7 @@ get_dtp_daemon_status() {
 
   local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR_NAME\",\"$_DISP\":true}}"
 
+  export JSON_RESP
   JSON_RESP=$(curl -x "" -s --location -X POST "http://${CFG_dtp_host_ip:?}:${CFG_dtp_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
 }
 export -f get_dtp_daemon_status
