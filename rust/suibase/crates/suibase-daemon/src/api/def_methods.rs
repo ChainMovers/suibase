@@ -142,7 +142,7 @@ impl InfoResponse {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusService {
-    pub label: String, // "localnet process", "proxy server", "multi-link RPC" etc...
+    pub label: String, // "Localnet process", "Proxy server", "Multi-link RPC" etc...
     pub status: Option<String>, // OK, DOWN, DEGRADED
     pub status_info: Option<String>, // Info related to status.
     pub help_info: Option<String>, // Short help info (e.g. the faucet URL)
@@ -428,6 +428,8 @@ impl VersionedEq for PackagesConfigResponse {
 pub struct VersionsResponse {
     pub header: Header,
     pub versions: Vec<Header>,
+
+    pub asui_selection: Option<String>, // Last confirmed applied asui.
 }
 
 impl VersionsResponse {
@@ -435,6 +437,7 @@ impl VersionsResponse {
         Self {
             header: Header::default(),
             versions: Vec::new(),
+            asui_selection: None,
         }
     }
 }
@@ -448,7 +451,7 @@ impl Default for VersionsResponse {
 impl VersionedEq for VersionsResponse {
     fn versioned_eq(&self, other: &Self) -> bool {
         // Purposely do not include header in the comparison.
-        self.versions == other.versions
+        self.versions == other.versions && self.asui_selection == other.asui_selection
     }
 }
 
@@ -499,6 +502,14 @@ pub trait GeneralApi {
         method_uuid: Option<String>,
         data_uuid: Option<String>,
     ) -> RpcResult<WorkdirStatusResponse>;
+
+    // Allow to modify the asui selection.
+    //
+    // Choices are "localnet", "devnet", "testnet" or "mainnet".    
+    //
+    // Returns success only after confirmed applied to Suibase (retry may have occurred).
+    #[method(name = "setAsuiSelection")]
+    async fn set_asui_selection(&self, workdir: String) -> RpcResult<SuccessResponse>;
 }
 
 #[rpc(server)]

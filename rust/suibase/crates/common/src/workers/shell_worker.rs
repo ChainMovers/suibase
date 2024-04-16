@@ -12,7 +12,6 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use crate::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
 
 pub struct ShellWorker {
-
     event_rx: GenericRx,
     workdir_idx: Option<WorkdirIdx>,
 }
