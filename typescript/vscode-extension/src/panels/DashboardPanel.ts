@@ -41,4 +41,9 @@ export class DashboardPanel extends BaseWebview {
       console.log("Error: dispose() called out of order");
     }
   }
+
+  protected handleMessage(message: any): void {
+    console.log("Dashboard.handleMessage() called");
+    console.log(message);
+  }
 }

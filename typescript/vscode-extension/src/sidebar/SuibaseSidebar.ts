@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { BaseWebview } from "../bases/BaseWebview";
+import { SuibaseData } from "../common/SuibaseData";
 
 export class SuibaseSidebar extends BaseWebview {
   private static instance?: SuibaseSidebar;
@@ -46,6 +47,22 @@ export class SuibaseSidebar extends BaseWebview {
       SuibaseSidebar.instance = undefined;
     } else {
       console.log("Error: dispose() called out of order");
+    }
+  }
+
+  // Override BaseWebview::handleMessage
+  protected handleMessage(message: any): void {
+    console.log("SuibaseSidebar.handleMessage() called");
+    console.log(message);
+    let sbData = SuibaseData.getInstance();
+    switch (message.type) {
+      case "init-view":
+        super.postMessage({ type: "init-global-states", message: sbData.globalStates.serialize() });
+        // TODO Initialize the other states...
+        break;
+      // TODO Implement new message types to handle workdir states.
+      // TODO Implement new message types to handle console states.
+      // TODO Implement new message types to handle wallet states.
     }
   }
 }

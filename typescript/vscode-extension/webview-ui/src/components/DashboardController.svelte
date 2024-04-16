@@ -1,17 +1,21 @@
 <script lang="ts">
-  import { VSCode } from "../lib/VSCode";
+  import { VSCode } from "$lib/VSCode";
   import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
+  import { onMount } from "svelte";
+
+  import { all_contexts, ui_selected_context } from "$lib/states/L4/contexts";
 
   interface WorkdirData {
     name: string;
     status: string;
+    versions: SuibaseJSONStorage;
   }
 
   export let workdirs: WorkdirData[] = [
-    { name: "Localnet", status: "Running" },
-    { name: "Devnet", status: "Degraded" },
-    { name: "Testnet", status: "Stopped" },
-    { name: "Mainnet", status: "Down" },
+    { name: "Localnet", status: "Running", versions: new SuibaseJSONStorage() },
+    { name: "Devnet", status: "Degraded", versions: new SuibaseJSONStorage() },
+    { name: "Testnet", status: "Stopped", versions: new SuibaseJSONStorage() },
+    { name: "Mainnet", status: "Down", versions: new SuibaseJSONStorage() },
   ];
 
   function handleStartClick(workdir: WorkdirData) {
@@ -63,6 +67,7 @@
       command: "stop",
       workdir: workdir.name,
     });
+    $ui_selected_context = "DSUI";
   }
 
   function handleRegenClick(workdir: WorkdirData) {
@@ -74,48 +79,43 @@
 </script>
 
 <main>
-  <!---
-  <vscode-dropdown>
-    <vscode-option>Option Label #1</vscode-option>
-    <vscode-option>Option Label #2</vscode-option>
-    <vscode-option>Option Label #3</vscode-option>
-  </vscode-dropdown>
-
-  <vscode-button appearance="primary">Button Text</vscode-button>
-  <vscode-button appearance="secondary">Button Text</vscode-button>
-
-  <vscode-button appearance="icon" aria-label="Confirm">
-    <span class="codicon codicon-check" />
-  </vscode-button>
--->
   <p>Suibase Dashboard</p>
   <br />
+  <select bind:value={$ui_selected_context}>
+    {#each [...$all_contexts] as [key, mapping]}
+      <option value={key}>
+        {mapping.context.ui_selector_name}
+      </option>
+    {/each}
+  </select>
+
   {#each workdirs as workdir}
     <div class="workdir_row">
       <h2 class="workdir">{workdir.name}</h2>
       <h2 class="status">{workdir.status}</h2>
       {#if workdir.status === "Stopped"}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={() => handleStartClick(workdir)}>
+        <vscode-button role="button" tabindex="0" on:click={() => handleStartClick(workdir)}>
           Start
           <span slot="start" class="codicon codicon-debug-start" />
         </vscode-button>
       {:else}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={() => handleStopClick(workdir)}>
+        <vscode-button role="button" tabindex="0" on:click={() => handleStopClick(workdir)}>
           Stop
           <span slot="start" class="codicon codicon-debug-stop" />
         </vscode-button>
       {/if}
       {#if workdir.name === "Localnet"}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={() => handleRegenClick(workdir)}>
+        <vscode-button role="button" tabindex="0" on:click={() => handleRegenClick(workdir)}>
           Regen
           <span slot="start" class="codicon codicon-refresh" />
         </vscode-button>
       {/if}
     </div>
   {/each}
+  <!-- Synchronized data from suibase daemon -->
 </main>
 
 <style>

@@ -1,120 +1,64 @@
 <script lang="ts">
   import { VSCode } from "../lib/VSCode";
-  import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
+  import { onMount } from "svelte";
+  import { SuibaseData } from "../common/SuibaseData";
+  import { all_contexts, ui_selected_context } from "$lib/states/L4/contexts";
 
-  interface WorkdirData {
-    name: string;
-    status: string;
-  }
+  // Data exchanged with the extension.
+  let suibaseData: SuibaseData = SuibaseData.getInstance();
 
-  export let workdirs: WorkdirData[] = [
-    { name: "Localnet", status: "Running" },
-    { name: "Devnet", status: "Degraded" },
-    { name: "Testnet", status: "Stopped" },
-    { name: "Mainnet", status: "Down" },
-  ];
-
-  function handleStartClick(workdir: WorkdirData) {
-    // let workdir=workdir.name
-
+  onMount(() => {
+    // Add a callback to connect SuibaseData with some Svelte store.
+    //suibaseData.globalStates.uiSelectedContextCallback =
+    console.log("ExplorerController mounted");
+    // Tell the extension that the view is ready to receive data.
     VSCode.postMessage({
-      command: "start",
-      workdir: workdir.name,
+      type: "init-view",
     });
-    console.log("handleStartClick called");
+  });
 
-    // Do a POST request equivalent to http://0.0.0.0:44399 with:
-    // header is Content-Type: application/json
-    // body is {"id":1,"jsonrpc":"2.0","method":"getLinks","params":{"workdir":"workdir.name"}}
-    const url = "http://localhost:44399";
-    const headers = {
-      "Content-Type": "application/json",
-    };
-    const body = {
-      id: 1,
-      jsonrpc: "2.0",
-      method: "getLinks",
-      params: {
-        workdir: workdir.name,
-      },
-    };
-
-    fetch(url, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(body),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        return response.json();
-      })
-      .then((data) => {
-        console.log(data);
-      })
-      .catch((error) => {
-        console.error("There was a problem with the fetch operation:", error);
-      });
-  }
-
-  function handleStopClick(workdir: WorkdirData) {
-    VSCode.postMessage({
-      command: "stop",
-      workdir: workdir.name,
-    });
-  }
-
-  function handleRegenClick(workdir: WorkdirData) {
-    VSCode.postMessage({
-      command: "regen",
-      workdir: workdir.name,
-    });
+  //Window event handler
+  function windowMessage(event) {
+    const message = event.data; // The json data sent by the extension
+    switch (message.type) {
+      // TODO: Look into "state" optimization https://blog.kylekukshtel.com/game-data-editor-3
+      case "init-global-states":
+        suibaseData.globalStates.deserialize(message.data);
+        console.log("init-global-states called", suibaseData.globalStates);
+        $ui_selected_context = suibaseData.globalStates.uiSelectedContext;
+        break;
+      default:
+        break;
+    }
   }
 </script>
 
+<svelte:window on:message={windowMessage} />
+
 <main>
-  <!---
-  <vscode-dropdown>
-    <vscode-option>Option Label #1</vscode-option>
-    <vscode-option>Option Label #2</vscode-option>
-    <vscode-option>Option Label #3</vscode-option>
-  </vscode-dropdown>
+  {#key ui_selected_context}
+    <vscode-dropdown value="$ui_selected_context">
+      {#each [...$all_contexts] as [key, mapping]}
+        {#if key === $ui_selected_context}
+          <vscode-option value={key} selected>
+            {key},{mapping.context.ui_selector_name}
+          </vscode-option>
+        {:else}
+          <vscode-option value={key}>
+            {key},{mapping.context.ui_selector_name}
+          </vscode-option>
+        {/if}
+      {/each}
+    </vscode-dropdown>
+  {/key}
 
-  <vscode-button appearance="primary">Button Text</vscode-button>
-  <vscode-button appearance="secondary">Button Text</vscode-button>
-
-  <vscode-button appearance="icon" aria-label="Confirm">
-    <span class="codicon codicon-check" />
-  </vscode-button>
--->
-  <p>Explorer View</p>
-  {#each workdirs as workdir}
-    <div class="workdir_row">
-      <h2 class="workdir">{workdir.name}</h2>
-      <h2 class="status">{workdir.status}</h2>
-      {#if workdir.status === "Stopped"}
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={() => handleStartClick(workdir)}>
-          Start
-          <span slot="start" class="codicon codicon-debug-start" />
-        </vscode-button>
-      {:else}
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={() => handleStopClick(workdir)}>
-          Stop
-          <span slot="start" class="codicon codicon-debug-stop" />
-        </vscode-button>
-      {/if}
-      {#if workdir.name === "Localnet"}
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <vscode-button on:click={() => handleRegenClick(workdir)}>
-          Regen
-          <span slot="start" class="codicon codicon-refresh" />
-        </vscode-button>
-      {/if}
-    </div>
-  {/each}
+  <select bind:value={$ui_selected_context}>
+    {#each [...$all_contexts] as [key, mapping]}
+      <option value={key}>
+        {mapping.context.ui_selector_name}
+      </option>
+    {/each}
+  </select>
 </main>
 
 <style>

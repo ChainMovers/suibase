@@ -6,10 +6,6 @@
 //
 // Public API is done with the StateLoop::get_instance() singleton.
 //
-// Data Layer Design (Top has the one below):
-//   --> Simple double buffering logic.
-//         Initialize one state while other is the active.
-//
 //   $table.data    <= May change often. Any change means a new data object.
 //   $table.isXXX   <= Useful abstractions.
 //   $table.context <= For UI variations specific to context. Never changes.
@@ -102,6 +98,7 @@ export class StateLoop {
           console.log(err);
         }
       }
+      //console.log("StateLoop::_async_loop() force_refresh=" + force_refresh);
       /*
       if (cur_context_stores && cur_context_stores.epoch_stores) {
         const [err] = await to<void>(cur_context_stores.epoch_stores.update_ev(force_refresh));

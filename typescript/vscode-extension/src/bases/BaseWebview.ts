@@ -59,7 +59,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
    */
   protected constructor(key: string, title: string) {
     if (!BaseWebview.context) {
-      console.log("Error: BasePanel.constructor called before activate()");
+      console.log("Error: BaseWebview.constructor called before activate()");
       this.extensionUri = Uri.parse("file:///undefined");
     } else {
       this.extensionUri = BaseWebview.context.extensionUri;
@@ -72,9 +72,6 @@ export class BaseWebview implements vscode.WebviewViewProvider {
 
     this.key = key;
     this.title = title;
-
-    // Set an event listener to listen for messages passed from the webview context
-    this._setWebviewMessageListener();
   }
 
   public static activate(context: vscode.ExtensionContext) {
@@ -100,15 +97,16 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this._getWebviewContent();
-    /*
-    webviewView.webview.onDidReceiveMessage((data) => {
-      switch (data.type) {
-        case "colorSelected": {
-          vscode.window.activeTextEditor?.insertSnippet(new vscode.SnippetString(`#${data.value}`));
-          break;
-        }
-      }
-    });*/
+
+    // Register message handling.
+    webviewView.webview.onDidReceiveMessage(
+      (message: any) => {
+        console.log("BaseWebview.onDidReceiveMessage() called");
+        this.handleMessage(message);
+      },
+      undefined,
+      this.disposables
+    );
   }
 
   /**
@@ -150,7 +148,13 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       this.panel.webview.html = this._getWebviewContent();
 
       // Register message handling.
-      this._setWebviewMessageListener();
+      this.panel.webview.onDidReceiveMessage(
+        (message: any) => {
+          this.handleMessage(message);
+        },
+        undefined,
+        this.disposables
+      );
     }
   }
 
@@ -171,7 +175,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       }
     }
 
-    console.log("BasePanel.dispose() called");
+    console.log("BaseWebview.dispose() called");
   }
 
   /**
@@ -237,34 +241,19 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     `;
   }
 
-  /**
-   * Sets up an event listener to listen for messages passed from the webview context and
-   * executes code based on the message that is received.
-   *
-   * @param webview A reference to the extension webview
-   * @param context A reference to the extension context
-   */
-  private _setWebviewMessageListener() {
-    if (!this.panel) {
-      return; // For now, only panel supports message passing.
+  protected handleMessage(message: any): void {
+    // This is a placeholder for the derived class to implement.
+    // The derived class should override this method to handle messages
+    // sent from the webview context.
+  }
+
+  protected postMessage(message: any): void {
+    if (this.panel) {
+      this.panel.webview.postMessage(message);
+    } else if (this.webview) {
+      this.webview.postMessage(message);
+    } else {
+      console.log("Warning: postMessage() called without a valid panel or webview");
     }
-
-    this.panel.webview.onDidReceiveMessage(
-      (message: any) => {
-        const command = message.command;
-        const text = message.text;
-
-        switch (command) {
-          case "hello":
-            // Code that should run in response to the hello message command
-            window.showInformationMessage(text);
-            return;
-          // Add more switch case statements here as more webview message commands
-          // are created within the webview context (i.e. inside media/main.js)
-        }
-      },
-      undefined,
-      this.disposables
-    );
   }
 }

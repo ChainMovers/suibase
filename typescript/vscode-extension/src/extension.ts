@@ -6,6 +6,7 @@ import { SuibaseSidebar } from "./sidebar/SuibaseSidebar";
 import { SuibaseExec } from "./SuibaseExec";
 import { SuibaseCommands } from "./SuibaseCommands";
 import { BaseWebview } from "./bases/BaseWebview";
+import { SuibaseData } from "./common/SuibaseData";
 
 // This method is called when the extension is activated by VSCode.
 export function activate(context: vscode.ExtensionContext) {
@@ -18,6 +19,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // "Business logic" enabled next.
   SuibaseCommands.activate(context);
+
+  // Common data from suibase-daemon backend.
+  //
+  // The data exchanges are:
+  //  suibase-daemon --HTTP JSON-RPC--> SuibaseData ---(updated data)---> Svelte Views
+  //                                    SuibaseData <--(request update)-- Svelte Views
+  SuibaseData.activateForExtension();
 
   // UI elements enabled/visible last.
   SuibaseSidebar.activate(context);

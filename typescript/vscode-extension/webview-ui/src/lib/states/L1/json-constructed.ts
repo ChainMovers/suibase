@@ -2,7 +2,7 @@
 //
 // Can be initialized only from JSON:
 //   - Perform some security validations.
-//   - Property names must match what is being sent by backend\views.py
+//   - Property names must match what is being sent by backend
 //
 // Intended to be used as stored values for svelte stores.
 

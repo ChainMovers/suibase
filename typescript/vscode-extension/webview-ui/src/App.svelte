@@ -1,9 +1,5 @@
 <script lang="ts" context="module">
   import { provideVSCodeDesignSystem, allComponents } from "@vscode/webview-ui-toolkit";
-  import { VSCode } from "./lib/VSCode";
-  import WorkdirsController from "./components/DashboardController.svelte";
-  import ConsoleController from "./components/ConsoleController.svelte";
-  import ExplorerController from "./components/ExplorerController.svelte";
 
   // In order to use the Webview UI Toolkit web components they
   // must be registered with the browser (i.e. webview) using the
@@ -26,6 +22,22 @@
   // components at once, there's a handy convenience function:
   //
   // provideVSCodeDesignSystem().register(allComponents);
+  console.log("App Init Module Level done");
+</script>
+
+<script lang="ts">
+  import { VSCode } from "./lib/VSCode";
+  import WorkdirsController from "./components/DashboardController.svelte";
+  import ConsoleController from "./components/ConsoleController.svelte";
+  import ExplorerController from "./components/ExplorerController.svelte";
+  import { ui_selected_context } from "$lib/states/L4/contexts";
+
+  import { onMount } from "svelte";
+  onMount(async () => {
+    // Add a callback to connect SuibaseData with some Svelte store.
+    //suibaseData.globalStates.uiSelectedContextCallback =
+    console.log("App mounted component level");
+  });
 
   function handleHowdyClick() {
     VSCode.postMessage({
@@ -33,6 +45,10 @@
       text: "Howdy!",
     });
   }
+
+  console.log("App Init Component Level done");
+
+  $ui_selected_context = "DSUI";
 </script>
 
 <main>

@@ -236,7 +236,7 @@ export abstract class LoadStore<T, D> implements Readable<T> {
       this._unsubscriber_dependency = this._dependency?.subscribe((value: D) => {
         // This is called whenever the dependency is initialized or changed.
         // For Reactive Abstraction, that means whenever the context changes.
-        // Note: This always gets called immediatly on subscription.
+        // Note: This always gets called immediately on subscription.
         this.force_onRun(value);
       });
     }

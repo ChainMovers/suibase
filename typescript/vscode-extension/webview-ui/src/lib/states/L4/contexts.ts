@@ -8,7 +8,6 @@
 //
 // The webapp is displaying/background processing only in one context at the time.
 //
-// User Authentication is common to all contexts.
 import {
   readable,
   writable,
@@ -21,7 +20,7 @@ import {
 } from "svelte/store";
 
 // Layer 1
-import { SUI_CONTEXT_KEY, SUL_CONTEXT_KEY, SUT_CONTEXT_KEY, SUD_CONTEXT_KEY } from "../L1/consts";
+import { MSUI_CONTEXT_KEY, LSUI_CONTEXT_KEY, TSUI_CONTEXT_KEY, DSUI_CONTEXT_KEY } from "../L1/consts";
 import type { IContextKeyed, IEpochETA } from "../L1/poc-interfaces";
 import type { EpochLatest, EpochLeaderboard, EpochValidators } from "../L1/json-constructed";
 import { LoadStore } from "../L1/stores";
@@ -59,38 +58,38 @@ class TST_Context implements IBlockchainContext {
 }
 */
 
-class SUL_Context implements IBlockchainContext {
-  readonly ui_selector_name = "Sui (Localnet)";
+class LSUI_Context implements IBlockchainContext {
+  readonly ui_selector_name = "Localnet";
   readonly ui_name = "Sui";
   readonly symbol = "Sui";
-  readonly prefix = SUL_CONTEXT_KEY;
+  readonly prefix = LSUI_CONTEXT_KEY;
   readonly workdir = "localnet";
   readonly server = "http://0.0.0.0:44399";
 }
 
-class SUT_Context implements IBlockchainContext {
-  readonly ui_selector_name = "Sui (Testnet)";
+class TSUI_Context implements IBlockchainContext {
+  readonly ui_selector_name = "Testnet";
   readonly ui_name = "Sui";
   readonly symbol = "Sui";
-  readonly prefix = SUT_CONTEXT_KEY;
+  readonly prefix = TSUI_CONTEXT_KEY;
   readonly workdir = "testnet";
   readonly server = "http://0.0.0.0:44399";
 }
 
-class SUD_Context implements IBlockchainContext {
-  readonly ui_selector_name = "Sui (Devnet)";
+class DSUI_Context implements IBlockchainContext {
+  readonly ui_selector_name = "Devnet";
   readonly ui_name = "Sui";
   readonly symbol = "Sui";
-  readonly prefix = SUD_CONTEXT_KEY;
+  readonly prefix = DSUI_CONTEXT_KEY;
   readonly workdir = "devnet";
   readonly server = "http://0.0.0.0:44399";
 }
 
-class SUI_Context implements IBlockchainContext {
-  readonly ui_selector_name = "Sui (Mainnet)";
+class MSUI_Context implements IBlockchainContext {
+  readonly ui_selector_name = "Mainnet";
   readonly ui_name = "Sui";
   readonly symbol = "Sui";
-  readonly prefix = SUI_CONTEXT_KEY;
+  readonly prefix = MSUI_CONTEXT_KEY;
   readonly workdir = "mainnet";
   readonly server = "http://0.0.0.0:44399";
 }
@@ -101,10 +100,10 @@ class SUI_Context implements IBlockchainContext {
 //
 //const _sc_context_obj = new SC_Context();
 //const _tst_context_obj = new TST_Context();
-const _sul_context_obj = new SUL_Context();
-const _sut_context_obj = new SUT_Context();
-const _sud_context_obj = new SUD_Context();
-const _sui_context_obj = new SUI_Context();
+const _LSUI_Context_obj = new LSUI_Context();
+const _TSUI_Context_obj = new TSUI_Context();
+const _DSUI_Context_obj = new DSUI_Context();
+const _MSUI_context_obj = new MSUI_Context();
 
 class BlockchainStores implements IBlockchainStores {
   readonly epoch_stores: IEpochStores;
@@ -125,20 +124,20 @@ class BlockchainContextMapping implements IBlockchainContextMapping {
 }
 
 // **WATCH OUT** Sui Localnet is default, make sure it match X_CONTEXT_KEY below.
-const _default_context_map = new BlockchainContextMapping(_sul_context_obj);
+const _default_context_map = new BlockchainContextMapping(_LSUI_Context_obj);
 
 const _contexts_map = new Map<string, BlockchainContextMapping>([
   [_default_context_map.context.prefix, _default_context_map],
-  [_sut_context_obj.prefix, new BlockchainContextMapping(_sut_context_obj)],
-  [_sud_context_obj.prefix, new BlockchainContextMapping(_sud_context_obj)],
-  [_sui_context_obj.prefix, new BlockchainContextMapping(_sui_context_obj)],
+  [_TSUI_Context_obj.prefix, new BlockchainContextMapping(_TSUI_Context_obj)],
+  [_DSUI_Context_obj.prefix, new BlockchainContextMapping(_DSUI_Context_obj)],
+  [_MSUI_context_obj.prefix, new BlockchainContextMapping(_MSUI_context_obj)],
 ]);
 
 export const all_contexts = readable<Map<string, IBlockchainContextMapping>>(_contexts_map);
 
 class UISelectedContext implements Writable<string> {
   // **WATCH OUT** must match context _default_context_map above.
-  private _store_obj = writable<string>(SUL_CONTEXT_KEY);
+  private _store_obj = writable<string>(LSUI_CONTEXT_KEY);
 
   subscribe(listener: Subscriber<string>): Unsubscriber {
     const _unsubscriber = this._store_obj.subscribe(listener);

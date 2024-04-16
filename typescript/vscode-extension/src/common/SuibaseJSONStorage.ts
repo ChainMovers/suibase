@@ -1,12 +1,9 @@
-// JSON storage of all data (config, state and status) related to a Suibase installation.
-//
-// Multiple instance are expected for a given data for doing comparison and detect deltas.
-//
 // The purpose of the SuibaseJSONStorage is to :
 //    - Always get any data (even if not up to date) and revert to a default when not initialized.
 //    - Allow to compare two JSON storage and optionally update a target.
 //    - Trigger 'changes' callbacks.
-
+//
+// This is tightly couples with how suibase-daemon synchronize its data.
 type SuibaseJsonCallback = (suibaseJson: SuibaseJson) => void;
 
 export class SuibaseJson {

@@ -1,5 +1,5 @@
 import { writable, type Writable, get } from "svelte/store";
-import { SUL_CONTEXT_KEY, VITE_SSC_API_URL } from "../L1/consts";
+import { LSUI_CONTEXT_KEY, VITE_SSC_API_URL } from "../L1/consts";
 
 // Step for a context switch:
 //    - Make all context store use the proper context. This will make the UI
@@ -8,7 +8,7 @@ import { SUL_CONTEXT_KEY, VITE_SSC_API_URL } from "../L1/consts";
 
 export const global_srv: Writable<string> = writable("");
 export const global_url_proxy: Writable<string> = writable(String("http://0.0.0.0:44399"));
-export const global_context: Writable<string> = writable(SUL_CONTEXT_KEY);
+export const global_context: Writable<string> = writable(LSUI_CONTEXT_KEY);
 
 const rsplit = function (source: string, sep: string, maxsplit: number) {
   const split = source.split(sep);
