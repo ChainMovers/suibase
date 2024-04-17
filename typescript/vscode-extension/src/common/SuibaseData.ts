@@ -13,7 +13,8 @@ export class SuibaseGlobalStates {
 
   public uiSelectedContext: string = "DSUI";
   public uiSelectedContextCallback: (newUiSelectedContext: string) => void = (
-    newUiSelectedContext: string
+    // eslint-disable-next-line
+    _newUiSelectedContext: string
   ) => {};
 
   public serialize(): string {

@@ -2,6 +2,7 @@
   "name": "suibase",
   "displayName": "suibase",
   "description": "Streamline Sui Move development and testing.",
+  "icon": "media/logo_128.png",
   "version": "0.0.1",
   "repository": "https://github.com/ChainMovers/suibase",
   "engines": {
@@ -54,7 +55,7 @@
         {
           "id": "suibaseSidebar",
           "title": "Suibase",
-          "icon": "media/dep.svg"
+          "icon": "media/logo_128.png"
         }
       ]
     },
@@ -63,7 +64,7 @@
         {
           "id": "explorerView",
           "name": "Suibase",
-          "icon": "media/dep.svg",
+          "icon": "media/logo_128.svg",
           "contextualTitle": "Suibase",
           "type": "webview"
         }

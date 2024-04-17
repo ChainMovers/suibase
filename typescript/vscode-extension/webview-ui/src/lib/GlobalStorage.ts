@@ -1,4 +1,4 @@
-import { SuibaseJSONStorage, SuibaseJson } from "../common/SuibaseJSONStorage";
+import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
 
 // Readonly interface of a suibaseJSONStorage singleton.
 //
@@ -23,7 +23,7 @@ export class GlobalStorage {
   }
 
   public static deactivate() {
-    let instance = GlobalStorage.instance;
+    const instance = GlobalStorage.instance;
     if (instance) {
       delete instance.suibaseJSONStorage;
     }

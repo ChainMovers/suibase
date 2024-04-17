@@ -1,3 +1,17 @@
+// import React from "react";
+
+export const ConsoleController = () => {
+
+  // Data exchanged with the extension.
+  //let suibaseData: SuibaseData = SuibaseData.getInstance();
+
+  return (
+    <>Console Controller
+    </>
+  );
+}
+
+/*
 <script lang="ts">
   import { VSCode } from "../lib/VSCode";
   import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
@@ -36,28 +50,4 @@
     </li>
   </ul>
 </main>
-
-<style>
-  /* Hide everything above this component. */
-  /*:global(#smui-app),
-  :global(body),
-  :global(html) {
-    display: block !important;
-    height: auto !important;
-    width: auto !important;
-    position: static !important;
-  }*/
-
-  main {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
-  }
-
-  ul.no-bullets {
-    list-style-type: none; /* Remove bullets */
-    padding: 0; /* Remove padding */
-    margin: 0; /* Remove margins */
-  }
-</style>
+*/

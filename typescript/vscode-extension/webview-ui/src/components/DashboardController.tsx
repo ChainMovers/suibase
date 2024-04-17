@@ -1,3 +1,80 @@
+// import React from "react";
+import "./DashboardController.css";
+
+import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
+import { VSCode } from "../lib/VSCode";
+import { VSCodeButton } from '@vscode/webview-ui-toolkit/react'
+
+  interface WorkdirData {
+    name: string;
+    status: string;
+    versions: SuibaseJSONStorage;
+  }
+
+  export const workdirs: WorkdirData[] = [
+    { name: "Localnet", status: "Running", versions: new SuibaseJSONStorage() },
+    { name: "Devnet", status: "Degraded", versions: new SuibaseJSONStorage() },
+    { name: "Testnet", status: "Stopped", versions: new SuibaseJSONStorage() },
+    { name: "Mainnet", status: "Down", versions: new SuibaseJSONStorage() },
+  ];
+
+export const DashboardController = () => {
+
+  const handleStartClick = (workdir: WorkdirData) => {
+    VSCode.postMessage({
+      command: "start",
+      workdir: workdir.name,
+    });
+    console.log("handleStartClick called");
+  }
+
+  function handleStopClick(workdir: WorkdirData) {
+    VSCode.postMessage({
+      command: "stop",
+      workdir: workdir.name,
+    });
+  }
+
+  function handleRegenClick(workdir: WorkdirData) {
+    VSCode.postMessage({
+      command: "regen",
+      workdir: workdir.name,
+    });
+  }  
+  // Data exchanged with the extension.
+  //let suibaseData: SuibaseData = SuibaseData.getInstance();
+
+  return (
+    <>Dashboard Controller
+    {workdirs.map((workdir) => (
+    <div className="workdir_row" key={workdir.name}>
+      <h2 className="workdir">{workdir.name}</h2>
+      <h2 className="status">{workdir.status}</h2>
+            {workdir.status === "Stopped" ? (
+              <VSCodeButton onClick={() => handleStartClick(workdir)}>
+                Start
+                <span slot="start" className="codicon codicon-debug-start" />
+              </VSCodeButton>
+            ) : (
+              <VSCodeButton onClick={() => handleStopClick(workdir)}>
+                Stop
+                <span slot="start" className="codicon codicon-debug-stop" />
+              </VSCodeButton>
+            )}
+
+      {workdir.name === "Localnet" && (        
+        <VSCodeButton onClick={() => handleRegenClick(workdir)}>
+          Regen
+          <span slot="start" className="codicon codicon-refresh" />
+        </VSCodeButton>
+      )}
+    </div>
+    ))}
+    </>
+  );
+}
+
+/*  
 <script lang="ts">
   import { VSCode } from "$lib/VSCode";
   import { SuibaseJSONStorage } from "../common/SuibaseJSONStorage";
@@ -162,3 +239,4 @@
     text-align: right;
   }
 </style>
+*/

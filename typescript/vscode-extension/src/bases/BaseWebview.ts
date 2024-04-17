@@ -65,7 +65,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       this.extensionUri = BaseWebview.context.extensionUri;
       this.extensionUris = [
         Uri.joinPath(BaseWebview.context.extensionUri, "out"),
-        Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/public/build"),
+        Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/build"),
         Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/node_modules/@vscode/codicons/dist"),
       ];
     }
@@ -197,10 +197,10 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     }
 
     // The CSS file from the Svelte build output
-    const stylesUri = getUri(webview, this.extensionUri, ["webview-ui", "public", "build", "bundle.css"]);
+    const stylesUri = getUri(webview, this.extensionUri, ["webview-ui", "build", "assets", "index.css"]);
 
     // The JS file from the Svelte build output
-    const scriptUri = getUri(webview, this.extensionUri, ["webview-ui", "public", "build", "bundle.js"]);
+    const scriptUri = getUri(webview, this.extensionUri, ["webview-ui", "build", "assets", "index.js"]);
 
     // The icon library being used.
     const iconsUri = getUri(webview, this.extensionUri, [
@@ -222,20 +222,20 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       <!DOCTYPE html>
       <html lang="en">
         <head>
-          <title>Hello World</title>
+          <title>Webview-UI</title>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <meta http-equiv="Content-Security-Policy" content="default-src ${cspSource}; connect-src http://localhost:*; font-src ${cspSource}; style-src ${cspSource} 'unsafe-inline'; img-src ${cspSource}; script-src ${cspSource} 'strict-dynamic' 'nonce-${nonce}'">      
           
           <link rel="stylesheet" type="text/css" href="${stylesUri}">
-          <link rel="stylesheet" type="text/css" href="${iconsUri}" />      
-
+          <link rel="stylesheet" type="text/css" href="${iconsUri}" />
+        </head>
+        <body>
           <script nonce="${nonce}">
             var suibase_view_key = '${this.key}';
           </script>
-          <script defer nonce="${nonce}" src="${scriptUri}"></script>
-        </head>
-        <body>
+          <div id="root"></div>
+          <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
         </body>
       </html>
     `;
