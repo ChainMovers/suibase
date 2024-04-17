@@ -2582,6 +2582,8 @@ export PRECOMP_REMOTE_VERSION=""
 export PRECOMP_REMOTE_TAG_NAME=""
 export PRECOMP_REMOTE_DOWNLOAD_URL=""
 export PRECOMP_REMOTE_DOWNLOAD_DIR=""
+export PRECOMP_REMOTE_FILE_NAME_VERSION=""
+
 update_PRECOMP_REMOTE_var() {
   PRECOMP_REMOTE="false"
   PRECOMP_REMOTE_PLATFORM=""
@@ -2590,6 +2592,7 @@ update_PRECOMP_REMOTE_var() {
   PRECOMP_REMOTE_TAG_NAME=""
   PRECOMP_REMOTE_DOWNLOAD_URL=""
   PRECOMP_REMOTE_DOWNLOAD_DIR=""
+  PRECOMP_REMOTE_FILE_NAME_VERSION=""
 
   local _REPO_URL="${CFG_default_repo_url:?}"
   local _BRANCH="${CFG_default_repo_branch:?}"
@@ -2753,6 +2756,7 @@ export -f update_PRECOMP_REMOTE_var
 download_PRECOMP_REMOTE() {
   local _WORKDIR="$1"
   PRECOMP_REMOTE_DOWNLOAD_DIR=""
+  PRECOMP_REMOTE_FILE_NAME_VERSION=""
 
   # It is assumed update_PRECOMP_REMOTE_var() was successfully called before
   # and there is indeed something to download and install.
@@ -2768,8 +2772,22 @@ download_PRECOMP_REMOTE() {
   local _DOWNLOAD_FILENAME_WITHOUT_TGZ="${_DOWNLOAD_FILENAME%.tgz}"
   local _DOWNLOAD_FILEPATH="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME"
   local _EXTRACT_DIR="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME_WITHOUT_TGZ" # Where the .tgz content will be placed.
-  local _EXTRACT_DIR_INNER="$_EXTRACT_DIR/target/release"             # The inner directory produced by the .tgz file.
-  local _EXTRACTED_TEST_FILE="$_EXTRACT_DIR_INNER/sui-$PRECOMP_REMOTE_PLATFORM-$PRECOMP_REMOTE_ARCH"
+
+  local _USE_VERSION=""
+
+  # Location prior to release 1.23 from Mysten Labs.
+  local _EXTRACTED_DIR_V1="$_EXTRACT_DIR/target/release"
+  local _EXTRACTED_TEST_FILENAME_V1="sui-$PRECOMP_REMOTE_PLATFORM-$PRECOMP_REMOTE_ARCH"
+  local _EXTRACTED_TEST_FILEDIR_V1="$_EXTRACTED_DIR_V1/$_EXTRACTED_TEST_FILENAME_V1"
+
+  # Location starting with release 1.23 from Mysten Labs.
+  local _EXTRACTED_DIR_V2="$_EXTRACT_DIR"
+  local _EXTRACTED_TEST_FILENAME_V2="sui"
+  local _EXTRACTED_TEST_FILEDIR_V2="$_EXTRACTED_DIR_V2/$_EXTRACTED_TEST_FILENAME_V2"
+
+  # These will be initialized with the version detected in the downloaded file.
+  local _EXTRACTED_DIR
+  local _EXTRACTED_TEST_FILEDIR
 
   # TODO validate here the local file is really matching the remote in case of republishing?
   # Try twice before giving up.
@@ -2777,7 +2795,7 @@ download_PRECOMP_REMOTE() {
     # Download if not already done.
     local _DO_EXTRACTION="false"
     if [ -f "$_DOWNLOAD_FILEPATH" ]; then
-      if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
+      if [ ! -f "$_EXTRACTED_TEST_FILEDIR_V1" ] && [ ! -f "$_EXTRACTED_TEST_FILEDIR_V2" ]; then
         _DO_EXTRACTION="true"
       fi
     else
@@ -2804,14 +2822,26 @@ download_PRECOMP_REMOTE() {
       tar -xzf "$_DOWNLOAD_FILEPATH" -C "$_EXTRACT_DIR"
     fi
 
-    # If extraction is not valid, then delete the downloaded file so it can be tried again.
-    if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
+    # Identify if the extracted file match one of the expected archive version (V1, V2 ...)
+    if [ -f "$_EXTRACTED_TEST_FILEDIR_V2" ]; then
+      _USE_VERSION="2"
+      _EXTRACTED_DIR="$_EXTRACTED_DIR_V2"
+      _EXTRACTED_TEST_FILEDIR="$_EXTRACTED_TEST_FILEDIR_V2"
+    elif [ -f "$_EXTRACTED_TEST_FILEDIR_V1" ]; then
+      _USE_VERSION="1"
+      _EXTRACTED_DIR="$_EXTRACTED_DIR_V1"
+      _EXTRACTED_TEST_FILEDIR="$_EXTRACTED_TEST_FILEDIR_V1"
+    else
+      # If extraction is not valid, then delete the downloaded file so it can be tried again.
+      _USE_VERSION=""
       if [ $i -lt 2 ]; then
         warn_user "Failed to extract binary. Trying to re-download again"
       fi
       rm -rf "$_EXTRACT_DIR"
       rm -rf "$_DOWNLOAD_FILEPATH"
-    else
+    fi
+
+    if [ -n "$_USE_VERSION" ]; then
       # Cleanup cache now that we have likely an older version to get rid of.
       cleanup_cache_as_needed "$_WORKDIR"
       break # Exit the retry loop.
@@ -2819,12 +2849,13 @@ download_PRECOMP_REMOTE() {
   done
 
   # Do a final check that the extracted files are OK.
-  if [ ! -f "$_EXTRACTED_TEST_FILE" ]; then
+  if [ ! -f "$_EXTRACTED_TEST_FILEDIR" ]; then
     setup_error "Failed to download or extract precompiled binary for $_BRANCH"
   fi
 
   # Success
-  PRECOMP_REMOTE_DOWNLOAD_DIR="$_EXTRACT_DIR_INNER"
+  PRECOMP_REMOTE_DOWNLOAD_DIR="$_EXTRACTED_DIR"
+  PRECOMP_REMOTE_FILE_NAME_VERSION="$_USE_VERSION"
 }
 export -f download_PRECOMP_REMOTE
 
@@ -2852,7 +2883,12 @@ install_PRECOMP_REMOTE() {
   #       in the debug directory to make it 'easier' to find
   #       for any app.
   for _BIN in "${_BINARIES[@]}"; do
-    local _SRC="$PRECOMP_REMOTE_DOWNLOAD_DIR/$_BIN-$PRECOMP_REMOTE_PLATFORM-$PRECOMP_REMOTE_ARCH"
+    local _SRC
+    if [ "$PRECOMP_REMOTE_FILE_NAME_VERSION" = "1" ]; then
+      _SRC="$PRECOMP_REMOTE_DOWNLOAD_DIR/$_BIN-$PRECOMP_REMOTE_PLATFORM-$PRECOMP_REMOTE_ARCH"
+    else
+      _SRC="$PRECOMP_REMOTE_DOWNLOAD_DIR/$_BIN"
+    fi
     local _DST="$WORKDIRS/$_WORKDIR/sui-repo/target/debug/$_BIN"
     # Copy/install files when difference detected.
     copy_on_bin_diff "$_SRC" "$_DST"
