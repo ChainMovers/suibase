@@ -7,7 +7,6 @@ use jsonrpsee::core::RpcResult;
 use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
 use crate::shared_types::WORKDIRS_KEYS;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
-use crate::workdirs_watcher;
 use common::basic_types::WorkdirIdx;
 
 use super::{
