@@ -26,6 +26,10 @@ export class BaseWebview implements vscode.WebviewViewProvider {
   private panel: WebviewPanel | undefined;
   private disposables: Disposable[] = [];
 
+  // Keep track of all BaseWebview instances. They
+  // can be accessed by "name" for some message handling.
+  private static instances: { [key: string]: BaseWebview } = {};
+
   // Allow the subclasses read-access to the panel variable.
   protected getWebview() {
     if (!this.panel) {
@@ -72,6 +76,9 @@ export class BaseWebview implements vscode.WebviewViewProvider {
 
     this.key = key;
     this.title = title;
+
+    // Add to instances list.
+    BaseWebview.instances[key] = this;
   }
 
   public static activate(context: vscode.ExtensionContext) {
@@ -79,6 +86,14 @@ export class BaseWebview implements vscode.WebviewViewProvider {
   }
 
   public static deactivate() {
+    console.log("Webview Deactivate called");
+    // Iterate all instances to undefined their webview and panel members.
+    for (const key in BaseWebview.instances) {
+      const instance = BaseWebview.instances[key];
+      instance.panel = undefined;
+      instance.webview = undefined;
+    }
+    BaseWebview.instances = {};
     BaseWebview.context = undefined;
   }
 
@@ -124,6 +139,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       this.panel.reveal(ViewColumn.One);
       console.log("BaseWebview render_panel reveal() called");
     } else {
+      console.log("BaseWebview render_panel called");
       // If a webview panel does not already exist create and show a new one
       // "this" here is the subclass that extends BasePanel.
       this.panel = window.createWebviewPanel(
@@ -160,18 +176,31 @@ export class BaseWebview implements vscode.WebviewViewProvider {
 
   /**
    * Cleans up and disposes of webview resources when the webview panel is closed.
+   *
+   * This is a dispose from the VSCode perspective only.
+   *
+   * From the extension perspective, the BaseWebview are singleton never "disposed".
+   * Instead they are activated/deactivated once in the lifetime of the extension.
    */
   protected dispose() {
-    // Dispose of the current webview panel
+    // Dispose of the current webview
     if (this.panel) {
       this.panel.dispose();
+      this.panel = undefined;
+    }
 
-      // Dispose of all disposables (i.e. commands) for the current webview panel
-      while (this.disposables.length) {
-        const disposable = this.disposables.pop();
-        if (disposable) {
-          disposable.dispose();
-        }
+    if (this.webview) {
+      // Note: webview do not have a dispose() method.
+      // Just mark it as undefined to avoid using it.
+      // this.webview.dispose();
+      this.webview = undefined;
+    }
+
+    // Dispose of all disposables (i.e. commands)
+    while (this.disposables.length) {
+      const disposable = this.disposables.pop();
+      if (disposable) {
+        disposable.dispose();
       }
     }
 
@@ -241,19 +270,38 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     `;
   }
 
-  protected handleMessage(message: any): void {
+  protected handleMessage(_message: any): void {
     // This is a placeholder for the derived class to implement.
     // The derived class should override this method to handle messages
     // sent from the webview context.
   }
 
   protected postMessage(message: any): void {
+    if (BaseWebview.context === undefined) {
+      // Should never happen, but just in case.
+      console.log("Warning: postMessage() called on deactivated view");
+      return;
+    }
+
     if (this.panel) {
       this.panel.webview.postMessage(message);
     } else if (this.webview) {
       this.webview.postMessage(message);
-    } else {
-      console.log("Warning: postMessage() called without a valid panel or webview");
+    }
+  }
+
+  // Send a message to all instances of BaseWebview.
+  public static broadcastMessage(message: any): void {
+    for (const key in BaseWebview.instances) {
+      BaseWebview.instances[key].postMessage(message);
+    }
+  }
+
+  // Send a message to a single instance of BaseWebview (by key).
+  public static postMessageTo(key: string, message: any): void {
+    const instance = BaseWebview.instances[key];
+    if (instance) {
+      instance.postMessage(message);
     }
   }
 }

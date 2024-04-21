@@ -17,7 +17,7 @@ export class SuibaseCommands {
 
   public static activate(context: vscode.ExtensionContext) {
     if (SuibaseCommands.instance) {
-      console.log("Error: SuibaseCommands.activate() called more than once");
+      console.error("SuibaseCommands.activate() called more than once");
       return;
     }
 

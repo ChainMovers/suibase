@@ -11,7 +11,7 @@
 
 import * as vscode from "vscode";
 import * as cp from "child_process";
-import * as WebSocket from "ws";
+import WebSocket from "ws";
 
 const execShell = (cmd: string) =>
   new Promise<string>((resolve, reject) => {

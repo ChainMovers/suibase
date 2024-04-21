@@ -7,6 +7,7 @@ import { SuibaseExec } from "./SuibaseExec";
 import { SuibaseCommands } from "./SuibaseCommands";
 import { BaseWebview } from "./bases/BaseWebview";
 import { SuibaseData } from "./common/SuibaseData";
+import { BackendSync } from "./BackendSync";
 
 // This method is called when the extension is activated by VSCode.
 export function activate(context: vscode.ExtensionContext) {
@@ -14,21 +15,23 @@ export function activate(context: vscode.ExtensionContext) {
   // Each will perform their own registrations.
 
   // Low-level APIs
-  SuibaseExec.activate(context);
-  BaseWebview.activate(context);
+  SuibaseData.activate(); // Only state/status storage (no app logic).
+  SuibaseExec.activate(context); // Used to perform shell commands.
+  BaseWebview.activate(context); // Base class for all webviews.
 
-  // "Business logic" enabled next.
+  // "App logic" enabled next.
   SuibaseCommands.activate(context);
 
-  // Common data from suibase-daemon backend.
-  //
-  // The data exchanges are:
-  //  suibase-daemon --HTTP JSON-RPC--> SuibaseData ---(updated data)---> Svelte Views
-  //                                    SuibaseData <--(request update)-- Svelte Views
-  SuibaseData.activateForExtension();
-
-  // UI elements enabled/visible last.
+  // Make main UI controller visible (with default unloaded data).
   SuibaseSidebar.activate(context);
+
+  // Enable getting states from the backend.
+  //
+  // Data flows are:
+  //  suibase-daemon --HTTP JSON-RPC--> Global SuibaseData ---(updated data)---> View SuibaseData --> React States
+  //                                    Global SuibaseData <--(request update)-- View SuibaseData <-- React States
+  BackendSync.activate();
+
   console.log("extension activate() completed");
 }
 

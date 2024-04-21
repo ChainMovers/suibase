@@ -23,7 +23,7 @@ export class SuibaseJson {
   public static fromString(jsonString: string): SuibaseJson | string {
     // TODO More validation.
     try {
-      let json = JSON.parse(jsonString);
+      const json = JSON.parse(jsonString);
       return new SuibaseJson(json.type, json.version, json.data);
     } catch (e) {
       return `Error parsing JSON string: ${e} string: ${jsonString}`;
@@ -62,7 +62,7 @@ export class SuibaseJSONStorage {
   // default for the requested type. This default is also
   // added to the map.
   public get(type: string): SuibaseJson {
-    let found = this.map.get(type);
+    const found = this.map.get(type);
     if (found) {
       return found.suibaseJson;
     }
@@ -72,9 +72,9 @@ export class SuibaseJSONStorage {
   // Add a JSON element to the map.
   // Replace an existing one only if the version is higher.
   public set(newJSON: SuibaseJson) {
-    let mappedElement = this.map.get(newJSON.type);
+    const mappedElement = this.map.get(newJSON.type);
     if (mappedElement) {
-      let mappedJSON = mappedElement.suibaseJson;
+      const mappedJSON = mappedElement.suibaseJson;
       if (mappedJSON.version < newJSON.version) {
         mappedJSON.update(newJSON);
         mappedElement.onChangeCallbacks.forEach((callback) => callback(mappedJSON));
@@ -82,7 +82,7 @@ export class SuibaseJSONStorage {
     } else {
       // Creating the default element first just to update it after is not the most efficient,
       // but it reduces initialization sequence variations (and need fro more tests).
-      let newMappedElement = this.addDefaultElement(newJSON.type);
+      const newMappedElement = this.addDefaultElement(newJSON.type);
       newMappedElement.suibaseJson.update(newJSON);
       // Note: new element created here... no callback possibly added yet.
     }
@@ -102,8 +102,8 @@ export class SuibaseJSONStorage {
   }
 
   private addDefaultElement(type: string): StorageValue {
-    let newMappedJSON = new SuibaseJson(type, 0, "");
-    let newMappedElement = new StorageValue(newMappedJSON);
+    const newMappedJSON = new SuibaseJson(type, 0, "");
+    const newMappedElement = new StorageValue(newMappedJSON);
     this.map.set(type, newMappedElement);
     return newMappedElement;
   }

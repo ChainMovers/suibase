@@ -2,12 +2,10 @@
 //
 // Multiple instance are expected for a given data for doing comparison and detect deltas.
 //
-// When the instance is for the extension, the data is from the suibase-daemon.
-// When the instance is for a view, the data is from the extension.
+// That object is responsible only to store the data.
 //
-// Take note that a Svelte view further convert this data to smaller reactive stores.
+// The actual mean to get the data is outside this object.
 //
-
 export class SuibaseGlobalStates {
   public loaded: boolean = false;
 
@@ -62,20 +60,10 @@ export class SuibaseData {
     this.globalStates = new SuibaseGlobalStates();
   }
 
-  public static activateForExtension() {
+  public static activate() {
     console.log("SuibaseData.activateForExtension() called");
     if (SuibaseData.instance) {
-      console.log("Error: SuibaseData.activateForExtension() called more than once");
-      return;
-    }
-
-    SuibaseData.getInstance(); // Create the singleton
-  }
-
-  public static activateForView() {
-    console.log("SuibaseData.activateForView() called");
-    if (SuibaseData.instance) {
-      console.log("Error: SuibaseData.activateForView() called more than once");
+      console.log("Error: SuibaseData.activate() called more than once");
       return;
     }
 

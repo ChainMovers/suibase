@@ -5,7 +5,9 @@ use anyhow::Result;
 use jsonrpsee::core::RpcResult;
 
 use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
+use crate::shared_types::WORKDIRS_KEYS;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
+use crate::workdirs_watcher;
 use common::basic_types::WorkdirIdx;
 
 use super::{
@@ -370,11 +372,56 @@ impl GeneralApiImpl {
 
         Ok((resp.header, resp.asui_selection))
     }
+
+    async fn get_active_workdir(&self) -> Option<String> {
+        // Does costly CLI calls. Use only on initialization, recovery, etc...
+
+        // Update the status of workdirs one-by-one until you get one with a known asui_selection!
+        for workdir_idx in 0..WORKDIRS_KEYS.len() {
+            let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx as u8).lock().await;
+            let api_mutex = &mut *api_mutex_guard;
+
+            let last_api_call_timestamp = &mut api_mutex.last_api_call_timestamp;
+
+            // Use the internal implementation
+            {
+                let update_result = self
+                    .update_globals_workdir_status(
+                        WORKDIRS_KEYS[workdir_idx].to_string(),
+                        workdir_idx as u8,
+                        last_api_call_timestamp,
+                    )
+                    .await;
+
+                if let Ok(results) = update_result {
+                    // Second parameter is the asui_selection (when known).
+                    if results.1.is_some() {
+                        log::info!("active workdir [{}] found", results.1.as_ref().unwrap());
+                        return results.1;
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }
 
 #[async_trait]
 impl GeneralApiServer for GeneralApiImpl {
-    async fn get_versions(&self, workdir: String) -> RpcResult<VersionsResponse> {
+    async fn get_versions(&self, workdir: Option<String>) -> RpcResult<VersionsResponse> {
+        // If workdir is not specified, then default to the active workdir (asui).
+        let workdir = if workdir.is_some() {
+            workdir
+        } else {
+            self.get_active_workdir().await
+        };
+
+        if workdir.is_none() {
+            return Err(RpcSuibaseError::InternalError("No active workdir".to_string()).into());
+        }
+        let workdir = workdir.unwrap();
+
         // Verify workdir param is OK and get its corresponding workdir_idx.
         let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
             .await

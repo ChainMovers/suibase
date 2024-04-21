@@ -479,14 +479,15 @@ pub trait ProxyApi {
 
 #[rpc(server)]
 pub trait GeneralApi {
-    // Get version of latest for everything.
-    // (e.g. WorkdirStatusResponse, WorkdirEventsResponse etc...)
-    //
+    // Get versions of all available "group of" data.
+    //    
     // Can be used by caller to detect changes by polling.
     //
-    // Output is always JSON.
+    // When detecting a change, it is often followed by 
+    // another fetch to get the latest (e.g. get_workdir_status()).
+    //
     #[method(name = "getVersions")]
-    async fn get_versions(&self, workdir: String) -> RpcResult<VersionsResponse>;
+    async fn get_versions(&self, workdir: Option<String>) -> RpcResult<VersionsResponse>;
 
     // Get status of a specific workdir.
     //

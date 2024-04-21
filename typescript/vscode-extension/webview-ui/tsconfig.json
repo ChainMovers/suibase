@@ -13,14 +13,13 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-
+    
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  "exclude": ["webview-ui.svelte/**/*"],
+  "include": ["src", "../src/BackendSync.ts", "../src/common/Consts.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

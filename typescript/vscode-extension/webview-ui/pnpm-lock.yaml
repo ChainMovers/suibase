@@ -15,8 +15,14 @@ importers:
         specifier: ^0.0.33
         version: 0.0.33
       '@vscode/webview-ui-toolkit':
-        specifier: ^1.2.2
+        specifier: ^1.4.0
         version: 1.4.0(react@18.2.0)
+      async-mutex:
+        specifier: ^0.5.0
+        version: 0.5.0
+      await-to-js:
+        specifier: ^3.0.0
+        version: 3.0.0
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -25,19 +31,19 @@ importers:
         version: 18.2.0(react@18.2.0)
     devDependencies:
       '@types/react':
-        specifier: ^18.2.66
+        specifier: ^18.2.79
         version: 18.2.79
       '@types/react-dom':
-        specifier: ^18.2.22
+        specifier: ^18.2.25
         version: 18.2.25
       '@types/vscode-webview':
-        specifier: ^1.57.0
+        specifier: ^1.57.5
         version: 1.57.5
       '@typescript-eslint/eslint-plugin':
-        specifier: ^7.2.0
+        specifier: ^7.7.0
         version: 7.7.0(@typescript-eslint/parser@7.7.0(eslint@8.57.0)(typescript@5.4.5))(eslint@8.57.0)(typescript@5.4.5)
       '@typescript-eslint/parser':
-        specifier: ^7.2.0
+        specifier: ^7.7.0
         version: 7.7.0(eslint@8.57.0)(typescript@5.4.5)
       '@vitejs/plugin-react':
         specifier: ^4.2.1
@@ -52,10 +58,10 @@ importers:
         specifier: ^0.4.6
         version: 0.4.6(eslint@8.57.0)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.4.5
         version: 5.4.5
       vite:
-        specifier: ^5.2.0
+        specifier: ^5.2.9
         version: 5.2.9
 
 packages:
@@ -608,6 +614,13 @@ packages:
     resolution: {integrity: sha512-HGyxoOTYUyCM6stUe6EJgnd4EoewAI7zMdfqO+kGjnlZmBDz/cR5pf8r/cR4Wq60sL/p0IkcjUEEPwS3GFrIyw==}
     engines: {node: '>=8'}
 
+  async-mutex@0.5.0:
+    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
+
+  await-to-js@3.0.0:
+    resolution: {integrity: sha512-zJAaP9zxTcvTHRlejau3ZOY4V7SRpiByf3/dxx2uyKxxor19tpmpV2QRsTKikckwhaPmr2dVpxxMr7jOCYVp5g==}
+    engines: {node: '>=6.0.0'}
+
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -630,8 +643,8 @@ packages:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
     engines: {node: '>=6'}
 
-  caniuse-lite@1.0.30001610:
-    resolution: {integrity: sha512-QFutAY4NgaelojVMjY63o6XlZyORPaLfyMnsl3HgnWdJUcX6K0oaJymHjH8PT5Gk7sTm8rvC/c5COUQKXqmOMA==}
+  caniuse-lite@1.0.30001611:
+    resolution: {integrity: sha512-19NuN1/3PjA3QI8Eki55N8my4LzfkMCRLgCVfrl/slbSAchQfV0+GwjPrK3rq37As4UCLlM/DHajbKkAqbv92Q==}
 
   chalk@2.4.2:
     resolution: {integrity: sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ==}
@@ -687,8 +700,8 @@ packages:
     resolution: {integrity: sha512-yS+Q5i3hBf7GBkd4KG8a7eBNNWNGLTaEwwYWUijIYM7zrlYDM0BFXHjjPWlWZ1Rg7UaddZeIDmi9jF3HmqiQ2w==}
     engines: {node: '>=6.0.0'}
 
-  electron-to-chromium@1.4.738:
-    resolution: {integrity: sha512-lwKft2CLFztD+vEIpesrOtCrko/TFnEJlHFdRhazU7Y/jx5qc4cqsocfVrBg4So4gGe9lvxnbLIoev47WMpg+A==}
+  electron-to-chromium@1.4.744:
+    resolution: {integrity: sha512-nAGcF0yeKKfrP13LMFr5U1eghfFSvFLg302VUFzWlcjPOnUYd52yU5x6PBYrujhNbc4jYmZFrGZFK+xasaEzVA==}
 
   esbuild@0.20.2:
     resolution: {integrity: sha512-WdOOppmUNU+IbZ0PaDiTst80zjnrOkyJNHoKupIcVyU8Lvla3Ugx94VzkQ32Ijqd7UhHJy75gNWDMUekcrSJ6g==}
@@ -1714,6 +1727,12 @@ snapshots:
 
   array-union@2.1.0: {}
 
+  async-mutex@0.5.0:
+    dependencies:
+      tslib: 2.6.2
+
+  await-to-js@3.0.0: {}
+
   balanced-match@1.0.2: {}
 
   brace-expansion@1.1.11:
@@ -1731,14 +1750,14 @@ snapshots:
 
   browserslist@4.23.0:
     dependencies:
-      caniuse-lite: 1.0.30001610
-      electron-to-chromium: 1.4.738
+      caniuse-lite: 1.0.30001611
+      electron-to-chromium: 1.4.744
       node-releases: 2.0.14
       update-browserslist-db: 1.0.13(browserslist@4.23.0)
 
   callsites@3.1.0: {}
 
-  caniuse-lite@1.0.30001610: {}
+  caniuse-lite@1.0.30001611: {}
 
   chalk@2.4.2:
     dependencies:
@@ -1789,7 +1808,7 @@ snapshots:
     dependencies:
       esutils: 2.0.3
 
-  electron-to-chromium@1.4.738: {}
+  electron-to-chromium@1.4.744: {}
 
   esbuild@0.20.2:
     optionalDependencies:
