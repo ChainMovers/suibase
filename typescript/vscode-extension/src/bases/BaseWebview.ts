@@ -30,6 +30,12 @@ export class BaseWebview implements vscode.WebviewViewProvider {
   // can be accessed by "name" for some message handling.
   private static instances: { [key: string]: BaseWebview } = {};
 
+  // Allow BackendSync to peek at every message for all views.
+  private static backendSyncMessageCallback: (message: any) => void;
+  public static setBackendSyncMessageCallback(callback: (message: any) => void): void {
+    BaseWebview.backendSyncMessageCallback = callback;
+  }
+
   // Allow the subclasses read-access to the panel variable.
   protected getWebview() {
     if (!this.panel) {
@@ -52,11 +58,6 @@ export class BaseWebview implements vscode.WebviewViewProvider {
   protected getTitle() {
     return this.title;
   }
-
-  /*
-  protected getExtensionUri() {
-    return this.extensionUri;
-  }*/
 
   /**
    * The BaseWebview class private constructor (called only from the derived class).
@@ -83,6 +84,11 @@ export class BaseWebview implements vscode.WebviewViewProvider {
 
   public static activate(context: vscode.ExtensionContext) {
     BaseWebview.context = context;
+    BaseWebview.backendSyncMessageCallback = (message: any) => {
+      console.error(
+        `BaseWebview.backendSyncMessageCallback() called before set for message: ${JSON.stringify(message)}`
+      );
+    };
   }
 
   public static deactivate() {
@@ -116,8 +122,8 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     // Register message handling.
     webviewView.webview.onDidReceiveMessage(
       (message: any) => {
-        console.log("BaseWebview.onDidReceiveMessage() called");
-        this.handleMessage(message);
+        this.handleMessage(message); // For derived class to implement.
+        BaseWebview.backendSyncMessageCallback?.(message); // For BackendSync to peek at every message.
       },
       undefined,
       this.disposables
@@ -167,6 +173,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       this.panel.webview.onDidReceiveMessage(
         (message: any) => {
           this.handleMessage(message);
+          BaseWebview.backendSyncMessageCallback?.(message); // For BackendSync to peek at every message.
         },
         undefined,
         this.disposables

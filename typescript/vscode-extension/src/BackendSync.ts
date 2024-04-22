@@ -1,52 +1,60 @@
-import { SuibaseJSONStorage } from "./common/SuibaseJSONStorage";
 import { API_URL, WORKDIRS_KEYS } from "./common/Consts";
 import { Mutex } from "async-mutex";
 import { BaseWebview } from "./bases/BaseWebview";
 import { UpdateVersions } from "./common/ViewMessages";
+import { SuibaseJson } from "./common/SuibaseJson";
 
-// Readonly interface of a suibaseJSONStorage singleton.
-//
-// This wrapper handles also all update messages FROM the extension and
-// allow for any components to set callback into it.
+// One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
+class BackendWorkdirTracking {
+  versions: SuibaseJson; // Result from getVersions backend call.
+
+  constructor() {
+    this.versions = new SuibaseJson();
+  }
+}
+
 export class BackendSync {
   private static sInstance?: BackendSync;
-  private mSuibaseJSONStorage?: SuibaseJSONStorage;
 
-  private mWorkdir: string; // One of "localnet", "mainnet", "testnet", "devnet".
+  private mWorkdir: string; // Last known active workdir. One of "localnet", "mainnet", "testnet", "devnet".
+  private mWorkdirTrackings: BackendWorkdirTracking[] = []; // One instance per workdir, align with WORKDIRS_KEYS.
 
-  //private mCurMethodUUID: string;
-  //private mCurDataUUID: string;
-
-  // Fit the VSCode initialization pattern.
-  // Constructor should be called only from GlobalStorage.activate().
-  // Release of resources done by GlobalStorage.deactivate().
+  // Singleton
   private constructor() {
-    //this.mCurMethodUUID = "";
-    //this.mCurDataUUID = "";
     this.mWorkdir = "";
-    this.mSuibaseJSONStorage = new SuibaseJSONStorage();
+
+    // Create one instance of BackendWorkdirTracking for each element in WORKDIRS_KEYS.
+    for (let workdirIdx = 0; workdirIdx < WORKDIRS_KEYS.length; workdirIdx++) {
+      this.mWorkdirTrackings.push(new BackendWorkdirTracking());
+    }
   }
 
   public static activate() {
     if (!BackendSync.sInstance) {
       BackendSync.getInstance();
     } else {
-      console.error("GlobalStorage.activate() called more than once");
+      console.error("BackendSync.activate() called more than once");
     }
   }
 
   public static deactivate() {
     const instance = BackendSync.sInstance;
     if (instance) {
-      delete instance.mSuibaseJSONStorage;
+      instance.mWorkdirTrackings = [];
     }
-    delete BackendSync.sInstance;
     BackendSync.sInstance = undefined;
   }
 
   public static getInstance(): BackendSync {
     if (!BackendSync.sInstance) {
       BackendSync.sInstance = new BackendSync();
+
+      // Initialize callback for all Webview messages.
+      BaseWebview.setBackendSyncMessageCallback(
+        BackendSync.sInstance.handleViewMessage.bind(BackendSync.sInstance)
+      );
+
+      // Start periodic sync with backend.
       setTimeout(() => {
         if (BackendSync.sInstance) {
           BackendSync.sInstance.syncLoop();
@@ -60,9 +68,20 @@ export class BackendSync {
     return this.mWorkdir;
   }
 
-  // Allow to trig a force refresh of states handled by this loop.
+  public handleViewMessage(message: any): void {
+    try {
+      if (message.name === "ForceVersionsRefresh" || message.name === "InitView") {
+        // TODO For now just send the versions. InitView should proactively send more.
+        this.forceRefresh();
+      }
+    } catch (error) {
+      console.error(`Error in handleViewMessage: ${error}`);
+    }
+  }
+
+  // Allow to trig a force refresh of all backend states.
   // Can be called safely from anywhere.
-  public forceLoopRefresh(): void {
+  public forceRefresh(): void {
     this.syncLoop(true);
   }
 
@@ -79,7 +98,7 @@ export class BackendSync {
 
   private async asyncLoop(forceRefresh: boolean): Promise<void> {
     await this.loopMutex.runExclusive(async () => {
-      this.update();
+      this.update(forceRefresh);
 
       if (forceRefresh === false) {
         // Schedule another call in one second.
@@ -129,6 +148,7 @@ export class BackendSync {
   }
 
   private async fetchGetVersions(workdir: string) {
+    // TODO Use BackendWorkdirTacking to detect and ignore out-of-order responses.
     return await this.fetchBackend("getVersions", workdir);
   }
 
@@ -143,7 +163,7 @@ export class BackendSync {
     }
   }
 
-  public async update() {
+  public async update(forceRefresh: boolean) {
     // Get the global states from the backend.
 
     // The VersionsUpdate message is periodically pushed to the views.
@@ -151,16 +171,19 @@ export class BackendSync {
     // The views then identify if they need to synchronize further with the extension
     // and trig update requests messages as needed.
     try {
-      await this.updateUsingBackend();
+      await this.updateUsingBackend(forceRefresh);
     } catch (error) {
       // Do nothing, assume the caller will retry later.
     }
   }
 
-  private async updateUsingBackend() {
+  private async updateUsingBackend(forceRefresh: boolean) {
     // Do getVersions for every possible workdir.
     //
-    // TODO Optimize to do this to retrieve all only when dashboard is visible, otherwise, just update active.
+    // TODO Optimize to do this to retrieve all only when dashboard is visible, otherwise just do the active?
+    if (forceRefresh) {
+      console.log("updateUsingBackend() called with forceRefresh!!!!!!!!!");
+    }
 
     // Iterate the WORKDIRS_KEYS
     for (let workdirIdx = 0; workdirIdx < WORKDIRS_KEYS.length; workdirIdx++) {
@@ -170,14 +193,23 @@ export class BackendSync {
         try {
           // This is an example of response stored in data:
           //  {"jsonrpc":"2.0","result":{
-          //   "header":{"method":"getVersions", "methodUuid":"8HIGKAE8L54850LDHQ7NN9EDG0","dataUuid":"067F4QSD45QPT1BUET42FFHM0S","key":"localnet"},
-          //   "versions":[{"method":"getWorkdirStatus","methodUuid":"ET1217DP0503LF4PFMB49J0LUC","dataUuid":"067F4QSD45QPT1BUET3JOJPQ50","key":"localnet"}],
+          //   "header":{"method":"getVersions", "methodUuid":"...","dataUuid":"...","key":"localnet"},
+          //   "versions":[{"method":"getWorkdirStatus","methodUuid":"...","dataUuid":"...","key":"localnet"}],
           //   "asuiSelection":"localnet"},
           //   "id":2}
+          // Update the SuibaseJson instance for the workdir.
+          const workdirTracking = this.mWorkdirTrackings[workdirIdx];
+          const hasChanged = workdirTracking.versions.update(
+            data.result.header.methodUuid,
+            data.result.header.dataUuid,
+            data.result
+          );
 
-          // Broadcast VersionsUpdate message to all the views.
+          // Broadcast UpdateVersions message to all the views when change detected or requested.
           // The views will then decide if they need to synchronize further with the extension.
-          BaseWebview.broadcastMessage(new UpdateVersions(workdirIdx, data));
+          if (hasChanged || forceRefresh) {
+            BaseWebview.broadcastMessage(new UpdateVersions(workdirIdx, data.result));
+          }
         } catch (error) {
           const errorMsg = `Error in load_from_backend: ${error}. Data: ${JSON.stringify(data)}`;
           console.error(errorMsg);
@@ -186,8 +218,4 @@ export class BackendSync {
       }
     }
   }
-
-  // Update the data for the context requested.
-
-  // Verify if the asuiSelection match the current context, if not, then switch to it and retrieve the new context.
 }

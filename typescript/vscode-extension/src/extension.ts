@@ -17,7 +17,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Low-level APIs
   SuibaseData.activate(); // Only state/status storage (no app logic).
   SuibaseExec.activate(context); // Used to perform shell commands.
-  BaseWebview.activate(context); // Base class for all webviews.
+  BaseWebview.activate(context); // Base class for all webview.
+
+  // MUST be activated after BaseWebview (because of callback initialization).
+  // MUST be activated before SuibaseSidebar (so it is ready before UI interaction).
+  //
+  // Data flows are:
+  //  suibase-daemon --HTTP JSON-RPC--> BackendSync ---(update messages)---> Webview  --> React States
+  //                                    BackendSync <--(request messages)--  Webview  <-- React States
+  BackendSync.activate();
 
   // "App logic" enabled next.
   SuibaseCommands.activate(context);
@@ -26,11 +34,6 @@ export function activate(context: vscode.ExtensionContext) {
   SuibaseSidebar.activate(context);
 
   // Enable getting states from the backend.
-  //
-  // Data flows are:
-  //  suibase-daemon --HTTP JSON-RPC--> Global SuibaseData ---(updated data)---> View SuibaseData --> React States
-  //                                    Global SuibaseData <--(request update)-- View SuibaseData <-- React States
-  BackendSync.activate();
 
   console.log("extension activate() completed");
 }

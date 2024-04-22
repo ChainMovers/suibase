@@ -8,7 +8,7 @@ export class ViewMessages {
   name: string;
 
   constructor(name: string) {
-    this.name = name;    
+    this.name = name;
   }
 }
 
@@ -62,5 +62,21 @@ export class SuiCommand extends ViewMessages {
     super("SuiCommand");
     this.workdirIdx = workdirIdx;
     this.command = command;
+  }
+}
+
+export class InitView extends ViewMessages {
+  // Request the extension to send all data commonly needed by a view
+  // (sync with the backend as needed).
+  constructor() {
+    super("InitView");
+  }
+}
+
+export class ForceVersionsRefresh extends ViewMessages {
+  // Request the extension to send the latest Versions information.
+  // It is assumed the view will further request what is needed.
+  constructor() {
+    super("ForceVersionsRefresh");
   }
 }

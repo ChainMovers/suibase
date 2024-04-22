@@ -1,42 +1,51 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // The purpose of the SuibaseJSONStorage is to :
-//    - Always get any data (even if not up to date) and revert to a default when not initialized.
-//    - Allow to compare two JSON storage and optionally update a target.
-//    - Trigger 'changes' callbacks.
+//    - Compare very quickly two JSON storage and optionally update the storage.
+//    - Trigger the 'deltaDetected' callback.
 //
-// This is tightly couples with how suibase-daemon synchronize its data.
-type SuibaseJsonCallback = (suibaseJson: SuibaseJson) => void;
+// This is a base class that handle "json" as a whole. Derived classes
+// interpret the JSON for finer grained handling.
 
 export class SuibaseJson {
-  public type: string;
-  public version: number;
-  public data: string;
+  // A change of method UUID means that delta detection using the dataUUID is
+  // not valid.
+  //
+  // Therefore, delta should be done by comparing the data as a whole.
+  public methodUUID: string;
+
+  // Allows to quickly detects delta. This is a time sortable UUID, therefore
+  // an update using a lower dataUUI should be ignored (out of order).
+  public dataUUID: string;
+
+  public json: any;
 
   // Constructor
-  constructor(type: string, version: number, data: string) {
-    this.type = type;
-    this.version = version;
-    this.data = data;
+  constructor() {
+    this.methodUUID = "";
+    this.dataUUID = "";
+    this.json = null;
   }
 
-  // Create a new SuibaseJSON from parsing a JSON string.
-  // Return an error message (string type) on any parsing failure.
-  public static fromString(jsonString: string): SuibaseJson | string {
-    // TODO More validation.
-    try {
-      const json = JSON.parse(jsonString);
-      return new SuibaseJson(json.type, json.version, json.data);
-    } catch (e) {
-      return `Error parsing JSON string: ${e} string: ${jsonString}`;
+  // Return true if the json has changed.
+  public update(methodUUID: string, dataUUID: string, json: any): boolean {
+    if (this.json === null || this.methodUUID !== methodUUID || dataUUID > this.dataUUID) {
+      this.methodUUID = methodUUID;
+      this.dataUUID = dataUUID;
+      this.json = json;
+      this.deltaDetected();
+      return true;
     }
+    return false;
   }
 
-  public update(newJSON: SuibaseJson) {
-    this.version = newJSON.version;
-    this.data = newJSON.data;
+  protected deltaDetected() {
+    // Callback handled by a derived class when a delta is detected.
+    //console.log(`SuibaseJson.deltaDetected() called for ${JSON.stringify(this.json)}`);
   }
 }
 
 // This is to be used internally by SuibaseJSONStorage only.
+/*
 class StorageValue {
   public suibaseJson: SuibaseJson;
   public onChangeCallbacks: Array<SuibaseJsonCallback>;
@@ -45,8 +54,9 @@ class StorageValue {
     this.suibaseJson = suibaseJson;
     this.onChangeCallbacks = [];
   }
-}
+}*/
 
+/*
 export class SuibaseJSONStorage {
   // Map key string to SuibaseJson elements.
 
@@ -108,3 +118,4 @@ export class SuibaseJSONStorage {
     return newMappedElement;
   }
 }
+*/
