@@ -28,8 +28,8 @@ export class ViewWorkdirData {
   }
 
 export class ViewCommonData {
-    activeWorkdir: string;
-    activeWorkdirIdx: number;
+    public activeWorkdir: string;
+    public activeWorkdirIdx: number;
 
     constructor() {
       this.activeWorkdir = "localnet";
@@ -87,5 +87,5 @@ export const useCommonController = () => {
     }
   }, [message]);
 
-  return workdirs;
+  return {common, workdirs};
 };

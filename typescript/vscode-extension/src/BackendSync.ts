@@ -73,6 +73,12 @@ export class BackendSync {
       if (message.name === "ForceVersionsRefresh" || message.name === "InitView") {
         // TODO For now just send the versions. InitView should proactively send more.
         this.forceRefresh();
+      } else if (message.name === "WorkdirCommand" ) {
+        let workdir = "";
+        if (message.workdirIdx >= 0 && message.workdirIdx < WORKDIRS_KEYS.length) {
+          workdir = WORKDIRS_KEYS[message.workdirIdx];
+        }
+        this.fetchWorkdirCommand(workdir, message.command);
       }
     } catch (error) {
       console.error(`Error in handleViewMessage: ${error}`);
@@ -109,7 +115,7 @@ export class BackendSync {
     }); // End of loop_mutex section
   }
 
-  private async fetchBackend<T = any>(method: string, workdir: string): Promise<T> {
+  private async fetchBackend<T = any>(method: string, params: Record<string, any> = {}): Promise<T> {
     // Do a POST request equivalent to:
     //   curl -H "Content-Type: application/json" --data '{ "id":1, "jsonrpc":"2.0", "method":"getVersions", "params": {"workdir":"localnet"}}' http://0.0.0.0:44399
     //
@@ -124,7 +130,7 @@ export class BackendSync {
       id: 1,
       jsonrpc: "2.0",
       method: method,
-      params: workdir === "" ? {} : { workdir: workdir },
+      params: params,
     };
 
     try {
@@ -135,13 +141,13 @@ export class BackendSync {
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error("getVersions fetch not ok");
+        throw new Error(`${method} ${params} not ok`);
       }
       let json: T = (await response.json()) as T;
       BackendSync.validateHeader(json, method);
       return json;
     } catch (error) {
-      let errorMsg = `Error in fetchBackend ${method} ${workdir}: ${error}`;
+      let errorMsg = `Error in fetchBackend ${method} ${params}: ${error}`;
       console.error(errorMsg);
       throw error;
     }
@@ -149,7 +155,11 @@ export class BackendSync {
 
   private async fetchGetVersions(workdir: string) {
     // TODO Use BackendWorkdirTacking to detect and ignore out-of-order responses.
-    return await this.fetchBackend("getVersions", workdir);
+    return await this.fetchBackend("getVersions", { workdir: workdir});
+  }
+
+  private async fetchWorkdirCommand(workdir: string, command: string) {
+    return await this.fetchBackend("workdirCommand", { workdir: workdir, command: command});
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

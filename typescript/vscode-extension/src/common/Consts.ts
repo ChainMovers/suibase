@@ -16,5 +16,6 @@ export const WORKDIR_IDX_LOCALNET = 3;
 // List of all possible workdirs planned to be supported.
 // The order is important since the position match the WORKDIR_IDX_* constants.
 export const WORKDIRS_KEYS = ["mainnet", "testnet", "devnet", "localnet"];
+export const WORKDIRS_LABELS = ["Mainnet", "Testnet", "Devnet", "Localnet"];
 
 export const API_URL = "http://0.0.0.0:44399";

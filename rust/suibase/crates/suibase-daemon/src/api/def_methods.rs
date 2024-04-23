@@ -480,14 +480,18 @@ pub trait ProxyApi {
 #[rpc(server)]
 pub trait GeneralApi {
     // Get versions of all available "group of" data.
-    //    
+    //
     // Can be used by caller to detect changes by polling.
     //
-    // When detecting a change, it is often followed by 
+    // When detecting a change, it is often followed by
     // another fetch to get the latest (e.g. get_workdir_status()).
     //
     #[method(name = "getVersions")]
     async fn get_versions(&self, workdir: Option<String>) -> RpcResult<VersionsResponse>;
+
+    #[method(name = "workdirCommand")]
+    async fn workdir_command(&self, workdir: String, command: String)
+        -> RpcResult<SuccessResponse>;
 
     // Get status of a specific workdir.
     //
@@ -506,7 +510,7 @@ pub trait GeneralApi {
 
     // Allow to modify the asui selection.
     //
-    // Choices are "localnet", "devnet", "testnet" or "mainnet".    
+    // Choices are "localnet", "devnet", "testnet" or "mainnet".
     //
     // Returns success only after confirmed applied to Suibase (retry may have occurred).
     #[method(name = "setAsuiSelection")]

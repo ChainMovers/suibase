@@ -408,6 +408,40 @@ impl GeneralApiImpl {
 
 #[async_trait]
 impl GeneralApiServer for GeneralApiImpl {
+    async fn workdir_command(
+        &self,
+        workdir: String,
+        command: String,
+    ) -> RpcResult<SuccessResponse> {
+        // Prevent shell command injection by validating the workdir (and forcing to use it as first CLI arg).
+        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
+            .await
+        {
+            Some(workdir_idx) => workdir_idx,
+            None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
+        };
+        let mut resp = SuccessResponse::new();
+        resp.header.method = "workdirCommand".to_string();
+        resp.header.key = Some(workdir.clone());
+
+        let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
+        let _api_mutex = &mut *api_mutex_guard;
+
+        let cmd_resp = match self
+            .shell_exec(workdir_idx, format!("{} {}", workdir, command))
+            .await
+        {
+            Ok(cmd_resp) => cmd_resp,
+            Err(e) => format!("Error: {e}"),
+        };
+
+        // Return the response to the caller... can't interpret if successful.
+        resp.result = true;
+        resp.info = Some(cmd_resp);
+
+        Ok(resp)
+    }
+
     async fn get_versions(&self, workdir: Option<String>) -> RpcResult<VersionsResponse> {
         // If workdir is not specified, then default to the active workdir (asui).
         let workdir = if workdir.is_some() {
@@ -556,6 +590,9 @@ impl GeneralApiServer for GeneralApiImpl {
         resp.header.method = "setAsuiSelection".to_string();
         resp.header.key = Some(workdir.clone());
         resp.result = false; // Will change to true if applied successfully.
+
+        let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
+        let _api_mutex = &mut *api_mutex_guard;
 
         // Call into the shell to set the asui selection.
         let cmd_resp = match self

@@ -20,10 +20,11 @@ function handleRegenClick(workdir: ViewWorkdirData) {
 } 
 
 export const DashboardController = () => {
-  const workdirs = useCommonController();  
+  const { workdirs } = useCommonController();  
 
   return (
-    <>Dashboard Controller
+    <>Suibase Services
+    {/*Active = {common.current.activeWorkdir}*/}
     
     {workdirs.current.map((workdir) => (
     <div className="workdir_row" key={workdir.label}>
