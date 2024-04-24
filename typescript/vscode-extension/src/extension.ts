@@ -9,22 +9,27 @@ import { BaseWebview } from "./bases/BaseWebview";
 import { SuibaseData } from "./common/SuibaseData";
 import { BackendSync } from "./BackendSync";
 
-// This method is called when the extension is activated by VSCode.
+// This method is called *once* when the extension is activated by VSCode.
 export function activate(context: vscode.ExtensionContext) {
   // Instantiate all the singleton instances.
   // Each will perform their own registrations.
 
   // Low-level APIs
-  SuibaseData.activate(); // Only state/status storage (no app logic).
-  SuibaseExec.activate(context); // Used to perform shell commands.
+  SuibaseData.activate(); // Some global state/status storage (no app logic).
+  SuibaseExec.activate(context); // Shell commands, JSON-RPC call and websocket subscribe with suibase-daemon.
   BaseWebview.activate(context); // Base class for all webview.
 
+  // BackendSync
+  //
+  // Periodic and on-demand forward of data between backend suibase-daemon and webview(s).
+  //
   // MUST be activated after BaseWebview (because of callback initialization).
   // MUST be activated before SuibaseSidebar (so it is ready before UI interaction).
   //
-  // Data flows are:
-  //  suibase-daemon --HTTP JSON-RPC--> BackendSync ---(update messages)---> Webview  --> React States
-  //                                    BackendSync <--(request messages)--  Webview  <-- React States
+  // Data flows:
+  //  suibase-daemon ---(JSON-RPC)--> BackendSync ---(window.message)--> Webview --> React States Update
+  //                 <--(JSON-RPC)--- BackendSync <--(window.message)--- Webview <-- React States/Effects
+  //
   BackendSync.activate();
 
   // "App logic" enabled next.

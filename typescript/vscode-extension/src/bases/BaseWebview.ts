@@ -71,6 +71,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       this.extensionUris = [
         Uri.joinPath(BaseWebview.context.extensionUri, "out"),
         Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/build"),
+        Uri.joinPath(BaseWebview.context.extensionUri, "assets"),
         Uri.joinPath(BaseWebview.context.extensionUri, "webview-ui/node_modules/@vscode/codicons/dist"),
       ];
     }
@@ -159,6 +160,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
           enableScripts: true,
           // Restrict the webview to only load resources from the `out` and `webview-ui/build` directories
           localResourceRoots: this.extensionUris,
+          retainContextWhenHidden: true,
         }
       );
 
@@ -182,7 +184,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Cleans up and disposes of webview resources when the webview panel is closed.
+   * Cleans up and disposes of webview resources when the webview panel (tab) is closed.
    *
    * This is a dispose from the VSCode perspective only.
    *
@@ -211,7 +213,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       }
     }
 
-    console.log("BaseWebview.dispose() called");
+    // console.log("BaseWebview.dispose() called");
   }
 
   /**
@@ -261,7 +263,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
           <title>Webview-UI</title>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src ${cspSource}; connect-src http://localhost:*; font-src ${cspSource}; style-src ${cspSource} 'unsafe-inline'; img-src ${cspSource}; script-src ${cspSource} 'strict-dynamic' 'nonce-${nonce}'">      
+          <meta http-equiv="Content-Security-Policy" content="default-src ${cspSource}; connect-src http://localhost:*; font-src ${cspSource} 'self' https://fonts.gstatic.com data:; style-src 'self' https://fonts.googleapis.com ${cspSource} 'unsafe-inline'; img-src ${cspSource}; script-src ${cspSource} 'strict-dynamic' 'nonce-${nonce}'">
           
           <link rel="stylesheet" type="text/css" href="${stylesUri}">
           <link rel="stylesheet" type="text/css" href="${iconsUri}" />

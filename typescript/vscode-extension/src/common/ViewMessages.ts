@@ -80,3 +80,21 @@ export class ForceVersionsRefresh extends ViewMessages {
     super("ForceVersionsRefresh");
   }
 }
+
+// Request from the view to update the status for a specific workdir.
+// The extension will eventually reply with an UpdateWorkdirStatus.
+export class RequestWorkdirStatus extends ViewMessages {
+  workdirIdx: number;
+  methodUuid: string;
+  dataUuid: string;
+  // Getters
+  
+  // Request the extension to send all data commonly needed by a view
+  // (sync with the backend as needed).
+  constructor(workdirIdx: number, methodUuid: string, dataUuid: string) {
+    super("RequestWorkdirStatus");
+    this.workdirIdx = workdirIdx;
+    this.methodUuid = methodUuid;
+    this.dataUuid = dataUuid;
+  }
+}

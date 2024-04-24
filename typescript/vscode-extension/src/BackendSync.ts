@@ -1,15 +1,17 @@
 import { API_URL, WORKDIRS_KEYS } from "./common/Consts";
 import { Mutex } from "async-mutex";
 import { BaseWebview } from "./bases/BaseWebview";
-import { UpdateVersions } from "./common/ViewMessages";
-import { SuibaseJson } from "./common/SuibaseJson";
+import { UpdateVersions, UpdateWorkdirStatus } from "./common/ViewMessages";
+import { SuibaseJson, SuibaseJsonVersions } from "./common/SuibaseJson";
 
 // One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
 class BackendWorkdirTracking {
-  versions: SuibaseJson; // Result from getVersions backend call.
+  versions: SuibaseJsonVersions; // Result from getVersions backend call.
+  workdirStatus: SuibaseJson; // Result from getWorkdirStatus backend call.
 
   constructor() {
-    this.versions = new SuibaseJson();
+    this.versions = new SuibaseJsonVersions();
+    this.workdirStatus = new SuibaseJson();
   }
 }
 
@@ -73,12 +75,14 @@ export class BackendSync {
       if (message.name === "ForceVersionsRefresh" || message.name === "InitView") {
         // TODO For now just send the versions. InitView should proactively send more.
         this.forceRefresh();
-      } else if (message.name === "WorkdirCommand" ) {
+      } else if (message.name === "WorkdirCommand") {
         let workdir = "";
         if (message.workdirIdx >= 0 && message.workdirIdx < WORKDIRS_KEYS.length) {
           workdir = WORKDIRS_KEYS[message.workdirIdx];
         }
         this.fetchWorkdirCommand(workdir, message.command);
+      } else if (message.name === "RequestWorkdirStatus") {
+        this.replyWorkdirStatus(message.workdirIdx, message.methodUuid, message.dataUuid);
       }
     } catch (error) {
       console.error(`Error in handleViewMessage: ${error}`);
@@ -154,12 +158,17 @@ export class BackendSync {
   }
 
   private async fetchGetVersions(workdir: string) {
-    // TODO Use BackendWorkdirTacking to detect and ignore out-of-order responses.
-    return await this.fetchBackend("getVersions", { workdir: workdir});
+    // TODO Use BackendWorkdirTracking to detect and ignore out-of-order responses.
+    return await this.fetchBackend("getVersions", { workdir: workdir });
+  }
+
+  private async fetchGetWorkdirStatus(workdir: string) {
+    // TODO Use BackendWorkdirTracking to detect and ignore out-of-order responses.
+    return await this.fetchBackend("getWorkdirStatus", { workdir: workdir });
   }
 
   private async fetchWorkdirCommand(workdir: string, command: string) {
-    return await this.fetchBackend("workdirCommand", { workdir: workdir, command: command});
+    return await this.fetchBackend("workdirCommand", { workdir: workdir, command: command });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -191,9 +200,6 @@ export class BackendSync {
     // Do getVersions for every possible workdir.
     //
     // TODO Optimize to do this to retrieve all only when dashboard is visible, otherwise just do the active?
-    if (forceRefresh) {
-      console.log("updateUsingBackend() called with forceRefresh!!!!!!!!!");
-    }
 
     // Iterate the WORKDIRS_KEYS
     for (let workdirIdx = 0; workdirIdx < WORKDIRS_KEYS.length; workdirIdx++) {
@@ -201,19 +207,19 @@ export class BackendSync {
       const data = await this.fetchGetVersions(workdir);
       if (data) {
         try {
-          // This is an example of response stored in data:
+          // This is an example of data:
           //  {"jsonrpc":"2.0","result":{
           //   "header":{"method":"getVersions", "methodUuid":"...","dataUuid":"...","key":"localnet"},
           //   "versions":[{"method":"getWorkdirStatus","methodUuid":"...","dataUuid":"...","key":"localnet"}],
           //   "asuiSelection":"localnet"},
           //   "id":2}
+          //
+          // Each element of "versions" match the header you will find for each API method.
+          // (e.g. see header example in replyWorkdirStatus)
+
           // Update the SuibaseJson instance for the workdir.
           const workdirTracking = this.mWorkdirTrackings[workdirIdx];
-          const hasChanged = workdirTracking.versions.update(
-            data.result.header.methodUuid,
-            data.result.header.dataUuid,
-            data.result
-          );
+          const hasChanged = workdirTracking.versions.update(data.result);
 
           // Broadcast UpdateVersions message to all the views when change detected or requested.
           // The views will then decide if they need to synchronize further with the extension.
@@ -221,11 +227,44 @@ export class BackendSync {
             BaseWebview.broadcastMessage(new UpdateVersions(workdirIdx, data.result));
           }
         } catch (error) {
-          const errorMsg = `Error in load_from_backend: ${error}. Data: ${JSON.stringify(data)}`;
+          const errorMsg = `Error in updateUsingBackend: ${error}. Data: ${JSON.stringify(data)}`;
           console.error(errorMsg);
           throw new Error(errorMsg);
         }
       }
+    }
+  }
+
+  private async replyWorkdirStatus(workdirIdx: number, methodUuid: string, dataUuid: string) {
+    let data = null;
+    try {
+      let workdir = WORKDIRS_KEYS[workdirIdx];
+      const workdirTracking = this.mWorkdirTrackings[workdirIdx];
+      const tracking = workdirTracking.workdirStatus;
+      data = tracking.getJson(); // Start with what is already in-memory (fetch only as needed)
+      if (!data || methodUuid !== tracking.getMethodUuid() || dataUuid !== tracking.getDataUuid()) {
+        const resp = await this.fetchGetWorkdirStatus(workdir);
+        data = resp.result;
+        workdirTracking.workdirStatus.update(data); // Save a copy of latest.
+      }
+
+      // This is an example of data:
+      //  {"jsonrpc":"2.0","result":{"header":{"method":"getWorkdirStatus","methodUuid":"...","dataUuid":"...","key":"localnet"},
+      //   "status":"OK","clientVersion":"1.23.0-db6e04d","asuiSelection":"localnet",
+      //   "services":[{"label":"Localnet process","status":"OK","statusInfo":null,"helpInfo":null,"pid":null},
+      //               {"label":"Faucet process","status":"OK","statusInfo":null,"helpInfo":null,"pid":null},
+      //               {"label":"Proxy server","status":"OK","statusInfo":null,"helpInfo":null,"pid":null},
+      //               {"label":"Multi-link RPC","status":"OK","statusInfo":null,"helpInfo":null,"pid":null}]},"id":2}
+      //
+      // Update the SuibaseJson instance for the workdir.
+
+      // Broadcast workdir status to all the views. They can choose to ignore the data if not needed.
+      // TODO Optimize to reply back only to the requesting view.
+      BaseWebview.broadcastMessage(new UpdateWorkdirStatus(workdirIdx, data));
+    } catch (error) {
+      const errorMsg = `Error in replyWorkdirStatus: ${error}. Data: ${JSON.stringify(data)}`;
+      console.error(errorMsg);
+      //throw new Error(errorMsg);
     }
   }
 }

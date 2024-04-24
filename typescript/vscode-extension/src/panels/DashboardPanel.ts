@@ -31,8 +31,9 @@ export class DashboardPanel extends BaseWebview {
   }
 
   // Dispose is a callback triggered by VSCode (see BaseWebview).
+  // Happens when the VSCode tab is closed.
   protected dispose() {
-    console.log("DashboardPanel.dispose() called");
+    //console.log("DashboardPanel.dispose() called");
     if (DashboardPanel.instance) {
       super.dispose();
       delete DashboardPanel.instance;
@@ -43,7 +44,6 @@ export class DashboardPanel extends BaseWebview {
   }
 
   protected handleMessage(message: any): void {
-    console.log("Dashboard.handleMessage() called");
     console.log(message);
   }
 }

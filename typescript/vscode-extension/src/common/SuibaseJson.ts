@@ -1,36 +1,68 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// The purpose of the SuibaseJSONStorage is to :
+// The purpose of the SuibaseJson is to :
 //    - Compare very quickly two JSON storage and optionally update the storage.
-//    - Trigger the 'deltaDetected' callback.
+//    - Detect delta using UUID.
 //
 // This is a base class that handle "json" as a whole. Derived classes
 // interpret the JSON for finer grained handling.
 
 export class SuibaseJson {
-  // A change of method UUID means that delta detection using the dataUUID is
+  private method: string; // The method used to get this JSON from backend (e.g. "getWorkdirStatus")
+
+  // A change of method UUID means that delta detection using the dataUuid is
   // not valid.
   //
   // Therefore, delta should be done by comparing the data as a whole.
-  public methodUUID: string;
+  private methodUuid: string;
 
   // Allows to quickly detects delta. This is a time sortable UUID, therefore
   // an update using a lower dataUUI should be ignored (out of order).
-  public dataUUID: string;
+  private dataUuid: string;
 
-  public json: any;
+  private json: any;
 
   // Constructor
   constructor() {
-    this.methodUUID = "";
-    this.dataUUID = "";
+    this.method = "";
+    this.methodUuid = "";
+    this.dataUuid = "";
     this.json = null;
   }
 
-  // Return true if the json has changed.
-  public update(methodUUID: string, dataUUID: string, json: any): boolean {
-    if (this.json === null || this.methodUUID !== methodUUID || dataUUID > this.dataUUID) {
-      this.methodUUID = methodUUID;
-      this.dataUUID = dataUUID;
+  // Getters for every private.
+  public getMethod(): string {
+    return this.method;
+  }
+
+  public getMethodUuid(): string {
+    return this.methodUuid;
+  }
+
+  public getDataUuid(): string {
+    return this.dataUuid;
+  }
+
+  public getJson(): any {
+    return this.json;
+  }
+
+  public update(json: any): boolean {
+    const method = json.header.method;
+    const methodUuid = json.header.methodUuid;
+    const dataUuid = json.header.dataUuid;
+
+    // TODO A lot more of data validation here...
+
+    if (this.method !== "" && method !== this.method) {
+      // Caller is mixing JSON responses from different methods. Likely a software bug.
+      console.error(`Trying to update [${this.json.method}] using a JSON from [${method}]`);
+      return false;
+    }
+
+    if (this.json === null || this.methodUuid !== methodUuid || dataUuid > this.dataUuid) {
+      this.method = method;
+      this.methodUuid = methodUuid;
+      this.dataUuid = dataUuid;
       this.json = json;
       this.deltaDetected();
       return true;
@@ -40,7 +72,99 @@ export class SuibaseJson {
 
   protected deltaDetected() {
     // Callback handled by a derived class when a delta is detected.
-    //console.log(`SuibaseJson.deltaDetected() called for ${JSON.stringify(this.json)}`);
+  }
+}
+
+export class SuibaseJsonVersions extends SuibaseJson {
+  // Stores the JSON returned by the getVersions backend.
+
+  // Verify if this object element version is newer than the param.
+  //
+  //
+  // Return true if the SuibaseJson param is *older* or show any sign of needing to be updated.
+  // Return false if the SuibaseJson param is *same* or *newer* (or in some error cases).
+  //
+  // When true, the newer methodUuid and dataUuid expected is returned.
+  public isWorkdirStatusUpdateNeeded(candidate: SuibaseJsonWorkdirStatus): [boolean, string, string] {
+    // Get the getWorkdirStatus UUIDs.
+    // Example of this.json:
+    //     {"header":{"method":"getVersions","methodUuid":"...","dataUuid":"...","key":"localnet"},
+    //      "versions":[{"method":"getWorkdirStatus","methodUuid":"...","dataUuid":"...","key":"localnet"}],
+    //      "asuiSelection":"localnet"
+    //     }
+    // Iterate this.json.versions elements, and look for the method. Compare the methodUuid and dataUuid.
+
+    try {
+      const candidateShouldBeUpdated =
+        candidate === null ||
+        candidate.getJson() === null ||
+        candidate.getMethod() === "" ||
+        candidate.getMethodUuid() === "" ||
+        candidate.getDataUuid() === "";
+      //console.log(`candidateShouldBeUpdated: ${candidateShouldBeUpdated} method: ${candidate.getMethod()}`);
+      for (const version of this.getJson().versions) {
+        if (version.method === "getWorkdirStatus") {
+          const methodUuid = version.methodUuid;
+          const dataUuid = version.dataUuid;
+          if (
+            candidateShouldBeUpdated ||
+            candidate.getMethodUuid() !== methodUuid ||
+            candidate.getDataUuid() < dataUuid
+          ) {
+            return [true, methodUuid, dataUuid];
+          }
+          break;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `Problem comparing versions for SuibaseJsonWorkdirStatus ${JSON.stringify(
+          candidate
+        )} and versions ${JSON.stringify(this.getJson())}: error [${error}]`
+      );
+    }
+    // Normal because candidate is same or not latest... or could be an error...
+    return [false, "", ""];
+  }
+
+  protected deltaDetected() {
+    /* Do nothing for now */
+    super.deltaDetected();
+  }
+}
+
+export class SuibaseJsonWorkdirStatus extends SuibaseJson {
+  private _status: string;
+  private _suiClientVersion: string;
+  private _isLoaded;
+
+  constructor() {
+    super();
+    this._status = "";
+    this._suiClientVersion = "";
+    this._isLoaded = false;
+  }
+  protected deltaDetected() {
+    super.deltaDetected();
+    try {
+      this._status = this.getJson().status;
+      this._suiClientVersion = this.getJson().clientVersion;
+      this._isLoaded = true;
+    } catch (error) {
+      console.error(`Problem with SuibaseJsonWorkdirStatus loading: ${error}`);
+    }
+  }
+
+  public get status(): string {
+    return this._status;
+  }
+
+  public get suiClientVersion(): string {
+    return this._suiClientVersion;
+  }
+
+  public get isLoaded(): boolean {
+    return this._isLoaded;
   }
 }
 

@@ -567,8 +567,8 @@ impl GeneralApiServer for GeneralApiImpl {
                         return Err(RpcSuibaseError::OutdatedUUID().into());
                     }
                 }
-                let resp = ui.get_data().clone();
-                //ui.write_uuids_into_header_param(&mut resp.header);
+                let mut resp = ui.get_data().clone();
+                resp.header.set_from_uuids(&ui.get_uuid());
                 return Ok(resp);
             } else {
                 return Err(

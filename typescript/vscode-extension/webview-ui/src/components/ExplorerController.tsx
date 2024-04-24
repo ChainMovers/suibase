@@ -55,18 +55,23 @@ export const ExplorerController = () => {
   return (
         <>
         <Box display="flex">
-          <VSCodeDropdown value={dropdownActive}  onChange={handleDropdownChange}>
-            {WORKDIRS_KEYS.map((key,index) => (
-              <VSCodeOption
-                key={key}
-                value={key}
-                selected={key === dropdownActive ? true : false}
-              >
-                {WORKDIRS_LABELS[index]}
-              </VSCodeOption>
-            ))}
-          </VSCodeDropdown>
-          {requestedActive && <CircularProgress size={15} style={{ marginLeft: '3px' }}/>}
+          {common.current.activeLoaded ? (
+            <>
+            <VSCodeDropdown value={dropdownActive}  onChange={handleDropdownChange}>
+              {WORKDIRS_KEYS.map((key,index) => (              
+                <VSCodeOption
+                  key={key}
+                  value={key}
+                  selected={key === dropdownActive ? true : false}
+                >
+                  {WORKDIRS_LABELS[index]}
+                </VSCodeOption>
+              ))}
+            </VSCodeDropdown>
+            {requestedActive && <CircularProgress size={15} style={{ marginLeft: '3px' }}/>}
+            </>
+          ) : (<CircularProgress size={15}/>)
+          }
         </Box>
         </>
   );
