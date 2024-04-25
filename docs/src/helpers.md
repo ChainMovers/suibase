@@ -2,18 +2,25 @@
 title: Suibase Helpers Overview
 ---
 
-This page is an introduction. For more details... follow the arrow:<br>
-[<i class="iconfont icon-arrow"></i> Rust Suibase Helper API](./rust/helper.md)<br>
-[<i class="iconfont icon-arrow"></i> Python Suibase Helper API](./python/helper.md)<br>
+This page is an introduction. When ready, check the following for language specific docs:
+[<iconify-icon class="font-icon icon" icon="marketeq:curve-arrow-right"></iconify-icon> Rust Helper](./rust/helper.md)
+[<iconify-icon class="font-icon icon" icon="marketeq:curve-arrow-right"></iconify-icon> Python Helper](./python/helper.md)<br>
 
 ## What is a Suibase Helper?
-An API providing what is needed to initialize Sui Network SDKs.
+An API providing information to accelerate the development and testing of Sui apps.
 
-That includes params such as the active client address and valid RPC URL.
+Your app get access to:
+- Package ID of most recently published modules (can query by name).
+- IDs of the shared objects created on last publish of your module.
+- active client address (can also query by alias).
+- A healthy RPC URL for a specific network (e.g. devnet).
+- Various utility functions to help automating development.
 
-Some other params needed in a typical "edit/publish/test" dev cycle are *your modules* package and shared_object IDs that you last published.
+**How it works?**
+The magic happens when you do a workdir "publish" command (e.g. ```testnet publish```). This is a drop-in replacement of the Sui binary approach (e.g. ```sui publish```) and the same parameters can be specified.
 
-These IDs are generated at publication time by the Sui client and written in a JSON file. Suibase automatically preserve this file in the workdir, and makes the IDs easily readable by your apps.
+The Suibase command calls the proper Mysten Labs Sui client version matching the network. It adds parameters to save the output in a JSON file. The data is copied in the Suibase workdir structure, and becomes accessible to your apps through an Helper API.
+
 
 ### Example 1: What is the active client address for localnet?
 
@@ -41,7 +48,7 @@ These IDs are generated at publication time by the Sui client and written in a J
     #
     # localnet has *always* at least 15 named addresses for deterministic test setups.
     #
-    # Print one of these address by-name (see the API for how to access all of them).
+    # Get one of these address using its alias.
     test_address_1 = sbh.client_address("sb-1-ed25519")
     print(f"Test address 1 type ed25519: { test_address_1 }")
 
@@ -70,8 +77,9 @@ These IDs are generated at publication time by the Sui client and written in a J
        //
        // localnet has *always* at least 15 named addresses for deterministic test setups.
        //
-       // Print one of these address by-name (see the API for how to access all of them).
-       println!("Test address 1 type ed25519: {}", sbh.client_address("sb-1-ed25519"));
+       // Get one of these address using its alias.
+       let test_address = sbh.client_address("sb-1-ed25519");
+       println!("Test address 1 type ed25519: {}", test_address );
     }
   }
 
@@ -84,7 +92,7 @@ These IDs are generated at publication time by the Sui client and written in a J
 :::
 
 
-#### Example 2: What is my last published package ID?
+#### Example 2: What is my last published package ID on devnet?
 ::: code-tabs
 
 @tab:active Python
@@ -101,8 +109,8 @@ TODO
 
 :::
 
-#### Example 3: Which URL should be used right now for localnet?
-Suibase monitor RPC health of multiple fullnode and return the best URL to use.
+#### Example 3: Which URL should be used right now for testnet?
+Suibase monitor RPC health of multiple servers and return the best URL to use.
 
 ::: code-tabs
 
@@ -117,9 +125,3 @@ TODO
 ```rust
 TODO
 ```
-:::
-
-::: warning Work-In-Progress
-RPC health monitoring is not yet implemented.<br>
-For now, the Helper always returns the URLs of public fullnodes services from Mysten Labs.
-:::

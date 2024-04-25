@@ -59,17 +59,17 @@ actions:
     <span style="position: relative; top: 3px">Fast Installation</span>
   </h3>
   <p class="vp-feature-details">
-    Simple "update" command to get the latest official Sui client release. In most cases, no build necessary.
+    Simple "update" command to get latest official Sui client release. In most cases, no build necessary.
   </p>
 </a>
 
 <a class="route-link vp-feature-item link" href="/intro.html" aria-label="Open-Source and Free" style="text-decoration: none">
   <h3 class="vp-feature-title">    
     <iconify-icon class="font-icon icon" icon="fluent-emoji-flat:free-button"></iconify-icon>
-    <span style="position: relative; top: 3px">Open-Source and Free</span>
+    <span style="position: relative; top: 3px">Fully Open-Source</span>
   </h3>
   <p class="vp-feature-details">
-    No fee to use Suibase. 100% open-source and contributed from developers for developers.
+    No fee to use Suibase. From developers for developers.
   </p>
 </a>
 
@@ -89,7 +89,7 @@ actions:
     <span style="position: relative; top: 3px">Proxy Server</span>
   </h3>
   <p class="vp-feature-details">
-    Reduce timeout failures with automatic fallback to alternative RPC servers.
+    Reduce network failures with automatic fallback and load-balancing between multiple RPC servers.
   </p>
 </a>
 
@@ -99,7 +99,7 @@ actions:
     <span style="position: relative; top: 3px">Version Matching</span>
   </h3>
   <p class="vp-feature-details">
-    A distinct Sui client binary and repo to each network (localnet, devnet, testnet, mainnet).
+    Eliminate version mismatch bugs. Distinct Sui client and repo is installed to match each network (localnet, devnet, testnet, mainnet).
   </p>
 </a>
 

@@ -4,12 +4,12 @@ contributors: true
 editLink: true
 ---
 
-It is work in progress :smile:
 
-Community maintained documentations for the developers of Sui applications and tools.
+Documentations for the developers of Sui applications and tools.
 
-Includes guides, code snippets, and references to other resources.
+Check the left menu for many guides and code snippets
 
-[<i class="iconfont icon-arrow"></i> How to become an editor](../community/editors.md)
 
-[<i class="iconfont icon-arrow"></i> Discuss on Discord](https://discord.com/invite/Erb6SwsVbH)
+[<iconify-icon class="font-icon icon" icon="marketeq:curve-arrow-right"></iconify-icon> How to become an editor](../community/editors.md)
+
+[<iconify-icon class="font-icon icon" icon="marketeq:curve-arrow-right"></iconify-icon> Discuss on Discord](https://discord.com/invite/Erb6SwsVbH)

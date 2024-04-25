@@ -5,9 +5,9 @@ order: 1
 
 ## Requirements
 **Supported operating systems**
-  * Linux
+  * Linux (Arch and Ubuntu tested)
   * macOS
-  * Windows 10/11 WSL2
+  * Windows with WSL2
 <br>
 
 **Prerequisites**
@@ -17,8 +17,8 @@ Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites)
 Skip installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config).<br>
 
 ::: details How will suibase get the Sui binaries?
-Suibase automatically download the code and builds a sui client for each workdir. One binary to properly match each network.<br>
-For faster build your Rust app can optionally have their dependencies set to the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
+Suibase will automatically download the sui client and repos from Mysten Labs that match each network version.<br>
+For consistency your Rust app can optionally have their dependencies set to the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
 :::
 
 ## Installation Steps
@@ -34,7 +34,7 @@ Suibase is not intrusive on your system. The installation is per user:
    - The installation only creates symlinks in ~/.local/bin
 
 ::: details Why suibase need to be cloned in user home (~)?
-Suibase files are an "open standard" and benefit from being easily found by many apps and sdks. The user home is the convenient solution.
+Suibase files are an "open standard" and benefit from being easily found by many apps and sdks. The home directory is the convenient solution.
 :::
 
 ## Update

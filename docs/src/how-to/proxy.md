@@ -89,7 +89,26 @@ A preference order when selecting between multiple servers. It is used, as an ex
 The proxy server update and restart as needed when you do ```~/suibase/update```.
 
 ## Stopping and Disabling
-Use the workdir ```stop``` command (e.g. ```devnet stop```) to disable the proxy services (Note: the background suibase daemon will keep running but will no longuer monitor the health of the RPC nodes).
-Disabling is also configureable by adding ```proxy_enabled: false``` to a suibase.yaml in a specific workdir.
-You can disable for all workdirs at once by adding it to ```~/suibase/workdirs/common/suibase.yaml```
+Use the workdir ```stop``` command (e.g. ```devnet stop```) to temporarily disable the proxy services for a specific workdir.<br>
+Disabling is also configurable by adding ```proxy_enabled: false``` to a suibase.yaml for a specific workdir.<br>
+You can disable for all workdirs at once by adding ```proxy_enabled: false``` to:<br>```~/suibase/workdirs/common/suibase.yaml```
 
+## Adding RPC Services with API Key
+This is an example of how to add services from https://www.shinami.com/
+
+Add to ```~/suibase/workdirs/testnet/suibase.yaml```:
+``` yaml
+links:
+  - alias: "shinami.com"
+    rpc: "https://api.shinami.com:443/node/v1/sui_testnet_xxxxxxxxx"
+    ws: "wss://api.shinami.com:443/node/v1/sui_testnet_xxxxxxxxx"
+    priority: 10
+```
+
+Replace "sui_testnet_xxxxxxxxx" with the API key specific to your shinami account (info is in their web app).
+
+Do the same for mainnet in ```~/suibase/workdirs/mainnet/suibase.yaml```.
+
+The proxy server automatically detect and apply the changes after you save the .yaml file.
+
+Many other commercial RPC services can be added in same way. 
