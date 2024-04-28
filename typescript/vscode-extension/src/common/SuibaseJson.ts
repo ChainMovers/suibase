@@ -134,37 +134,32 @@ export class SuibaseJsonVersions extends SuibaseJson {
 }
 
 export class SuibaseJsonWorkdirStatus extends SuibaseJson {
-  private _status: string;
-  private _suiClientVersion: string;
-  private _isLoaded;
+  public status: string;
+  public suiClientVersion: string;
+  public suiClientVersionShort: string;
+  public isLoaded;
 
   constructor() {
     super();
-    this._status = "";
-    this._suiClientVersion = "";
-    this._isLoaded = false;
+    this.status = "";
+    this.suiClientVersion = "";
+    this.suiClientVersionShort = "";
+    this.isLoaded = false;
   }
   protected deltaDetected() {
     super.deltaDetected();
     try {
-      this._status = this.getJson().status;
-      this._suiClientVersion = this.getJson().clientVersion;
-      this._isLoaded = true;
+      this.status = this.getJson().status;
+      this.suiClientVersion = this.getJson().clientVersion;
+      if (typeof this.suiClientVersion === "string" && this.suiClientVersion.length > 0) {
+        this.suiClientVersionShort = this.suiClientVersion.split("-")[0];
+      } else {
+        this.suiClientVersionShort = "";
+      }
+      this.isLoaded = true;
     } catch (error) {
       console.error(`Problem with SuibaseJsonWorkdirStatus loading: ${error}`);
     }
-  }
-
-  public get status(): string {
-    return this._status;
-  }
-
-  public get suiClientVersion(): string {
-    return this._suiClientVersion;
-  }
-
-  public get isLoaded(): boolean {
-    return this._isLoaded;
   }
 }
 

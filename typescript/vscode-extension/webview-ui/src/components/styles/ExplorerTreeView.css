@@ -1,0 +1,48 @@
+.explorer-tree {
+  background: #242322;
+  font-family: monospace;
+  font-size: 16px;
+  color: white;
+  user-select: none;
+  padding: 20px;
+  border-radius: 0.4em;
+}
+
+.explorer-tree .tree,
+.explorer-tree .tree-node,
+.explorer-tree .tree-node-group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.explorer-tree .tree-branch-wrapper,
+.explorer-tree .tree-node__leaf {
+  outline: none;
+  outline: none;
+}
+
+.explorer-tree .tree-node {
+  cursor: pointer;
+}
+
+.explorer-tree .tree-node:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.explorer-tree .tree .tree-node--focused {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.explorer-tree .tree .tree-node--selected {
+  background: rgba(48, 107, 176);
+}
+
+.explorer-tree .tree-node__branch {
+  display: block;
+}
+
+.explorer-tree .icon {
+  vertical-align: middle;
+  padding-right: 5px;
+}

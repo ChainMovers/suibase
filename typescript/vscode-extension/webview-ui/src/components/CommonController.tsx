@@ -9,66 +9,20 @@ import { WORKDIRS_KEYS } from "../common/Consts";
 import { VSCode } from '../lib/VSCode';
 import { InitView, RequestWorkdirStatus } from '../common/ViewMessages';
 
-export class ViewWorkdirData {
-    private _label: string;
-    private _workdir: string;
-    private _workdirIdx: number;
-    private _suiClientVersionShort: string;
-    private _versions: SuibaseJsonVersions; // Backend JSON of getVersions for this Workdir.
-    private _workdirStatus: SuibaseJsonWorkdirStatus; // Backend JSON of getWorkdirStatus for this Workdir.
+export class ViewWorkdirStates {
+    public label: string;
+    public workdir: string;
+    public workdirIdx: number;
+    public versions: SuibaseJsonVersions; // Backend JSON of getVersions for this Workdir.
+    public workdirStatus: SuibaseJsonWorkdirStatus; // Backend JSON of getWorkdirStatus for this Workdir.
 
     constructor(workdir: string, workdirIdx: number) {
-      this._label = workdir.charAt(0).toUpperCase() + workdir.slice(1);      
-      this._workdir = workdir;
-      this._workdirIdx = workdirIdx;
-      this._suiClientVersionShort = "";
-      this._versions = new SuibaseJsonVersions();
-      this._workdirStatus = new SuibaseJsonWorkdirStatus();
-    }
-
-    public get label() {
-      return this._label;
-    }
-
-    public get workdir() {
-      return this._workdir;
-    }
-
-    public get workdirIdx() {
-      return this._workdirIdx;
-    }
-
-    public get status() {
-      return this._workdirStatus.status;
-    }
-
-    public get suiClientVersion() {
-      return this._workdirStatus.suiClientVersion;
-    }
-
-    public get suiClientVersionShort() {
-      return this._suiClientVersionShort;
-    }
-
-    public get versions() {
-      return this._versions;
-    }
-
-    public get workdirStatus() {
-      return this._workdirStatus;
-    }
-
-    public get isStatusLoaded() {
-      return this._workdirStatus.isLoaded;
-    }
-
-    public updateCalculatedFields() {
-      if (typeof this._workdirStatus.suiClientVersion === 'string' && this._workdirStatus.suiClientVersion.length > 0) {
-        this._suiClientVersionShort = this._workdirStatus.suiClientVersion.split("-")[0];
-      } else {
-        this._suiClientVersionShort = "";
-      }      
-    }
+      this.label = workdir.charAt(0).toUpperCase() + workdir.slice(1);      
+      this.workdir = workdir;
+      this.workdirIdx = workdirIdx;
+      this.versions = new SuibaseJsonVersions();
+      this.workdirStatus = new SuibaseJsonWorkdirStatus();
+    }    
   }
 
 export class ViewCommonData {
@@ -77,7 +31,7 @@ export class ViewCommonData {
     private _activeLoaded: boolean;
 
     constructor() {
-      this._activeWorkdir = "localnet";
+      this._activeWorkdir = "";
       this._activeWorkdirIdx = 0;
       this._activeLoaded = false;
     }
@@ -118,21 +72,77 @@ export class ViewCommonData {
     }
 }
 
+export class ViewObject {
+  public name: string;
+  public id: string;
+  constructor() {
+    this.name = "";
+    this.id = "";
+  }
+}
+
+export class ViewAddress {
+  public id: string;  
+  public ownedObjects: ViewObject[];
+  public watchObjects: ViewObject[];
+  constructor() {
+    this.id = "";
+    this.ownedObjects = [];
+    this.watchObjects = [];
+  }
+}
+
+export class ViewPackageData {
+  public name: string;
+  public id: string;
+  public initObjects: ViewObject[];
+  public watchObjects: ViewObject[];
+  constructor() {
+    this.name = "";
+    this.id = "";
+    this.initObjects = [];
+    this.watchObjects = [];
+  }
+}
+
+export class ViewExplorerData {
+  // Packages/Objects/Addresses relevant to the recent publish.
+  mostRecents: ViewPackageData[];
+  archives: ViewPackageData[];
+  constructor() {
+    this.mostRecents = [];
+    this.archives = [];
+  }
+}
+
 export const useCommonController = () => {
   const { message } = useMessage();
   const common = useRef(new ViewCommonData());
-  const workdirs = useRef(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirData(key, index)));
-  const [, setUpdateTrigger] = useState(false);
+  const [ workdirs ] = useState<ViewWorkdirStates[]>(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirStates(key, index)));
+  /*
+  const updateWorkdirs = (index: number, updates: Partial<ViewWorkdirStates>) => {
+    setWorkdirs(currentStates =>
+      currentStates.map((item, idx) =>
+        idx === index ? { ...item, ...updates } : item
+      )
+    );
+  };*/
+
+  // A trick to force a re-render of the component using useCommonController.
+  // This simplify greatly the handling of changes of workdirs array elements.
+  const [commonTrigger, setUpdateTrigger] = useState(false);
 
   useEffect(() => {  
-    // Called when this component is mounted, which is surprisingly often (e.g. every time user switch tabs in VSCode).
+    // This is also called when this component is mounted, which is 
+    // surprisingly often (e.g. every time user switch tabs in VSCode).
 
-    // Call InitView if any of the backend data is missing, otherwise use the latest cached in ref.
+    // Call InitView if any of the backend data is missing.
+    // TODO Use persistence to cache the data when the view is unmounted.
     let missingData = common.current.activeLoaded === false;
     if (!missingData) {
       // Check workdirs data.
-      for (let i = 0; i < workdirs.current.length; i++) {
-        const workdirTracking = workdirs.current[i];
+      for (let i = 0; i < workdirs.length; i++) {
+        const workdirTracking = workdirs[i];
         if (!workdirTracking.versions.getJson()) {
           missingData = true;
           break;
@@ -142,7 +152,7 @@ export const useCommonController = () => {
     if (missingData) {
       VSCode.postMessage(new InitView());
     }
-  }, []);
+  }, [workdirs]);
 
   useEffect(() => {
     try {
@@ -150,7 +160,7 @@ export const useCommonController = () => {
         let do_render = false;
         switch (message.name) {
           case 'UpdateVersions': {
-            const workdirTracking = workdirs.current[message.workdirIdx];
+            const workdirTracking = workdirs[message.workdirIdx];
             const hasChanged = workdirTracking.versions.update(message.json);            
             if (hasChanged) {
               do_render = true;
@@ -162,27 +172,19 @@ export const useCommonController = () => {
                 VSCode.postMessage( new RequestWorkdirStatus(message.workdirIdx, methodUuid, dataUuid) );
               }
             }
-            // Update activeWorkdirIdx (as needed).
+            // As needed, update activeWorkdir (and indirectly activeWorkdirIdx ).
+            //console.log(`common.current.activeWorkdir: ${common.current.activeWorkdir}, message.json.asuiSelection: ${message.json.asuiSelection}`);
             if (common.current.activeWorkdir !== message.json.asuiSelection) {
-                const idx = WORKDIRS_KEYS.indexOf(message.json.asuiSelection);
-                if (idx >= 0) {
-                    common.current.activeWorkdir = message.json.asuiSelection;
-                    common.current.activeWorkdirIdx = idx;
-                    //console.log(`Active workdir changed to ${common.current.activeWorkdir}`);
-                    do_render = true;
-                } else {
-                    console.error(`Invalid active workdir: ${message.json.asuiSelection}`);
-                }
+              common.current.activeWorkdir = message.json.asuiSelection;                
+              do_render = true;
             }
-            
-            
             break;
           }
           case 'UpdateWorkdirStatus': {
-            const workdirTracking = workdirs.current[message.workdirIdx];
+            const workdirTracking = workdirs[message.workdirIdx];
             const hasChanged = workdirTracking.workdirStatus.update(message.json);
             if (hasChanged) {
-              workdirTracking.updateCalculatedFields();
+              //workdirTracking.updateCalculatedFields();
               do_render = true;
             }
             break;
@@ -197,7 +199,7 @@ export const useCommonController = () => {
     } catch (error) {
       console.error("An error occurred in useCommonController:", error);
     }
-  }, [message]);
+  }, [message,workdirs]);
 
-  return {common, workdirs};
+  return {commonTrigger, common, workdirs};
 };

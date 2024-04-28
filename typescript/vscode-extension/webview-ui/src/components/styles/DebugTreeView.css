@@ -1,0 +1,48 @@
+.debugtree {
+  background: #242322;
+  font-family: monospace;
+  font-size: 16px;
+  color: white;
+  user-select: none;
+  padding: 20px;
+  border-radius: 0.4em;
+}
+
+.debugtree .tree,
+.debugtree .tree-node,
+.debugtree .tree-node-group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.debugtree .tree-branch-wrapper,
+.debugtree .tree-node__leaf {
+  outline: none;
+  outline: none;
+}
+
+.debugtree .tree-node {
+  cursor: pointer;
+}
+
+.debugtree .tree-node:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.debugtree .tree .tree-node--focused {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.debugtree .tree .tree-node--selected {
+  background: rgba(48, 107, 176);
+}
+
+.debugtree .tree-node__branch {
+  display: block;
+}
+
+.debugtree .icon {
+  vertical-align: middle;
+  padding-right: 5px;
+}

@@ -54,6 +54,7 @@ export const ExplorerController = () => {
 
   return (
         <>
+        
         <Box display="flex">
           {common.current.activeLoaded ? (
             <>
@@ -73,6 +74,7 @@ export const ExplorerController = () => {
           ) : (<CircularProgress size={15}/>)
           }
         </Box>
+        {/*<DebugTreeViewObj jsonObj={common.current}/>*/}
         </>
   );
 }
