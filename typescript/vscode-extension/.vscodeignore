@@ -6,10 +6,11 @@
 
 # Ignore test files
 .vscode-test/**
-out/test/**
+out/**
 
 # Ignore source code
 src/**
+test/**
 
 # Ignore all webview-ui files except the build directory
 webview-ui/src/**
@@ -22,11 +23,17 @@ webview-ui/package-lock.json
 webview-ui/node_modules/**
 
 # Ignore Misc
+node_modules
 .yarnrc
-vsc-extension-quickstart.md
 **/.gitignore
 **/tsconfig.json
 **/vite.config.ts
 **/.eslintrc.json
 **/*.map
 **/*.ts
+
+# Ignore markdown docs, except the ones expected for packaging.
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE.md
