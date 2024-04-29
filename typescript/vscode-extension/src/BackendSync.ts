@@ -1,7 +1,7 @@
-import { API_URL, WORKDIRS_KEYS } from "./common/Consts";
+import { API_URL, WEBVIEW_BACKEND, WORKDIRS_KEYS } from "./common/Consts";
 import { Mutex } from "async-mutex";
 import { BaseWebview } from "./bases/BaseWebview";
-import { UpdateVersions, UpdateWorkdirStatus } from "./common/ViewMessages";
+import { RequestWorkdirStatus, UpdateVersions, UpdateWorkdirStatus } from "./common/ViewMessages";
 import { SuibaseJson, SuibaseJsonVersions } from "./common/SuibaseJson";
 
 // One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
@@ -82,7 +82,7 @@ export class BackendSync {
         }
         this.fetchWorkdirCommand(workdir, message.command);
       } else if (message.name === "RequestWorkdirStatus") {
-        this.replyWorkdirStatus(message.workdirIdx, message.methodUuid, message.dataUuid);
+        this.replyWorkdirStatus(message as RequestWorkdirStatus);
       }
     } catch (error) {
       console.error(`Error in handleViewMessage: ${error}`);
@@ -224,7 +224,7 @@ export class BackendSync {
           // Broadcast UpdateVersions message to all the views when change detected or requested.
           // The views will then decide if they need to synchronize further with the extension.
           if (hasChanged || forceRefresh) {
-            BaseWebview.broadcastMessage(new UpdateVersions(workdirIdx, data.result));
+            BaseWebview.broadcastMessage(new UpdateVersions(WEBVIEW_BACKEND, workdirIdx, data.result));
           }
         } catch (error) {
           const errorMsg = `Error in updateUsingBackend: ${error}. Data: ${JSON.stringify(data)}`;
@@ -235,7 +235,12 @@ export class BackendSync {
     }
   }
 
-  private async replyWorkdirStatus(workdirIdx: number, methodUuid: string, dataUuid: string) {
+  private async replyWorkdirStatus(message: RequestWorkdirStatus) {
+    const sender = message.sender; // Will reply to sender only.
+    const workdirIdx = message.workdirIdx;
+    const methodUuid= message.methodUuid;
+    const dataUuid = message.dataUuid;
+
     let data = null;
     try {
       let workdir = WORKDIRS_KEYS[workdirIdx];
@@ -257,10 +262,7 @@ export class BackendSync {
       //               {"label":"Multi-link RPC","status":"OK","statusInfo":null,"helpInfo":null,"pid":null}]},"id":2}
       //
       // Update the SuibaseJson instance for the workdir.
-
-      // Broadcast workdir status to all the views. They can choose to ignore the data if not needed.
-      // TODO Optimize to reply back only to the requesting view.
-      BaseWebview.broadcastMessage(new UpdateWorkdirStatus(workdirIdx, data));
+      BaseWebview.postMessageTo(sender,new UpdateWorkdirStatus(WEBVIEW_BACKEND, workdirIdx, data));
     } catch (error) {
       const errorMsg = `Error in replyWorkdirStatus: ${error}. Data: ${JSON.stringify(data)}`;
       console.error(errorMsg);

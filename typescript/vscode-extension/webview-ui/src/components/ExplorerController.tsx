@@ -9,9 +9,10 @@ import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { Box, CircularProgress } from "@mui/material";
 import { VSCode } from "../lib/VSCode";
 import { WorkdirCommand } from "../common/ViewMessages";
+import { WEBVIEW_EXPLORER } from "../../../src/common/Consts";
 
 export const ExplorerController = () => {
-  const {common} = useCommonController();  
+  const {common} = useCommonController(WEBVIEW_EXPLORER);  
 
   const [requestedActive, setRequestedActive] = useState("");
   const [dropdownActive, setDropdownActive] =useState(common.current.activeWorkdir);
@@ -25,7 +26,7 @@ export const ExplorerController = () => {
       // Do CLI "set-active" to the requested workdir.
       const workdirIdx = WORKDIRS_KEYS.indexOf(newValue);
       if (workdirIdx !== -1) {
-        VSCode.postMessage(new WorkdirCommand(workdirIdx, "set-active"));
+        VSCode.postMessage(new WorkdirCommand(WEBVIEW_EXPLORER,workdirIdx, "set-active"));
       }
       
     } else {

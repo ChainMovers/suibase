@@ -12,6 +12,7 @@ import { createTheme} from '@mui/material/styles';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import React from 'react';
 import { purple } from '@mui/material/colors';
+import { WEBVIEW_CONSOLE, WEBVIEW_DASHBOARD, WEBVIEW_EXPLORER } from '../../src/common/Consts';
 
 const cssVar = (variableName: string) => {
   try {
@@ -101,13 +102,13 @@ function App() {
 
   let controller;
   switch (globalThis.suibase_view_key) {
-    case "suibase.settings":
+    case WEBVIEW_DASHBOARD:
       controller = <DashboardController />;
       break;
-    case "suibase.console":
+    case WEBVIEW_CONSOLE:
       controller = <ConsoleController />;
       break;
-    case "suibase.sidebar":
+    case WEBVIEW_EXPLORER:
       controller = <ExplorerController />;
       break;
     default:

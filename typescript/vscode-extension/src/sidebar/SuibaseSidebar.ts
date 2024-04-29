@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import { BaseWebview } from "../bases/BaseWebview";
 import { SuibaseData } from "../common/SuibaseData";
+import { WEBVIEW_EXPLORER } from "../common/Consts";
 
 export class SuibaseSidebar extends BaseWebview {
   private static instance?: SuibaseSidebar;
 
   private constructor() {
-    super("suibase.sidebar", "Sui Sidebar");
+    super(WEBVIEW_EXPLORER, "Sui Sidebar");
   }
 
   public static activate(context: vscode.ExtensionContext) {
@@ -52,8 +53,8 @@ export class SuibaseSidebar extends BaseWebview {
 
   // Override BaseWebview::handleMessage
   protected handleMessage(message: any): void {
-    console.log("SuibaseSidebar.handleMessage() called");
-    console.log(message);
+    //console.log("SuibaseSidebar.handleMessage() called");
+    //console.log(message);
     let sbData = SuibaseData.getInstance();
     switch (message.type) {
       case "init-view":

@@ -2,7 +2,7 @@
 import "./styles/DashboardController.css";
 
 import { VSCode } from "../lib/VSCode";
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
+//import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import { WorkdirCommand } from "../common/ViewMessages";
 
 import { useCommonController, ViewWorkdirStates } from "./CommonController";
@@ -10,10 +10,12 @@ import { Badge, Box, CircularProgress, Table, TableBody, TableCell, TableContain
 import { AntSwitch } from "./AntSwitch";
 import { useEffect, useState } from "react";
 import { WORKDIRS_KEYS, WORKDIRS_LABELS } from "../common/Consts";
+import { WEBVIEW_DASHBOARD } from "../../../src/common/Consts";
 
+/*
 function handleRegenClick(workdir: ViewWorkdirStates) {
-  VSCode.postMessage(new WorkdirCommand(workdir.workdirIdx, "regen"));
-}
+  VSCode.postMessage(new WorkdirCommand(WEBVIEW_DASHBOARD,workdir.workdirIdx, "regen"));
+}*/
 
 // One instance per element in WORKDIRS_KEYS.
 class WorkdirStates {
@@ -42,7 +44,7 @@ class WorkdirStates {
 }
 
 export const DashboardController = () => {
-  const { commonTrigger, common, workdirs } = useCommonController();
+  const { commonTrigger, common, workdirs } = useCommonController(WEBVIEW_DASHBOARD);
 
   const switchProps = { inputProps: { 'aria-label': 'workdir on/off' } };
 
@@ -78,7 +80,7 @@ export const DashboardController = () => {
       updateWorkdirStates(index, { requestedChange: newValue, switchState: newValue, spinnerForSwitch: true });
       // Do CLI "start" or "stop" for the requested workdir.
       const command = newValue? "start" : "stop";
-      VSCode.postMessage(new WorkdirCommand(index, command));      
+      VSCode.postMessage(new WorkdirCommand(WEBVIEW_DASHBOARD,index, command));      
     } else {
       // Matching with backend. Clear the request, make sure the UI matches.      
       updateWorkdirStates(index, { requestedChange: undefined, switchState: switchBackendState, spinnerForSwitch: false });
@@ -130,7 +132,7 @@ export const DashboardController = () => {
               <TableCell style={{ width: '115px' }}></TableCell>
               <TableCell align="center" style={{ width: '105px' }}>Status</TableCell>
               <TableCell style={{ width: '100px' }}>Version</TableCell>
-              <TableCell style={{ width: '100px' }}>More Controls</TableCell>
+              <TableCell style={{ width: '100px' }}>{/*More Controls*/}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -160,12 +162,13 @@ export const DashboardController = () => {
                 <Typography variant="body2">{workdirStates.workdirStatus.isLoaded && workdirStates.workdirStatus.suiClientVersionShort}</Typography>
               </TableCell>         
               <TableCell>
+                {/* Not supported for now
                 {workdirStates.label === "Localnet" && (
                   <VSCodeButton onClick={() => handleRegenClick(workdirStates)}>
                     Regen
                     <span slot="start" className="codicon codicon-refresh" />
                   </VSCodeButton>              
-                )}
+                )}*/}
               </TableCell>
             </TableRow>
             );

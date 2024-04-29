@@ -115,7 +115,7 @@ export class ViewExplorerData {
   }
 }
 
-export const useCommonController = () => {
+export const useCommonController = (sender: string) => {
   const { message } = useMessage();
   const common = useRef(new ViewCommonData());
   const [ workdirs ] = useState<ViewWorkdirStates[]>(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirStates(key, index)));
@@ -150,9 +150,9 @@ export const useCommonController = () => {
       }
     }
     if (missingData) {
-      VSCode.postMessage(new InitView());
+      VSCode.postMessage(new InitView(sender));
     }
-  }, [workdirs]);
+  }, [workdirs, sender]);
 
   useEffect(() => {
     try {
@@ -169,7 +169,7 @@ export const useCommonController = () => {
               const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirStatusUpdateNeeded(workdirTracking.workdirStatus);
               //console.log(`isUpdateNeeded: ${isUpdateNeeded}, methodUuid: ${methodUuid}, dataUuid: ${dataUuid}`);
               if (isUpdateNeeded) {
-                VSCode.postMessage( new RequestWorkdirStatus(message.workdirIdx, methodUuid, dataUuid) );
+                VSCode.postMessage( new RequestWorkdirStatus(sender, message.workdirIdx, methodUuid, dataUuid) );
               }
             }
             // As needed, update activeWorkdir (and indirectly activeWorkdirIdx ).
@@ -199,7 +199,7 @@ export const useCommonController = () => {
     } catch (error) {
       console.error("An error occurred in useCommonController:", error);
     }
-  }, [message,workdirs]);
+  }, [message,workdirs,sender]);
 
   return {commonTrigger, common, workdirs};
 };

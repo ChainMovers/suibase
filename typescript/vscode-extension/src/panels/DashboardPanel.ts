@@ -1,4 +1,5 @@
 import { BaseWebview } from "../bases/BaseWebview";
+import { WEBVIEW_DASHBOARD } from "../common/Consts";
 
 /**
  * This class manages the state and behavior of the DashboardPanel webview.
@@ -12,7 +13,7 @@ export class DashboardPanel extends BaseWebview {
    * DashboardPanel constructor called only from DashboardPanel.render()
    */
   private constructor() {
-    super("suibase.settings", "Suibase Dashboard");
+    super(WEBVIEW_DASHBOARD, "Suibase Dashboard");
   }
 
   // Note: Does not use the activate/deactivate pattern (the BasePanel does).
@@ -44,6 +45,6 @@ export class DashboardPanel extends BaseWebview {
   }
 
   protected handleMessage(message: any): void {
-    console.log(message);
+    //console.log(message);
   }
 }

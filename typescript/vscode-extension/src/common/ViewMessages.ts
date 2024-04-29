@@ -6,9 +6,11 @@
 export class ViewMessages {
   // Must be defined by all derived classes to match the class Name.
   name: string;
+  sender: string;
 
-  constructor(name: string) {
-    this.name = name;
+  constructor(name: string, sender: string) {
+    this.name = name; // Class name of derived class.
+    this.sender = sender; // Unique identifier (see WEBVIEW_* in Consts.ts).
   }
 }
 
@@ -18,8 +20,8 @@ export class UpdateVersions extends ViewMessages {
   json: any;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(workdirIdx: number, json: any) {
-    super("UpdateVersions");
+  constructor(sender: string, workdirIdx: number, json: any) {
+    super("UpdateVersions", sender);
     this.workdirIdx = workdirIdx;
     this.json = json;
   }
@@ -31,8 +33,8 @@ export class UpdateWorkdirStatus extends ViewMessages {
   json: any;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(workdirIdx: number, json: any) {
-    super("UpdateWorkdirStatus");
+  constructor(sender: string, workdirIdx: number, json: any) {
+    super("UpdateWorkdirStatus", sender);
     this.workdirIdx = workdirIdx;
     this.json = json;
   }
@@ -46,8 +48,8 @@ export class WorkdirCommand extends ViewMessages {
   command: string; // e.g. "start", "stop"
 
   // Just request the backend to run the specified CLI command for a workdir.
-  constructor(workdirIdx: number, command: string) {
-    super("WorkdirCommand");
+  constructor(sender: string, workdirIdx: number, command: string) {
+    super("WorkdirCommand", sender);
     this.workdirIdx = workdirIdx;
     this.command = command;
   }
@@ -58,8 +60,8 @@ export class SuiCommand extends ViewMessages {
   command: string; // e.g. "client switch --address some_alias"
 
   // Just request the backend to run the specified CLI command for a workdir.
-  constructor(workdirIdx: number, command: string) {
-    super("SuiCommand");
+  constructor(sender: string, workdirIdx: number, command: string) {
+    super("SuiCommand", sender);
     this.workdirIdx = workdirIdx;
     this.command = command;
   }
@@ -68,16 +70,16 @@ export class SuiCommand extends ViewMessages {
 export class InitView extends ViewMessages {
   // Request the extension to send all data commonly needed by a view
   // (sync with the backend as needed).
-  constructor() {
-    super("InitView");
+  constructor(sender: string) {
+    super("InitView", sender);
   }
 }
 
 export class ForceVersionsRefresh extends ViewMessages {
   // Request the extension to send the latest Versions information.
   // It is assumed the view will further request what is needed.
-  constructor() {
-    super("ForceVersionsRefresh");
+  constructor(sender: string) {
+    super("ForceVersionsRefresh", sender);
   }
 }
 
@@ -88,11 +90,11 @@ export class RequestWorkdirStatus extends ViewMessages {
   methodUuid: string;
   dataUuid: string;
   // Getters
-  
+
   // Request the extension to send all data commonly needed by a view
   // (sync with the backend as needed).
-  constructor(workdirIdx: number, methodUuid: string, dataUuid: string) {
-    super("RequestWorkdirStatus");
+  constructor(sender: string, workdirIdx: number, methodUuid: string, dataUuid: string) {
+    super("RequestWorkdirStatus", sender);
     this.workdirIdx = workdirIdx;
     this.methodUuid = methodUuid;
     this.dataUuid = dataUuid;

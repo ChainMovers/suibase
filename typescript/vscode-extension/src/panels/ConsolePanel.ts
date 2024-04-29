@@ -1,4 +1,5 @@
 import { BaseWebview } from "../bases/BaseWebview";
+import { WEBVIEW_CONSOLE } from "../common/Consts";
 
 /**
  * This class manages the state and behavior of the ConsolePanel webview.
@@ -12,7 +13,7 @@ export class ConsolePanel extends BaseWebview {
    * ConsolePanel constructor called only from ConsolePanel.render()
    */
   private constructor() {
-    super("suibase.console", "Sui Console");
+    super(WEBVIEW_CONSOLE, "Sui Console");
   }
 
   // Note: Does not use the activate/deactivate pattern (the BaseWebview does).
