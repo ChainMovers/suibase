@@ -15,12 +15,20 @@ publish_all() {
 
   # Add default --gas-budget if not specified.
   if ! has_param "" "--gas-budget" $_PASSTHRU_OPTIONS; then
-    _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --gas-budget 100000000"
+    _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --gas-budget 500000000"
   fi
 
   # Add --json, but only if not already specified by the caller.
   if ! has_param "" "--json" $_PASSTHRU_OPTIONS; then
     _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --json"
+  fi
+
+  # Add --with-unpublished-dependencies if not already specified and
+  # local unpublished dependencies are found in the Move.toml
+  if ! has_param "" "--with-unpublished-dependencies"; then
+    if has_unpublished_dependencies "$MOVE_TOML_DIR"; then
+      _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --with-unpublished-dependencies"
+    fi
   fi
 
   # Do a pre publication handshake with the suibase-daemon.
@@ -229,6 +237,20 @@ process_object_changes() {
   echo "]" >>"$_INSTALL_DIR/created-objects.json"
 }
 export -f process_object_changes
+
+has_unpublished_dependencies() {
+  # Returns true if the "--with-unpublished-dependencies" option should be added.
+
+  local _MOVE_TOML_DIR="$1"
+  # For now, detect only Suibase specific local dependencies, might
+  # allow this to work for any module later when  a more deterministic
+  # way to manage sui dependencies exists...
+
+  # Check in non-comment section for the following sub-string in order:
+  # "=", "{", local", "=", "suibase/move/@suibase" and "}"
+  sed 's/#.*//' "$_MOVE_TOML_DIR/Move.toml" | grep -q "=.*{.*local.*=.*suibase/move/@suibase.*}"
+}
+export -f has_unpublished_dependencies
 
 update_latest_symlinks() {
   # Following global variables must all be set:
