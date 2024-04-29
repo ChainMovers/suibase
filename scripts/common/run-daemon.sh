@@ -33,7 +33,7 @@ case "$PARAM_NAME" in
   source "$DTP_DIR/scripts/common/__dtp-daemon.sh"
   ;;
 *)
-  echo "ERROR: Invalid daemon name: $NAME_LC"
+  echo "ERROR: Invalid daemon name: $PARAM_NAME"
   exit 1
   ;;
 esac
@@ -73,7 +73,7 @@ main() {
     _DAEMON_NAME="$DTP_DAEMON_NAME"
     ;;
   *)
-    echo "ERROR: Invalid daemon name: $NAME_LC"
+    echo "ERROR: Invalid daemon name: $PARAM_NAME"
     exit 1
     ;;
   esac

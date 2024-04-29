@@ -1,15 +1,14 @@
-use std::collections::HashMap;
 
-use crate::api::{MoveConfig, PackagesConfigResponse, Versioned};
+use crate::api::{Versioned, WorkdirPackagesResponse};
 
-use common::basic_types::{AutoSizeVec, WorkdirIdx};
+//use common::basic_types::{AutoSizeVec, WorkdirIdx};
 
 #[derive(Debug, Clone)]
 pub struct PackagesWorkdirConfig {
     // Mostly store everything in the same struct
     // as the response of the GetEventsConfig API. That way,
     // the UI queries can be served very quickly.
-    pub ui: Option<Versioned<PackagesConfigResponse>>,
+    pub ui: Option<Versioned<WorkdirPackagesResponse>>,
     pub last_ui_update: tokio::time::Instant,
 }
 
@@ -29,20 +28,20 @@ impl std::default::Default for PackagesWorkdirConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct GlobalsPackagesConfigST {
-    // One per workdir, WorkdirIdx maintained by workdirs.
-    pub workdirs: AutoSizeVec<PackagesWorkdirConfig>,
+pub struct GlobalsWorkdirPackagesST {
+    // Mostly store everything in the same struct
+    // as the response of the GetWorkdirPackages API. That way,
+    // the UI queries can be served very quickly.
+    pub ui: Option<Versioned<WorkdirPackagesResponse>>,
 }
 
-impl GlobalsPackagesConfigST {
+impl GlobalsWorkdirPackagesST {
     pub fn new() -> Self {
-        Self {
-            workdirs: AutoSizeVec::new(),
-        }
+        Self { ui: None }
     }
 
     // Convenient access to the move_configs for a given workdir.
-
+/* 
     pub fn get_move_configs(
         workdirs: &AutoSizeVec<PackagesWorkdirConfig>,
         workdir_idx: WorkdirIdx,
@@ -68,7 +67,7 @@ impl GlobalsPackagesConfigST {
     pub fn get_config_resp(
         workdirs: &AutoSizeVec<PackagesWorkdirConfig>,
         workdir_idx: WorkdirIdx,
-    ) -> Option<&PackagesConfigResponse> {
+    ) -> Option<&WorkdirPackagesResponse> {
         // Will return None if an object is missing while trying to reach the PackageConfigResponse (should not happen).
         let packages_workdir_config = workdirs.get_if_some(workdir_idx)?;
         let ui = packages_workdir_config.ui.as_ref()?;
@@ -84,10 +83,10 @@ impl GlobalsPackagesConfigST {
     pub fn get_mut_config_resp(
         workdirs: &mut AutoSizeVec<PackagesWorkdirConfig>,
         workdir_idx: WorkdirIdx,
-    ) -> &mut PackagesConfigResponse {
+    ) -> &mut WorkdirPackagesResponse {
         let packages_workdir_config = workdirs.get_mut(workdir_idx);
         if packages_workdir_config.ui.is_none() {
-            packages_workdir_config.ui = Some(Versioned::new(PackagesConfigResponse::new()));
+            packages_workdir_config.ui = Some(Versioned::new(WorkdirPackagesResponse::new()));
         }
         let ui = packages_workdir_config.ui.as_mut().unwrap();
         let config_resp = ui.get_mut_data();
@@ -97,10 +96,10 @@ impl GlobalsPackagesConfigST {
         }
 
         config_resp
-    }
+    }*/
 }
 
-impl Default for GlobalsPackagesConfigST {
+impl Default for GlobalsWorkdirPackagesST {
     fn default() -> Self {
         Self::new()
     }

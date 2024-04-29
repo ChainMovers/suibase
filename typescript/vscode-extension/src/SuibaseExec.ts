@@ -125,7 +125,7 @@ export class SuibaseExec {
 
     if (!suibaseRunning) {
       // Start suibase daemon
-      const result = await execShell("~/suibase/scripts/common/run-daemon.sh suibase");
+      const result = await execShell("~/suibase/scripts/common/run-daemon.sh suibase &");
 
       // TODO Implement retry and error handling of run-daemon.sh for faster startup.
 

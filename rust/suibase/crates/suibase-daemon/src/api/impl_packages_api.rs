@@ -8,11 +8,11 @@ use chrono::Utc;
 
 use crate::admin_controller::{AdminController, AdminControllerTx};
 use crate::api::RpcSuibaseError;
-use crate::shared_types::{Globals, GlobalsPackagesConfigST, GlobalsWorkdirsST};
+use crate::shared_types::{Globals, GlobalsWorkdirsST};
 
 use super::{
-    MoveConfig, PackageInstance, PackagesApiServer, PackagesConfigResponse, RpcInputError,
-    SuccessResponse, WorkdirSuiEventsResponse,
+    MoveConfig, PackageInstance, PackagesApiServer, RpcInputError, SuccessResponse, Versioned,
+    WorkdirPackagesResponse, WorkdirSuiEventsResponse,
 };
 
 pub struct PackagesApiImpl {
@@ -145,55 +145,68 @@ impl PackagesApiServer for PackagesApiImpl {
 
         // Insert the data in the globals.
         {
-            let mut globals_write_guard = self.globals.packages_config.write().await;
+            let mut globals_write_guard = self.globals.get_packages(workdir_idx).write().await;
             let globals = &mut *globals_write_guard;
 
-            let move_configs =
-                GlobalsPackagesConfigST::get_mut_move_configs(&mut globals.workdirs, workdir_idx);
-
-            let mut move_config = move_configs.get_mut(&package_uuid);
-            if move_config.is_none() {
-                // Delete any other move_configs element where path equals move_toml_path.
-                move_configs.retain(|_, config| {
-                    if let Some(path) = &config.path {
-                        if path == &move_toml_path {
-                            return false;
-                        }
-                    }
-                    true
-                });
-
-                let mut new_move_config = MoveConfig::new();
-                new_move_config.path = Some(move_toml_path.clone());
-                move_configs.insert(package_uuid.clone(), new_move_config);
-                move_config = Some(move_configs.get_mut(&package_uuid).unwrap());
+            // Create the globals.ui if does not exists.
+            if globals.ui.is_none() {
+                let versioned_resp = Versioned::new(WorkdirPackagesResponse::new());
+                globals.ui = Some(versioned_resp);
             }
-            let move_config = move_config.unwrap();
 
-            if let Some(current_package) = move_config.latest_package.take() {
-                if current_package.package_id == package_id {
-                    // This package is already the latest. Ignore this redundant publish request.
-                    move_config.latest_package = Some(current_package); // Put it back.
-                    resp.result = true;
-                    resp.info = Some("Package is already the current one.".to_string());
-                    return Ok(resp);
+            if let Some(ui) = &mut globals.ui {
+                let wp_resp = ui.get_mut_data();
+                let move_configs = &mut wp_resp.move_configs;
+                let mut move_config = move_configs.get_mut(&package_uuid);
+
+                if move_config.is_none() {
+                    // Delete any other move_configs element where path equals move_toml_path.
+                    move_configs.retain(|_, config| {
+                        if let Some(path) = &config.path {
+                            if path == &move_toml_path {
+                                return false;
+                            }
+                        }
+                        true
+                    });
+
+                    let mut new_move_config = MoveConfig::new();
+                    new_move_config.path = Some(move_toml_path.clone());
+                    move_configs.insert(package_uuid.clone(), new_move_config);
+                    move_config = Some(move_configs.get_mut(&package_uuid).unwrap());
+                }
+                let move_config = move_config.unwrap();
+
+                if let Some(current_package) = move_config.latest_package.take() {
+                    if current_package.package_id == package_id {
+                        // This package is already the latest. Ignore this redundant publish request.
+                        move_config.latest_package = Some(current_package); // Put it back.
+                        resp.result = true;
+                        resp.info = Some("Package is already the current one.".to_string());
+                        return Ok(resp);
+                    }
+
+                    // Move current package into the list of previous packages.
+                    move_config.older_packages.push(current_package);
                 }
 
-                // Move current package into the list of previous packages.
-                move_config.older_packages.push(current_package);
-            }
+                // Initialize this new current package.
+                move_config.latest_package = Some(PackageInstance::new(
+                    package_id.clone(),
+                    package_name.clone(),
+                    package_timestamp.clone(),
+                ));
 
-            // Initialize this new current package.
-            move_config.latest_package = Some(PackageInstance::new(
-                package_id.clone(),
-                package_name.clone(),
-                package_timestamp.clone(),
-            ));
+                // Make sure the latest known path is correctly reflected in globals.
+                if move_config.path.is_none()
+                    || (move_config.path.as_ref().unwrap() != &move_toml_path)
+                {
+                    move_config.path = Some(move_toml_path.clone());
+                }
 
-            // Make sure the latest known path is correctly reflected in globals.
-            if move_config.path.is_none() || (move_config.path.as_ref().unwrap() != &move_toml_path)
-            {
-                move_config.path = Some(move_toml_path.clone());
+                // Always bump the UUIDs.
+                ui.inc_uuid();
+                ui.write_uuids_into_header_param(&mut resp.header);
             }
         }
 
@@ -214,27 +227,12 @@ impl PackagesApiServer for PackagesApiImpl {
         Ok(resp)
     }
 
-    async fn get_workdir_packages_config(
+    async fn get_workdir_packages(
         &self,
         workdir: String,
-        data: Option<bool>,
-        display: Option<bool>,
-        debug: Option<bool>,
         method_uuid: Option<String>,
         data_uuid: Option<String>,
-    ) -> RpcResult<PackagesConfigResponse> {
-        // data/display/debug allow variations of how the output
-        // is produced (and they may be combined).
-        //
-        // They all default to false when not specified
-        // with the exception of data defaulting to true when
-        // the other (display and debug) are false.
-
-        // TODO Implement display/debug requests.
-        let debug = debug.unwrap_or(false);
-        let display = display.unwrap_or(debug);
-        let _data = data.unwrap_or(!(debug || display));
-
+    ) -> RpcResult<WorkdirPackagesResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
         let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
             .await
@@ -243,44 +241,45 @@ impl PackagesApiServer for PackagesApiImpl {
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
-        let mut resp_ready: Option<PackagesConfigResponse> = None;
+        let mut resp_ready: Option<WorkdirPackagesResponse> = None;
 
-        // Just return what is already built in-memory, or empty.
-        {
+        if method_uuid.is_none() && data_uuid.is_none() {
+            // Just return what is already built in-memory, or empty.
+
             // Get the globals for the target workdir_idx.
-            let globals_read_guard = self.globals.packages_config.read().await;
+            let globals_read_guard = self.globals.get_packages(workdir_idx).read().await;
             let globals = &*globals_read_guard;
-            let globals = globals.workdirs.get_if_some(workdir_idx);
 
-            if let Some(globals) = globals {
-                if let Some(ui) = &globals.ui {
-                    if let (Some(method_uuid), Some(data_uuid)) = (method_uuid, data_uuid) {
-                        let globals_data_uuid = ui.get_uuid().get_data_uuid();
-                        if data_uuid == globals_data_uuid {
-                            let globals_method_uuid = ui.get_uuid().get_method_uuid();
-                            if method_uuid == globals_method_uuid {
-                                // The caller requested the same data that it already have a copy of.
-                                // Respond with the same UUID as a way to say "no change".
-                                let mut resp = PackagesConfigResponse::new();
-                                ui.write_uuids_into_header_param(&mut resp.header);
-                                resp_ready = Some(resp);
-                            }
+            if let Some(ui) = &globals.ui {
+                if let (Some(method_uuid), Some(data_uuid)) = (method_uuid, data_uuid) {
+                    let globals_data_uuid = ui.get_uuid().get_data_uuid();
+                    if data_uuid == globals_data_uuid {
+                        let globals_method_uuid = ui.get_uuid().get_method_uuid();
+                        if method_uuid == globals_method_uuid {
+                            // The caller requested the same data that it already have a copy of.
+                            // Respond with the same UUID as a way to say "no change".
+                            let mut new_resp = WorkdirPackagesResponse::new();
+                            ui.write_uuids_into_header_param(&mut new_resp.header);
+                            resp_ready = Some(new_resp);
                         }
-                    } else {
-                        // The caller did not specify a method_uuid or data_uuid and
-                        // there is an in-memory response ready. Just respond with it.
-                        resp_ready = Some(ui.get_data().clone());
                     }
+                } else {
+                    // The caller did not specify a method_uuid or data_uuid and
+                    // there is an in-memory response ready. Just respond with it.
+                    let mut existing_resp = ui.get_data().clone();
+                    ui.write_uuids_into_header_param(&mut existing_resp.header);
+                    resp_ready = Some(existing_resp);
                 }
             }
         }
 
         if resp_ready.is_none() {
-            resp_ready = Some(PackagesConfigResponse::new());
+            // There was no data in the globals, so revert to empty response.
+            resp_ready = Some(WorkdirPackagesResponse::new());
         }
         let mut resp_ready = resp_ready.unwrap();
 
-        resp_ready.header.method = "getPackagesConfig".to_string();
+        resp_ready.header.method = "getWorkdirPackages".to_string();
         resp_ready.header.key = Some(workdir.clone());
         return Ok(resp_ready);
     }

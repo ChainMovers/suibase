@@ -11,8 +11,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::shared_types::{
-    Globals, GlobalsPackagesConfigST, WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET,
-    WORKDIR_IDX_MAINNET, WORKDIR_IDX_TESTNET,
+    Globals, WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
+    WORKDIR_IDX_TESTNET,
 };
 
 use anyhow::Result;
@@ -316,9 +316,8 @@ impl WebSocketWorkerThread {
                     }
                     let package_id = &package_id[2..];
                     let expected_package_id = tracker
-                        .package_filter()
-                        .map(|s| s.clone())
-                        .unwrap_or_else(|| "".to_string());
+                        .package_filter().cloned()
+                        .unwrap_or_default();
                     if package_id != expected_package_id {
                         log::error!(
                                 "packageId {} not matching {} in Sui Event message. workdir={} message={:?}",
@@ -429,83 +428,81 @@ impl WebSocketWorkerThread {
                 return;
             }
         } else {
-            log::error!("Unexpected workdir_idx {:?}", msg);
+            log::error!("Missing workdir_idx {:?}", msg);
             return;
         }
+        let workdir_idx = self.params.workdir_idx;
 
         // log::info!("Received an audit message: {:?}", msg);
         let mut state_change = false;
         {
             // Get a reader lock on the globals packages_config.
-            let globals_read_guard = self.params.globals.packages_config.read().await;
-            let workdirs = &globals_read_guard.workdirs;
+            let globals_read_guard = self.params.globals.get_packages(workdir_idx).read().await;
+            let globals = &globals_read_guard;
 
-            // Get the element in packages_config for workdir_idx.
+            // Get the move_configs in ui for workdir_idx.
+            if let Some(ui) = &globals.ui {
+                let resp = ui.get_data();
+                let move_configs = &resp.move_configs;
 
-            let move_configs =
-                GlobalsPackagesConfigST::get_move_configs(workdirs, self.params.workdir_idx);
-            if move_configs.is_none() {
-                return; // Normal when the workdir never had any published package.
-            }
-            let move_configs = move_configs.unwrap();
+                // Check for adding PackagesTracking.
+                // Add a PackagesTracking in the packages HashMap for every latests in packages_config.
+                // Once created, the PackagesTracking remains until removed from ui.
+                // The package_id is used as the key in the packages HashMap.
+                for (uuid, move_config) in move_configs {
+                    let latest = move_config.latest_package.as_ref().unwrap();
+                    // Check if the package is already in the packages HashMap.
+                    if !self.package_subs.contains_key(&latest.package_id) {
+                        if move_config.path.is_none() {
+                            log::error!("Missing path in move_config {:?}", move_config);
+                            continue;
+                        }
+                        let toml_path = move_config.path.as_ref().unwrap().clone();
 
-            // Check for adding PackagesTracking.
-            // Add a PackagesTracking in the packages HashMap for every latests in packages_config.
-            // Once created, the PackagesTracking remains until removed from packages_config.
-            // The package_id is used as the key in the packages HashMap.
-            for (uuid, move_config) in move_configs {
-                let latest = move_config.latest_package.as_ref().unwrap();
-                // Check if the package is already in the packages HashMap.
-                if !self.package_subs.contains_key(&latest.package_id) {
-                    if move_config.path.is_none() {
-                        log::error!("Missing path in move_config {:?}", move_config);
-                        continue;
+                        // Create a new PackagesTracking.
+                        let package_tracking = SubscriptionTracking::new_for_managed_package(
+                            toml_path,
+                            latest.package_name.clone(),
+                            uuid.to_string(),
+                            latest.package_id.clone(),
+                        );
+                        // Add the PackagesTracking to the packages HashMap.
+                        self.package_subs
+                            .insert(latest.package_id.clone(), package_tracking);
                     }
-                    let toml_path = move_config.path.as_ref().unwrap().clone();
-
-                    // Create a new PackagesTracking.
-                    let package_tracking = SubscriptionTracking::new_for_managed_package(
-                        toml_path,
-                        latest.package_name.clone(),
-                        uuid.to_string(),
-                        latest.package_id.clone(),
-                    );
-                    // Add the PackagesTracking to the packages HashMap.
-                    self.package_subs
-                        .insert(latest.package_id.clone(), package_tracking);
                 }
-            }
 
-            // Transition package to Unsubscribing state when no longer in the config.
-            // Remove the package tracking once unsubscription confirmed (or timeout).
-            self.package_subs.retain(|package_id, package_tracking| {
-                let mut retain = true;
-                let move_config = move_configs.get(package_tracking.uuid().as_str());
-                if let Some(move_config) = move_config {
-                    // Verify if this package_id is still the latest published for this package UUID.
-                    if move_config.latest_package.is_none() {
-                        retain = false;
-                    } else {
-                        let latest = move_config.latest_package.as_ref().unwrap();
-                        if latest.package_id != *package_id {
+                // Transition package to Unsubscribing state when no longer in the config.
+                // Remove the package tracking once unsubscription confirmed (or timeout).
+                self.package_subs.retain(|package_id, package_tracking| {
+                    let mut retain = true;
+                    let move_config = move_configs.get(package_tracking.uuid().as_str());
+                    if let Some(move_config) = move_config {
+                        // Verify if this package_id is still the latest published for this package UUID.
+                        if move_config.latest_package.is_none() {
                             retain = false;
+                        } else {
+                            let latest = move_config.latest_package.as_ref().unwrap();
+                            if latest.package_id != *package_id {
+                                retain = false;
+                            }
+                        }
+                    } else {
+                        retain = false;
+                    }
+                    if !retain {
+                        if package_tracking.can_be_deleted() {
+                            log::info!("Deleting tracking for package_id={}", package_id);
+                            return false; // Delete the element in the HashMap.
+                        }
+                        // Transition toward eventual deletion after Unsubscribing completes (or timeout).
+                        if !package_tracking.is_remove_requested() {
+                            package_tracking.report_remove_request();
                         }
                     }
-                } else {
-                    retain = false;
-                }
-                if !retain {
-                    if package_tracking.can_be_deleted() {
-                        log::info!("Deleting tracking for package_id={}", package_id);
-                        return false; // Delete the element in the HashMap.
-                    }
-                    // Transition toward eventual deletion after Unsubscribing completes (or timeout).
-                    if !package_tracking.is_remove_requested() {
-                        package_tracking.report_remove_request();
-                    }
-                }
-                true // Keep the element in the HashMap.
-            });
+                    true // Keep the element in the HashMap.
+                });
+            }
         } // End of reader lock.
 
         let websocket = &mut self.websocket;
@@ -570,11 +567,10 @@ impl WebSocketWorkerThread {
     }
 
     async fn process_update_msg(&mut self, msg: GenericChannelMsg) {
-        // This function takes care of synching from self.packages to
-        // the global packages_config.
+        // This function takes care of synching from self.packages to the global ui.
         //
-        // Unlike an audit, changes to packages_config globals are
-        // allowed here.
+        // Unlike an audit, changes to ui are allowed here.
+        //
         //log::info!("Received an update message: {:?}", msg);
 
         // Make sure the event_id is EVENT_UPDATE.
@@ -597,50 +593,50 @@ impl WebSocketWorkerThread {
             log::error!("Unexpected workdir_idx {:?}", msg);
             return;
         }
+        let workdir_idx = self.params.workdir_idx;
 
         let mut trig_audit = false;
         {
-            // Get a writer lock on the globals packages_config.
-            let mut globals_write_guard = self.params.globals.packages_config.write().await;
+            // Get a writer lock on the globals ui.
+            let mut globals_write_guard =
+                self.params.globals.get_packages(workdir_idx).write().await;
             let globals = &mut *globals_write_guard;
 
-            // Get the element in packages_config for workdir_idx.
+            if let Some(ui) = &mut globals.ui {
+                let resp = ui.get_mut_data();
+                let move_configs = &mut resp.move_configs;
 
-            let move_configs = GlobalsPackagesConfigST::get_mut_move_configs(
-                &mut globals.workdirs,
-                self.params.workdir_idx,
-            );
+                // Check for adding PackagesTracking.
+                // Add a PackagesTracking in the packages HashMap for every latests in packages_config.
+                // Once created, the PackagesTracking remains until removed from packages_config.
+                // The package_id is used as the key in the packages HashMap.
+                for (uuid, move_config) in &mut *move_configs {
+                    let latest = move_config.latest_package.as_ref().unwrap();
+                    // Check if the package is already in the packages HashMap.
+                    if !self.package_subs.contains_key(&latest.package_id) {
+                        if move_config.path.is_none() {
+                            log::error!("Missing path in move_config {:?}", move_config);
+                            continue;
+                        }
+                        let toml_path = move_config.path.as_ref().unwrap().clone();
 
-            // Check for adding PackagesTracking.
-            // Add a PackagesTracking in the packages HashMap for every latests in packages_config.
-            // Once created, the PackagesTracking remains until removed from packages_config.
-            // The package_id is used as the key in the packages HashMap.
-            for (uuid, move_config) in &mut *move_configs {
-                let latest = move_config.latest_package.as_ref().unwrap();
-                // Check if the package is already in the packages HashMap.
-                if !self.package_subs.contains_key(&latest.package_id) {
-                    if move_config.path.is_none() {
-                        log::error!("Missing path in move_config {:?}", move_config);
-                        continue;
-                    }
-                    let toml_path = move_config.path.as_ref().unwrap().clone();
-
-                    // Create a new PackagesTracking.
-                    let package_tracking = SubscriptionTracking::new_for_managed_package(
-                        toml_path,
-                        latest.package_name.clone(),
-                        uuid.to_string(),
-                        latest.package_id.clone(),
-                    );
-                    // Add the PackagesTracking to the packages HashMap.
-                    self.package_subs
-                        .insert(latest.package_id.clone(), package_tracking);
-                    trig_audit = true;
-                } else {
-                    let package_tracking = &self.package_subs[&latest.package_id];
-                    let package_tracking_state: u32 = package_tracking.state().clone().into();
-                    if move_config.tracking_state != package_tracking_state {
-                        move_config.tracking_state = package_tracking_state;
+                        // Create a new PackagesTracking.
+                        let package_tracking = SubscriptionTracking::new_for_managed_package(
+                            toml_path,
+                            latest.package_name.clone(),
+                            uuid.to_string(),
+                            latest.package_id.clone(),
+                        );
+                        // Add the PackagesTracking to the packages HashMap.
+                        self.package_subs
+                            .insert(latest.package_id.clone(), package_tracking);
+                        trig_audit = true;
+                    } else {
+                        let package_tracking = &self.package_subs[&latest.package_id];
+                        let package_tracking_state: u32 = package_tracking.state().clone().into();
+                        if move_config.tracking_state != package_tracking_state {
+                            move_config.tracking_state = package_tracking_state;
+                        }
                     }
                 }
             }
@@ -708,9 +704,8 @@ impl WebSocketWorkerThread {
                 return false;
             }
             let package_id = tracker
-                .package_filter()
-                .map(|s| s.clone())
-                .unwrap_or_else(|| "".to_string());
+                .package_filter().cloned()
+                .unwrap_or_default();
 
             // Check if retrying and log error only on first retry and once in a while after.
             if tracker.request_retry() % 3 == 1 {

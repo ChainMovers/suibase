@@ -30,6 +30,25 @@ dependencies = [
 ]
 
 [move.toolchain-version]
-compiler-version = "1.22.0"
-edition = "legacy"
+compiler-version = "1.23.0"
+edition = "2024.beta"
 flavor = "sui"
+
+[env]
+
+
+
+[env.suibase]
+test = 12
+
+[env.localnet_proxy]
+chain-id = "599ba668"
+original-published-id = "0x4fc94af2a4f1982f56ad734a50b8df98cbf7e45553e0dbb475daab6cd0ab5436"
+latest-published-id = "0x4fc94af2a4f1982f56ad734a50b8df98cbf7e45553e0dbb475daab6cd0ab5436"
+published-version = "1"
+
+[env.testnet_proxy]
+chain-id = "4c78adac"
+original-published-id = "0xb7f03f869344fc7359bc709b54f923e581c9d1ceb8bbfc673dab182d7b3f50a0"
+latest-published-id = "0xb7f03f869344fc7359bc709b54f923e581c9d1ceb8bbfc673dab182d7b3f50a0"
+published-version = "1"

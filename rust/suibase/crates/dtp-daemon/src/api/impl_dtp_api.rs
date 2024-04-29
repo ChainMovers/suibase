@@ -774,10 +774,10 @@ impl DtpApiServer for DtpApiImpl {
             .create_send_callback(workdir_idx, host_sla_idx, tc_address.clone())
             .await;
 
-        let message = if message.is_none() {
-            "ping".to_string()
+        let message = if let Some(message) = message {
+            message
         } else {
-            message.unwrap()
+            "ping".to_string()
         };
 
         let _ = {

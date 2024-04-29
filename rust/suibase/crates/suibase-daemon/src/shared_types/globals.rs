@@ -4,24 +4,21 @@
 //
 // Simple design:
 //
-//  - Group of global variables shared between the subsystems/threads
-//    (AdminController, NetworkMonitor, ProxyServer etc...)
+//  - Each thread get a reference count (Arc) on the same multi-threaded 'MT' instance.
 //
-//  - Each thread get a reference count (Arc) on the same 'multi-thread 'MT' instance.
+//  - A thread can lock read/write access on the single-thread 'ST' instance.
 //
-//  - A thread can lock read/write access on the single writer thread 'ST' instance.
-//
-//  - Although globals are not encouraged, they are carefully used here in a balanced way
-//    and as a stepping stone toward a more optimized design. Ask the dev for more details.
+//  - Although globals are not encouraged, they are carefully used here in a balanced way. Also,
+//    mutex blocking are carefully kept fine grain (split by workdir, by data type etc...).
 //
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
-use crate::api::{Versioned, VersionsResponse, WorkdirStatusResponse};
+use crate::api::{Versioned, VersionsResponse, WorkdirPackagesResponse, WorkdirStatusResponse};
 use crate::shared_types::InputPort;
 use common::basic_types::{AutoSizeVec, ManagedVec, WorkdirIdx};
 
-use super::{workdirs, GlobalsEventsDataST, GlobalsPackagesConfigST, GlobalsWorkdirsST};
+use super::{workdirs, GlobalsEventsDataST, GlobalsWorkdirPackagesST, GlobalsWorkdirsST};
 
 #[derive(Debug)]
 pub struct GlobalsProxyST {
@@ -94,6 +91,7 @@ pub struct APIResponses {
     //
     pub versions: Option<Versioned<VersionsResponse>>,
     pub workdir_status: Option<WorkdirStatusResponse>,
+    pub workdir_packages: Option<WorkdirPackagesResponse>,
 }
 
 impl APIResponses {
@@ -101,6 +99,7 @@ impl APIResponses {
         Self {
             versions: None,
             workdir_status: None,
+            workdir_packages: None,
         }
     }
 }
@@ -113,14 +112,16 @@ impl Default for APIResponses {
 
 #[derive(Debug)]
 pub struct GlobalsAPIMutexST {
-    pub last_api_call_timestamp: tokio::time::Instant,
+    pub last_get_workdir_status_time: tokio::time::Instant,
+    pub last_get_workdir_packages_time: tokio::time::Instant,
     pub last_responses: APIResponses,
 }
 
 impl GlobalsAPIMutexST {
     pub fn new() -> Self {
         Self {
-            last_api_call_timestamp: tokio::time::Instant::now(),
+            last_get_workdir_status_time: tokio::time::Instant::now(),
+            last_get_workdir_packages_time: tokio::time::Instant::now(),
             last_responses: APIResponses::default(),
         }
     }
@@ -171,7 +172,7 @@ impl Default for GlobalsConfigST {
 pub type GlobalsProxyMT = Arc<tokio::sync::RwLock<GlobalsProxyST>>;
 pub type GlobalsWorkdirStatusMT = Arc<tokio::sync::RwLock<GlobalsWorkdirStatusST>>;
 pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsConfigST>>;
-pub type GlobalsPackagesConfigMT = Arc<tokio::sync::RwLock<GlobalsPackagesConfigST>>;
+pub type GlobalsWorkdirPackagesMT = Arc<tokio::sync::RwLock<GlobalsWorkdirPackagesST>>;
 pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
 pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
 pub type GlobalsAPIMutexMT = Arc<tokio::sync::Mutex<GlobalsAPIMutexST>>;
@@ -206,7 +207,10 @@ pub struct Globals {
     pub status_mainnet: GlobalsWorkdirStatusMT,
 
     // Configuration related to Sui Move modules, particularly for monitoring management.
-    pub packages_config: GlobalsPackagesConfigMT,
+    pub packages_localnet: GlobalsWorkdirPackagesMT,
+    pub packages_devnet: GlobalsWorkdirPackagesMT,
+    pub packages_testnet: GlobalsWorkdirPackagesMT,
+    pub packages_mainnet: GlobalsWorkdirPackagesMT,
 
     // In-memory access to events data of actively monitored modules.
     pub events_data_localnet: GlobalsEventsDataMT,
@@ -231,7 +235,10 @@ impl Globals {
             status_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
-            packages_config: Arc::new(tokio::sync::RwLock::new(GlobalsPackagesConfigST::new())),
+            packages_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
+            packages_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
+            packages_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
+            packages_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
             events_data_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsEventsDataST::new())),
             events_data_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsEventsDataST::new())),
             events_data_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsEventsDataST::new())),
@@ -244,12 +251,21 @@ impl Globals {
     }
 
     pub fn get_status(&self, workdir_idx: WorkdirIdx) -> &GlobalsWorkdirStatusMT {
-        // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
             workdirs::WORKDIR_IDX_LOCALNET => &self.status_localnet,
             workdirs::WORKDIR_IDX_DEVNET => &self.status_devnet,
             workdirs::WORKDIR_IDX_TESTNET => &self.status_testnet,
             workdirs::WORKDIR_IDX_MAINNET => &self.status_mainnet,
+            _ => panic!("Invalid workdir_idx {}", workdir_idx),
+        }
+    }
+
+    pub fn get_packages(&self, workdir_idx: WorkdirIdx) -> &GlobalsWorkdirPackagesMT {
+        match workdir_idx {
+            workdirs::WORKDIR_IDX_LOCALNET => &self.packages_localnet,
+            workdirs::WORKDIR_IDX_DEVNET => &self.packages_devnet,
+            workdirs::WORKDIR_IDX_TESTNET => &self.packages_testnet,
+            workdirs::WORKDIR_IDX_MAINNET => &self.packages_mainnet,
             _ => panic!("Invalid workdir_idx {}", workdir_idx),
         }
     }
@@ -267,7 +283,6 @@ impl Globals {
     }
 
     pub fn events_data(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsEventsDataMT> {
-        // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
             workdirs::WORKDIR_IDX_LOCALNET => Some(&self.events_data_localnet),
             workdirs::WORKDIR_IDX_DEVNET => Some(&self.events_data_devnet),
@@ -280,7 +295,6 @@ impl Globals {
         &mut self,
         workdir_idx: WorkdirIdx,
     ) -> Option<&mut GlobalsEventsDataMT> {
-        // Use hard coded workdir_idx to dispatch the right data.
         match workdir_idx {
             workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.events_data_localnet),
             workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.events_data_devnet),

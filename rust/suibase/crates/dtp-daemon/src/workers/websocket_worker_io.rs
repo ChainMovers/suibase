@@ -332,19 +332,18 @@ impl WebSocketWorkerIOThread {
                             // Assume this is a valid response to the subscription request.
                             // Get the host_sla_idx and trig a response for it if exists in the globals.
                             let host_sla_idx = ipipe.host_sla_idx;
-                            {
-                                {
-                                    let mut conns_state_guard = self
-                                        .params
-                                        .globals
-                                        .dtp_conns_state_client(self.params.workdir_idx)
-                                        .write()
-                                        .await;
-                                    let conns_state = &mut *conns_state_guard;
 
-                                    conns_state.trigger_subs_callback(host_sla_idx);
-                                }
-                            };
+                            {
+                                let mut conns_state_guard = self
+                                    .params
+                                    .globals
+                                    .dtp_conns_state_client(self.params.workdir_idx)
+                                    .write()
+                                    .await;
+                                let conns_state = &mut *conns_state_guard;
+
+                                conns_state.trigger_subs_callback(host_sla_idx);
+                            }
                         }
                     }
                 }
@@ -757,9 +756,7 @@ impl WebSocketWorkerIOThread {
                 .await;
             let conns_state = &mut *conns_state_guard;
 
-            let host_sla_idx = conns_state
-                .conns
-                .get_if_some(service_idx, &srv_host_addr, 0);
+            let host_sla_idx = conns_state.conns.get_if_some(service_idx, srv_host_addr, 0);
 
             if host_sla_idx.is_none() {
                 // TODO It should have been created on "publish", but can be created here as needed.

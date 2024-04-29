@@ -74,6 +74,12 @@ impl<T: Clone + PartialEq + VersionedEq> Versioned<T> {
         self.uuid.clone()
     }
 
+    // When owner did get_mut_data and made modifications to the data
+    // directly, it must call this method to increment the version.
+    pub fn inc_uuid(&mut self) {
+        self.uuid.increment();
+    }
+
     // readonly access
     pub fn get_data(&self) -> &T {
         &self.data

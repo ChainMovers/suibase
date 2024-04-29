@@ -15,6 +15,7 @@ use super::{
 };
 
 use super::def_header::Versioned;
+use crate::api::WorkdirPackagesResponse;
 
 pub struct GeneralApiImpl {
     pub globals: Globals,
@@ -376,17 +377,17 @@ impl GeneralApiImpl {
         // Does costly CLI calls. Use only on initialization, recovery, etc...
 
         // Update the status of workdirs one-by-one until you get one with a known asui_selection!
-        for workdir_idx in 0..WORKDIRS_KEYS.len() {
+        for (workdir_idx, workdir_key) in WORKDIRS_KEYS.iter().enumerate() {
             let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx as u8).lock().await;
             let api_mutex = &mut *api_mutex_guard;
 
-            let last_api_call_timestamp = &mut api_mutex.last_api_call_timestamp;
+            let last_api_call_timestamp = &mut api_mutex.last_get_workdir_status_time;
 
             // Use the internal implementation
             {
                 let update_result = self
                     .update_globals_workdir_status(
-                        WORKDIRS_KEYS[workdir_idx].to_string(),
+                        workdir_key.to_string(),
                         workdir_idx as u8,
                         last_api_call_timestamp,
                     )
@@ -472,10 +473,11 @@ impl GeneralApiServer for GeneralApiImpl {
         let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
         let api_mutex = &mut *api_mutex_guard;
 
-        let last_api_call_timestamp = &mut api_mutex.last_api_call_timestamp;
+        let last_api_call_timestamp = &mut api_mutex.last_get_workdir_status_time;
 
-        // Use the internal implementation
+        // Section for getWorkdirStatus version.
         {
+            // Use the internal implementation
             let update_result = self
                 .update_globals_workdir_status(workdir, workdir_idx, last_api_call_timestamp)
                 .await;
@@ -483,8 +485,24 @@ impl GeneralApiServer for GeneralApiImpl {
             // Read access to globals for versioning all components.
             // If no change, then the version remains the same for that global component.
             if let Ok(results) = update_result {
-                resp.versions.push(results.0);
+                let mut status_resp = results.0;
+                status_resp.key = None; // No need to repeat the key here (already in the getVersions header).
+                resp.versions.push(status_resp);
                 resp.asui_selection = results.1;
+            }
+        }
+
+        // Section for getWorkdirPackages version.
+        {
+            // Get the data from the globals.get_packages
+            let globals_read_guard = self.globals.get_packages(workdir_idx).read().await;
+            let globals = &*globals_read_guard;
+            if let Some(ui) = &globals.ui {
+                // Create an header that has the same UUID as the globals.
+                let mut wp_resp = WorkdirPackagesResponse::new();
+                wp_resp.header.method = "getWorkdirPackages".to_string();
+                wp_resp.header.set_from_uuids(ui.get_uuid());
+                resp.versions.push(wp_resp.header);
             }
         }
 
@@ -529,7 +547,7 @@ impl GeneralApiServer for GeneralApiImpl {
             let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
             let api_mutex = &mut *api_mutex_guard;
 
-            let last_api_call_timestamp = &mut api_mutex.last_api_call_timestamp;
+            let last_api_call_timestamp = &mut api_mutex.last_get_workdir_status_time;
 
             // Use the internal implementation (same logic as done with get_versions).
 
@@ -568,7 +586,7 @@ impl GeneralApiServer for GeneralApiImpl {
                     }
                 }
                 let mut resp = ui.get_data().clone();
-                resp.header.set_from_uuids(&ui.get_uuid());
+                resp.header.set_from_uuids(ui.get_uuid());
                 return Ok(resp);
             } else {
                 return Err(

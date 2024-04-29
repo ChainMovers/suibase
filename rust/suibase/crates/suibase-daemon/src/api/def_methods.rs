@@ -185,16 +185,6 @@ pub struct WorkdirStatusResponse {
     // Finer grain status for each process/feature/service.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub services: Option<Vec<StatusService>>,
-
-    // This is the output when the option 'display' is true.
-    // Will also change the default to false for all the other fields.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<String>,
-
-    // This is the output when the option 'debug' is true.
-    // Will also change the default to true for the other fields.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub debug: Option<String>,
 }
 
 impl WorkdirStatusResponse {
@@ -207,8 +197,6 @@ impl WorkdirStatusResponse {
             network_version: None,
             asui_selection: None,
             services: None,
-            display: None,
-            debug: None,
         }
     }
 }
@@ -369,7 +357,7 @@ impl Default for MoveConfig {
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct PackagesConfigResponse {
+pub struct WorkdirPackagesResponse {
     pub header: Header,
 
     // One entry per distinct Move.toml published.
@@ -384,38 +372,25 @@ pub struct PackagesConfigResponse {
     // Among the move_configs, there is an additional constraint:
     //   - The MoveConfig.path must all be distinct.
     //
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub move_configs: Option<HashMap<String, MoveConfig>>,
-
-    // This is the output when the option 'display' is true.
-    // Will also change the default to false for all the other fields.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<String>,
-
-    // This is the output when the option 'debug' is true.
-    // Will also change the default to true for the other fields.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub debug: Option<String>,
+    pub move_configs: HashMap<String, MoveConfig>,
 }
 
-impl PackagesConfigResponse {
+impl WorkdirPackagesResponse {
     pub fn new() -> Self {
         Self {
             header: Header::default(),
-            move_configs: None,
-            display: None,
-            debug: None,
+            move_configs: HashMap::new(),
         }
     }
 }
 
-impl Default for PackagesConfigResponse {
+impl Default for WorkdirPackagesResponse {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl VersionedEq for PackagesConfigResponse {
+impl VersionedEq for WorkdirPackagesResponse {
     fn versioned_eq(&self, other: &Self) -> bool {
         // Purposely do not include header in the comparison.
         self.move_configs == other.move_configs
@@ -527,16 +502,13 @@ pub trait PackagesApi {
         last_ts: Option<String>,
     ) -> RpcResult<WorkdirSuiEventsResponse>;
 
-    #[method(name = "getWorkdirPackagesConfig")]
-    async fn get_workdir_packages_config(
+    #[method(name = "getWorkdirPackages")]
+    async fn get_workdir_packages(
         &self,
         workdir: String,
-        data: Option<bool>,
-        display: Option<bool>,
-        debug: Option<bool>,
         method_uuid: Option<String>,
         data_uuid: Option<String>,
-    ) -> RpcResult<PackagesConfigResponse>;
+    ) -> RpcResult<WorkdirPackagesResponse>;
 
     #[method(name = "prePublish")]
     async fn pre_publish(
