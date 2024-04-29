@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseWebview } from "../bases/BaseWebview";
 import { WEBVIEW_DASHBOARD } from "../common/Consts";
 
@@ -44,6 +45,7 @@ export class DashboardPanel extends BaseWebview {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected handleMessage(message: any): void {
     //console.log(message);
   }
