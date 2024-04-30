@@ -1,40 +1,46 @@
 {
   "name": "suibase",
-  "displayName": "suibase",
+  "displayName": "Suibase",
+  "publisher": "suibase",
   "description": "Streamline Sui Move development and testing.",
+  "author": {
+    "name": "Mario Fortier"
+  },
+  "license": "Apache-2.0",
   "icon": "media/logo_128.png",
-  "version": "0.0.1",
-  "repository": "https://github.com/ChainMovers/suibase",
+  "version": "0.0.3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChainMovers/suibase.git"
+  },
   "engines": {
     "vscode": "^1.88.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages",
+    "Debuggers",
+    "Testing"
   ],
+  "pricing": "Free",
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "suibase.settings",
-        "title": "settings",
-        "icon": "$(settings-view-bar-icon)"
+        "command": "suibase.dashboard",
+        "title": "Dashboard",
+        "icon": "$(dashboard)"
       },
       {
         "command": "suibase.console",
         "title": "console",
         "icon": "$(debug-console)"
-      },
-      {
-        "command": "suibase.refresh",
-        "title": "refresh",
-        "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "suibase.settings",
+          "command": "suibase.dashboard",
           "when": "view == explorerView",
           "group": "navigation@0"
         },
@@ -64,7 +70,6 @@
         {
           "id": "explorerView",
           "name": "Suibase",
-          "icon": "media/logo_128.svg",
           "contextualTitle": "Suibase",
           "type": "webview"
         }

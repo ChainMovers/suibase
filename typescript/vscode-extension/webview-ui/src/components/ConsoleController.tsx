@@ -6,7 +6,7 @@ export const ConsoleController = () => {
   //let suibaseData: SuibaseData = SuibaseData.getInstance();
 
   return (
-    <>Console Controller
+    <>Note: Not implemented yet.<br/> Will show events from your last published module(s).
     </>
   );
 }

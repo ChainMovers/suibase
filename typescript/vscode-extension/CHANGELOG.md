@@ -6,4 +6,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- Initial release
+## 0.0.4
+  - Warn about requiring suibase to be installed.
+  - Clean-up sidebar buttons.
+
+## 0.0.1
+  - Initial release

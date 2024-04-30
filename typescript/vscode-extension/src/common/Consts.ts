@@ -23,7 +23,7 @@ export const API_URL = "http://0.0.0.0:44399";
 // Unique identified for each participant exchanging messages.
 //
 // They are used in messages/params when coordinating between views and the extension.
-export const WEBVIEW_DASHBOARD = "suibase.settings";
+export const WEBVIEW_DASHBOARD = "suibase.dashboard";
 export const WEBVIEW_CONSOLE = "suibase.console";
-export const WEBVIEW_EXPLORER = "suibase.sidebar";
+export const WEBVIEW_EXPLORER = "suibase.explorer";
 export const WEBVIEW_BACKEND = "suibase.backend"; // Not really a webview, but name similarly for consistency....
