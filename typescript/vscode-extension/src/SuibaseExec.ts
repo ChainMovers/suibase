@@ -49,7 +49,7 @@ export class SuibaseExec {
 
       // Store the response in the cache
       //let self = SuibaseExec.getInstance();
-      this.cache["response"] = response.result;
+      this.cache.response = response.result;
       console.log(response.result);
     });
   }
@@ -115,7 +115,7 @@ export class SuibaseExec {
       for (let i = 0; i < lines.length && !suibaseRunning; i++) {
         const line = lines[i];
         const columns = line.split(" ");
-        if (columns[0].indexOf("suibase") === 0) {
+        if (columns[0].startsWith("suibase")) {
           suibaseRunning = true;
         }
       }
@@ -125,7 +125,7 @@ export class SuibaseExec {
 
     if (!suibaseRunning) {
       // Start suibase daemon
-      const result = await execShell("~/suibase/scripts/common/run-daemon.sh suibase &");
+      await execShell("~/suibase/scripts/common/run-daemon.sh suibase &");
 
       // TODO Implement retry and error handling of run-daemon.sh for faster startup.
 
@@ -147,7 +147,7 @@ export class SuibaseExec {
     // The caller get the response (or last known state) with
     // a lookup for the data in the cache.
     //
-    let sb = SuibaseExec.getInstance();
+    const sb = SuibaseExec.getInstance();
     if (!sb) {
       return;
     }

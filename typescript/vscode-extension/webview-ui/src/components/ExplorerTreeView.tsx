@@ -25,7 +25,7 @@ class TreeObject {
     this.children = [];
   }
 }*/
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 /*
 function json_to_tree_recursive(obj: any): any {  
   const tree = new TreeObject("");
@@ -43,14 +43,14 @@ function json_to_tree_recursive(obj: any): any {
   return tree;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function jsonStringToTree(json: string): any {
   //const obj = JSON.parse(json);
   const tree = json_to_tree_recursive(json);
   return tree;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function jsonObjToTree(json: any): any {
   const tree = json_to_tree_recursive(json);
   return tree;
@@ -75,9 +75,6 @@ const folder = {
       ],
     },
     {
-      name: ".npmignore",
-    },
-    {
       name: "package.json",
     },
     {
@@ -88,7 +85,7 @@ const folder = {
 
 // Define the props type
 interface DebugTreeViewObjProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   jsonObj: any;  
 }
 
@@ -136,7 +133,7 @@ export function DebugTreeViewObj({ jsonObj }: DebugTreeViewObjProps) {
 }
 
 interface DebugTreeViewStrProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   jsonStr: string;  
 }
 
@@ -196,8 +193,6 @@ const FileIcon = ({ filename }: { filename: string }) => {
     case "css":
       return <div className="icon"><i className="codicon codicon-json"></i></div>;
     case "json":
-      return <div className="icon"><i className="codicon codicon-json"></i></div>;
-    case "npmignore":
       return <div className="icon"><i className="codicon codicon-json"></i></div>;
     default:
       return null;

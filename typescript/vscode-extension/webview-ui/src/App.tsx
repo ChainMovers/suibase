@@ -91,13 +91,12 @@ function App() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Can do some initial handling here before
-      // setting the react state for the children.
-      setMessage(event.data);
-    }
-
+      if (event.data) {
+        setMessage(event.data);
+      }             
+    }    
     window.addEventListener('message', handleMessage); 
-    return () => window.removeEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);    
   }, [setMessage]);
 
   let controller;
@@ -118,7 +117,7 @@ function App() {
   return (
     <ThemeProvider theme={adaptiveTheme}>
       <CssBaseline/>
-      <main> {controller}</main>
+      <main>{controller}</main>
     </ThemeProvider>
   );
 }

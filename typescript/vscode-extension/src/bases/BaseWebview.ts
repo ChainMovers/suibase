@@ -28,7 +28,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
 
   // Keep track of all BaseWebview instances. They
   // can be accessed by "name" for some message handling.
-  private static instances: { [key: string]: BaseWebview } = {};
+  private static instances: Record<string, BaseWebview> = {};
 
   // Allow BackendSync to peek at every message for all views.
   private static backendSyncMessageCallback: (message: any) => void;
@@ -106,7 +106,9 @@ export class BaseWebview implements vscode.WebviewViewProvider {
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _context: vscode.WebviewViewResolveContext,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _token: vscode.CancellationToken
   ) {
     this.webview = webviewView.webview;
@@ -228,17 +230,27 @@ export class BaseWebview implements vscode.WebviewViewProvider {
    * rendered within the webview panel
    */
   private _getWebviewContent() {
-    let webview = this.getWebview();
+    const webview = this.getWebview();
     if (!webview) {
       // Should never happen, but just in case... show an error so the user can see (and report).
       return "Error: Missing webview instance";
     }
 
     // The CSS file from the Svelte build output
-    const stylesUri = getUri(webview, this.extensionUri, ["webview-ui", "build", "assets", "index.css"]);
+    const stylesUri = getUri(webview, this.extensionUri, [
+      "webview-ui",
+      "build",
+      "assets",
+      "index.css",
+    ]).toString();
 
     // The JS file from the Svelte build output
-    const scriptUri = getUri(webview, this.extensionUri, ["webview-ui", "build", "assets", "index.js"]);
+    const scriptUri = getUri(webview, this.extensionUri, [
+      "webview-ui",
+      "build",
+      "assets",
+      "index.js",
+    ]).toString();
 
     // The icon library being used.
     const iconsUri = getUri(webview, this.extensionUri, [
@@ -247,7 +259,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
       "@vscode/codicons",
       "dist",
       "codicon.css",
-    ]);
+    ]).toString();
 
     const nonce = getNonce();
 
@@ -279,6 +291,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     `;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected handleMessage(_message: any): void {
     // This is a placeholder for the derived class to implement.
     // The derived class should override this method to handle messages
@@ -293,9 +306,9 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     }
 
     if (this.panel) {
-      this.panel.webview.postMessage(message);
+      void this.panel.webview.postMessage(message);
     } else if (this.webview) {
-      this.webview.postMessage(message);
+      void this.webview.postMessage(message);
     }
   }
 

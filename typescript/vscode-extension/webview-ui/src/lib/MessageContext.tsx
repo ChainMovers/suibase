@@ -1,9 +1,8 @@
 import React, { createContext, useState, ReactNode } from "react";
 
 export const MessageContext = createContext({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    
     message: null as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-types, @typescript-eslint/no-unused-vars
     setMessage: (_message: any) => {},
 });
 

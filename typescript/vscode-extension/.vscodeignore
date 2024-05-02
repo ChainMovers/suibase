@@ -6,7 +6,10 @@
 
 # Ignore test files
 .vscode-test/**
+
+# Ignore build artifacts
 out/**
+!out/extension.js
 
 # Ignore source code
 src/**

@@ -1,5 +1,7 @@
 // Messages exchanged between the views and the extension.
 
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
 // **********************************
 // Message from Extension to Views
 // **********************************
@@ -16,23 +18,29 @@ export class ViewMessages {
 
 export class UpdateVersions extends ViewMessages {
   workdirIdx: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setupIssue: string | undefined; // Info for user when Suibase backend not available.
   json: any;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(sender: string, workdirIdx: number, json: any) {
     super("UpdateVersions", sender);
     this.workdirIdx = workdirIdx;
+    this.setupIssue = undefined;
     this.json = json;
+  }
+
+  setSetupIssue(issue: string) {
+    if (issue === "") {
+      this.setupIssue = undefined;
+    } else {
+      this.setupIssue = issue;
+    }
   }
 }
 
 export class UpdateWorkdirStatus extends ViewMessages {
   workdirIdx: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   json: any;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(sender: string, workdirIdx: number, json: any) {
     super("UpdateWorkdirStatus", sender);
     this.workdirIdx = workdirIdx;

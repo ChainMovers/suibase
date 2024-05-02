@@ -26,7 +26,7 @@ class TreeObject {
   }
 }*/
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 /*
 function json_to_tree_recursive(obj: any): any {  
   const tree = new TreeObject("");
@@ -44,14 +44,14 @@ function json_to_tree_recursive(obj: any): any {
   return tree;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function jsonStringToTree(json: string): any {
   //const obj = JSON.parse(json);
   const tree = json_to_tree_recursive(json);
   return tree;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function jsonObjToTree(json: any): any {
   const tree = json_to_tree_recursive(json);
   return tree;
@@ -89,7 +89,7 @@ const folder = {
 
 // Define the props type
 interface DebugTreeViewObjProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   jsonObj: any;  
 }
 
@@ -137,7 +137,7 @@ export function DebugTreeViewObj({ jsonObj }: DebugTreeViewObjProps) {
 }
 
 interface DebugTreeViewStrProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   jsonStr: string;  
 }
 

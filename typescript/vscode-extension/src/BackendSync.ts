@@ -20,13 +20,15 @@ export class BackendSync {
 
   private mWorkdir: string; // Last known active workdir. One of "localnet", "mainnet", "testnet", "devnet".
   private mWorkdirTrackings: BackendWorkdirTracking[] = []; // One instance per workdir, align with WORKDIRS_KEYS.
+  private mForceRefreshOnNextReconnect: boolean; // Force some refresh when there was a lost of backend connection.
 
   // Singleton
   private constructor() {
     this.mWorkdir = "";
+    this.mForceRefreshOnNextReconnect = false;
 
     // Create one instance of BackendWorkdirTracking for each element in WORKDIRS_KEYS.
-    for (let workdirIdx = 0; workdirIdx < WORKDIRS_KEYS.length; workdirIdx++) {
+    for (const {} of WORKDIRS_KEYS) {
       this.mWorkdirTrackings.push(new BackendWorkdirTracking());
     }
   }
@@ -80,12 +82,12 @@ export class BackendSync {
         if (message.workdirIdx >= 0 && message.workdirIdx < WORKDIRS_KEYS.length) {
           workdir = WORKDIRS_KEYS[message.workdirIdx];
         }
-        this.fetchWorkdirCommand(workdir, message.command);
+        void this.fetchWorkdirCommand(workdir, message.command);
       } else if (message.name === "RequestWorkdirStatus") {
-        this.replyWorkdirStatus(message as RequestWorkdirStatus);
+        void this.replyWorkdirStatus(message as RequestWorkdirStatus);
       }
     } catch (error) {
-      console.error(`Error in handleViewMessage: ${error}`);
+      console.error(`Error in handleViewMessage: ${JSON.stringify(error)}`);
     }
   }
 
@@ -108,7 +110,7 @@ export class BackendSync {
 
   private async asyncLoop(forceRefresh: boolean): Promise<void> {
     await this.loopMutex.runExclusive(async () => {
-      this.update(forceRefresh);
+      await this.update(forceRefresh);
 
       if (forceRefresh === false) {
         // Schedule another call in one second.
@@ -145,13 +147,13 @@ export class BackendSync {
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error(`${method} ${params} not ok`);
+        throw new Error(`${method} ${JSON.stringify(params)} not ok`);
       }
-      let json: T = (await response.json()) as T;
+      const json: T = (await response.json()) as T;
       BackendSync.validateHeader(json, method);
       return json;
     } catch (error) {
-      let errorMsg = `Error in fetchBackend ${method} ${params}: ${error}`;
+      const errorMsg = `Error in fetchBackend ${method} ${JSON.stringify(params)}: ${JSON.stringify(error)}`;
       console.error(errorMsg);
       throw error;
     }
@@ -196,6 +198,16 @@ export class BackendSync {
     }
   }
 
+  private diagnoseBackendError(workdirIdx: number) {
+    // This is a helper function to diagnose the backend error.
+    // It will send a message to the views to display the error message.
+    // For now, always broadcast a message to all views that the backend is not responding.
+    this.mForceRefreshOnNextReconnect = true;
+    const msg = new UpdateVersions(WEBVIEW_BACKEND, workdirIdx, undefined);
+    msg.setSetupIssue("Suibase not responding. Is it installed?");
+    BaseWebview.broadcastMessage(msg);
+  }
+
   private async updateUsingBackend(forceRefresh: boolean) {
     // Do getVersions for every possible workdir.
     //
@@ -203,8 +215,14 @@ export class BackendSync {
 
     // Iterate the WORKDIRS_KEYS
     for (let workdirIdx = 0; workdirIdx < WORKDIRS_KEYS.length; workdirIdx++) {
-      let workdir = WORKDIRS_KEYS[workdirIdx];
-      const data = await this.fetchGetVersions(workdir);
+      const workdir = WORKDIRS_KEYS[workdirIdx];
+      let data = undefined;
+      try {
+        data = await this.fetchGetVersions(workdir);
+      } catch (error) {
+        this.diagnoseBackendError(workdirIdx);
+        return;
+      }
       if (data) {
         try {
           // This is an example of data:
@@ -223,11 +241,14 @@ export class BackendSync {
 
           // Broadcast UpdateVersions message to all the views when change detected or requested.
           // The views will then decide if they need to synchronize further with the extension.
-          if (hasChanged || forceRefresh) {
+          if (hasChanged || forceRefresh || this.mForceRefreshOnNextReconnect) {
+            this.mForceRefreshOnNextReconnect = false;
             BaseWebview.broadcastMessage(new UpdateVersions(WEBVIEW_BACKEND, workdirIdx, data.result));
           }
         } catch (error) {
-          const errorMsg = `Error in updateUsingBackend: ${error}. Data: ${JSON.stringify(data)}`;
+          const errorMsg = `Error in updateUsingBackend: ${JSON.stringify(error)}. Data: ${JSON.stringify(
+            data
+          )}`;
           console.error(errorMsg);
           throw new Error(errorMsg);
         }
@@ -238,12 +259,12 @@ export class BackendSync {
   private async replyWorkdirStatus(message: RequestWorkdirStatus) {
     const sender = message.sender; // Will reply to sender only.
     const workdirIdx = message.workdirIdx;
-    const methodUuid= message.methodUuid;
+    const methodUuid = message.methodUuid;
     const dataUuid = message.dataUuid;
 
     let data = null;
     try {
-      let workdir = WORKDIRS_KEYS[workdirIdx];
+      const workdir = WORKDIRS_KEYS[workdirIdx];
       const workdirTracking = this.mWorkdirTrackings[workdirIdx];
       const tracking = workdirTracking.workdirStatus;
       data = tracking.getJson(); // Start with what is already in-memory (fetch only as needed)
@@ -262,9 +283,9 @@ export class BackendSync {
       //               {"label":"Multi-link RPC","status":"OK","statusInfo":null,"helpInfo":null,"pid":null}]},"id":2}
       //
       // Update the SuibaseJson instance for the workdir.
-      BaseWebview.postMessageTo(sender,new UpdateWorkdirStatus(WEBVIEW_BACKEND, workdirIdx, data));
+      BaseWebview.postMessageTo(sender, new UpdateWorkdirStatus(WEBVIEW_BACKEND, workdirIdx, data));
     } catch (error) {
-      const errorMsg = `Error in replyWorkdirStatus: ${error}. Data: ${JSON.stringify(data)}`;
+      const errorMsg = `Error in replyWorkdirStatus: ${JSON.stringify(error)}. Data: ${JSON.stringify(data)}`;
       console.error(errorMsg);
       //throw new Error(errorMsg);
     }

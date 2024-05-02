@@ -52,12 +52,11 @@ export class SuibaseSidebar extends BaseWebview {
   }
 
   // Override BaseWebview::handleMessage
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   protected handleMessage(message: any): void {
     //console.log("SuibaseSidebar.handleMessage() called");
     //console.log(message);
     const sbData = SuibaseData.getInstance();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     switch (message.type) {
       case "init-view":
         super.postMessage({ type: "init-global-states", message: sbData.globalStates.serialize() });

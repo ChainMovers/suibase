@@ -3,7 +3,6 @@
 // a UI interaction (e.g. pressing a "refresh" button).
 //
 import * as vscode from "vscode";
-import { SuibaseExec } from "./SuibaseExec";
 
 import { DashboardPanel } from "./panels/DashboardPanel";
 import { ConsolePanel } from "./panels/ConsolePanel";
@@ -13,7 +12,9 @@ export class SuibaseCommands {
   private static instance?: SuibaseCommands;
   private static context?: vscode.ExtensionContext;
 
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   private constructor() {} // Called from activate() only.
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   private dispose() {} // Called from deactivate() only.
 
   public static activate(context: vscode.ExtensionContext) {
@@ -26,19 +27,19 @@ export class SuibaseCommands {
     SuibaseCommands.instance = new SuibaseCommands();
 
     {
-      let disposable = vscode.commands.registerCommand(WEBVIEW_DASHBOARD, () => {
+      const disposable = vscode.commands.registerCommand(WEBVIEW_DASHBOARD, () => {
         SuibaseCommands.getInstance()?.settings();
       });
       context.subscriptions.push(disposable);
     }
 
     {
-      let disposable = vscode.commands.registerCommand(WEBVIEW_CONSOLE, () => {
+      const disposable = vscode.commands.registerCommand(WEBVIEW_CONSOLE, () => {
         SuibaseCommands.getInstance()?.console();
       });
       context.subscriptions.push(disposable);
     }
-
+    /*
     {
       let disposable = vscode.commands.registerCommand("suibase.refresh", () => {
         SuibaseCommands.getInstance()?.refresh();
@@ -50,6 +51,7 @@ export class SuibaseCommands {
     setInterval(() => {
       vscode.commands.executeCommand("suibase.refresh");
     }, 3000); // 3 seconds
+    */
   }
 
   public static deactivate() {
@@ -70,18 +72,6 @@ export class SuibaseCommands {
       return undefined;
     }
     return SuibaseCommands.instance;
-  }
-
-  public refresh(workdir?: string) {
-    //const str = "SuibaseCommands.refresh() called";
-    //console.log(str);
-    // TODO Debouncing to avoid excessive global refresh.
-    // Do a JSON-RPC call to the suibase server API.
-    //
-    // If workdir is not specified, update them all.
-    // This is a best-effort request and reactions to the
-    // eventual response are handled somewhere else...
-    //SuibaseExec.getInstance()?.getLinks();
   }
 
   public settings() {

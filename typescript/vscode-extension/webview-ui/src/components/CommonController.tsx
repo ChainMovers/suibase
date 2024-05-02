@@ -29,15 +29,29 @@ export class ViewCommonData {
     private _activeWorkdir: string;
     private _activeWorkdirIdx: number;
     private _activeLoaded: boolean;
+    private _setupIssue: string;
 
     constructor() {
       this._activeWorkdir = "";
       this._activeWorkdirIdx = 0;
       this._activeLoaded = false;
+      this._setupIssue = "";
     }
 
     public get activeWorkdir() {
       return this._activeWorkdir;
+    }
+
+    public get activeWorkdirIdx() {
+      return this._activeWorkdirIdx;
+    }
+
+    public get activeLoaded() {
+      return this._activeLoaded;
+    }
+
+    public get setupIssue() {
+      return this._setupIssue;
     }
 
     public set activeWorkdir(workdir: string) {      
@@ -49,11 +63,7 @@ export class ViewCommonData {
       // Keep activeWorkdirIdx in-sync.
       this._activeWorkdirIdx = idx;
       this._activeWorkdir = workdir;
-      this._activeLoaded = true;
-    }
-
-    public get activeWorkdirIdx() {
-      return this._activeWorkdirIdx;
+      this._activeLoaded = true;      
     }
 
     public set activeWorkdirIdx(workdirIdx: number) {    
@@ -67,8 +77,8 @@ export class ViewCommonData {
       this._activeLoaded = true;
     }
 
-    public get activeLoaded() {
-      return this._activeLoaded;
+    public set setupIssue(issue: string) {
+      this._setupIssue = issue;
     }
 }
 
@@ -119,17 +129,11 @@ export const useCommonController = (sender: string) => {
   const { message } = useMessage();
   const common = useRef(new ViewCommonData());
   const [ workdirs ] = useState<ViewWorkdirStates[]>(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirStates(key, index)));
-  /*
-  const updateWorkdirs = (index: number, updates: Partial<ViewWorkdirStates>) => {
-    setWorkdirs(currentStates =>
-      currentStates.map((item, idx) =>
-        idx === index ? { ...item, ...updates } : item
-      )
-    );
-  };*/
 
-  // A trick to force a re-render of the component using useCommonController.
-  // This simplify greatly the handling of changes of workdirs array elements.
+  // A state where the view should display a string to the user while there is a backend issue.
+  //const [setupIssue, setSetupIssue] = useState("");
+
+  // State to force a re-render of the component using useCommonController.  
   const [commonTrigger, setUpdateTrigger] = useState(false);
 
   useEffect(() => {  
@@ -159,24 +163,46 @@ export const useCommonController = (sender: string) => {
       if (message && message.name) {
         let do_render = false;
         switch (message.name) {
-          case 'UpdateVersions': {
-            const workdirTracking = workdirs[message.workdirIdx];
-            const hasChanged = workdirTracking.versions.update(message.json);            
-            if (hasChanged) {
-              do_render = true;
-              // Verify if versions shows that a newer WorkdirStatus is available. If yes, then PostMessage "RequestWorkdirStatus"              
-              //console.log(`Received modified versions ${JSON.stringify(message.json)} workdir status: ${JSON.stringify(workdirTracking.workdirStatus)}`)
-              const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirStatusUpdateNeeded(workdirTracking.workdirStatus);
-              //console.log(`isUpdateNeeded: ${isUpdateNeeded}, methodUuid: ${methodUuid}, dataUuid: ${dataUuid}`);
-              if (isUpdateNeeded) {
-                VSCode.postMessage( new RequestWorkdirStatus(sender, message.workdirIdx, methodUuid, dataUuid) );
+          case 'UpdateVersions': {            
+            // console.log("Message received", event.data);
+            // Detect when the Backend is not responding.
+            //console.log("UpdateVersions", event.data);
+            let backendIssue = false;
+            if (message.setupIssue) {
+              const msgSetupIssue = message.setupIssue as string;
+              if (msgSetupIssue !== common.current.setupIssue) {
+                common.current.setupIssue = msgSetupIssue;
+                do_render = true;
+              }
+              if (msgSetupIssue !== "") {
+                backendIssue = true;
               }
             }
-            // As needed, update activeWorkdir (and indirectly activeWorkdirIdx ).
-            //console.log(`common.current.activeWorkdir: ${common.current.activeWorkdir}, message.json.asuiSelection: ${message.json.asuiSelection}`);
-            if (common.current.activeWorkdir !== message.json.asuiSelection) {
-              common.current.activeWorkdir = message.json.asuiSelection;                
+
+            if (backendIssue === false && common.current.setupIssue !== "") {
+              common.current.setupIssue = "";
               do_render = true;
+            }
+
+            if (backendIssue === false && message.json) {
+              const workdirTracking = workdirs[message.workdirIdx];
+              const hasChanged = workdirTracking.versions.update(message.json);            
+              if (hasChanged) {
+                do_render = true;
+                // Verify if versions shows that a newer WorkdirStatus is available. If yes, then PostMessage "RequestWorkdirStatus"              
+                //console.log(`Received modified versions ${JSON.stringify(message.json)} workdir status: ${JSON.stringify(workdirTracking.workdirStatus)}`)
+                const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirStatusUpdateNeeded(workdirTracking.workdirStatus);
+                //console.log(`isUpdateNeeded: ${isUpdateNeeded}, methodUuid: ${methodUuid}, dataUuid: ${dataUuid}`);
+                if (isUpdateNeeded) {
+                  VSCode.postMessage( new RequestWorkdirStatus(sender, message.workdirIdx, methodUuid, dataUuid) );
+                }
+              }
+              // As needed, update activeWorkdir (and indirectly activeWorkdirIdx ).
+              //console.log(`common.current.activeWorkdir: ${common.current.activeWorkdir}, message.json.asuiSelection: ${message.json.asuiSelection}`);
+              if (common.current.activeWorkdir !== message.json.asuiSelection) {
+                common.current.activeWorkdir = message.json.asuiSelection;                
+                do_render = true;
+              }
             }
             break;
           }

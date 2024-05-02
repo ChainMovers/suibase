@@ -6,7 +6,7 @@ import { useCommonController } from "./CommonController";
 import { WORKDIRS_LABELS, WORKDIRS_KEYS } from "../common/Consts";
 import { useEffect, useState } from "react";
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Typography } from "@mui/material";
 import { VSCode } from "../lib/VSCode";
 import { WorkdirCommand } from "../common/ViewMessages";
 import { WEBVIEW_EXPLORER } from "../../../src/common/Consts";
@@ -17,7 +17,7 @@ export const ExplorerController = () => {
   const [requestedActive, setRequestedActive] = useState("");
   const [dropdownActive, setDropdownActive] =useState(common.current.activeWorkdir);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   const handleDropdownChange = (event: any) => {
     const newValue = event.target.value;
     if (newValue !== common.current.activeWorkdir) {    
@@ -55,9 +55,9 @@ export const ExplorerController = () => {
 
   return (
         <>
-        
+        {common.current.setupIssue && <Typography variant="body2">{common.current.setupIssue}</Typography>}
         <Box display="flex">
-          {common.current.activeLoaded ? (
+          {common.current.activeLoaded && !common.current.setupIssue? (
             <>
             <VSCodeDropdown value={dropdownActive}  onChange={handleDropdownChange}>
               {WORKDIRS_KEYS.map((key,index) => (              

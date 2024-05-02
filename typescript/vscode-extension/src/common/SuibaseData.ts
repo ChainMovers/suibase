@@ -7,12 +7,13 @@
 // The actual mean to get the data is outside this object.
 //
 export class SuibaseGlobalStates {
-  public loaded: boolean = false;
+  public loaded = false;
 
-  public uiSelectedContext: string = "DSUI";
+  public uiSelectedContext = "DSUI";
   public uiSelectedContextCallback: (newUiSelectedContext: string) => void = (
     // eslint-disable-next-line
     _newUiSelectedContext: string
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   ) => {};
 
   public serialize(): string {

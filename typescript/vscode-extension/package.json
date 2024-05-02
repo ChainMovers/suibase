@@ -8,7 +8,7 @@
   },
   "license": "Apache-2.0",
   "icon": "media/logo_128.png",
-  "version": "0.0.3",
+  "version": "0.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/ChainMovers/suibase.git"
@@ -23,7 +23,7 @@
   ],
   "pricing": "Free",
   "activationEvents": [],
-  "main": "./dist/extension.js",
+  "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
@@ -48,11 +48,6 @@
           "command": "suibase.console",
           "when": "view == explorerView",
           "group": "navigation@1"
-        },
-        {
-          "command": "suibase.refresh",
-          "when": "view == explorerView",
-          "group": "navigation@2"
         }
       ]
     },

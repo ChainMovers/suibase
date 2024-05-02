@@ -71,7 +71,7 @@ export const DashboardController = () => {
         return false;      
     }
 }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   const handleSwitchChange = (index: number, newValue: boolean) => {
     // Get the related workdir backend states.
     const workdirStates = workdirs[index];
@@ -122,9 +122,11 @@ export const DashboardController = () => {
   }, [commonTrigger,workdirs,workdirStates]);
 
   return (
-    <>
+      <>
+      {common.current.setupIssue && <Typography variant="body2">{common.current.setupIssue}</Typography>}
+      {common.current.activeLoaded && !common.current.setupIssue? (
+        <>
       <Typography variant="body1">Services</Typography>
-      {/*Active = {common.current.activeWorkdir}*/}
       <TableContainer>
         <Table aria-label="Suibase Services" sx={{ minWidth: 420, maxWidth: 420 }} size="small">
           <TableHead>
@@ -176,7 +178,9 @@ export const DashboardController = () => {
           </TableBody>
         </Table>
       </TableContainer>
-      {/*<DebugTreeViewObj jsonObj={workdirs.current}/>*/}
+      </>
+      ) : (<CircularProgress size={15}/>)
+      }
     </>
   );
 };

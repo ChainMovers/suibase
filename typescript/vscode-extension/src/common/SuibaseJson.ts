@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // The purpose of the SuibaseJson is to :
 //    - Compare very quickly two JSON storage and optionally update the storage.
 //    - Detect delta using UUID.
@@ -120,7 +119,7 @@ export class SuibaseJsonVersions extends SuibaseJson {
       console.error(
         `Problem comparing versions for SuibaseJsonWorkdirStatus ${JSON.stringify(
           candidate
-        )} and versions ${JSON.stringify(this.getJson())}: error [${error}]`
+        )} and versions ${JSON.stringify(this.getJson())}: error [${JSON.stringify(error)}]`
       );
     }
     // Normal because candidate is same or not latest... or could be an error...
@@ -158,7 +157,7 @@ export class SuibaseJsonWorkdirStatus extends SuibaseJson {
       }
       this.isLoaded = true;
     } catch (error) {
-      console.error(`Problem with SuibaseJsonWorkdirStatus loading: ${error}`);
+      console.error(`Problem with SuibaseJsonWorkdirStatus loading: ${JSON.stringify(error)}`);
     }
   }
 }
