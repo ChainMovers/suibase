@@ -1,17 +1,25 @@
 import { API_URL, WEBVIEW_BACKEND, WORKDIRS_KEYS } from "./common/Consts";
 import { Mutex } from "async-mutex";
 import { BaseWebview } from "./bases/BaseWebview";
-import { RequestWorkdirStatus, UpdateVersions, UpdateWorkdirStatus } from "./common/ViewMessages";
+import {
+  RequestWorkdirPackages,
+  RequestWorkdirStatus,
+  UpdateVersions,
+  UpdateWorkdirPackages,
+  UpdateWorkdirStatus,
+} from "./common/ViewMessages";
 import { SuibaseJson, SuibaseJsonVersions } from "./common/SuibaseJson";
 
 // One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
 class BackendWorkdirTracking {
   versions: SuibaseJsonVersions; // Result from getVersions backend call.
   workdirStatus: SuibaseJson; // Result from getWorkdirStatus backend call.
+  workdirPackages: SuibaseJson; // Result from getWorkdirPackages backend call.
 
   constructor() {
     this.versions = new SuibaseJsonVersions();
     this.workdirStatus = new SuibaseJson();
+    this.workdirPackages = new SuibaseJson();
   }
 }
 
@@ -85,6 +93,8 @@ export class BackendSync {
         void this.fetchWorkdirCommand(workdir, message.command);
       } else if (message.name === "RequestWorkdirStatus") {
         void this.replyWorkdirStatus(message as RequestWorkdirStatus);
+      } else if (message.name === "RequestWorkdirPackages") {
+        void this.replyWorkdirPackages(message as RequestWorkdirPackages);
       }
     } catch (error) {
       console.error(`Error in handleViewMessage: ${JSON.stringify(error)}`);
@@ -167,6 +177,11 @@ export class BackendSync {
   private async fetchGetWorkdirStatus(workdir: string) {
     // TODO Use BackendWorkdirTracking to detect and ignore out-of-order responses.
     return await this.fetchBackend("getWorkdirStatus", { workdir: workdir });
+  }
+
+  private async fetchGetWorkdirPackages(workdir: string) {
+    // TODO Use BackendWorkdirTracking to detect and ignore out-of-order responses.
+    return await this.fetchBackend("getWorkdirPackages", { workdir: workdir });
   }
 
   private async fetchWorkdirCommand(workdir: string, command: string) {
@@ -286,6 +301,48 @@ export class BackendSync {
       BaseWebview.postMessageTo(sender, new UpdateWorkdirStatus(WEBVIEW_BACKEND, workdirIdx, data));
     } catch (error) {
       const errorMsg = `Error in replyWorkdirStatus: ${JSON.stringify(error)}. Data: ${JSON.stringify(data)}`;
+      console.error(errorMsg);
+      //throw new Error(errorMsg);
+    }
+  }
+
+  private async replyWorkdirPackages(message: RequestWorkdirPackages) {
+    const sender = message.sender; // Will reply to sender only.
+    const workdirIdx = message.workdirIdx;
+    const methodUuid = message.methodUuid;
+    const dataUuid = message.dataUuid;
+
+    let data = null;
+    try {
+      const workdir = WORKDIRS_KEYS[workdirIdx];
+      const workdirTracking = this.mWorkdirTrackings[workdirIdx];
+      const tracking = workdirTracking.workdirPackages;
+      data = tracking.getJson(); // Start with what is already in-memory (fetch only as needed)
+      if (!data || methodUuid !== tracking.getMethodUuid() || dataUuid !== tracking.getDataUuid()) {
+        const resp = await this.fetchGetWorkdirPackages(workdir);
+        data = resp.result;
+        workdirTracking.workdirPackages.update(data); // Save a copy of latest.
+      }
+
+      // This is an example of data:
+      // {"jsonrpc":"2.0",
+      //  "result":
+      //    {
+      //      "header":{"method":"getWorkdirPackages","methodUuid":"...","dataUuid":"...","key":"localnet"},
+      //      "moveConfigs":{"HPM...DTA":
+      //                              {"path":"/home/user/suibase/rust/demo-app/move",
+      //                               "latestPackage":{"packageId":"...","packageName":"demo","packageTimestamp":"1714698283265","initObjects":null},
+      //                               "olderPackages":[{"packageId":"...","packageName":"demo","packageTimestamp":"1714697847504","initObjects":null}],
+      //                               "trackingState":2
+      //                              }
+      //                    },
+      //    }
+      //  "id":2}
+      //
+      // Update the SuibaseJson instance for the workdir.
+      BaseWebview.postMessageTo(sender, new UpdateWorkdirPackages(WEBVIEW_BACKEND, workdirIdx, data));
+    } catch (error) {
+      const errorMsg = `Error in replyWorkdirPackages: ${JSON.stringify(error)}. Data: ${JSON.stringify(data)}`;
       console.error(errorMsg);
       //throw new Error(errorMsg);
     }

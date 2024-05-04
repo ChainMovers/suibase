@@ -48,6 +48,17 @@ export class UpdateWorkdirStatus extends ViewMessages {
   }
 }
 
+export class UpdateWorkdirPackages extends ViewMessages {
+  workdirIdx: number;
+  json: any;
+
+  constructor(sender: string, workdirIdx: number, json: any) {
+    super("UpdateWorkdirPackages", sender);
+    this.workdirIdx = workdirIdx;
+    this.json = json;
+  }
+}
+
 // **********************************
 // Message from Views to Extension
 // **********************************
@@ -91,16 +102,15 @@ export class ForceVersionsRefresh extends ViewMessages {
   }
 }
 
-// Request from the view to update the status for a specific workdir.
+// Requests from the view to update the status for a specific workdir.
 // The extension will eventually reply with an UpdateWorkdirStatus.
+// (will sync with the backend as needed).
 export class RequestWorkdirStatus extends ViewMessages {
   workdirIdx: number;
   methodUuid: string;
   dataUuid: string;
-  // Getters
 
-  // Request the extension to send all data commonly needed by a view
-  // (sync with the backend as needed).
+
   constructor(sender: string, workdirIdx: number, methodUuid: string, dataUuid: string) {
     super("RequestWorkdirStatus", sender);
     this.workdirIdx = workdirIdx;
@@ -108,3 +118,19 @@ export class RequestWorkdirStatus extends ViewMessages {
     this.dataUuid = dataUuid;
   }
 }
+
+export class RequestWorkdirPackages extends ViewMessages {
+  workdirIdx: number;
+  methodUuid: string;
+  dataUuid: string;
+
+  // Request the extension to send all data commonly needed by a view
+  // (sync with the backend as needed).
+  constructor(sender: string, workdirIdx: number, methodUuid: string, dataUuid: string) {
+    super("RequestWorkdirPackages", sender);
+    this.workdirIdx = workdirIdx;
+    this.methodUuid = methodUuid;
+    this.dataUuid = dataUuid;
+  }
+}
+

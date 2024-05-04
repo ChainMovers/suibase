@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+//
 // The purpose of the SuibaseJson is to :
 //    - Compare very quickly two JSON storage and optionally update the storage.
 //    - Detect delta using UUID.
@@ -85,14 +87,26 @@ export class SuibaseJsonVersions extends SuibaseJson {
   //
   // When true, the newer methodUuid and dataUuid expected is returned.
   public isWorkdirStatusUpdateNeeded(candidate: SuibaseJsonWorkdirStatus): [boolean, string, string] {
-    // Get the getWorkdirStatus UUIDs.
-    // Example of this.json:
+    return this.isUpdateNeeded(candidate, "getWorkdirStatus");
+  }
+
+  // Verify if this object element version is newer than the param.
+  //
+  // Return true if the SuibaseJson param is *older* or show any sign of needing to be updated.
+  // Return false if the SuibaseJson param is *same* or *newer* (or in some error cases).
+  //
+  // When true, the newer methodUuid and dataUuid expected is returned.
+  public isWorkdirPackagesUpdateNeeded(candidate: SuibaseJsonWorkdirPackages): [boolean, string, string] {    
+    return this.isUpdateNeeded(candidate, "getWorkdirPackages");
+  }
+
+  public isUpdateNeeded(candidate: any, method: string): [boolean, string, string] {
+    // Example of candidate:
     //     {"header":{"method":"getVersions","methodUuid":"...","dataUuid":"...","key":"localnet"},
     //      "versions":[{"method":"getWorkdirStatus","methodUuid":"...","dataUuid":"...","key":"localnet"}],
     //      "asuiSelection":"localnet"
     //     }
     // Iterate this.json.versions elements, and look for the method. Compare the methodUuid and dataUuid.
-
     try {
       const candidateShouldBeUpdated =
         candidate === null ||
@@ -102,12 +116,14 @@ export class SuibaseJsonVersions extends SuibaseJson {
         candidate.getDataUuid() === "";
       //console.log(`candidateShouldBeUpdated: ${candidateShouldBeUpdated} method: ${candidate.getMethod()}`);
       for (const version of this.getJson().versions) {
-        if (version.method === "getWorkdirStatus") {
+        if (version.method === method) {
           const methodUuid = version.methodUuid;
           const dataUuid = version.dataUuid;
           if (
             candidateShouldBeUpdated ||
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
             candidate.getMethodUuid() !== methodUuid ||
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
             candidate.getDataUuid() < dataUuid
           ) {
             return [true, methodUuid, dataUuid];
@@ -117,7 +133,7 @@ export class SuibaseJsonVersions extends SuibaseJson {
       }
     } catch (error) {
       console.error(
-        `Problem comparing versions for SuibaseJsonWorkdirStatus ${JSON.stringify(
+        `Problem comparing versions for ${method} ${JSON.stringify(
           candidate
         )} and versions ${JSON.stringify(this.getJson())}: error [${JSON.stringify(error)}]`
       );
@@ -159,6 +175,20 @@ export class SuibaseJsonWorkdirStatus extends SuibaseJson {
     } catch (error) {
       console.error(`Problem with SuibaseJsonWorkdirStatus loading: ${JSON.stringify(error)}`);
     }
+  }
+}
+
+export class SuibaseJsonWorkdirPackages extends SuibaseJson {
+  public isLoaded;
+
+  constructor() {
+    super();
+    this.isLoaded = false;
+  }
+
+  protected deltaDetected() {
+    super.deltaDetected();
+    this.isLoaded = true;
   }
 }
 

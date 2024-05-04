@@ -2,7 +2,7 @@
 
 [move]
 version = 1
-manifest_digest = "D709415505E68A022612B74B374F85067240DDF5CA0768C210BF0F4F3D6CA340"
+manifest_digest = "99A2707BE9E2291561C863B1EDEB5A85A208B564A99B37B6CD77EECD4B77ADD5"
 deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 dependencies = [
   { name = "Log" },
@@ -42,9 +42,9 @@ flavor = "sui"
 test = 12
 
 [env.localnet_proxy]
-chain-id = "a88de774"
-original-published-id = "0xbcf1c7861cdf5a5eed050ed8990b4fea9e39c365561f033c3d532f3b739e9553"
-latest-published-id = "0xbcf1c7861cdf5a5eed050ed8990b4fea9e39c365561f033c3d532f3b739e9553"
+chain-id = "64594ad2"
+original-published-id = "0xbdff74ca73d4a33a1d20b1d8bec0eda03e4bbbaec4178e0580ebdd974beb053d"
+latest-published-id = "0xbdff74ca73d4a33a1d20b1d8bec0eda03e4bbbaec4178e0580ebdd974beb053d"
 published-version = "1"
 
 [env.testnet_proxy]

@@ -46,7 +46,7 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 |     [indexer.xyz](https://indexer.xyz)     | Multi-chain GraphQL data services |
 | [status.sui.io](https://status.sui.io/) | Official Mysten Labs network status |
 |     [suiscan.xyz](https://suiscan.xyz)     | Rich blockchain explorer for validators, packages, analytics |
-|     [suivision.xyz](https://suiscan.xyz)     | Well-done explorer, with portfolio view support for many Defi  |
+|     [suivision.xyz](https://suivision.xyz)     | Well-done explorer, with portfolio view support for many Defi  |
 
 
 ## Wallets
@@ -60,6 +60,7 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 |                    Name                    |                 Description                 |                                    Links                                    |
 | :----------------------------------------: | :-----------------------------------------: | :-------------------------------------------------------------------------: |
 |[dApp Kit](https://sdk.mystenlabs.com/dapp-kit?ref=suibase.io)| Mysten Labs React components, hooks and more |[npm](https://www.npmjs.com/package/@mysten/dapp-kit) |
+| [Interest Protocol](https://interestprotocol.com/) | DeFi protocol and other open-source contributions | [github](https://github.com/interest-protocol/) [suitears](https://www.suitears.com/) |
 | [Polymedia](https://polymedia.app/) | Various open-source projects from JuzyBits (active Sui community contributor)|[github](https://github.com/juzybits) |
-| [OriginByte](https://originbyte.io/)&nbsp; | Gaming SDK (Unity/Unreal), Sui NFT Standard | [github](https://github.com/Origin-Byte) [docs](https://docs.originbyte.io) |
+| [OriginByte](https://originbyte.io/)&nbsp; | Gaming SDK (Unity/Unreal), Sui NFT Standard | [github](https://github.com/Origin-Byte)<br/>[docs](https://docs.originbyte.io) |
 

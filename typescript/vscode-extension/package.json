@@ -8,7 +8,7 @@
   },
   "license": "Apache-2.0",
   "icon": "media/logo_128.png",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "repository": {
     "type": "git",
     "url": "https://github.com/ChainMovers/suibase.git"
@@ -75,12 +75,13 @@
     "install:all": "npm install && cd webview-ui && npm install",
     "start:webview": "cd webview-ui && npm run dev",
     "build:webview": "cd webview-ui && npm run build",
+    "build": "npm run compile && npm run build:webview",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "dev": "npm run esbuild-base -- --sourcemap --watch",
     "vscode:prepublish": "npm run esbuild-base -- --minify",
     "package": "vsce package"

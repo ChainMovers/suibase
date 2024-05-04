@@ -4,17 +4,18 @@
 // "status" data for the active workdir.
 import { useRef, useState, useEffect } from 'react';
 import { useMessage } from "../lib/CustomHooks";
-import { SuibaseJsonVersions, SuibaseJsonWorkdirStatus } from "../common/SuibaseJson";
+import { SuibaseJsonVersions, SuibaseJsonWorkdirPackages, SuibaseJsonWorkdirStatus } from "../common/SuibaseJson";
 import { WORKDIRS_KEYS } from "../common/Consts";
 import { VSCode } from '../lib/VSCode';
-import { InitView, RequestWorkdirStatus } from '../common/ViewMessages';
+import { InitView, RequestWorkdirPackages, RequestWorkdirStatus } from '../common/ViewMessages';
 
-export class ViewWorkdirStates {
+export class ViewWorkdirData {
     public label: string;
     public workdir: string;
     public workdirIdx: number;
     public versions: SuibaseJsonVersions; // Backend JSON of getVersions for this Workdir.
     public workdirStatus: SuibaseJsonWorkdirStatus; // Backend JSON of getWorkdirStatus for this Workdir.
+    public workdirPackages: SuibaseJsonWorkdirPackages; // Backend JSON of getWorkdirPackages for this Workdir.
 
     constructor(workdir: string, workdirIdx: number) {
       this.label = workdir.charAt(0).toUpperCase() + workdir.slice(1);      
@@ -22,6 +23,7 @@ export class ViewWorkdirStates {
       this.workdirIdx = workdirIdx;
       this.versions = new SuibaseJsonVersions();
       this.workdirStatus = new SuibaseJsonWorkdirStatus();
+      this.workdirPackages = new SuibaseJsonWorkdirPackages();
     }    
   }
 
@@ -128,7 +130,7 @@ export class ViewExplorerData {
 export const useCommonController = (sender: string) => {
   const { message } = useMessage();
   const common = useRef(new ViewCommonData());
-  const [ workdirs ] = useState<ViewWorkdirStates[]>(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirStates(key, index)));
+  const [ workdirs ] = useState<ViewWorkdirData[]>(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirData(key, index)));
 
   // A state where the view should display a string to the user while there is a backend issue.
   //const [setupIssue, setSetupIssue] = useState("");
@@ -189,13 +191,25 @@ export const useCommonController = (sender: string) => {
               const hasChanged = workdirTracking.versions.update(message.json);            
               if (hasChanged) {
                 do_render = true;
-                // Verify if versions shows that a newer WorkdirStatus is available. If yes, then PostMessage "RequestWorkdirStatus"              
-                //console.log(`Received modified versions ${JSON.stringify(message.json)} workdir status: ${JSON.stringify(workdirTracking.workdirStatus)}`)
-                const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirStatusUpdateNeeded(workdirTracking.workdirStatus);
-                //console.log(`isUpdateNeeded: ${isUpdateNeeded}, methodUuid: ${methodUuid}, dataUuid: ${dataUuid}`);
-                if (isUpdateNeeded) {
-                  VSCode.postMessage( new RequestWorkdirStatus(sender, message.workdirIdx, methodUuid, dataUuid) );
+                // Verify if versions shows that a newer WorkdirStatus is available. If yes, then PostMessage "RequestWorkdirStatus"                              
+                {
+                  const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirStatusUpdateNeeded(workdirTracking.workdirStatus);
+                
+                  if (isUpdateNeeded) {
+                    VSCode.postMessage( new RequestWorkdirStatus(sender, message.workdirIdx, methodUuid, dataUuid) );
+                  }
                 }
+
+                // Do same for WorkdirPackages.
+                // TODO Make these configurable by the view (using a prop).
+                {
+                  const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirPackagesUpdateNeeded(workdirTracking.workdirPackages);
+                
+                  if (isUpdateNeeded) {
+                    VSCode.postMessage( new RequestWorkdirPackages(sender, message.workdirIdx, methodUuid, dataUuid) );
+                  }
+                }
+
               }
               // As needed, update activeWorkdir (and indirectly activeWorkdirIdx ).
               //console.log(`common.current.activeWorkdir: ${common.current.activeWorkdir}, message.json.asuiSelection: ${message.json.asuiSelection}`);
@@ -206,15 +220,26 @@ export const useCommonController = (sender: string) => {
             }
             break;
           }
+
           case 'UpdateWorkdirStatus': {
             const workdirTracking = workdirs[message.workdirIdx];
             const hasChanged = workdirTracking.workdirStatus.update(message.json);
             if (hasChanged) {
-              //workdirTracking.updateCalculatedFields();
               do_render = true;
             }
             break;
           }
+
+          case 'UpdateWorkdirPackages': {
+            const workdirTracking = workdirs[message.workdirIdx];
+            const hasChanged = workdirTracking.workdirPackages.update(message.json);
+            if (hasChanged) {
+              console.log("UpdateWorkdirPackages received with changes", JSON.stringify(message.json));
+              do_render = true;
+            }
+            break;
+          }
+
           default:
             console.log('Received an unknown command', message);
         }

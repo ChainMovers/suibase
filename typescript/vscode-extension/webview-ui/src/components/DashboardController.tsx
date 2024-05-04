@@ -5,7 +5,7 @@ import { VSCode } from "../lib/VSCode";
 //import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import { WorkdirCommand } from "../common/ViewMessages";
 
-import { useCommonController, ViewWorkdirStates } from "./CommonController";
+import { useCommonController, ViewWorkdirData } from "./CommonController";
 import { Badge, Box, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
 import { AntSwitch } from "./AntSwitch";
 import { useEffect, useState } from "react";
@@ -58,8 +58,8 @@ export const DashboardController = () => {
     );
   };
 
-  const toSwitchState = ( workdirStates: ViewWorkdirStates ): boolean => {
-    switch (workdirStates.workdirStatus.status) {
+  const toSwitchState = ( workdirData: ViewWorkdirData ): boolean => {
+    switch (workdirData.workdirStatus.status) {
       case "DEGRADED":
       case "OK":
         return true;
@@ -74,8 +74,8 @@ export const DashboardController = () => {
   
   const handleSwitchChange = (index: number, newValue: boolean) => {
     // Get the related workdir backend states.
-    const workdirStates = workdirs[index];
-    const switchBackendState = toSwitchState(workdirStates);
+    const workdirData = workdirs[index];
+    const switchBackendState = toSwitchState(workdirData);
     if (newValue !== switchBackendState) {
       updateWorkdirStates(index, { requestedChange: newValue, switchState: newValue, spinnerForSwitch: true });
       // Do CLI "start" or "stop" for the requested workdir.
