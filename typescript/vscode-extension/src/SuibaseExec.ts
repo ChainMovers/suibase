@@ -23,6 +23,17 @@ const execShell = (cmd: string) =>
     });
   });
 
+const execShellBackground = (cmd: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  new Promise<string>((resolve, _reject) => {
+    cp.exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.warn(err);
+      }
+      resolve(stdout ? stdout : stderr);
+    });
+  });
+
 export class SuibaseExec {
   private static instance?: SuibaseExec;
   private static context?: vscode.ExtensionContext;
@@ -93,20 +104,56 @@ export class SuibaseExec {
     return SuibaseExec.instance;
   }
 
-  public async version(): Promise<string> {
+  public async isRustInstalled(): Promise<boolean> {
+    // Returns true if the rust compiler can be call.
+    // Returns false on any error.
     try {
-      const result = await execShell("localnet --version");
-      console.log(result);
-      return Promise.resolve(result);
-    } catch (err) {
-      return Promise.reject(err);
+      const result = await execShell("rustc --version");
+      if (result.startsWith("rustc") && !result.includes("error")) {
+        return true;
+      }
+    } catch (error) {
+      console.error("rustc not installed");
     }
+    return false;
   }
 
-  private async startDaemon() {
-    // Check if suibase-daemon is running, if not, attempt
-    // to start it and return once confirmed ready to
-    // process requests.
+  public async isGitInstalled(): Promise<boolean> {
+    // Returns true if the git can be call.
+    // Returns false on any error.
+    try {
+      const result = await execShell("git --version");
+      if (result.startsWith("git") && !result.includes("error")) {
+        return true;
+      }
+    } catch (error) {
+      console.error("git not installed");
+    }
+    return false;
+  }
+
+  public async isSuibaseInstalled(): Promise<boolean> {
+    // Verify if Suibase itself is installed.
+    // Returns true if all the following files exists:
+    //    ~/suibase/install
+    //    ~/suibase/scripts/common/run-daemon.sh
+    try {
+      let result = await execShell("ls ~/suibase/install");
+      if (result.includes("suibase/install")) {
+        return true;
+      }
+      result = await execShell("ls ~/suibase/scripts/common/run-daemon.sh");
+      if (result.includes("suibase/scripts/common/run-daemon.sh")) {
+        return true;
+      }
+    } catch (error) {
+      console.error("suibase not installed");
+    }
+    return false;
+  }
+
+  public async isSuibaseBackendRunning(): Promise<boolean> {
+    // Returns true if suibase-daemon is running.
     let suibaseRunning = false;
     try {
       const result = await execShell("lsof /tmp/.suibase/suibase-daemon.lock");
@@ -122,18 +169,45 @@ export class SuibaseExec {
     } catch (err) {
       /* Do nothing */
     }
+    return suibaseRunning;
+  }
+
+  public async version(): Promise<string> {
+    try {
+      const result = await execShell("localnet --version");
+      console.log(result);
+      return Promise.resolve(result);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  public async startDaemon(): Promise<boolean> {
+    // Check if suibase-daemon is running, if not, attempt
+    // to start it and return once confirmed ready to
+    // process requests.
+    let suibaseRunning = await this.isSuibaseBackendRunning();
 
     if (!suibaseRunning) {
-      // Start suibase daemon
-      await execShell("~/suibase/scripts/common/run-daemon.sh suibase &");
+      // Start suibase daemon      
+      void execShellBackground("~/suibase/scripts/common/run-daemon.sh suibase");
 
-      // TODO Implement retry and error handling of run-daemon.sh for faster startup.
-
-      // Sleep 500 milliseconds to give it a chance to start.
-      await new Promise((r) => setTimeout(r, 500));
-
-      // TODO Confirm that suibase-daemon is responding to requests.
+      // Check for up to ~5 seconds that it is started.
+      let attempts = 10;
+      while (!suibaseRunning && attempts > 0) {
+        // Sleep 500 millisecs to give it a chance to start.
+        await new Promise((r) => setTimeout(r, 500));
+        suibaseRunning = await this.isSuibaseBackendRunning();
+        attempts--;
+      }
     }
+
+    if (suibaseRunning) {
+      return true;
+    }
+
+    console.error("Failed to start suibase.daemon");
+    return false;
   }
 
   private makeJsonRpcCall() {

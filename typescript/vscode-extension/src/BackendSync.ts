@@ -9,6 +9,7 @@ import {
   UpdateWorkdirStatus,
 } from "./common/ViewMessages";
 import { SuibaseJson, SuibaseJsonVersions } from "./common/SuibaseJson";
+import { SuibaseExec } from "./SuibaseExec";
 
 // One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
 class BackendWorkdirTracking {
@@ -120,7 +121,11 @@ export class BackendSync {
 
   private async asyncLoop(forceRefresh: boolean): Promise<void> {
     await this.loopMutex.runExclusive(async () => {
-      await this.update(forceRefresh);
+      try {
+        await this.update(forceRefresh);
+      } catch (error) {
+        console.error(`Catch done in asyncLoop: ${JSON.stringify(error)}`);
+      }
 
       if (forceRefresh === false) {
         // Schedule another call in one second.
@@ -213,13 +218,37 @@ export class BackendSync {
     }
   }
 
-  private diagnoseBackendError(workdirIdx: number) {
+  private async diagnoseBackendError(workdirIdx: number) {
     // This is a helper function to diagnose the backend error.
+    //
+    // It may attempts fixes, and it is assumed the caller will
+    // retry to contact the backend periodically until success.
+    //
     // It will send a message to the views to display the error message.
-    // For now, always broadcast a message to all views that the backend is not responding.
+    // For now, always broadcast problems to all views.
     this.mForceRefreshOnNextReconnect = true;
+
     const msg = new UpdateVersions(WEBVIEW_BACKEND, workdirIdx, undefined);
-    msg.setSetupIssue("Suibase not responding. Is it installed?");
+
+    const sb = SuibaseExec.getInstance();
+    if (sb === undefined) {
+      msg.setSetupIssue("Internal error. Shell commands failed.");
+    } else if ((await sb.isSuibaseInstalled()) === false) {
+      msg.setSetupIssue("Suibase not installed?\nCheck https://suibase.io/how-to/install");
+    } else if ((await sb.isGitInstalled()) === false) {
+      msg.setSetupIssue(
+        "Git not installed?\nPlease install Sui prerequisites\nhttps://docs.sui.io/guides/developer/getting-started/sui-install"
+      );
+    } else if ((await sb.isSuibaseBackendRunning()) === false) {
+      if ((await sb.startDaemon()) === true) {
+        msg.setSetupIssue("Suibase initializing...");
+      } else {
+        msg.setSetupIssue("Suibase backend not starting");
+      }
+    } else {
+      msg.setSetupIssue("Suibase backend not responding");
+    }
+
     BaseWebview.broadcastMessage(msg);
   }
 
@@ -232,14 +261,17 @@ export class BackendSync {
     for (let workdirIdx = 0; workdirIdx < WORKDIRS_KEYS.length; workdirIdx++) {
       const workdir = WORKDIRS_KEYS[workdirIdx];
       let data = undefined;
+
       try {
         data = await this.fetchGetVersions(workdir);
       } catch (error) {
-        this.diagnoseBackendError(workdirIdx);
+        await this.diagnoseBackendError(workdirIdx);
         return;
       }
+
       if (data) {
         try {
+          //console.log("update versions: ", JSON.stringify(data));
           // This is an example of data:
           //  {"jsonrpc":"2.0","result":{
           //   "header":{"method":"getVersions", "methodUuid":"...","dataUuid":"...","key":"localnet"},
@@ -258,6 +290,7 @@ export class BackendSync {
           // The views will then decide if they need to synchronize further with the extension.
           if (hasChanged || forceRefresh || this.mForceRefreshOnNextReconnect) {
             this.mForceRefreshOnNextReconnect = false;
+
             BaseWebview.broadcastMessage(new UpdateVersions(WEBVIEW_BACKEND, workdirIdx, data.result));
           }
         } catch (error) {
@@ -298,6 +331,7 @@ export class BackendSync {
       //               {"label":"Multi-link RPC","status":"OK","statusInfo":null,"helpInfo":null,"pid":null}]},"id":2}
       //
       // Update the SuibaseJson instance for the workdir.
+      //console.log("replyWorkdirStatus: ", JSON.stringify(data));
       BaseWebview.postMessageTo(sender, new UpdateWorkdirStatus(WEBVIEW_BACKEND, workdirIdx, data));
     } catch (error) {
       const errorMsg = `Error in replyWorkdirStatus: ${JSON.stringify(error)}. Data: ${JSON.stringify(data)}`;
@@ -342,7 +376,9 @@ export class BackendSync {
       // Update the SuibaseJson instance for the workdir.
       BaseWebview.postMessageTo(sender, new UpdateWorkdirPackages(WEBVIEW_BACKEND, workdirIdx, data));
     } catch (error) {
-      const errorMsg = `Error in replyWorkdirPackages: ${JSON.stringify(error)}. Data: ${JSON.stringify(data)}`;
+      const errorMsg = `Error in replyWorkdirPackages: ${JSON.stringify(error)}. Data: ${JSON.stringify(
+        data
+      )}`;
       console.error(errorMsg);
       //throw new Error(errorMsg);
     }

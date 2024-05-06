@@ -4,8 +4,10 @@ All notable changes to the "suibase" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
-
+## 0.1.4
+  - Warn user if some Sui prerequisites are not installed (git and rustc)
+  - Start suibase-daemon if not running.
+  
 ## 0.1.2
   - Warn about requiring suibase to be installed.
 
