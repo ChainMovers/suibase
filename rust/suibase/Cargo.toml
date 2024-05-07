@@ -15,12 +15,30 @@ edition = "2021"
 
 [workspace.dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
+axum = { version = "0.6.6", default-features = false, features = [
+  "headers",
+  "tokio",
+  "http1",
+  "http2",
+  "json",
+  "matched-path",
+  "original-uri",
+  "form",
+  "query",
+  "ws",
+] }
+axum-extra = "0.4.2"
+axum-server = { version = "0.5.1", default-features = false, features = [
+  "tls-rustls",
+] }
 bcs = "0.1.4"
 chrono = "0.4.31" 
 clap = { version = "3.2.22", features = ["derive"] } # No upgrade to v4 until color are back.
-colored = { version = "2.0.0" }
+colored = "2.0.0"
 data-encoding = "2.4.0"
 futures = "0.3.25"
+hyper = { version = "0.14.20", features = ["full"] }
+http-body = "0.4.5"
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
     "full",
     "http-client",
@@ -28,6 +46,8 @@ jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b3007847
 ] }
 jsonrpsee-proc-macros = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8" }
 md5 = "0.7"
+mime = "0.3"
+reqwest = { version = "0.11", features = ["json"] }
 rusqlite = { version = "0.30.0", features = ["bundled"] }
 schemars = { version = "0.8.10", features = ["either"] }
 serde_with = { version = "2.1.0", features = ["hex"] }
@@ -37,7 +57,7 @@ serde_json = { version = "1.0.95", features = [
 ] }
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 thiserror = "1.0"
-tokio = { version = "1.28.1", features = ["full"] }
+tokio = { version = "1.36.0", features = ["full"] }
 tokio-graceful-shutdown = "0.14"
 tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
 tower = { version = "0.4.12", features = [

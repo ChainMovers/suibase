@@ -127,6 +127,7 @@ pub(crate) async fn do_move_call(
             call_args,
             None, // The node will pick a gas object from the signer.
             1000000000,
+            None,
         )
         .await;
     if let Err(e) = move_call {

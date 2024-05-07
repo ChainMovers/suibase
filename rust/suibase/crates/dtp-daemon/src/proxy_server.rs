@@ -3,6 +3,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use crate::app_error::AppError;
+use std::time::Duration;
+
 use common::basic_types::*;
 
 use crate::network_monitor::{
@@ -17,15 +19,14 @@ use crate::shared_types::{
 
 use anyhow::{anyhow, Result};
 use axum::{
-    body::Body,
+    body::{Body, HttpBody},
     extract::State,
-    http::{header, HeaderMap, Request, Response},
+    http::{header, Request, Response},
     routing::get,
     Router,
 };
 
 use hyper::body::Bytes;
-use hyper::http;
 use memchr::memmem;
 use serde::{Deserialize, Serialize};
 use tokio_graceful_shutdown::SubsystemHandle;
@@ -82,7 +83,7 @@ impl ProxyServer {
     }*/
 
     fn process_header_server_idx(
-        headers: &mut HeaderMap,
+        headers: &mut axum::http::HeaderMap,
         report: &mut ProxyHandlerReport,
     ) -> Option<TargetServerIdx> {
         if let Some(server_idx) = headers.remove(HEADER_SBSD_SERVER_IDX) {
@@ -96,7 +97,7 @@ impl ProxyServer {
     }
 
     fn process_header_server_health_check(
-        headers: &mut HeaderMap,
+        headers: &mut axum::http::HeaderMap,
         report: &mut ProxyHandlerReport,
     ) -> bool {
         if let Some(_prot_code) = headers.remove(HEADER_SBSD_SERVER_HC) {
@@ -207,12 +208,10 @@ impl ProxyServer {
         // TODO interpret the JSON to identify what is safe to retry.
 
         // TODO Optimize (eliminate clone) when there is no retry possible?
-
         let method = req.method().clone();
-        let bytes = hyper::body::to_bytes(req.into_body()).await;
 
-        let bytes = match bytes {
-            Ok(bytes) => bytes,
+        let bytes = match req.into_body().collect().await {
+            Ok(body) => body.to_bytes(),
             Err(err) => {
                 let _perf_report = report.req_fail(retry_count, REQUEST_FAILED_BODY_READ).await;
                 return Err(err.into());
@@ -248,7 +247,7 @@ impl ProxyServer {
                             *server_idx,
                             req_initiation_time,
                             SEND_FAILED_UNSPECIFIED_ERROR,
-                            http::StatusCode::INTERNAL_SERVER_ERROR,
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
                         )
                         .await;
                     // Try with another server.
@@ -411,11 +410,17 @@ impl ProxyServer {
         let bind_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port_number);
         log::info!("listening on {}", bind_address);
 
-        let return_value = axum::Server::bind(&bind_address)
+        let handle = axum_server::Handle::new();
+
+        // Spawn a task to shutdown axum server (on process exit or signal).
+        tokio::spawn(graceful_shutdown(subsys, handle.clone()));
+
+        //let listener = tokio::net::TcpListener::bind(&bind_address).await.unwrap();
+        axum_server::bind(bind_address)
+            .handle(handle)
             .serve(app.into_make_service())
-            .with_graceful_shutdown(subsys.on_shutdown_requested())
             .await
-            .map_err(|err| anyhow! {err});
+            .unwrap();
 
         log::info!("stopped for {}", bind_address);
 
@@ -430,8 +435,15 @@ impl ProxyServer {
             }
         }
 
-        return_value
+        Ok(())
     }
+}
+
+async fn graceful_shutdown(subsys: SubsystemHandle, axum_handle: axum_server::Handle) {
+    // Run as a thread. Block until shutdown requested.
+    subsys.on_shutdown_requested().await;
+    // Signal the axum server to shutdown.
+    axum_handle.graceful_shutdown(Some(Duration::from_secs(30)));
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

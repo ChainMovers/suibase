@@ -11,19 +11,16 @@ twox-hash = "1.6.1"
 
 serde_yaml = "0.9"
 bitflags = "2.3"
-
-axum = "0.6"
-hyper = { version = "0.14", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
-mime = "0.3.16"
+axum.workspace = true
+http-body.workspace = true
+hyper.workspace = true
+mime.workspace = true
+reqwest.workspace = true
 
 memchr = "2.5.0"
 
 toml_edit = { version = "0.20.0" }
 
-notify = { version = "6.0", default-features = false, features = [
-    "macos_kqueue",
-] }
 
 anyhow.workspace = true
 chrono.workspace = true

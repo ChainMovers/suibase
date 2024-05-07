@@ -26,13 +26,12 @@ use crate::api::impl_proxy_api::ProxyApiImpl;
 use super::PackagesApiServer;
 use crate::api::impl_packages_api::PackagesApiImpl;
 
-use hyper::Method;
 use jsonrpsee::{
     core::server::rpc_module::Methods,
     server::{AllowHosts, ServerBuilder},
 };
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 #[derive(Clone)]
 pub struct APIServerParams {
@@ -98,9 +97,9 @@ impl APIServerThread {
         // https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/cors_server.rs
         let cors = CorsLayer::new()
             // Allow `POST` when accessing the resource
-            .allow_methods([Method::POST])
+            .allow_methods(hyper::Method::POST)
             // Allow requests from any origin
-            .allow_origin(Any)
+            .allow_origin(AllowOrigin::any())
             .allow_headers([hyper::header::CONTENT_TYPE]);
         let middleware = tower::ServiceBuilder::new().layer(cors);
 

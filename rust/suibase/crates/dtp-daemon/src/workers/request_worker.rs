@@ -3,9 +3,6 @@ use crate::network_monitor::NetmonMsg;
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use axum::http::header;
-use reqwest::Method;
-
 use crate::network_monitor::{NetMonRx, HEADER_SBSD_SERVER_HC, HEADER_SBSD_SERVER_IDX};
 
 const SERVER_CHECK_REQUEST_BODY: &str =
@@ -30,10 +27,10 @@ impl RequestWorker {
         let uri = format!("http://0.0.0.0:{}", msg.para16()[0]);
         let _ = self
             .client
-            .request(Method::POST, uri)
-            .header(header::CONTENT_TYPE, "application/json")
-            .header(header::USER_AGENT, "curl/7.68.0")
-            .header(header::ACCEPT, "*/*")
+            .request(reqwest::Method::POST, uri)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(reqwest::header::USER_AGENT, "curl/7.68.0")
+            .header(reqwest::header::ACCEPT, "*/*")
             .header(HEADER_SBSD_SERVER_IDX, server_idx.as_str())
             .header(HEADER_SBSD_SERVER_HC, "1")
             .body(SERVER_CHECK_REQUEST_BODY)

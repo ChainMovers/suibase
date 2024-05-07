@@ -276,11 +276,10 @@ impl WorkdirsWatcher {
             move |res: Result<notify::Event, _>| match res {
                 Ok(event) => {
                     //log::info!("watcher step 1 event {:?}", event);
-                    let event_to_spawned_fn = event; //.clone();
                     let local_tx_to_spawned_fn = local_tx.clone();
                     rt.spawn(async move {
                         //log::info!("watcher step 2 event_clone {:?}", event_clone);
-                        if let Err(e) = local_tx_to_spawned_fn.send(event_to_spawned_fn).await {
+                        if let Err(e) = local_tx_to_spawned_fn.send(event).await {
                             log::error!("local_tx.send {}", e);
                         }
                     });

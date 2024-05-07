@@ -12,7 +12,6 @@ use crate::workers::RequestWorker;
 use bitflags::bitflags;
 
 use anyhow::{anyhow, Result};
-use hyper::http;
 use tokio_graceful_shutdown::{FutureExt, SubsystemBuilder, SubsystemHandle};
 
 use tokio::time::{Duration, Instant};
@@ -227,7 +226,7 @@ impl<'a> ProxyHandlerReport<'a> {
         server_idx: TargetServerIdx,
         req_initiation_time: EpochTimestamp,
         reason: SendFailedReason,
-        status: http::StatusCode,
+        status: u16,
     ) -> Result<()> {
         let error_time = EpochTimestamp::now();
         let mut msg = NetmonMsg::new();
@@ -240,7 +239,7 @@ impl<'a> ProxyHandlerReport<'a> {
         msg.para32[0] = duration_to_micros(req_initiation_time - self.handler_start);
         msg.para32[1] = duration_to_micros(error_time - req_initiation_time);
         msg.para8[1] = reason;
-        msg.para16[0] = status.as_u16();
+        msg.para16[0] = status;
 
         // Send the message.
         self.tx_channel.send(msg).await.map_err(|e| {
@@ -268,9 +267,9 @@ impl<'a> ProxyHandlerReport<'a> {
             // If the HTTP error is cause by a bad client request, then fail
             // the request (client's fault, the server did nothing wrong...)
             match status {
-                http::StatusCode::BAD_REQUEST
-                | http::StatusCode::METHOD_NOT_ALLOWED
-                | http::StatusCode::UNSUPPORTED_MEDIA_TYPE => {
+                reqwest::StatusCode::BAD_REQUEST
+                | reqwest::StatusCode::METHOD_NOT_ALLOWED
+                | reqwest::StatusCode::UNSUPPORTED_MEDIA_TYPE => {
                     // These will not punish the server health score.
                     let _ = self
                         .req_fail(retry_count, REQUEST_FAILED_BAD_REQUEST_HTTP)
@@ -286,7 +285,7 @@ impl<'a> ProxyHandlerReport<'a> {
                     *server_idx,
                     req_initiation_time,
                     SEND_FAILED_RESP_HTTP_STATUS,
-                    status,
+                    status.as_u16(),
                 )
                 .await;
         } else {
@@ -296,7 +295,7 @@ impl<'a> ProxyHandlerReport<'a> {
                     *server_idx,
                     req_initiation_time,
                     SEND_FAILED_UNSPECIFIED_STATUS,
-                    http::StatusCode::INTERNAL_SERVER_ERROR,
+                    hyper::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
                 )
                 .await;
         }
