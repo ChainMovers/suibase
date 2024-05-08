@@ -27,8 +27,8 @@ use super::PackagesApiServer;
 use crate::api::impl_packages_api::PackagesApiImpl;
 
 use jsonrpsee::{
-    core::server::rpc_module::Methods,
-    server::{AllowHosts, ServerBuilder},
+    core::server::Methods,
+    server::ServerBuilder,
 };
 use std::net::SocketAddr;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -104,9 +104,7 @@ impl APIServerThread {
         let middleware = tower::ServiceBuilder::new().layer(cors);
 
         let builder = ServerBuilder::default()
-            .batch_requests_supported(false)
-            .set_host_filtering(AllowHosts::Any)
-            .set_middleware(middleware);
+            .set_http_middleware(middleware);
 
         // TODO Put here the suibase.yaml proxy_port_number.
         let server = builder
@@ -144,18 +142,8 @@ impl APIServerThread {
             }
         }
 
-        let start_result = server.start(all_methods);
-
-        if let Ok(handle) = start_result {
-            //let addr = server.local_addr()?;
-            //log::info!(local_addr =? addr, "JSON-RPC server listening on {addr}");
-            //log::info!("Available JSON-RPC methods : {:?}", module.method_names());
-            // Wait for the server to finish. This will block until
-            // CancelledByShutdown.
-            handle.stopped().await;
-        } else {
-            log::error!("JSONRPSEE failed to start");
-        }
+        let handle = server.start(all_methods);
+        handle.stopped().await;
 
         Ok(())
     }

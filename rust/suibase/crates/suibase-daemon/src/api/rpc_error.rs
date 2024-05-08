@@ -5,8 +5,7 @@
 // RpcInputError map to CallError::InvalidParams.
 // RpcServerError map to CallError::Failed.
 
-use jsonrpsee::core::Error as RpcError;
-use jsonrpsee::types::error::CallError;
+use jsonrpsee_types::ErrorObjectOwned as RpcError;
 
 impl From<RpcInputError> for RpcError {
     fn from(e: RpcInputError) -> Self {
@@ -38,12 +37,22 @@ pub enum RpcSuibaseError {
 
 impl RpcInputError {
     pub fn rpc_error(self) -> RpcError {
-        jsonrpsee::core::Error::Call(CallError::InvalidParams(self.into()))
+        let message = format!("{}", self);
+        jsonrpsee_types::ErrorObject::owned(
+            jsonrpsee_types::error::ErrorCode::InvalidParams.code(),
+            message,
+            None::<()>,
+        )
     }
 }
 
 impl RpcSuibaseError {
     pub fn rpc_error(self) -> RpcError {
-        jsonrpsee::core::Error::Call(CallError::Failed(self.into()))
+        let message = format!("{}", self);
+        jsonrpsee_types::ErrorObject::owned(
+            jsonrpsee_types::error::ErrorCode::InternalError.code(),
+            message,
+            None::<()>,
+        )
     }
 }

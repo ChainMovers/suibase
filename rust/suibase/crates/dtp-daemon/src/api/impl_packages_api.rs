@@ -2,7 +2,8 @@ use std::time::SystemTime;
 
 use axum::async_trait;
 
-use jsonrpsee::core::{Error as RpcError, RpcResult};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee_types::ErrorObjectOwned as RpcError;
 
 use chrono::Utc;
 

@@ -38,6 +38,7 @@ data-encoding.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
 jsonrpsee-proc-macros.workspace = true
+jsonrpsee-types.workspace = true
 md5.workspace = true
 rusqlite.workspace = true
 schemars.workspace = true

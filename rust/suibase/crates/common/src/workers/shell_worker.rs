@@ -33,11 +33,16 @@ impl ShellWorker {
         // Some effects are also possible on globals, particularly
         // for sharing large results.
         //
-        log::info!(
-            "do_exec() msg {:?} for workdir_idx={:?}",
-            msg,
-            msg.workdir_idx
-        );
+        if let Some(command) = &msg.command {
+            // Log every command for debugging... except the periodical "status".
+            if !command.ends_with("status") {
+                log::info!(
+                    "do_exec() msg {:?} for workdir_idx={:?}",
+                    msg,
+                    msg.workdir_idx
+                );
+            }
+        }
 
         let resp = if msg.workdir_idx != self.workdir_idx {
             log::error!(

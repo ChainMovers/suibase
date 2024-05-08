@@ -329,8 +329,18 @@ impl DtpApiServer for DtpApiImpl {
                 .map_err(|e| RpcSuibaseError::InvalidConfig(e.to_string()))?;
 
             // Get the host on network, it will be created if does not exists.
-            let mut dtp = DTP::new(auth_addr, keystore_path.to_str()).await?;
-            dtp.add_rpc_url("http://0.0.0.0:44340").await?;
+            let dtp = DTP::new(auth_addr, keystore_path.to_str()).await;
+            if let Err(e) = dtp {
+                let error_message = format!(
+                    "auth addr {} package_id {} inner error [{}]",
+                    auth_addr, package_id, e
+                );
+                return Err(RpcSuibaseError::InternalError(error_message).into());
+            }
+            let mut dtp = dtp.unwrap();
+            if let Err(e) = dtp.add_rpc_url("http://0.0.0.0:44340").await {
+                return Err(RpcSuibaseError::InternalError(e.to_string()).into());
+            }
             dtp.set_package_id(package_id).await;
             dtp.set_gas_address(gas_addr).await;
 
@@ -622,10 +632,20 @@ impl DtpApiServer for DtpApiImpl {
             } else {
                 // Need to create the DTP and DtpConnStateData.
                 let keystore_path = workdir.path().join("config").join("sui.keystore");
-                let mut new_dtp = DTP::new(gas_addr, keystore_path.to_str()).await?;
+                let new_dtp = DTP::new(gas_addr, keystore_path.to_str()).await;
+                if let Err(e) = new_dtp {
+                    let error_message = format!(
+                        "gas addr {} package_id {} inner error [{}]",
+                        gas_addr, package_id, e
+                    );
+                    return Err(RpcSuibaseError::InternalError(error_message).into());
+                }
+                let mut new_dtp = new_dtp.unwrap();
 
                 // TODO Remove hard coding
-                new_dtp.add_rpc_url("http://0.0.0.0:44340").await?;
+                if let Err(e) = new_dtp.add_rpc_url("http://0.0.0.0:44340").await {
+                    return Err(RpcSuibaseError::InternalError(e.to_string()).into());
+                }
                 new_dtp.set_gas_address(gas_addr).await;
                 new_dtp.set_package_id(package_id).await;
                 dtp_access = Some(Arc::new(Mutex::new(new_dtp)));
@@ -678,7 +698,12 @@ impl DtpApiServer for DtpApiImpl {
         let target_host = {
             let dtp = dtp_access.lock().await;
             info!("In API doing get_host_by_id for host_id: {:?}", host_id);
-            dtp.get_host_by_id(host_id).await?
+            let target_host = dtp.get_host_by_id(host_id).await;
+            if let Err(e) = target_host {
+                let error_message = format!("package_id {} inner error {}", package_id, e);
+                return Err(RpcSuibaseError::InternalError(error_message).into());
+            }
+            target_host.unwrap()
         };
 
         // The remote host must exist!
@@ -756,8 +781,12 @@ impl DtpApiServer for DtpApiImpl {
             info!("impl_dtp_api: sent conn_update to WebSocketWorkerIO");
         }
 
-        self.block_for_subs_callback(workdir_idx, host_sla_idx, cid)
-            .await?;
+        if let Err(e) = self
+            .block_for_subs_callback(workdir_idx, host_sla_idx, cid)
+            .await
+        {
+            return Err(RpcSuibaseError::InternalError(e.to_string()).into());
+        }
 
         // TODO Somehow verify if WebSocketWorkerIO is monitoring the connection.
 
@@ -780,10 +809,14 @@ impl DtpApiServer for DtpApiImpl {
             "ping".to_string()
         };
 
-        let _ = {
+        {
             let mut dtp = dtp_access.lock().await;
-            dtp.send_request(&mut conn, message.as_bytes().to_vec())
-                .await?
+            if let Err(e) = dtp
+                .send_request(&mut conn, message.as_bytes().to_vec())
+                .await
+            {
+                return Err(RpcSuibaseError::InternalError(e.to_string()).into());
+            }
         };
 
         // Block wait on response.
