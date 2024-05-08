@@ -315,9 +315,7 @@ impl WebSocketWorkerThread {
                         return;
                     }
                     let package_id = &package_id[2..];
-                    let expected_package_id = tracker
-                        .package_filter().cloned()
-                        .unwrap_or_default();
+                    let expected_package_id = tracker.package_filter().cloned().unwrap_or_default();
                     if package_id != expected_package_id {
                         log::error!(
                                 "packageId {} not matching {} in Sui Event message. workdir={} message={:?}",
@@ -703,9 +701,7 @@ impl WebSocketWorkerThread {
                 log::error!("Missing package_filter in SubscriptionTracking");
                 return false;
             }
-            let package_id = tracker
-                .package_filter().cloned()
-                .unwrap_or_default();
+            let package_id = tracker.package_filter().cloned().unwrap_or_default();
 
             // Check if retrying and log error only on first retry and once in a while after.
             if tracker.request_retry() % 3 == 1 {
@@ -855,7 +851,11 @@ impl WebSocketWorkerThread {
                 self.websocket.read = Some(read);
             }
             Err(e) => {
-                log::error!("connect_async error: {:?}", e);
+                if !e.to_string().contains("Connection refused") {
+                    // ConnectionRefused is annoying when localnet is not running, so ignore it.
+                    // TODO Make this more "aware" about if localnet should be running or not.
+                    log::error!("connect_async error: {:?}", e);
+                }
                 self.websocket.write = None;
                 self.websocket.read = None;
             }

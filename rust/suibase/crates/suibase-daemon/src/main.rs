@@ -167,7 +167,9 @@ async fn main() {
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
 
-    Builder::from_env(Env::default().default_filter_or("info")).init();
+    Builder::from_env(Env::default().default_filter_or("info"))
+        .filter(Some("jsonrpsee_server::server"), log::LevelFilter::Warn)
+        .init();
 
     let cmd: Command = Command::parse();
 

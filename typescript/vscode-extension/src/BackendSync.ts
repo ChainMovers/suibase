@@ -241,9 +241,10 @@ export class BackendSync {
       );
     } else if ((await sb.isSuibaseBackendRunning()) === false) {
       if ((await sb.startDaemon()) === true) {
-        msg.setSetupIssue("Suibase initializing...");
+        // Started, but need a moment for the backend to init/respond.
+        msg.setSetupIssue("Suibase backend connecting...");
       } else {
-        msg.setSetupIssue("Suibase backend not starting");
+        msg.setSetupIssue("Suibase backend starting...");
       }
     } else {
       msg.setSetupIssue("Suibase backend not responding");

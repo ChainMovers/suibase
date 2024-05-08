@@ -116,15 +116,15 @@ impl ShellWorker {
     }
 
     pub async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("started");
+        log::info!("started for workdir index {:?}", self.workdir_idx);
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
-                log::info!("normal thread exit (2)");
+                log::info!("normal thread exit (2) for {:?}", self.workdir_idx);
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("normal thread exit (1)");
+                log::info!("normal thread exit (1) for {:?}", self.workdir_idx);
                 Ok(())
             }
         }
