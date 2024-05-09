@@ -4,23 +4,35 @@
 //   - Run concurrently when for different workdir.
 //   - Run sequentially when for the same workdir.
 //
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
+use crate::{
+    basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx},
+    shared_types::WORKDIRS_KEYS,
+};
+
+use home::home_dir;
 
 pub struct ShellWorker {
     event_rx: GenericRx,
     workdir_idx: Option<WorkdirIdx>,
+    home_dir: PathBuf,
 }
 
 impl ShellWorker {
     pub fn new(event_rx: GenericRx, workdir_idx: Option<WorkdirIdx>) -> Self {
+        let home_dir = if let Some(home_dir) = home_dir() {
+            home_dir
+        } else {
+            PathBuf::from("/tmp")
+        };
         Self {
             event_rx,
             workdir_idx,
+            home_dir,
         }
     }
 
@@ -29,10 +41,6 @@ impl ShellWorker {
         // of the response is returned to requester with a one shot message.
         //
         // If the response starts with "Error:", then an error was detected.
-        //
-        // Some effects are also possible on globals, particularly
-        // for sharing large results.
-        //
         if let Some(command) = &msg.command {
             // Log every command for debugging... except the periodical "status".
             if !command.ends_with("status") {
@@ -59,8 +67,32 @@ impl ShellWorker {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             format!("Error: Unexpected event_id {:?}", msg.event_id)
         } else if let Some(cmd) = &msg.command {
+            let mut cwd = if msg.workdir_idx.is_some() {
+                let idx = msg.workdir_idx.unwrap();
+                if idx < WORKDIRS_KEYS.len() as u8 {
+                    Some(format!(
+                        "{}/suibase/workdirs/{}",
+                        self.home_dir.display(),
+                        WORKDIRS_KEYS[idx as usize]
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if cwd.is_none() {
+                cwd = Some(format!("{}", self.home_dir.display()));
+            }
+            let cwd = cwd.unwrap();
+            //log::info!("do_exec() cwd={:?} cmd={:?}", cwd, cmd);
+
             // Execute the command as if it was a bash script.
-            let output = Command::new("bash").arg("-c").arg(cmd).output();
+            let output = Command::new("bash")
+                .current_dir(cwd)
+                .arg("-c")
+                .arg(cmd)
+                .output();
 
             match output {
                 Ok(output) => {
