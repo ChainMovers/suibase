@@ -9,7 +9,6 @@
 
 # Ignore build artifacts
 out/**
-!out/extension.js
 
 # Ignore source code
 src/**
@@ -28,15 +27,22 @@ webview-ui/node_modules/**
 # Ignore Misc
 node_modules
 .yarnrc
+.prettierignore
 **/.gitignore
 **/tsconfig.json
+**/tsconfig.node.json
 **/vite.config.ts
 **/.eslintrc.json
+**/.eslintrc.cjs
 **/*.map
 **/*.ts
 
-# Ignore markdown docs, except the ones expected for packaging.
-*.md
+# Ignore markdown docs.
+**/*.md
+
+# Files that *must* be included (override the above ignores).
 !README.md
 !CHANGELOG.md
 !LICENSE.md
+!out/extension.js
+!webview-ui/node_modules/@vscode/codicons/dist/codicon.css

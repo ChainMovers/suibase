@@ -12,8 +12,13 @@ Implemented features:
 
 Coming soon features:
   - Wallet/alias editor 
+  - Manage local instance of Mysten Labs "suiexplorer"
   - View most recent published packages (and created objects).
   - Debug console for Move programs.
   - Proxy server interface
   
 See https://suibase.io for more information
+
+## Troubleshooting
+(1) Do "~/suibase/update" to make sure you run the latest version of Suibase CLI
+(2) Discord support: https://discord.com/invite/Erb6SwsVbH
