@@ -42,13 +42,13 @@ flavor = "sui"
 test = 12
 
 [env.localnet_proxy]
-chain-id = "5d93f5c6"
-original-published-id = "0xaf50536c32a442ef09b0bf595da7e607e7e37f8026cd88a3c6815f889567fa96"
-latest-published-id = "0xaf50536c32a442ef09b0bf595da7e607e7e37f8026cd88a3c6815f889567fa96"
+chain-id = "4df4d192"
+original-published-id = "0xeb840b1671894c1540e15059f6b2102c178f2ded0d4fcd4155cf62cfc7638ae8"
+latest-published-id = "0xeb840b1671894c1540e15059f6b2102c178f2ded0d4fcd4155cf62cfc7638ae8"
 published-version = "1"
 
 [env.testnet_proxy]
 chain-id = "4c78adac"
-original-published-id = "0xfd9ebb2a0e016a21b11839b4b0df4d537fbc1fb4ca68b4bdc96f364277b88676"
-latest-published-id = "0xfd9ebb2a0e016a21b11839b4b0df4d537fbc1fb4ca68b4bdc96f364277b88676"
+original-published-id = "0xf543f676ec89fa53b27245b11d94b7183302f234ff9d36824f69ae20635aee09"
+latest-published-id = "0xf543f676ec89fa53b27245b11d94b7183302f234ff9d36824f69ae20635aee09"
 published-version = "1"

@@ -1,7 +1,17 @@
-// This is a custom Hook used by all other view/controller components.
+// This is a custom Hook used by all webview.
 //
-// It keep tracks of the "versions" for each workdir and 
-// "status" data for the active workdir.
+// Maintains latest JSON data from the backend and translate it to React states.
+//
+// Tracking is done periodically (and reactively) with the JSON response from getVersions 
+// and then trig further JSON retrieval as needed (e.g getWorkdirStatus).
+// 
+// Why all that complexity?
+//    With VSCode, the suibase backend daemon and the webview(s) are not always running
+//    on the same machine (e.g. user does remote debugging).
+//
+//    The extension code is acting as the middlemen to forward all the needed data 
+//    using "Post" messages.
+
 import { useRef, useState, useEffect } from 'react';
 import { useMessage } from "../lib/CustomHooks";
 import { SuibaseJsonVersions, SuibaseJsonWorkdirPackages, SuibaseJsonWorkdirStatus } from "../common/SuibaseJson";
@@ -84,59 +94,30 @@ export class ViewCommonData {
     }
 }
 
-export class ViewObject {
-  public name: string;
-  public id: string;
-  constructor() {
-    this.name = "";
-    this.id = "";
-  }
+
+interface CommonControllerOptions {
+  trackStatus?: boolean;
+  trackPackages?: boolean;  
 }
 
-export class ViewAddress {
-  public id: string;  
-  public ownedObjects: ViewObject[];
-  public watchObjects: ViewObject[];
-  constructor() {
-    this.id = "";
-    this.ownedObjects = [];
-    this.watchObjects = [];
-  }
-}
+export const useCommonController = (sender: string, options?: CommonControllerOptions ) => {
+  const trackStatus = options?.trackStatus || false;
+  const trackPackages = options?.trackPackages || false;
 
-export class ViewPackageData {
-  public name: string;
-  public id: string;
-  public initObjects: ViewObject[];
-  public watchObjects: ViewObject[];
-  constructor() {
-    this.name = "";
-    this.id = "";
-    this.initObjects = [];
-    this.watchObjects = [];
-  }
-}
-
-export class ViewExplorerData {
-  // Packages/Objects/Addresses relevant to the recent publish.
-  mostRecents: ViewPackageData[];
-  archives: ViewPackageData[];
-  constructor() {
-    this.mostRecents = [];
-    this.archives = [];
-  }
-}
-
-export const useCommonController = (sender: string) => {
   const { message } = useMessage();
   const common = useRef(new ViewCommonData());
   const [ workdirs ] = useState<ViewWorkdirData[]>(WORKDIRS_KEYS.map((key, index) => new ViewWorkdirData(key, index)));
 
+
   // A state where the view should display a string to the user while there is a backend issue.
   //const [setupIssue, setSetupIssue] = useState("");
 
-  // State to force a re-render of the component using useCommonController.  
+  // States to force re-renders for ALL components using useCommonController.  
+  // useEffects dependencies on these can be used for more selectively 
+  // reacting to changes.
   const [commonTrigger, setUpdateTrigger] = useState(false);
+  const [statusTrigger, setStatusTrigger] = useState(false);
+  const [packagesTrigger, setPackagesTrigger] = useState(false);
 
   useEffect(() => {  
     // This is also called when this component is mounted, which is 
@@ -163,7 +144,9 @@ export const useCommonController = (sender: string) => {
   useEffect(() => {
     try {
       if (message && message.name) {
-        let do_render = false;
+        let do_common_trigger = false;
+        let do_status_trigger = false;
+        let do_packages_trigger = false;
         switch (message.name) {
           case 'UpdateVersions': {            
             // console.log("Message received", event.data);
@@ -174,7 +157,7 @@ export const useCommonController = (sender: string) => {
               const msgSetupIssue = message.setupIssue as string;
               if (msgSetupIssue !== common.current.setupIssue) {
                 common.current.setupIssue = msgSetupIssue;
-                do_render = true;
+                do_common_trigger = true;
               }
               if (msgSetupIssue !== "") {
                 backendIssue = true;
@@ -183,16 +166,16 @@ export const useCommonController = (sender: string) => {
 
             if (backendIssue === false && common.current.setupIssue !== "") {
               common.current.setupIssue = "";
-              do_render = true;
+              do_common_trigger = true;
             }
 
             if (backendIssue === false && message.json) {
               const workdirTracking = workdirs[message.workdirIdx];
               const hasChanged = workdirTracking.versions.update(message.json);            
               if (hasChanged) {
-                do_render = true;
+                do_common_trigger = true;
                 // Verify if versions shows that a newer WorkdirStatus is available. If yes, then PostMessage "RequestWorkdirStatus"                              
-                {
+                if (trackStatus) {
                   const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirStatusUpdateNeeded(workdirTracking.workdirStatus);
                 
                   if (isUpdateNeeded) {
@@ -202,7 +185,7 @@ export const useCommonController = (sender: string) => {
 
                 // Do same for WorkdirPackages.
                 // TODO Make these configurable by the view (using a prop).
-                {
+                if (trackPackages) {
                   const [isUpdateNeeded,methodUuid,dataUuid] = workdirTracking.versions.isWorkdirPackagesUpdateNeeded(workdirTracking.workdirPackages);
                 
                   if (isUpdateNeeded) {
@@ -215,27 +198,30 @@ export const useCommonController = (sender: string) => {
               //console.log(`common.current.activeWorkdir: ${common.current.activeWorkdir}, message.json.asuiSelection: ${message.json.asuiSelection}`);
               if (common.current.activeWorkdir !== message.json.asuiSelection) {
                 common.current.activeWorkdir = message.json.asuiSelection;                
-                do_render = true;
+                do_common_trigger = true;
               }
             }
             break;
           }
 
           case 'UpdateWorkdirStatus': {
-            const workdirTracking = workdirs[message.workdirIdx];
-            const hasChanged = workdirTracking.workdirStatus.update(message.json);
-            if (hasChanged) {
-              do_render = true;
+            if (trackStatus) {
+              const workdirTracking = workdirs[message.workdirIdx];
+              const hasChanged = workdirTracking.workdirStatus.update(message.json);
+              if (hasChanged) {                
+                do_status_trigger = true;
+              }
             }
             break;
           }
 
           case 'UpdateWorkdirPackages': {
-            const workdirTracking = workdirs[message.workdirIdx];
-            const hasChanged = workdirTracking.workdirPackages.update(message.json);
-            if (hasChanged) {
-              console.log("UpdateWorkdirPackages received with changes", JSON.stringify(message.json));
-              do_render = true;
+            if (trackPackages) {
+              const workdirTracking = workdirs[message.workdirIdx];
+              const hasChanged = workdirTracking.workdirPackages.update(message.json);
+              if (hasChanged) {
+                do_packages_trigger = true;
+              }
             }
             break;
           }
@@ -243,8 +229,15 @@ export const useCommonController = (sender: string) => {
           default:
             console.log('Received an unknown command', message);
         }
-        if (do_render) {
+
+        if (do_common_trigger) {
           setUpdateTrigger(prev => !prev);
+        }
+        if (do_status_trigger) {
+          setStatusTrigger(prev => !prev);
+        }
+        if (do_packages_trigger) {
+          setPackagesTrigger(prev => !prev);        
         }
       }
     } catch (error) {
@@ -252,5 +245,7 @@ export const useCommonController = (sender: string) => {
     }
   }, [message,workdirs,sender]);
 
-  return {commonTrigger, common, workdirs};
+  // Note: Triggers are intended as "finer grain" dependencies for useEffects.
+  //       Also, it makes possible reaction on changes *within* objects/arrays.
+  return {commonTrigger, statusTrigger, packagesTrigger, common, workdirs};
 };

@@ -11,7 +11,7 @@ export class SuibaseSidebar extends BaseWebview {
   }
 
   public static activate(context: vscode.ExtensionContext) {
-    console.log("SuibaseSidebar.activate() called");
+    //console.log("SuibaseSidebar.activate() called");
     if (SuibaseSidebar.instance) {
       console.log("Error: SuibaseSidebar.activate() called more than once");
       return;
@@ -41,7 +41,7 @@ export class SuibaseSidebar extends BaseWebview {
 
   // Dispose is a callback triggered by VSCode (see BaseWebview).
   protected dispose() {
-    console.log("SuibaseSidebar.dispose() called");
+    //console.log("SuibaseSidebar.dispose() called");
     if (SuibaseSidebar.instance) {
       super.dispose();
       delete SuibaseSidebar.instance;

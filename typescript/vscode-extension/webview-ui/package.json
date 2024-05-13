@@ -10,18 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emotion/react": "^11.11.4",
-    "@emotion/styled": "^11.11.5",
+    "@emotion/react": "latest",
+    "@emotion/styled": "latest",
     "@estruyf/vscode": "^1.1.0",
     "@fontsource/roboto": "^5.0.13",
+    "@mui/icons-material": "^5.15.17",
     "@mui/material": "^5.15.15",
     "@mui/x-tree-view": "^7.3.1",
-    "@textea/json-viewer": "^3.4.1",
-    "@vscode/codicons": "^0.0.33",
+    "@vscode/codicons": "^0.0.36",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "async-mutex": "^0.5.0",
     "react": "^18.3.1",
-    "react-accessible-treeview": "^2.9.0",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {

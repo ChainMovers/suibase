@@ -1,21 +1,19 @@
 
-  //import { VSCode } from "../lib/VSCode";
-  //import { SuibaseData } from "../common/SuibaseData";
-
 import { useCommonController } from "./CommonController";
 import { WORKDIRS_LABELS, WORKDIRS_KEYS } from "../common/Consts";
 import { useEffect, useState } from "react";
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
-import { Box, CircularProgress, Typography } from "@mui/material";
+import { Box, CircularProgress, Link, Typography } from "@mui/material";
 import { VSCode } from "../lib/VSCode";
 import { WorkdirCommand } from "../common/ViewMessages";
 import { WEBVIEW_EXPLORER } from "../../../src/common/Consts";
+import { ExplorerTreeView } from "./ExplorerTreeView";
 
 export const ExplorerController = () => {
-  const {common} = useCommonController(WEBVIEW_EXPLORER);  
+  const {common, workdirs, commonTrigger, packagesTrigger} = useCommonController(WEBVIEW_EXPLORER, {trackPackages: true});
 
   const [requestedActive, setRequestedActive] = useState("");
-  const [dropdownActive, setDropdownActive] =useState(common.current.activeWorkdir);
+  const [dropdownActive, setDropdownActive] = useState(common.current.activeWorkdir);
 
   
   const handleDropdownChange = (event: any) => {
@@ -50,13 +48,13 @@ export const ExplorerController = () => {
       }
     }
     return () => {};
-  }, [requestedActive, dropdownActive, common.current.activeWorkdir, common]);
+  }, [requestedActive, dropdownActive, common.current.activeWorkdir, commonTrigger]);
 
 
   return (
         <>
         {common.current.setupIssue && <Typography variant="body2">{common.current.setupIssue}</Typography>}
-        <Box display="flex">
+        <Box flexDirection="column" justifyContent="center" width="100%" paddingLeft={1} paddingTop={1}>
           {common.current.activeLoaded && !common.current.setupIssue? (
             <>
             <VSCodeDropdown value={dropdownActive}  onChange={handleDropdownChange}>
@@ -75,7 +73,21 @@ export const ExplorerController = () => {
           ) : (<CircularProgress size={15}/>)
           }
         </Box>
-        {/*<DebugTreeViewObj jsonObj={common.current}/>*/}
+
+        <Box display="flex" justifyContent="center" width="100%" paddingTop={1}>
+          <Typography variant="caption" sx={{ alignContent: 'center', fontSize: '9px' }}>Need help? Try the&nbsp;
+            <Link color='inherit' href="https://suibase.io/community/" target="_blank" rel="noopener noreferrer">sui community</Link>
+          </Typography>
+        </Box>
+
+        <Box width="100%" paddingTop={1}>
+          {common.current.activeLoaded && 
+              <ExplorerTreeView packagesTrigger={packagesTrigger}
+                                packagesJson={workdirs[common.current.activeWorkdirIdx].workdirPackages} 
+                                workdir={common.current.activeWorkdir}
+                                workdirIdx={common.current.activeWorkdirIdx}/>
+          }
+        </Box>
         </>
   );
 }

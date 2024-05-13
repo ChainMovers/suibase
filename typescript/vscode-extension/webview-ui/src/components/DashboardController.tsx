@@ -11,7 +11,6 @@ import { AntSwitch } from "./AntSwitch";
 import { useEffect, useState } from "react";
 import { WORKDIRS_KEYS, WORKDIRS_LABELS } from "../common/Consts";
 import { WEBVIEW_DASHBOARD } from "../../../src/common/Consts";
-
 /*
 function handleRegenClick(workdir: ViewWorkdirStates) {
   VSCode.postMessage(new WorkdirCommand(WEBVIEW_DASHBOARD,workdir.workdirIdx, "regen"));
@@ -44,7 +43,7 @@ class WorkdirStates {
 }
 
 export const DashboardController = () => {
-  const { commonTrigger, common, workdirs } = useCommonController(WEBVIEW_DASHBOARD);
+  const { commonTrigger, statusTrigger, common, workdirs } = useCommonController(WEBVIEW_DASHBOARD, { trackStatus: true });
 
   const switchProps = { inputProps: { 'aria-label': 'workdir on/off' } };
 
@@ -119,10 +118,10 @@ export const DashboardController = () => {
     });
 
     return () => {};
-  }, [commonTrigger,workdirs,workdirStates]);
+  }, [commonTrigger,statusTrigger,workdirs,workdirStates]);
 
   return (
-      <>
+      <Box sx={{paddingLeft:1}}>
       {common.current.setupIssue && <Typography variant="body2">{common.current.setupIssue}</Typography>}
       {common.current.activeLoaded && !common.current.setupIssue? (
         <>
@@ -181,6 +180,6 @@ export const DashboardController = () => {
       </>
       ) : (<CircularProgress size={15}/>)
       }
-    </>
+    </Box>
   );
 };

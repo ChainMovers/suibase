@@ -375,6 +375,7 @@ export class BackendSync {
       //  "id":2}
       //
       // Update the SuibaseJson instance for the workdir.
+      //console.log(`replyWorkdirPackages: ${JSON.stringify(data)}`);
       BaseWebview.postMessageTo(sender, new UpdateWorkdirPackages(WEBVIEW_BACKEND, workdirIdx, data));
     } catch (error) {
       const errorMsg = `Error in replyWorkdirPackages: ${JSON.stringify(error)}. Data: ${JSON.stringify(

@@ -93,7 +93,7 @@ export class BaseWebview implements vscode.WebviewViewProvider {
   }
 
   public static deactivate() {
-    console.log("Webview Deactivate called");
+    //console.log("Webview Deactivate called");
     // Iterate all instances to undefined their webview and panel members.
     for (const key in BaseWebview.instances) {
       const instance = BaseWebview.instances[key];
@@ -146,9 +146,9 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     if (this.panel !== undefined) {
       // If the webview panel already exists reveal it
       this.panel.reveal(ViewColumn.One);
-      console.log("BaseWebview render_panel reveal() called");
+      //console.log("BaseWebview render_panel reveal() called");
     } else {
-      console.log("BaseWebview render_panel called");
+      //console.log("BaseWebview render_panel called");
       // If a webview panel does not already exist create and show a new one
       // "this" here is the subclass that extends BasePanel.
       this.panel = window.createWebviewPanel(
@@ -218,18 +218,11 @@ export class BaseWebview implements vscode.WebviewViewProvider {
     // console.log("BaseWebview.dispose() called");
   }
 
-  /**
-   * Defines and returns the HTML that should be rendered within the webview panel.
-   *
-   * @remarks This is also the place where references to the Svelte webview build files
-   * are created and inserted into the webview HTML.
-   *
-   * @param webview A reference to the extension webview
-   * @param extensionUri The URI of the directory containing the extension
-   * @returns A template string literal containing the HTML that should be
-   * rendered within the webview panel
-   */
   private _getWebviewContent() {
+    // Note: console error "An iframe which has both allow-scripts and allow-same-origin for its
+    //       sandbox attribute can escape its sandboxing." is considered safe by MSFT.
+    //       See https://github.com/microsoft/vscode/issues/192853
+    //
     const webview = this.getWebview();
     if (!webview) {
       // Should never happen, but just in case... show an error so the user can see (and report).

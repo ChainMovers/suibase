@@ -1,4 +1,37 @@
-// import React from "react";
+import { Box } from "@mui/material";
+import { purple } from "@mui/material/colors";
+
+const cssVar = (variableName: string) => {
+  try {
+  // Get the computed style of the :root element (document.documentElement)
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();  
+  return value || purple[500];
+  } catch (error) {
+    console.error(`Error getting CSS variable ${variableName}: ${error}`);
+    return purple[500];
+  }
+};
+
+const vsColor = (color: any) => {  
+  
+  let colorVar = color.replace(/\./g, '-').toLowerCase();
+  // Append --vscode- to colorVar if not already present.
+  if (!colorVar.startsWith("--vscode-")) {
+    colorVar = "--vscode-" + colorVar;
+  }  
+  const value = cssVar(`${colorVar}`);
+  return (
+    <Box display="flex" alignItems="center" gap={1}>
+      <div>{colorVar}: {JSON.stringify(value)}</div>
+      <Box sx={{
+      width: '10px',
+      height: '10px',
+      backgroundColor: value,
+      border: '1px solid #000',
+    }} />
+    </Box>
+  );    
+}
 
 export const ConsoleController = () => {
 
@@ -6,7 +39,12 @@ export const ConsoleController = () => {
   //let suibaseData: SuibaseData = SuibaseData.getInstance();
 
   return (
-    <>Note: Not implemented yet.<br/> Will show events from your last published module(s).
+    <>Note: Not implemented yet.<br/> Will show events from your last published module(s).    
+
+        {vsColor("editor-foreground")}
+        {vsColor("editor-background")}        
+        {vsColor("badge-background")}
+        {vsColor("badge-foreground")}
     </>
   );
 }

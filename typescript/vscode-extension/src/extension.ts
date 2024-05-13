@@ -39,8 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
   SuibaseSidebar.activate(context);
 
   // Enable getting states from the backend.
-
-  console.log("extension activate() completed");
+  console.log("Suibase extension activate() completed successfully");
 }
 
 // This method is called when the extension is deactivated by VSCode.

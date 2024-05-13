@@ -1,6 +1,4 @@
 
-import './App.css'
-
 import { useEffect, useState } from 'react';
 import { useMessage } from './lib/CustomHooks';
 
@@ -27,7 +25,6 @@ const cssVar = (variableName: string) => {
 
 const useExternalCssVariable = (variableName: string) => {
   const [value, setValue] = useState(getComputedStyle(document.documentElement).getPropertyValue(variableName));
-
   
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -50,12 +47,46 @@ function App() {
   const vscodeThemeChange = useExternalCssVariable('--vscode-editor-foreground');
 
   // See https://code.visualstudio.com/api/references/theme-color
+  
   const adaptiveTheme = React.useMemo(() => createTheme({
+    components:{    
+      MuiCssBaseline: {
+        styleOverrides: {        
+          body: {
+            padding: 0,
+          },
+        },
+      }
+      /*,
+      MuiSnackbar: {
+        styleOverrides: {
+            root: {
+                "& .MuiSnackbar-root": {
+                    padding: 0,
+                },
+                "&.MuiSnackbar-root.MuiSnackbar-anchorOriginTopLeft": {
+                    maxWidth: "50px",
+                    top: 76
+                },
+                "& .MuiSnackbarContent-root": {
+                    padding: 0
+                },
+                "& .MuiSnackbarContent-message": {
+                    padding: 0, 
+                    paddingLeft: '2px'
+                }
+            }
+        }
+      },*/      
+    },    
+    /*
     typography: {
       fontSize: 12,
-    }, 
+    },*/
+
     palette: {
-      /*  primary?: PaletteColorOptions;
+/*      
+  primary?: PaletteColorOptions;
   secondary?: PaletteColorOptions;
   error?: PaletteColorOptions;
   warning?: PaletteColorOptions;
@@ -85,6 +116,16 @@ function App() {
         //main: 'var(--vscode-editor-foreground)',
         main: cssVar("--vscode-editor-foreground"),
       },
+
+      /*
+      primary: {
+        main: cssVar("--vscode-editor-background"),
+        contrastText: cssVar("--vscode-editor-foreground"),
+      },
+      secondary: {
+        main: cssVar("--vscode-badge-background"),
+        contrastText: cssVar("--vscode-badge-foreground"),
+      },*/
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [vscodeThemeChange]);
@@ -115,10 +156,12 @@ function App() {
   }
   
   return (
+    <>
     <ThemeProvider theme={adaptiveTheme}>
       <CssBaseline/>
-      <main>{controller}</main>
+        <main>{controller}</main>
     </ThemeProvider>
+    </>
   );
 }
 

@@ -13,7 +13,7 @@ export class SuibaseGlobalStates {
   public uiSelectedContextCallback: (newUiSelectedContext: string) => void = (
     // eslint-disable-next-line
     _newUiSelectedContext: string
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
   ) => {};
 
   public serialize(): string {
@@ -62,7 +62,7 @@ export class SuibaseData {
   }
 
   public static activate() {
-    console.log("SuibaseData.activateForExtension() called");
+    //console.log("SuibaseData.activateForExtension() called");
     if (SuibaseData.instance) {
       console.log("Error: SuibaseData.activate() called more than once");
       return;

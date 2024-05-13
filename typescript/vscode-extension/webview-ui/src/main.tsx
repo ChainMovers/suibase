@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
-import './index.css'
+
 import { MessageProvider } from './lib/MessageContext.tsx';
 
 import { provideVSCodeDesignSystem, allComponents } from "@vscode/webview-ui-toolkit";
