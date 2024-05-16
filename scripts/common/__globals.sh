@@ -2765,11 +2765,15 @@ is_valid_assets() {
   local _IS_VALID=true
 
   # Add here detection of tags known to be defective ("bad release").
-  if [[ "$_PLATFORM" == "macos" ]] && [[ "$_ARCH" == "arm64" ]]; then
-    if [[ "$_TAG_NAME" == *"v1.25.0"* ]]; then
-      _IS_VALID=false
-    fi
-  fi
+
+  # macos arm64 v1.25 now fix:
+  #    https://github.com/MystenLabs/sui/issues/17770
+  #
+  # if [[ "$_PLATFORM" == "macos" ]] && [[ "$_ARCH" == "arm64" ]]; then
+  #  if [[ "$_TAG_NAME" == *"v1.25.0"* ]]; then
+  #    _IS_VALID=false
+  #  fi
+  # fi
 
   if $_IS_VALID; then
     true
