@@ -2688,18 +2688,22 @@ update_PRECOMP_REMOTE_var() {
           if [ "$_TAG_NAME" == "$_FORCE_TAG_NAME" ]; then
             break
           fi
-        else
+        elif is_valid_assets "$_TAG_NAME" "$_BIN_PLATFORM" "$_BIN_ARCH"; then
           break
+        else
+          echo "Warn: Skipping invalid Mysten Labs assets $_TAG_NAME"
         fi
       fi
     done <<<"$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -rV)"
 
+    # Stop looping for retry if _DOWNLOAD_URL looks valid.
+    # TODO Refactor this to avoid duplicate logic done in above loop.
     if [ -n "$_DOWNLOAD_URL" ]; then
       if [ -n "$_FORCE_TAG_NAME" ]; then
         if [ "$_TAG_NAME" == "$_FORCE_TAG_NAME" ]; then
           break
         fi
-      else
+      elif is_valid_assets "$_TAG_NAME" "$_BIN_PLATFORM" "$_BIN_ARCH"; then
         break
       fi
     fi
@@ -2752,6 +2756,30 @@ update_PRECOMP_REMOTE_var() {
   return
 }
 export -f update_PRECOMP_REMOTE_var
+
+is_valid_assets() {
+  local _TAG_NAME="$1" # "devnet-v1.25.0"
+  local _PLATFORM="$2" # "ubuntu", "macos"
+  local _ARCH="$3"     # "arm64", "x86_64"
+
+  local _IS_VALID=true
+
+  # Add here detection of tags known to be defective ("bad release").
+  if [[ "$_PLATFORM" == "macos" ]] && [[ "$_ARCH" == "arm64" ]]; then
+    if [[ "$_TAG_NAME" == *"v1.25.0"* ]]; then
+      _IS_VALID=false
+    fi
+  fi
+
+  if $_IS_VALID; then
+    true
+    return
+  else
+    false
+    return
+  fi
+}
+export -f is_valid_assets
 
 download_PRECOMP_REMOTE() {
   local _WORKDIR="$1"
