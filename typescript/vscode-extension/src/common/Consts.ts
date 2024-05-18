@@ -87,3 +87,7 @@ export const TREE_ITEM_ID_RECENT_PACKAGES_EMPTY = `${TREE_ITEM_EMPTY}-${TREE_ITE
 //     Insert in label the last portion of the ID and interpret it as an address.
 //     Will shorten the address in the label, add clipboard copy button etc...
 export const TREE_ID_INSERT_ADDR = "[TREE_ID_INSERT_ADDR]";
+
+// setupIssue strings. Used in messages between extension and webviews
+export const SETUP_ISSUE_SUIBASE_NOT_INSTALLED = "Suibase not installed";
+export const SETUP_ISSUE_GIT_NOT_INSTALLED = "Git not installed";

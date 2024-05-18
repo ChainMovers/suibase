@@ -98,7 +98,9 @@ impl ShellWorker {
                 Ok(output) => {
                     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    let resp = format!("{}{}", stdout, stderr);
+                    let resp = format!("{}{}", stderr, stdout); // Put error first for easier detection.
+                                                                // Remove leading/trailing whitespaces (including empty lines).
+                    let resp = resp.trim().to_string();
                     if output.status.success() && stderr.is_empty() {
                         resp
                     } else {
@@ -110,7 +112,7 @@ impl ShellWorker {
                         "Error: do_exec({:?}, {:?}) error 1: {}",
                         msg.workdir_idx, cmd, e
                     );
-                    log::error!("{}", error_msg);
+                    //log::error!("{}", error_msg);
                     error_msg
                 }
             }

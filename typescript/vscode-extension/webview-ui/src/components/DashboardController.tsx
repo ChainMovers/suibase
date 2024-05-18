@@ -11,6 +11,7 @@ import { AntSwitch } from "./AntSwitch";
 import { useEffect, useState } from "react";
 import { WORKDIRS_KEYS, WORKDIRS_LABELS } from "../common/Consts";
 import { WEBVIEW_DASHBOARD } from "../../../src/common/Consts";
+import SetupIssue from "./SetupIssue";
 /*
 function handleRegenClick(workdir: ViewWorkdirStates) {
   VSCode.postMessage(new WorkdirCommand(WEBVIEW_DASHBOARD,workdir.workdirIdx, "regen"));
@@ -122,7 +123,7 @@ export const DashboardController = () => {
 
   return (
       <Box sx={{paddingLeft:1}}>
-      {common.current.setupIssue && <Typography variant="body2">{common.current.setupIssue}</Typography>}
+      {common.current.setupIssue && <SetupIssue issue={common.current.setupIssue}/>}
       {common.current.activeLoaded && !common.current.setupIssue? (
         <>
       <Typography variant="body1">Services</Typography>

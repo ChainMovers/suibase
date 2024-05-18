@@ -1,4 +1,10 @@
-import { API_URL, WEBVIEW_BACKEND, WORKDIRS_KEYS } from "./common/Consts";
+import {
+  API_URL,
+  SETUP_ISSUE_GIT_NOT_INSTALLED,
+  SETUP_ISSUE_SUIBASE_NOT_INSTALLED,
+  WEBVIEW_BACKEND,
+  WORKDIRS_KEYS,
+} from "./common/Consts";
 import { Mutex } from "async-mutex";
 import { BaseWebview } from "./bases/BaseWebview";
 import {
@@ -234,19 +240,25 @@ export class BackendSync {
     if (sb === undefined) {
       msg.setSetupIssue("Internal error. Shell commands failed.");
     } else if ((await sb.isSuibaseInstalled()) === false) {
-      msg.setSetupIssue("Suibase not installed?\nCheck https://suibase.io/how-to/install");
+      msg.setSetupIssue(SETUP_ISSUE_SUIBASE_NOT_INSTALLED);
     } else if ((await sb.isGitInstalled()) === false) {
-      msg.setSetupIssue(
-        "Git not installed?\nPlease install Sui prerequisites\nhttps://docs.sui.io/guides/developer/getting-started/sui-install"
-      );
+      msg.setSetupIssue(SETUP_ISSUE_GIT_NOT_INSTALLED);
     } else if ((await sb.isSuibaseBackendRunning()) === false) {
-      if ((await sb.startDaemon()) === true) {
+      // Start the backend daemon if safe to do...
+      if ((await sb.isSuibaseBackendUpgrading()) === true) {
+        // Do not attempt to start the daemon if a backend script is in
+        // the process of building/upgrading it.
+        msg.setSetupIssue("Suibase backend upgrading...");
+      } else if ((await sb.startDaemon()) === true) {
         // Started, but need a moment for the backend to init/respond.
         msg.setSetupIssue("Suibase backend connecting...");
       } else {
+        // Did not start this time, but assumes the caller will retry, so
+        // report as still "starting" for now...
         msg.setSetupIssue("Suibase backend starting...");
       }
     } else {
+      // Unknown cause... a temporary connectivity hiccup?
       msg.setSetupIssue("Suibase backend not responding");
     }
 
@@ -282,6 +294,19 @@ export class BackendSync {
           //
           // Each element of "versions" match the header you will find for each API method.
           // (e.g. see header example in replyWorkdirStatus)
+
+          // Sanity check that the data is valid.
+          //  - result should have a header with method "getVersions".
+          //  - the key must match the workdir.
+          //  - asuiSelection should always be set to one of "localnet", "mainnet", "testnet", "devnet".
+          if (
+            data?.result?.header?.method !== "getVersions" ||
+            data?.result?.header?.key !== workdir ||
+            data?.result?.asuiSelection === "Unknown"
+          ) {
+            await this.diagnoseBackendError(workdirIdx);
+            return;
+          }
 
           // Update the SuibaseJson instance for the workdir.
           const workdirTracking = this.mWorkdirTrackings[workdirIdx];

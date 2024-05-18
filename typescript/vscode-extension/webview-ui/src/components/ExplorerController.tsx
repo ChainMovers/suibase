@@ -8,6 +8,7 @@ import { VSCode } from "../lib/VSCode";
 import { WorkdirCommand } from "../common/ViewMessages";
 import { WEBVIEW_EXPLORER } from "../../../src/common/Consts";
 import { ExplorerTreeView } from "./ExplorerTreeView";
+import SetupIssue from "./SetupIssue";
 
 export const ExplorerController = () => {
   const {common, workdirs, commonTrigger, packagesTrigger} = useCommonController(WEBVIEW_EXPLORER, {trackPackages: true});
@@ -53,7 +54,7 @@ export const ExplorerController = () => {
 
   return (
         <>
-        {common.current.setupIssue && <Typography variant="body2">{common.current.setupIssue}</Typography>}
+        {common.current.setupIssue && <SetupIssue issue={common.current.setupIssue}/>}
         <Box flexDirection="column" justifyContent="center" width="100%" paddingLeft={1} paddingTop={1}>
           {common.current.activeLoaded && !common.current.setupIssue? (
             <>

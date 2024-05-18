@@ -341,7 +341,40 @@ start_suibase_daemon_as_needed() {
     update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
     #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
     #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
+    local _PERFORM_UPGRADE=false
+
     if need_suibase_daemon_upgrade; then
+      _PERFORM_UPGRADE=true
+
+      # To try to minimize race conditions, wait until a concurrent script 
+      # is done doing the same. Not perfect... good enough.
+      #
+      # This also hint the VSCode extension to step back from using the
+      # backend while this is on-going.
+      local _CHECK_IF_NEEDED_AGAIN=false
+      local _FIRST_ITERATION=true
+      while [ -f /tmp/.suibase/suibase-daemon-upgrading ]; do
+        if $_FIRST_ITERATION; then
+          echo "Waiting for concurrent script to finish upgrading suibase daemon..."
+          _FIRST_ITERATION=false
+        fi
+        sleep 1
+        _PERFORM_UPGRADE=false
+      done
+
+      if [ "$_PERFORM_UPGRADE" = false ]; then
+        # Was block by another script... check again if the upgrade is still needed.
+        update_SUIBASE_DAEMON_VERSION_INSTALLED
+        update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
+        if need_suibase_daemon_upgrade; then
+          _PERFORM_UPGRADE=true
+        fi
+      fi
+    fi
+
+    if [ "$_PERFORM_UPGRADE" = true ]; then
+      touch /tmp/.suibase/suibase-daemon-upgrading
+      trap 'rm -f /tmp/.suibase/suibase-daemon-upgrading' EXIT
       local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
       build_suibase_daemon
       update_SUIBASE_DAEMON_VERSION_INSTALLED

@@ -147,26 +147,56 @@ impl GeneralApiImpl {
     ) -> bool {
         // First line is two words, first should match the workdir name followed by the status word.
         // If the workdir name does not match, then the resp.status is set to "DOWN" else the status word is stores in resp.status.
-
-        // Success if at least first line parsed (may extend to other lines later...) and other
-        // lines are not errors.
+        /*log::info!(
+            "{} convert_status_cmd_resp_to_status_response: cmd_response=[{}]",
+            workdir_name,
+            cmd_response
+        );*/
         let mut first_line_parsed = false;
 
         // Iterate every lines of cmd.
         let mut line_number = 0;
+        let mut error_detected = false;
 
         let cmd = Self::remove_ascii_color_code(&cmd_response);
         for line in cmd.lines() {
-            if line.trim_start().starts_with("Error:") {
-                return false;
-            }
-
-            // Ignore lines starting with a "---" divider.
-            if line.trim_start().starts_with("---") {
+            let line = line.trim();
+            // Ignore empty lines or "---" divider.
+            if line.is_empty() || line.starts_with("---") {
                 continue;
             }
 
+            if line.starts_with("Error:") {
+                error_detected = true;
+            }
+
             line_number += 1;
+
+            // Detect into the first two lines for a hint of a problem.
+            if line_number <= 2 {
+                let line_lc = line.to_lowercase();
+                // Detect Suibase not installed.
+                if line_lc.contains("not initialized")
+                    || line_lc.contains("not found")
+                    || line_lc.contains("no such")
+                {
+                    resp.status = Some("DISABLED".to_string());
+                    let status_info = format!("{0} not initialized. Do '{0} start'", workdir_name);
+                    resp.status_info = Some(status_info);
+                    return false;
+                }
+            }
+
+            if error_detected {
+                if line_number == 2 {
+                    // Error detected but not sure what the problem is.
+                    resp.status = Some("DOWN".to_string());
+                    resp.status_info = Some(format!("Error detected [{}]", cmd_response));
+                    log::error!("Workdir status error detected [{}]", cmd_response);
+                    return false;
+                }
+                continue;
+            }
 
             // Split the line into words.
             let mut words = line.split_whitespace();
@@ -343,11 +373,12 @@ impl GeneralApiImpl {
 
         // Do not assumes that if shell_exec returns OK that the command was successful.
         // Parse the command response to figure out if really successful.
-        let is_successful =
+        resp.status = None;
+        let _is_successful =
             self.convert_status_cmd_resp_to_status_response(cmd_resp, workdir, &mut resp);
 
-        if !is_successful {
-            // Command was not successful, make 100% sure the status is DOWN.
+        // Default to DOWN if could not identify the status.
+        if resp.status.is_none() {
             resp.status = Some("DOWN".to_string());
         }
 
@@ -618,7 +649,10 @@ impl GeneralApiServer for GeneralApiImpl {
             .await
         {
             Ok(cmd_resp) => cmd_resp,
-            Err(e) => format!("Error: {e}"),
+            Err(e) => {
+                log::error!("Error: {e}");
+                format!("Error: {e}")
+            }
         };
 
         // Do not assumes that if shell_exec returns OK that the command was successful.

@@ -20,5 +20,7 @@ Coming soon features:
 See https://suibase.io for more information
 
 ## Troubleshooting
+
 (1) Do "~/suibase/update" to make sure you run the latest version of Suibase CLI
+
 (2) Discord support: https://discord.com/invite/Erb6SwsVbH

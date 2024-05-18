@@ -11,7 +11,7 @@
 
 import * as vscode from "vscode";
 import * as cp from "child_process";
-import WebSocket from "ws";
+//import WebSocket from "ws";
 
 const execShell = (cmd: string) =>
   new Promise<string>((resolve, reject) => {
@@ -37,13 +37,14 @@ const execShellBackground = (cmd: string) =>
 export class SuibaseExec {
   private static instance?: SuibaseExec;
   private static context?: vscode.ExtensionContext;
-  private ws: WebSocket | undefined;
+  //private ws: WebSocket | undefined;
 
   // Define a cache to store the response
-  private cache: any = {};
+  //private cache: any = {};
 
   private constructor() {
     // Should be called only by SuibaseExec.activate()
+    /*
     this.ws = new WebSocket("ws://localhost:44399");
 
     this.ws.on("open", () => {
@@ -62,17 +63,18 @@ export class SuibaseExec {
       //let self = SuibaseExec.getInstance();
       this.cache.response = response.result;
       console.log(response.result);
-    });
+    });*/
   }
 
   private dispose() {
     // Should be called only by SuibaseExec.deactivate()
     // Dispose of the instance resources (somewhat like a "destructor").
+    /*
     if (this.ws) {
       this.ws.close();
       delete this.ws;
       this.ws = undefined;
-    }
+    }*/
   }
 
   public static activate(context: vscode.ExtensionContext) {
@@ -132,28 +134,45 @@ export class SuibaseExec {
     return false;
   }
 
-  public async isSuibaseInstalled(): Promise<boolean> {
-    // Verify if Suibase itself is installed.
-    // Returns true if all the following files exists:
-    //    ~/suibase/install
-    //    ~/suibase/scripts/common/run-daemon.sh
+  /*
+  public async fileExists(pathname: string): Promise<boolean> {
+    // Returns true if the file exists on the filesystem.
+    // Returns false on any error.
+    //
+    // This function must always resolve its promise.
     try {
-      let result = await execShell("ls ~/suibase/install");
-      if (result.includes("suibase/install")) {
-        return true;
-      }
-      result = await execShell("ls ~/suibase/scripts/common/run-daemon.sh");
-      if (result.includes("suibase/scripts/common/run-daemon.sh")) {
-        return true;
+      let result = await execShell(`ls ${pathname}`);
+      result = result.toLowerCase();
+      if (!result.includes(pathname) || result.includes("cannot access") || result.includes("no such")) {
+        return false;
       }
     } catch (error) {
-      console.error("suibase not installed");
+      return false;
     }
-    return false;
+    return true;
+  }*/
+
+  public async isSuibaseInstalled(): Promise<boolean> {
+    // Verify if Suibase itself is installed.
+    //
+    // Verifies that executing "localnet suibase-script-name" returns the exact string "localnet".
+    //
+    // This is the same verification trick used by "~/suibase/install"
+    try {
+      const result = await execShell("localnet suibase-script-name");
+      if (!result || result.trim() !== "localnet") {
+        return false;
+      }
+    } catch (error) {
+      return false;
+    }
+
+    return true;
   }
 
   public async isSuibaseBackendRunning(): Promise<boolean> {
     // Returns true if suibase-daemon is running.
+    // This function must always resolve its promise.
     let suibaseRunning = false;
     try {
       const result = await execShell("lsof /tmp/.suibase/suibase-daemon.lock");
@@ -167,49 +186,78 @@ export class SuibaseExec {
         }
       }
     } catch (err) {
-      /* Do nothing */
+      return false;
     }
     return suibaseRunning;
   }
 
+  public async isSuibaseBackendUpgrading(): Promise<boolean> {
+    // True when a file /tmp/suibase_daemon_upgrading exists.
+    //
+    // This file exists only while a backend scripts is in the process of
+    // upgrading the daemon.
+    //
+    // This function must always resolve its promise.
+    try {
+      let result = await execShell("ls /tmp/.suibase/suibase-daemon-upgrading");
+      result = result.toLowerCase();
+      if (result.includes("cannot") || result.includes("no such")) {
+        return false;
+      }
+    } catch (error) {
+      return false;
+    }
+
+    return true;
+  }
+
   public async version(): Promise<string> {
+    // This function must always resolve its promise.
+    // Returns an empty string on error.
     try {
       const result = await execShell("localnet --version");
-      console.log(result);
-      return Promise.resolve(result);
+      //console.log(result);
+      return result;
     } catch (err) {
-      return Promise.reject(err);
+      /* Absorb the err and return empty string */
     }
+
+    return "";
   }
 
   public async startDaemon(): Promise<boolean> {
     // Check if suibase-daemon is running, if not, attempt
     // to start it and return once confirmed ready to
     // process requests.
-    let suibaseRunning = await this.isSuibaseBackendRunning();
+    //
+    // This function must always resolve its promise.
+    try {
+      let suibaseRunning = await this.isSuibaseBackendRunning();
 
-    if (!suibaseRunning) {
-      // Start suibase daemon      
-      void execShellBackground("~/suibase/scripts/common/run-daemon.sh suibase");
+      if (!suibaseRunning) {
+        // Start suibase daemon
+        void execShellBackground("~/suibase/scripts/common/run-daemon.sh suibase");
 
-      // Check for up to ~5 seconds that it is started.
-      let attempts = 10;
-      while (!suibaseRunning && attempts > 0) {
-        // Sleep 500 millisecs to give it a chance to start.
-        await new Promise((r) => setTimeout(r, 500));
-        suibaseRunning = await this.isSuibaseBackendRunning();
-        attempts--;
+        // Check for up to ~5 seconds that it is started.
+        let attempts = 10;
+        while (!suibaseRunning && attempts > 0) {
+          // Sleep 500 millisecs to give it a chance to start.
+          await new Promise((r) => setTimeout(r, 500));
+          suibaseRunning = await this.isSuibaseBackendRunning();
+          attempts--;
+        }
       }
-    }
 
-    if (suibaseRunning) {
-      return true;
+      if (suibaseRunning) {
+        return true;
+      }
+    } catch (err) {
+      /* Absorb the err and return false below */
     }
-
     console.error("Failed to start suibase.daemon");
     return false;
   }
-
+  /*
   private makeJsonRpcCall() {
     // Send a JSON-RPC request and handle its response.
     //
@@ -248,4 +296,5 @@ export class SuibaseExec {
       return Promise.reject(err);
     }
   }
+  */
 }
