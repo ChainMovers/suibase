@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::async_trait;
 
 use anyhow::Result;
@@ -36,14 +38,22 @@ impl GeneralApiImpl {
         let (tx, rx) = tokio::sync::oneshot::channel();
         msg.resp_channel = Some(tx);
         msg.workdir_idx = Some(workdir_idx);
-        msg.data_string = Some(cmd);
+        msg.data_string = Some(cmd.clone());
+        // The purpose of the timeout is the error log to help debugging
+        // if the CLI call is apparently "stuck".
+        const TIMEOUT: Duration = Duration::from_secs(3600); // 1 hour!
         if (self.admctrl_tx.send(msg).await).is_ok() {
-            match rx.await {
-                Ok(resp_str) => {
+            match tokio::time::timeout(TIMEOUT, rx).await {
+                Ok(Ok(resp_str)) => {
                     return Ok(resp_str);
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     return Err(RpcSuibaseError::InternalError(e.to_string()).into());
+                }
+                Err(_) => {
+                    let timeout_err = format!("Command Timeout {}", cmd);
+                    log::error!("{}", timeout_err);
+                    return Err(RpcSuibaseError::InternalError(timeout_err).into());
                 }
             }
         }
@@ -506,11 +516,16 @@ impl GeneralApiServer for GeneralApiImpl {
 
         let last_api_call_timestamp = &mut api_mutex.last_get_workdir_status_time;
 
+        log::info!("{} getVersions response A", workdir);
         // Section for getWorkdirStatus version.
         {
             // Use the internal implementation
             let update_result = self
-                .update_globals_workdir_status(workdir, workdir_idx, last_api_call_timestamp)
+                .update_globals_workdir_status(
+                    workdir.clone(),
+                    workdir_idx,
+                    last_api_call_timestamp,
+                )
                 .await;
 
             // Read access to globals for versioning all components.
@@ -523,6 +538,7 @@ impl GeneralApiServer for GeneralApiImpl {
             }
         }
 
+        log::info!("{} getVersions response B", workdir);
         // Section for getWorkdirPackages version.
         {
             // Get the data from the globals.get_packages
@@ -536,6 +552,8 @@ impl GeneralApiServer for GeneralApiImpl {
                 resp.versions.push(wp_resp.header);
             }
         }
+
+        log::info!("{} getVersions response C", workdir);
 
         // Initialize the uuids in the response header.
         // Use api_mutex.last_responses to detect if this response is equivalent to the previous one.
@@ -553,6 +571,8 @@ impl GeneralApiServer for GeneralApiImpl {
             new_versioned_resp.write_uuids_into_header_param(&mut resp.header);
             last.versions = Some(new_versioned_resp);
         }
+
+        log::info!("{} getVersions response completed", workdir);
 
         Ok(resp)
     }

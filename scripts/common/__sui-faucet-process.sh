@@ -38,7 +38,7 @@ start_sui_faucet_process() {
         --port "${CFG_sui_faucet_port:?}" \
         --request-buffer-size "${CFG_sui_faucet_request_buffer_size:?}" \
         --wallet-client-timeout-secs "${CFG_sui_faucet_client_timeout_secs:?}" \
-        --write-ahead-log "$CONFIG_DATA_DIR/faucet.wal" >&"$CONFIG_DATA_DIR/sui-faucet-process.log" &
+        --write-ahead-log "$CONFIG_DATA_DIR/faucet.wal" >"$CONFIG_DATA_DIR/sui-faucet-process.log" 2>&1 &
     fi
 
     # Loop until confirms can connect, or exit if takes too much time.

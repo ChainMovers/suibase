@@ -83,7 +83,7 @@ if [ -z "$SELECTED_SUI" ]; then
   # out-of-sync with latest intended sui location.
   #
   # Info: https://unix.stackexchange.com/questions/335801
-  if hash -t sui >&/dev/null; then
+  if hash -t sui >/dev/null 2>&1; then
     hash -d sui
   fi
   exit 1

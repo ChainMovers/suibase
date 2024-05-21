@@ -373,8 +373,8 @@ start_suibase_daemon_as_needed() {
     fi
 
     if [ "$_PERFORM_UPGRADE" = true ]; then
-      touch /tmp/.suibase/suibase-daemon-upgrading
-      trap 'rm -f /tmp/.suibase/suibase-daemon-upgrading' EXIT
+      trap 'rm -f /tmp/.suibase/suibase-daemon-upgrading >/dev/null 2>&1' EXIT
+      touch /tmp/.suibase/suibase-daemon-upgrading      
       local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
       build_suibase_daemon
       update_SUIBASE_DAEMON_VERSION_INSTALLED

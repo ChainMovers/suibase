@@ -29,7 +29,7 @@ if [ ! "$(git status --porcelain | grep -v "Cargo.lock" | grep -v "Move.lock" | 
 fi
 
 # Check if there is actually a new version
-git remote update >&/dev/null
+git remote update >/dev/null 2>&1
 V1=$(git rev-parse HEAD)
 V2=$(git rev-parse '@{u}')
 if [ "$V1" != "$V2" ]; then

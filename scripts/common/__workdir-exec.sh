@@ -794,7 +794,7 @@ workdir_exec() {
 
     if ! $is_local; then
       # Do more precise deletion for testnet/devnet/mainnet to preserve key.
-      (if cd "$SUI_REPO_DIR" >&/dev/null; then cargo clean; fi)
+      (if cd "$SUI_REPO_DIR" >/dev/null 2>&1; then cargo clean; fi)
       rm -rf "$WORKDIRS/$WORKDIR/logs/sui.log"
       rm -rf "$WORKDIRS/$WORKDIR/config/sui-process.log"
       rm -rf "$WORKDIRS/$WORKDIR/config/sui-faucet-process.log"
@@ -811,8 +811,13 @@ workdir_exec() {
     fi
 
     echo "Deleting $WORKDIR"
+
+    # TODO Retry a few times until confirmed emptied because of potential race condition
+    #      for the $WORKDIRS/$WORKDIR/logs/sui.log (recreated by concurrent status CLI).
+
     # shellcheck disable=SC2115
-    rm -rf "$WORKDIRS/$WORKDIR"
+    rm -rf "$WORKDIRS/$WORKDIR" >/dev/null 2>&1
+
     info_exit "$WORKDIR now deleted"
   fi
 

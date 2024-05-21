@@ -195,6 +195,8 @@ impl AdminController {
     }
 
     async fn process_shell_exec_msg(&mut self, msg: AdminControllerMsg, subsys: &SubsystemHandle) {
+        // TODO Make sure to respond on resp_channel if there is *any* error
+
         // Simply forward to the proper ShellWorker (one worker per workdir).
         if msg.event_id != EVENT_SHELL_EXEC {
             log::error!("Unexpected event_id {:?}", msg.event_id);

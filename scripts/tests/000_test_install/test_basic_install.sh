@@ -10,7 +10,7 @@ SUIBASE_DIR="$HOME/suibase"
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
 
 # Installation.
-(~/suibase/install >&"$OUT") || fail "install exit status=[$?]"
+(~/suibase/install >"$OUT" 2>&1) || fail "install exit status=[$?]"
 
 # As needed, create scripts/templates/common/suibase.yaml
 init_common_template
@@ -35,12 +35,12 @@ test_no_workdirs() {
   cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
 
   echo "localnet create"
-  (localnet create >&"$OUT") || fail "create"
+  (localnet create >"$OUT" 2>&1) || fail "create"
   assert_workdir_ok "localnet"
 
   #rm -rf ~/suibase/workdirs
   #echo "localnet update"
-  #(localnet update >& "$OUT") || fail "update"
+  #(localnet update >"$OUT" 2>&1) || fail "update"
   #assert_workdir_ok "localnet"
   #assert_build_ok "localnet"
 }

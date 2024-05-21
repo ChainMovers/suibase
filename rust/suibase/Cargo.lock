@@ -1223,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "axum",
@@ -1719,7 +1719,7 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "dtp-core"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "axum",
@@ -1768,7 +1768,7 @@ dependencies = [
 
 [[package]]
 name = "dtp-daemon"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "axum",
@@ -1820,7 +1820,7 @@ dependencies = [
 
 [[package]]
 name = "dtp-sdk"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "bitflags 2.5.0",
@@ -6441,7 +6441,7 @@ dependencies = [
 
 [[package]]
 name = "suibase-daemon"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "axum",

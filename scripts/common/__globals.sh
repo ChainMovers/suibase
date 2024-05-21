@@ -548,17 +548,17 @@ build_sui_repo_branch() {
     fi
 
     # Update sui devnet local repo (if needed)
-    #(cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >& /dev/null)
+    #(cd "$SUI_REPO_DIR" && git switch "$CFG_default_repo_branch" >/dev/null 2>&1)
 
     if [ "$USE_PRECOMPILED" = "false" ]; then
       local _BRANCH
       _BRANCH=$(cd "$SUI_REPO_DIR" && git branch --show-current)
 
       if [ "$_BRANCH" != "$CFG_default_repo_branch" ]; then
-        (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >&/dev/null)
+        (cd "$SUI_REPO_DIR" && git checkout -f "$CFG_default_repo_branch" >/dev/null 2>&1)
       fi
 
-      (cd "$SUI_REPO_DIR" && git remote update >&/dev/null)
+      (cd "$SUI_REPO_DIR" && git remote update >/dev/null 2>&1)
       V1=$(if cd "$SUI_REPO_DIR"; then git rev-parse HEAD; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
       V2=$(if cd "$SUI_REPO_DIR"; then git rev-parse '@{u}'; else setup_error "unexpected missing $SUI_REPO_DIR"; fi)
       if [ "$V1" != "$V2" ]; then
@@ -620,11 +620,11 @@ build_sui_repo_branch() {
 
       # Checkout the tag that match the precompiled binary.
       echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
-      (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >&/dev/null)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >&/dev/null)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >&/dev/null)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git merge '@{u}' >&/dev/null)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >&/dev/null)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >/dev/null 2>&1)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null 2>&1)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >/dev/null 2>&1)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git merge '@{u}' >/dev/null 2>&1)
+      (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >/dev/null 2>&1)
       _FEEDBACK_BEFORE_RETURN=false
     fi
 
@@ -1831,7 +1831,7 @@ start_sui_process() {
     if $SUI_BASE_NET_MOCK; then
       SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
-      "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >&"$CONFIG_DATA_DIR/sui-process.log" &
+      nohup "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >"$CONFIG_DATA_DIR/sui-process.log" 2>&1 &
     fi
     #NEW_PID=$!
 
@@ -2111,7 +2111,7 @@ add_test_addresses() {
   if [[ "$_HIGH_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
     _HIGH_ADDR="${BASH_REMATCH[0]}"
 
-    $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >&/dev/null
+    $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" switch --address "$_HIGH_ADDR" >/dev/null 2>&1
 
     # Test that it succeeded.
     update_ACTIVE_ADDRESS_var "$_SUI_BINARY" "$_CLIENT_FILE"
@@ -2537,7 +2537,7 @@ sync_client_yaml() {
 
   if [ "$_ACTIVE_ENV" != "$_EXPECTED_ENV" ]; then
     echo "Switching sui client env from [$_ACTIVE_ENV] to [$_EXPECTED_ENV]"
-    $SUI_EXEC client switch --env "$_EXPECTED_ENV" >&/dev/null
+    $SUI_EXEC client switch --env "$_EXPECTED_ENV" >/dev/null 2>&1
     # Verify if successful. If not and the _EXPECTED_ENV is for the
     # proxy, then try to "fix" the client.yaml.
     _ACTIVE_ENV=$(grep active_env "$_TARGET_YAML" | tr -d '[:space:]')
@@ -2554,7 +2554,7 @@ sync_client_yaml() {
         echo "[$_EXPECTED_ENV] added to client.yaml"
       fi
       # Try again.
-      $SUI_EXEC client switch --env "$_EXPECTED_ENV" >&/dev/null
+      $SUI_EXEC client switch --env "$_EXPECTED_ENV" >/dev/null 2>&1
       _ACTIVE_ENV=$(grep active_env "$_TARGET_YAML" | tr -d '[:space:]')
       _ACTIVE_ENV=${_ACTIVE_ENV#*:} # Remove the "active_env:" prefix
       if [ "$_ACTIVE_ENV" != "$_EXPECTED_ENV" ]; then
