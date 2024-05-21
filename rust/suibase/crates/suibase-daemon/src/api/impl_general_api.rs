@@ -516,7 +516,6 @@ impl GeneralApiServer for GeneralApiImpl {
 
         let last_api_call_timestamp = &mut api_mutex.last_get_workdir_status_time;
 
-        log::info!("{} getVersions response A", workdir);
         // Section for getWorkdirStatus version.
         {
             // Use the internal implementation
@@ -538,7 +537,6 @@ impl GeneralApiServer for GeneralApiImpl {
             }
         }
 
-        log::info!("{} getVersions response B", workdir);
         // Section for getWorkdirPackages version.
         {
             // Get the data from the globals.get_packages
@@ -552,8 +550,6 @@ impl GeneralApiServer for GeneralApiImpl {
                 resp.versions.push(wp_resp.header);
             }
         }
-
-        log::info!("{} getVersions response C", workdir);
 
         // Initialize the uuids in the response header.
         // Use api_mutex.last_responses to detect if this response is equivalent to the previous one.
@@ -571,8 +567,6 @@ impl GeneralApiServer for GeneralApiImpl {
             new_versioned_resp.write_uuids_into_header_param(&mut resp.header);
             last.versions = Some(new_versioned_resp);
         }
-
-        log::info!("{} getVersions response completed", workdir);
 
         Ok(resp)
     }
