@@ -48,8 +48,9 @@ export const DashboardController = () => {
 
   const switchProps = { inputProps: { 'aria-label': 'workdir on/off' } };
 
-  // Calculated states that consider both the backend and the user requests.
+  const [allDisabled, setAllDisabled] = useState(false);
   const [workdirStates, setWorkdirStates] = useState<WorkdirStates[]>(WORKDIRS_KEYS.map(() => new WorkdirStates()));
+
   const updateWorkdirStates = (index: number, updates: Partial<WorkdirStates>) => {
     setWorkdirStates(currentStates =>
       currentStates.map((item, idx) =>
@@ -121,6 +122,21 @@ export const DashboardController = () => {
     return () => {};
   }, [commonTrigger,statusTrigger,workdirs,workdirStates]);
 
+  useEffect(() => {
+    // Check if all workdirs are disabled.
+    let allDisabledCalc = true;
+    for (let i = 0; i < WORKDIRS_KEYS.length; i++) {
+      if (workdirs[i].workdirStatus.status !== "DISABLED") {
+        allDisabledCalc = false;
+        break;
+      }
+    }
+    // Update the state.
+    if (allDisabledCalc !== allDisabled) {
+      setAllDisabled(allDisabledCalc);
+    }
+  }, [workdirs, statusTrigger]);
+
   return (
       <Box sx={{paddingLeft:1}}>
       {common.current.setupIssue && <SetupIssue issue={common.current.setupIssue}/>}
@@ -133,35 +149,36 @@ export const DashboardController = () => {
             <TableRow>
               <TableCell style={{ width: '115px' }}></TableCell>
               <TableCell align="center" style={{ width: '105px' }}>Status</TableCell>
-              <TableCell style={{ width: '100px' }}>Version</TableCell>
+              <TableCell align="center" style={{ width: '100px' }}>Version</TableCell>
               <TableCell style={{ width: '100px' }}>{/*More Controls*/}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
           {workdirStates.map((workdirState,index) => {
-            const workdirStates = workdirs[index];
+            const viewData = workdirs[index];
+            const badgeInvisible = allDisabled || !viewData.workdirStatus.isLoaded || index !== common.current.activeWorkdirIdx;
             return (
-            <TableRow key={WORKDIRS_LABELS[index]} sx={{ p: 0, m: 0, '&:last-child td, &:last-child th': { border: 0 } }}>
-              <TableCell sx={{ width: 115, maxWidth: 115, p: 0, m: 0}}>
+            <TableRow key={WORKDIRS_LABELS[index]} sx={{p: 0, m: 0, '&:last-child td, &:last-child th': { border: 0 } }}>
+              <TableCell sx={{width: 115, maxWidth: 115, pt: '6px', pb: '6px', pl: 0, pr: 0, m: 0}}>
                 <Box display="flex" alignItems="center" flexWrap="nowrap">
                   <Box width="10px" display="flex" justifyContent="left" alignItems="center">
                     {workdirState.showSpinner && <CircularProgress size={9}/>}
                   </Box>                          
                   <Box width="50px" display="flex" justifyContent="center" alignItems="center">
-                    <AntSwitch {...switchProps} checked={workdirState.switchState} onChange={(event) => handleSwitchChange(index, event.target.checked)}/>
+                    <AntSwitch {...switchProps} size="small" disabled={workdirState.showSpinner} checked={workdirState.switchState} onChange={(event) => handleSwitchChange(index, event.target.checked)}/>
                   </Box>                       
                   <Box width="50px" display="flex" justifyContent="left" alignItems="center">
-                    <Badge variant="dot" color="info" anchorOrigin={{vertical: 'top', horizontal: 'left',}} invisible={!workdirStates.workdirStatus.isLoaded || index !== common.current.activeWorkdirIdx}>
+                    <Badge variant="dot" color="info" anchorOrigin={{vertical: 'top', horizontal: 'left',}} invisible={badgeInvisible}>
                       <Typography variant="body2" sx={{pl:'2px'}}>{WORKDIRS_LABELS[index]}</Typography>
                     </Badge>
                   </Box>
                 </Box>
               </TableCell>
-              <TableCell align="center" sx={{ width: 105, maxWidth: 105, p: 0, m: 0}}>
-                <Typography variant="subtitle2">{workdirStates.workdirStatus.status}</Typography>                
+              <TableCell align="center" sx={{width: 105, maxWidth: 105, p: 0, m: 0}}>
+                <Typography variant="subtitle2">{viewData.workdirStatus.status}</Typography>                
               </TableCell>              
-              <TableCell>
-                <Typography variant="body2">{workdirStates.workdirStatus.isLoaded && workdirStates.workdirStatus.suiClientVersionShort}</Typography>
+              <TableCell align="center" sx={{width: 65, maxWidth: 65, p: 0, m: 0}}>
+                <Typography variant="body2">{viewData.workdirStatus.isLoaded && viewData.workdirStatus.suiClientVersionShort}</Typography>
               </TableCell>         
               <TableCell>
                 {/* Not supported for now

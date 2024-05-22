@@ -4,6 +4,7 @@ import {
   SETUP_ISSUE_SUIBASE_NOT_INSTALLED,
   WEBVIEW_BACKEND,
   WORKDIRS_KEYS,
+  WORKDIR_IDX_TESTNET,
 } from "./common/Consts";
 import { Mutex } from "async-mutex";
 import { BaseWebview } from "./bases/BaseWebview";
@@ -16,6 +17,7 @@ import {
 } from "./common/ViewMessages";
 import { SuibaseJson, SuibaseJsonVersions } from "./common/SuibaseJson";
 import { SuibaseExec } from "./SuibaseExec";
+import * as vscode from "vscode";
 
 // One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
 class BackendWorkdirTracking {
@@ -36,6 +38,7 @@ export class BackendSync {
   private mWorkdir: string; // Last known active workdir. One of "localnet", "mainnet", "testnet", "devnet".
   private mWorkdirTrackings: BackendWorkdirTracking[] = []; // One instance per workdir, align with WORKDIRS_KEYS.
   private mForceRefreshOnNextReconnect: boolean; // Force some refresh when there was a lost of backend connection.
+  private activeWorkdir: string = WORKDIRS_KEYS[WORKDIR_IDX_TESTNET];
 
   // Singleton
   private constructor() {
@@ -102,6 +105,11 @@ export class BackendSync {
         void this.replyWorkdirStatus(message as RequestWorkdirStatus);
       } else if (message.name === "RequestWorkdirPackages") {
         void this.replyWorkdirPackages(message as RequestWorkdirPackages);
+      } else if (message.name === "OpenDiagnosticPanel") {
+        // Call the VSCode command "suibase.dashboard" to open/reveal the dashboard panel.
+        vscode.commands.executeCommand("suibase.dashboard").then(undefined, (error) => {
+          console.error(`Error executing suibase.dashboard command: ${error}`);
+        });
       }
     } catch (error) {
       console.error(`Error in handleViewMessage: ${JSON.stringify(error)}`);
@@ -298,14 +306,19 @@ export class BackendSync {
           // Sanity check that the data is valid.
           //  - result should have a header with method "getVersions".
           //  - the key must match the workdir.
-          //  - asuiSelection should always be set to one of "localnet", "mainnet", "testnet", "devnet".
-          if (
-            data?.result?.header?.method !== "getVersions" ||
-            data?.result?.header?.key !== workdir ||
-            data?.result?.asuiSelection === "Unknown"
-          ) {
+          if (data?.result?.header?.method !== "getVersions" || data?.result?.header?.key !== workdir) {
             await this.diagnoseBackendError(workdirIdx);
             return;
+          }
+
+          // In the UI, the asuiSelection should always be one of "localnet", "mainnet", "testnet", "devnet".
+          //
+          // If the backend has trouble to identify the active, just default to the last known valid.
+          if (!data.result.asuiSelection || !WORKDIRS_KEYS.includes(data.result.asuiSelection)) {
+            data.result.asuiSelection = this.activeWorkdir;
+          } else {
+            // Got a valid active workdir from backend, make it the last known valid.
+            this.activeWorkdir = data.result.asuiSelection;
           }
 
           // Update the SuibaseJson instance for the workdir.
@@ -328,6 +341,9 @@ export class BackendSync {
         }
       }
     }
+
+    // TODO Robustness. If there was no valid active workdir coming from the backend, then
+    //      try to resolve it with the ~/suibase/workdirs/active symlink.
   }
 
   private async replyWorkdirStatus(message: RequestWorkdirStatus) {

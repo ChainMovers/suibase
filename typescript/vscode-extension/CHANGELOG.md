@@ -1,6 +1,10 @@
 # Change Log
 
-When upgrading the extension, do also "~/suibase/update" to get the latest Suibase CLI.
+Important: 
+  When upgrading the extension, do also "~/suibase/update" to get the latest Suibase CLI.
+
+## 0.1.7
+  - Better UI to help the user get started. Less "unexplained" spinners...
 
 ## 0.1.6
   - Make installation/upgrade more user friendly, better error messages.

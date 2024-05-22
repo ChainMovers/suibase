@@ -110,7 +110,6 @@ export class RequestWorkdirStatus extends ViewMessages {
   methodUuid: string;
   dataUuid: string;
 
-
   constructor(sender: string, workdirIdx: number, methodUuid: string, dataUuid: string) {
     super("RequestWorkdirStatus", sender);
     this.workdirIdx = workdirIdx;
@@ -134,3 +133,8 @@ export class RequestWorkdirPackages extends ViewMessages {
   }
 }
 
+export class OpenDiagnosticPanel extends ViewMessages {
+  constructor() {
+    super("OpenDiagnosticPanel", "");
+  }
+}

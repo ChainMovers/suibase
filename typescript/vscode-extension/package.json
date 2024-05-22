@@ -8,7 +8,7 @@
   },
   "license": "Apache-2.0",
   "icon": "media/logo_128.png",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "repository": {
     "type": "git",
     "url": "https://github.com/ChainMovers/suibase.git"

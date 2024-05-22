@@ -9,9 +9,7 @@ use std::{path::PathBuf, process::Command};
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::{
-    basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx},
-};
+use crate::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
 
 use home::home_dir;
 
@@ -101,14 +99,20 @@ impl ShellWorker {
 
                 match output {
                     Ok(output) => {
-                        if output.status.success() {
-                            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                            resp = Some(stdout.trim().to_string());
+                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                        let mut outputs = if stderr.is_empty() {
+                            stdout
                         } else {
-                            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                            format!("{}\n{}", stderr, stdout)
+                        };
+                        outputs = outputs.trim().to_string();
+                        if output.status.success() {
+                            resp = Some(outputs);
+                        } else {
                             let error_msg = format!(
                                 "Error: do_exec({:?}, {:?}) returned {}",
-                                msg.workdir_idx, cmd, stderr
+                                msg.workdir_idx, cmd, outputs
                             );
                             log::error!("{}", error_msg);
                             resp = Some(error_msg);
