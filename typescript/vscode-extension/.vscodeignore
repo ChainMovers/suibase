@@ -46,3 +46,4 @@ node_modules
 !LICENSE.md
 !out/extension.js
 !webview-ui/node_modules/@vscode/codicons/dist/codicon.css
+!webview-ui/node_modules/@vscode/codicons/dist/codicon.ttf
