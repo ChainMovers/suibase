@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# This is not normally called, only when suspecting that the
+# suibase-daemon is not responding.
+#
+
+# Source '__globals.sh'.
+SUIBASE_DIR="$HOME/suibase"
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="localnet"
+
+main() {
+  # Detect if suibase is not installed!
+  if [ ! -d "$SUIBASE_DIR" ]; then
+    echo "ERROR: suibase is not installed! Check https://suibase.io/how-to/install"
+    exit 1
+  fi
+
+  # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
+  source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
+  # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
+  source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
+
+  restart_suibase_daemon
+}
+
+main "$@"
