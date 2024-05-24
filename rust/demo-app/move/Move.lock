@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [move.toolchain-version]
-compiler-version = "1.25.1"
+compiler-version = "1.26.0"
 edition = "2024.beta"
 flavor = "sui"
 
@@ -42,13 +42,13 @@ flavor = "sui"
 test = 12
 
 [env.localnet_proxy]
-chain-id = "c47310d1"
-original-published-id = "0x88783e9285603ec50560a4db581a728f4329c12e765fdefeebb3cc9a7db771f4"
-latest-published-id = "0x88783e9285603ec50560a4db581a728f4329c12e765fdefeebb3cc9a7db771f4"
+chain-id = "a93d8416"
+original-published-id = "0x53402fa9fbe721fb56864ad3cf77d6508677d3d40dc5797b8b16883186afd02c"
+latest-published-id = "0x53402fa9fbe721fb56864ad3cf77d6508677d3d40dc5797b8b16883186afd02c"
 published-version = "1"
 
 [env.testnet_proxy]
 chain-id = "4c78adac"
-original-published-id = "0x47a6d73defe78b2c2500fd25c01dd520aec45bb7fae178b92ffd39036f1d31b1"
-latest-published-id = "0x47a6d73defe78b2c2500fd25c01dd520aec45bb7fae178b92ffd39036f1d31b1"
+original-published-id = "0x915398a0991635914fbe730133da9015618976fe546db7c69cb94251c9ae6719"
+latest-published-id = "0x915398a0991635914fbe730133da9015618976fe546db7c69cb94251c9ae6719"
 published-version = "1"

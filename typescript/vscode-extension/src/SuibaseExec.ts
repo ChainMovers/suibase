@@ -12,6 +12,7 @@
 import * as vscode from "vscode";
 import * as cp from "child_process";
 //import WebSocket from "ws";
+import * as OS from "os";
 
 const execShell = (cmd: string) =>
   new Promise<string>((resolve, reject) => {
@@ -37,12 +38,15 @@ const execShellBackground = (cmd: string) =>
 export class SuibaseExec {
   private static instance?: SuibaseExec;
   private static context?: vscode.ExtensionContext;
+  private static homedir: string;
   //private ws: WebSocket | undefined;
 
   // Define a cache to store the response
   //private cache: any = {};
 
   private constructor() {
+    SuibaseExec.homedir = OS.homedir();
+
     // Should be called only by SuibaseExec.activate()
     /*
     this.ws = new WebSocket("ws://localhost:44399");
@@ -106,6 +110,10 @@ export class SuibaseExec {
     return SuibaseExec.instance;
   }
 
+  public static getHomedir(): string {
+    return SuibaseExec.homedir;
+  }
+
   public async isRustInstalled(): Promise<boolean> {
     // Returns true if the rust compiler can be call.
     // Returns false on any error.
@@ -134,30 +142,47 @@ export class SuibaseExec {
     return false;
   }
 
-  /*
   public async fileExists(pathname: string): Promise<boolean> {
     // Returns true if the file exists on the filesystem.
     // Returns false on any error.
     //
     // This function must always resolve its promise.
+    pathname = pathname.replace("~", SuibaseExec.homedir);
     try {
       let result = await execShell(`ls ${pathname}`);
       result = result.toLowerCase();
-      if (!result.includes(pathname) || result.includes("cannot access") || result.includes("no such")) {
+      if (
+        !result.includes(pathname) ||
+        result.includes("cannot access") ||
+        result.includes("no such") ||
+        result.includes("not found")
+      ) {
+        console.error(`File ${pathname} not found`);
         return false;
       }
     } catch (error) {
       return false;
     }
     return true;
-  }*/
+  }
 
   public async isSuibaseInstalled(): Promise<boolean> {
     // Verify if Suibase itself is installed.
     //
+    // Good enough to just check that the script to start the backend daemon exists.
+    try {
+      return await this.fileExists("~/suibase/scripts/common/run-daemon.sh");
+    } catch (error) {
+      return false;
+    }
+  }
+
+  public async isSuibaseOnPath(): Promise<boolean> {
+    // Verify if Suibase itself is accessible.
+    //
     // Verifies that executing "localnet suibase-script-name" returns the exact string "localnet".
     //
-    // This is the same verification trick used by "~/suibase/install"
+    // This is similar to the verification trick used by "~/suibase/install"
     try {
       const result = await execShell("localnet suibase-script-name");
       if (!result || result.trim() !== "localnet") {
@@ -199,16 +224,11 @@ export class SuibaseExec {
     //
     // This function must always resolve its promise.
     try {
-      let result = await execShell("ls /tmp/.suibase/suibase-daemon-upgrading");
-      result = result.toLowerCase();
-      if (result.includes("cannot") || result.includes("no such")) {
-        return false;
-      }
+      return await this.fileExists("/tmp/.suibase/suibase-daemon-upgrading")
     } catch (error) {
       return false;
     }
 
-    return true;
   }
 
   public async version(): Promise<string> {

@@ -5,6 +5,7 @@ import {
 import React from 'react';
 import { Box, ClickAwayListener, useTheme} from '@mui/material';
 import Fade from '@mui/material/Fade';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 
 interface CopyToClipboardButtonProps {
     text: string;
@@ -36,7 +37,7 @@ const CopyToClipboardButton = ({text,message}: CopyToClipboardButtonProps) => {
 
     return (
         <>        
-        <div className="icon" onClick={handleClick}><i className="codicon codicon-clippy"></i></div>
+        <Box className="icon" onClick={handleClick}><ContentCopyOutlinedIcon sx={{ fontSize: '14px'}}/></Box>
         <BasePopup
           id="placement-popper"
           open={open}
@@ -45,7 +46,7 @@ const CopyToClipboardButton = ({text,message}: CopyToClipboardButtonProps) => {
           offset={4}
         >
           <ClickAwayListener onClickAway={handleClickAway}>
-            <Fade in={open} timeout={1000}>
+            <Fade in={open} timeout={500}>
                 <Box role="presentation" sx={{ padding: '2px', 
                     color: theme.palette.secondary.contrastText,
                     backgroundColor: theme.palette.secondary.main,

@@ -146,7 +146,7 @@ export const ExplorerController = () => {
         <>
         {common.current.setupIssue && <SetupIssue issue={common.current.setupIssue}/>}
         
-        {allDisabled && renderAllDisabledHelp()}
+        {!common.current.setupIssue && allDisabled && renderAllDisabledHelp()}
 
         {renderControls && renderDropdown()}
 

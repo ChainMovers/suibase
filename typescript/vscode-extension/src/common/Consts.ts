@@ -90,4 +90,5 @@ export const TREE_ID_INSERT_ADDR = "[TREE_ID_INSERT_ADDR]";
 
 // setupIssue strings. Used in messages between extension and webviews
 export const SETUP_ISSUE_SUIBASE_NOT_INSTALLED = "Suibase not installed";
+export const SETUP_ISSUE_SUIBASE_NOT_ON_PATH = "Suibase scripts not on $PATH";
 export const SETUP_ISSUE_GIT_NOT_INSTALLED = "Git not installed";

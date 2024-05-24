@@ -2,6 +2,7 @@ import {
   API_URL,
   SETUP_ISSUE_GIT_NOT_INSTALLED,
   SETUP_ISSUE_SUIBASE_NOT_INSTALLED,
+  SETUP_ISSUE_SUIBASE_NOT_ON_PATH,
   WEBVIEW_BACKEND,
   WORKDIRS_KEYS,
   WORKDIR_IDX_TESTNET,
@@ -247,10 +248,12 @@ export class BackendSync {
     const sb = SuibaseExec.getInstance();
     if (sb === undefined) {
       msg.setSetupIssue("Internal error. Shell commands failed.");
-    } else if ((await sb.isSuibaseInstalled()) === false) {
-      msg.setSetupIssue(SETUP_ISSUE_SUIBASE_NOT_INSTALLED);
     } else if ((await sb.isGitInstalled()) === false) {
       msg.setSetupIssue(SETUP_ISSUE_GIT_NOT_INSTALLED);
+    } else if ((await sb.isSuibaseInstalled()) === false) {
+      msg.setSetupIssue(SETUP_ISSUE_SUIBASE_NOT_INSTALLED);
+    } else if ((await sb.isSuibaseOnPath()) === false) {
+      msg.setSetupIssue(SETUP_ISSUE_SUIBASE_NOT_ON_PATH + ",homedir=" + SuibaseExec.getHomedir());
     } else if ((await sb.isSuibaseBackendRunning()) === false) {
       // Start the backend daemon if safe to do...
       if ((await sb.isSuibaseBackendUpgrading()) === true) {

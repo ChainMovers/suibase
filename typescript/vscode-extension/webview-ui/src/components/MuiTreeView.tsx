@@ -66,6 +66,8 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
   const { workdir, id, itemId, disabled, children, ...other } = props;
   let { label } = props;
 
+  let [isHoveredItem, setIsHoveredItem] = React.useState(false);
+
   // set is_top_folder to true if first character of itemId is a numeric.
   // See Consts.ts for the meaning of the first char ( TREE_ITEM_x ).
   let is_top_folder = false;
@@ -117,6 +119,38 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
     labelStyle.fontFamily = 'monospace';
   }
 
+  const renderItemIcons = () => {
+    return (
+      <>
+      {to_clipboard && (
+        <Box width={20}>                                   
+          <CopyToClipboardButton text={to_clipboard} message="Copied!" />
+        </Box>
+      )}
+      </>
+    );
+  }
+
+  const renderItem = () => {
+    return(
+      <Box display="flex" overflow="hidden" 
+      justifyContent="space-between" width="100%"
+      onMouseEnter={()=> setIsHoveredItem(true)} 
+      onMouseLeave={()=> setIsHoveredItem(false)}>
+
+        <Box flexGrow={1} overflow="hidden" >
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={labelStyle} {...getLabelProps()} >
+              {labelInnerStyling(label)}
+            </span>
+          </div>
+          {/* <TreeItem2Label sx={labelSx} {...getLabelProps()} />*/}
+        </Box>
+        {isHoveredItem && renderItemIcons()}
+      </Box>              
+    );
+  }
+
   return (
     <TreeItem2Provider itemId={itemId}>
       <TreeItem2Root {...getRootProps(other)}>
@@ -124,29 +158,12 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
           <TreeItem2IconContainer {...getIconContainerProps()}>
             <TreeItem2Icon status={status} />
           </TreeItem2IconContainer>
-          
             {is_empty_folder ? (
               <Typography variant="caption" sx={labelStyle} {...getLabelProps()}>
                 {empty_folder_label}
               </Typography>
-            ) : (
-              <Box display="flex" overflow="hidden" justifyContent="space-between" width="100%">
-                <Box flexGrow={1} overflow="hidden" >
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <span style={labelStyle} {...getLabelProps()} >
-                      {labelInnerStyling(label)}
-                    </span>
-                  </div>
-                  {/* <TreeItem2Label sx={labelSx} {...getLabelProps()} />*/}
-                </Box>
-                {to_clipboard && (
-                  <Box width={20}>                                   
-                    <CopyToClipboardButton text={to_clipboard} message="Copied!" />
-                  </Box>
-                )}
-              </Box>              
-            )}         
-          
+            ) : (renderItem())
+            }
         </CustomTreeItemContent>
         {children && <TreeItem2GroupTransition {...getGroupTransitionProps()} />}        
       </TreeItem2Root>
