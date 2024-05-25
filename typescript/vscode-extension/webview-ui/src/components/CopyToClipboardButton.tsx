@@ -30,14 +30,16 @@ const CopyToClipboardButton = ({text,message}: CopyToClipboardButtonProps) => {
       setOpen(false)
     };
     
-    // Default message to "{text} copied!" if message not specified.
+    // Default message to "{text} copied" if message not specified.
     if (!message) {
       message = `Copied ${text}`
     }
 
     return (
         <>        
-        <Box className="icon" onClick={handleClick}><ContentCopyOutlinedIcon sx={{ fontSize: '14px'}}/></Box>
+        <Box className="icon" onClick={handleClick} sx={{width: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+          <ContentCopyOutlinedIcon sx={{height: '16px'}}/>
+        </Box>
         <BasePopup
           id="placement-popper"
           open={open}

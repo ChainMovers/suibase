@@ -5,8 +5,6 @@ import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
 import { TreeViewBaseItem } from '@mui/x-tree-view/models';
 import Box from '@mui/material/Box';
 
-//import { css } from '@emotion/react';
-
 import {
   unstable_useTreeItem2 as useTreeItem2,
   UseTreeItem2Parameters,
@@ -22,6 +20,7 @@ import { TreeItem2Provider } from '@mui/x-tree-view/TreeItem2Provider';
 import { Typography } from '@mui/material';
 import { TREE_ID_INSERT_ADDR, TREE_ITEM_EMPTY, TREE_ITEM_ID_RECENT_PACKAGES_EMPTY, TREE_ITEM_PACKAGE } from '../common/Consts';
 import CopyToClipboardButton from './CopyToClipboardButton';
+import ToBrowserButton from './ToBrowserButton';
 
 const CustomTreeItemContent = styled(TreeItem2Content)(({ }) => ({
   padding: 0,
@@ -34,7 +33,7 @@ function shortAddr( addr: string ): string {
   addr = addr.replace(/^0x/, "");  
 
   // Given a string, take the first two character of addr, append a "~" and then append the last 3 character of addr.
-  // Example: "1234567890" => "12~890"
+  // Example: "1234567890" => "0x12~890"
   return "0x" + (addr.length > 5 ? addr.slice(0,2) + "~" + addr.slice(-3) : addr);
 }
 
@@ -49,14 +48,25 @@ interface CustomTreeItemProps
 // Intended as the last minor styling "touch-up" done prior to rendering.
 const labelInnerStyling = (label: React.ReactNode) => {
   const str = String(label);
-  const parts = str.split('0x');
+  const parts = str.split(/(0x|~|::)/);
 
-  return parts.map((part, i) => (
-    <React.Fragment key={i}>
-      {i > 0 && <span style={{fontSize: "9px", filter: 'brightness(50%)', fontWeight: 'lighter'}}>0x</span>}
-      {part}
-    </React.Fragment>
-  ));
+  const lightStyle = {fontSize: "9px", fontWeight: 'lighter'};
+  const colonStyle = {...lightStyle, verticalAlign: 'middle', marginRight: '-1px', marginLeft: '-1px'};
+  
+  return parts.map((part, i) => {
+    const is0x = part === '0x';
+    const isEllipsis = part === '~';
+    const isColon = part === '::';
+    const isRest = !is0x && !isEllipsis && !isColon;
+    return (
+      <React.Fragment key={i}>      
+        {is0x && <span style={lightStyle}>0x</span>}
+        {isEllipsis && <span style={lightStyle}>&hellip;</span>}
+        {isColon && <><span style={colonStyle}>:</span><span style={colonStyle}>:</span></>}
+        {isRest && part}
+      </React.Fragment>
+    );
+  });
 };
 
 const CustomTreeItem = React.forwardRef(function CustomTreeItem(
@@ -74,6 +84,8 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
   let is_empty_folder = false;
   let empty_folder_label = '(empty)';
   let to_clipboard: string | undefined = undefined;
+  let to_browser_type: string | undefined = undefined;
+  let to_browser_id: string | undefined = undefined;
   const first_char = itemId.charAt(0);
   if (first_char.length > 0) {
     if (first_char >= '0' && first_char <= '9') {
@@ -91,6 +103,10 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
         const shortPackageId = shortAddr(packageId);
         label = label.toString().replace(TREE_ID_INSERT_ADDR, shortPackageId);
         to_clipboard = packageId;
+        if (workdir != "localnet") {
+          to_browser_id = "0x" + packageId;
+          to_browser_type = "package";
+        }
       }
     }
   }
@@ -123,9 +139,10 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
     return (
       <>
       {to_clipboard && (
-        <Box width={20}>                                   
-          <CopyToClipboardButton text={to_clipboard} message="Copied!" />
-        </Box>
+        <CopyToClipboardButton text={to_clipboard} message="Copied" />        
+      )}
+      {to_browser_id && to_browser_type && (
+        <ToBrowserButton network={workdir} type={to_browser_type} id={to_browser_id} />
       )}
       </>
     );
