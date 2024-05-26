@@ -199,13 +199,14 @@ workdir_exec() {
   esac
 
   # Optional params
-  # "debug", "nobinary" and "precompiled" are for developnent testing and
-  # are purposely not documented
+  # These are for development/testing/internal and are purposely not
+  # docuemnted (not intended for the end-user).
   DEBUG_PARAM=false
   NOBINARY_PARAM=false
   PRECOMPILED_PARAM=false
   NO_AVX2_PARAM=false
   NO_AVX_PARAM=false
+  IS_DAEMON_CALL=false
 
   # This is for the --json parameter
   JSON_PARAM=false
@@ -219,6 +220,7 @@ workdir_exec() {
     while [[ "$#" -gt 0 ]]; do
       case $1 in
       --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
       --precompiled | --nobinary)
         echo "Option '$1' not compatible with '$CMD_REQ' command"
         exit 1
@@ -232,6 +234,7 @@ workdir_exec() {
     while [[ "$#" -gt 0 ]]; do
       case $1 in
       --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
       --precompiled | --nobinary)
         echo "Option '$1' not compatible with '$CMD_REQ' command"
         exit 1
@@ -257,6 +260,7 @@ workdir_exec() {
     while [[ "$#" -gt 0 ]]; do
       case $1 in
       --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
       --precompiled | --nobinary)
         echo "Option '$1' not compatible with '$CMD_REQ' command"
         exit 1
@@ -280,6 +284,7 @@ workdir_exec() {
     while [[ "$#" -gt 0 ]]; do
       case $1 in
       --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
       --nobinary) NOBINARY_PARAM=true ;; # Will just update the repo.
       --precompiled) PRECOMPILED_PARAM=true ;;
       --no_avx2) NO_AVX2_PARAM=true ;;
@@ -296,6 +301,7 @@ workdir_exec() {
     while [[ "$#" -gt 0 ]]; do
       case $1 in
       --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
       --json) JSON_PARAM=true ;;
       --precompiled | --nobinary)
         echo "Option '$1' not compatible with '$CMD_REQ' command"
@@ -313,6 +319,7 @@ workdir_exec() {
     while [[ "$#" -gt 0 ]]; do
       case $1 in
       --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
       --precompiled | --nobinary)
         echo "Option '$1' not compatible with '$CMD_REQ' command"
         exit 1
@@ -428,12 +435,18 @@ workdir_exec() {
     # Verify from suibase.yaml if proxy services are expected.
     # If yes, then populate STATUS/INFO.
     local _SUPPORT_PROXY
+    local _SHOW_PROXY
     local _MLINK_STATUS
     local _MLINK_INFO
-    if [ "${CFG_proxy_enabled:?}" == "false" ]; then
+    if $IS_DAEMON_CALL; then
       _SUPPORT_PROXY=false
+      _SHOW_PROXY=false
+    elif [ "${CFG_proxy_enabled:?}" == "false" ]; then
+      _SUPPORT_PROXY=false
+      _SHOW_PROXY=true
     else
       _SUPPORT_PROXY=true
+      _SHOW_PROXY=true
       unset JSON_RESP
       get_suibase_daemon_status "data"
       update_JSON_VALUE "code" "$JSON_RESP"
@@ -570,29 +583,31 @@ workdir_exec() {
         echo_process "DTP services" "$_SUPPORT_DTP" "$DTP_DAEMON_PID" "$_INFO"
       fi
 
-      _INFO=$(
-        echo -n "http://"
-        echo_blue "${CFG_proxy_host_ip:?}"
-        echo -n ":"
-        echo_blue "${CFG_proxy_port_number:?}"
-      )
-      echo_process "Proxy server" "$_SUPPORT_PROXY" "$SUIBASE_DAEMON_PID" "$_INFO"
-    fi
+      if $_SHOW_PROXY; then
+        _INFO=$(
+          echo -n "http://"
+          echo_blue "${CFG_proxy_host_ip:?}"
+          echo -n ":"
+          echo_blue "${CFG_proxy_port_number:?}"
+        )
+        echo_process "Proxy server" "$_SUPPORT_PROXY" "$SUIBASE_DAEMON_PID" "$_INFO"
+      fi
 
-    if [ "$_SUPPORT_PROXY" = true ]; then
-      echo -n "Multi-link RPC   : "
-      case $_MLINK_STATUS in
-      "OK")
-        echo_blue "OK"
-        ;;
-      "DOWN")
-        echo_red "DOWN"
-        ;;
-      esac
-      if [ -n "$_MLINK_INFO" ]; then
-        echo " ( $_MLINK_INFO )"
-      else
-        echo
+      if [ "$_SUPPORT_PROXY" = true ]; then
+        echo -n "Multi-link RPC   : "
+        case $_MLINK_STATUS in
+        "OK")
+          echo_blue "OK"
+          ;;
+        "DOWN")
+          echo_red "DOWN"
+          ;;
+        esac
+        if [ -n "$_MLINK_INFO" ]; then
+          echo " ( $_MLINK_INFO )"
+        else
+          echo
+        fi
       fi
     fi
 

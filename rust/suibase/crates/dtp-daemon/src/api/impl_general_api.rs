@@ -126,7 +126,7 @@ impl GeneralApiImpl {
             let first_word = words.next();
 
             match first_word {
-                Some("localnet") | Some("faucet") | Some("multi-link") | Some("proxy") => {
+                Some("localnet") | Some("faucet") => {
                     // Get the 4th word in words.
                     let mut service_status = words.nth(2).unwrap_or("").to_string();
 

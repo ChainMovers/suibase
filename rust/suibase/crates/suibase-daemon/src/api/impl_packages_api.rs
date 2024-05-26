@@ -2,17 +2,21 @@ use std::time::SystemTime;
 
 use axum::async_trait;
 
+use anyhow::Result;
+
+use common::basic_types::WorkdirIdx;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_types::ErrorObjectOwned as RpcError;
 
 use chrono::Utc;
 
 use crate::admin_controller::{AdminController, AdminControllerTx};
+
 use crate::api::RpcSuibaseError;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
 
 use super::{
-    MoveConfig, PackageInstance, PackagesApiServer, RpcInputError, SuccessResponse, Versioned,
+    Header, MoveConfig, PackageInstance, PackagesApiServer, RpcInputError, SuccessResponse,
     WorkdirPackagesResponse, WorkdirSuiEventsResponse,
 };
 
@@ -151,8 +155,7 @@ impl PackagesApiServer for PackagesApiImpl {
 
             // Create the globals.ui if does not exists.
             if globals.ui.is_none() {
-                let versioned_resp = Versioned::new(WorkdirPackagesResponse::new());
-                globals.ui = Some(versioned_resp);
+                globals.init_empty_ui(workdir.clone());
             }
 
             if let Some(ui) = &mut globals.ui {
@@ -242,47 +245,55 @@ impl PackagesApiServer for PackagesApiImpl {
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
-        let mut resp_ready: Option<WorkdirPackagesResponse> = None;
-
         if method_uuid.is_none() && data_uuid.is_none() {
-            // Just return what is already built in-memory, or empty.
+            // Best-effort refresh, since user is requesting for the latest.
 
-            // Get the globals for the target workdir_idx.
+            // Allow only one API request for a given workdir at the time to avoid race conditions.
+            let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
+            let api_mutex = &mut *api_mutex_guard;
+
+            let last_api_call_timestamp = &mut api_mutex.last_get_workdir_status_time;
+
+            let _ = self
+                .update_globals_workdir_packages(
+                    workdir.clone(),
+                    workdir_idx,
+                    last_api_call_timestamp,
+                )
+                .await;
+        }
+
+        {
             let globals_read_guard = self.globals.get_packages(workdir_idx).read().await;
             let globals = &*globals_read_guard;
 
             if let Some(ui) = &globals.ui {
                 if let (Some(method_uuid), Some(data_uuid)) = (method_uuid, data_uuid) {
+                    let mut are_same_version = false;
                     let globals_data_uuid = ui.get_uuid().get_data_uuid();
                     if data_uuid == globals_data_uuid {
                         let globals_method_uuid = ui.get_uuid().get_method_uuid();
                         if method_uuid == globals_method_uuid {
-                            // The caller requested the same data that it already have a copy of.
-                            // Respond with the same UUID as a way to say "no change".
-                            let mut new_resp = WorkdirPackagesResponse::new();
-                            ui.write_uuids_into_header_param(&mut new_resp.header);
-                            resp_ready = Some(new_resp);
+                            are_same_version = true;
                         }
                     }
-                } else {
-                    // The caller did not specify a method_uuid or data_uuid and
-                    // there is an in-memory response ready. Just respond with it.
-                    let mut existing_resp = ui.get_data().clone();
-                    ui.write_uuids_into_header_param(&mut existing_resp.header);
-                    resp_ready = Some(existing_resp);
+                    if !are_same_version {
+                        // Something went wrong, but this could be normal if the globals just got updated
+                        // and the caller is not yet aware of it (assume the caller will eventually discover
+                        // the latest version with getVersions).
+                        return Err(RpcSuibaseError::OutdatedUUID().into());
+                    }
                 }
+                // Response with the latest global data.
+                let mut resp = ui.get_data().clone();
+                resp.header.set_from_uuids(ui.get_uuid());
+                return Ok(resp);
+            } else {
+                return Err(
+                    RpcSuibaseError::InternalError("globals.ui was None".to_string()).into(),
+                );
             }
         }
-
-        if resp_ready.is_none() {
-            // There was no data in the globals, so revert to empty response.
-            resp_ready = Some(WorkdirPackagesResponse::new());
-        }
-        let mut resp_ready = resp_ready.unwrap();
-
-        resp_ready.header.method = "getWorkdirPackages".to_string();
-        resp_ready.header.key = Some(workdir.clone());
-        return Ok(resp_ready);
     }
 }
 
@@ -413,5 +424,49 @@ impl PackagesApiImpl {
         }
 
         Ok((workdir_idx, package_uuid))
+    }
+
+    async fn update_globals_workdir_packages(
+        &self,
+        workdir: String,
+        workdir_idx: WorkdirIdx,
+        last_api_call_timestamp: &mut tokio::time::Instant,
+    ) -> Result<Header> {
+        // Debounce excessive refresh request on short period of time.
+        if last_api_call_timestamp.elapsed() < tokio::time::Duration::from_millis(50) {
+            let globals_read_guard = self.globals.get_packages(workdir_idx).read().await;
+            let globals = &*globals_read_guard;
+
+            if let Some(ui) = &globals.ui {
+                return Ok(ui.get_data().header.clone());
+            }
+        };
+        *last_api_call_timestamp = tokio::time::Instant::now();
+
+        // Read the Filesystem to get the published packages.
+
+        // TODO Get latest from filesystem.
+
+        // Merge filesystem findings with globals and create a new resp as needed.
+        // This is a write lock on the globals.
+        let resp_header = {
+            let mut globals_write_guard = self.globals.get_packages(workdir_idx).write().await;
+            let globals = &mut *globals_write_guard;
+
+            if let Some(ui) = &mut globals.ui {
+                // Update globals.ui with resp if different. This will update the uuid_data accordingly.
+                // TODO For now just get what is in the global.
+                // let uuids = ui.set(&resp);
+
+                // Make the header in the response have the proper uuids.
+                //resp.header.set_from_uuids(&uuids);
+                ui.get_data().header.clone()
+            } else {
+                globals.init_empty_ui(workdir.clone());
+                globals.ui.as_ref().unwrap().get_data().header.clone()
+            }
+        };
+
+        Ok(resp_header)
     }
 }

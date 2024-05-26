@@ -10,7 +10,7 @@ members = ["crates/suibase-daemon",
 [workspace.package]
 # Bump 'version' for the daemon to self-restart after an update.
 # (this is not the Suibase package version, it is specifically for the Rust crates).
-version = "0.0.8"
+version = "0.0.9"
 edition = "2021"
 
 [workspace.dependencies]
@@ -32,7 +32,7 @@ axum-server = { version = "0.5.1", default-features = false, features = [
   "tls-rustls",
 ] }
 bcs = "0.1.4"
-chrono = "0.4.31" 
+chrono = "0.4.31"
 clap = { version = "3.2.22", features = ["derive"] } # No upgrade to v4 until color are back.
 colored = "2.0.0"
 data-encoding = "2.4.0"

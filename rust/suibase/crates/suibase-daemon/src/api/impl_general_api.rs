@@ -189,6 +189,7 @@ impl GeneralApiImpl {
                 if line_lc.contains("not initialized")
                     || line_lc.contains("not found")
                     || line_lc.contains("no such")
+                    || line_lc.contains("no command")
                 {
                     resp.status = Some("DISABLED".to_string());
                     let status_info = format!("{0} not initialized. Do '{0} start'", workdir_name);
@@ -374,7 +375,7 @@ impl GeneralApiImpl {
         // Get an update with a "<workdir> status" shell call.
         // Map it into the resp.
         let cmd_resp = match self
-            .shell_exec(workdir_idx, format!("{} status", workdir))
+            .shell_exec(workdir_idx, format!("{} status --daemoncall", workdir))
             .await
         {
             Ok(cmd_resp) => cmd_resp,
@@ -393,9 +394,9 @@ impl GeneralApiImpl {
         }
 
         {
-            // Get the globals for the target workdir_idx.
-            let mut globals_read_guard = self.globals.get_status(workdir_idx).write().await;
-            let globals = &mut *globals_read_guard;
+            // Update the globals with this potentially new response.
+            let mut globals_write_guard = self.globals.get_status(workdir_idx).write().await;
+            let globals = &mut *globals_write_guard;
             if let Some(ui) = &mut globals.ui {
                 // Update globals.ui with resp if different. This will update the uuid_data accordingly.
                 let uuids = ui.set(&resp);
@@ -610,19 +611,16 @@ impl GeneralApiServer for GeneralApiImpl {
             let globals = &*globals_read_guard;
 
             if let Some(ui) = &globals.ui {
-                if method_uuid.is_some() || data_uuid.is_some() {
+                if let (Some(method_uuid), Some(data_uuid)) = (method_uuid, data_uuid) {
                     let mut are_same_version = false;
-                    if let (Some(method_uuid), Some(data_uuid)) =
-                        (method_uuid.as_ref(), data_uuid.as_ref())
-                    {
-                        let globals_data_uuid = &ui.get_uuid().get_data_uuid();
-                        if data_uuid == globals_data_uuid {
-                            let globals_method_uuid = &ui.get_uuid().get_method_uuid();
-                            if method_uuid == globals_method_uuid {
-                                are_same_version = true;
-                            }
+                    let globals_data_uuid = ui.get_uuid().get_data_uuid();
+                    if data_uuid == globals_data_uuid {
+                        let globals_method_uuid = ui.get_uuid().get_method_uuid();
+                        if method_uuid == globals_method_uuid {
+                            are_same_version = true;
                         }
                     }
+
                     if !are_same_version {
                         // Something went wrong, but this could be normal if the globals just got updated
                         // and the caller is not yet aware of it (assume the caller will eventually discover
