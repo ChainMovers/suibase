@@ -90,13 +90,33 @@ build_suibase_daemon() {
   #
   echo "Building $SUIBASE_DAEMON_NAME"
   rm -f "$SUIBASE_DAEMON_VERSION_FILE"
+
+  if [ "${CFG_proxy_enabled:?}" != "dev" ]; then
+    # Clean the build directory.
+    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target"
+  fi
+
   (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
   # Copy the build result from target to $SUIBASE_BIN_DIR
   local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
   if [ ! -f "$_SRC" ]; then
     setup_error "Fail to build $SUIBASE_DAEMON_NAME"
   fi
-  # TODO Add a sanity test here before overwriting the installed binary.
+
+  # Sanity test that the binary is working.
+  local _VERSION
+  _VERSION=$("$_SRC" --version)
+
+  # _VERSION should be a string that starts with $SUIBASE_DAEMON_NAME
+  if [ -z "$_VERSION" ] || [[ ! "$_VERSION" =~ ^$SUIBASE_DAEMON_NAME ]]; then
+    setup_error "Fail to run $SUIBASE_DAEMON_NAME --version"
+  fi
+
+  # end of _VERSION should match the expected $SUIBASE_DAEMON_VERSION_SOURCE_CODE
+  if [[ ! "$_VERSION" =~ $SUIBASE_DAEMON_VERSION_SOURCE_CODE$ ]]; then
+    setup_error "The $SUIBASE_DAEMON_NAME --version ($_VERSION) does not match the expected version ($SUIBASE_DAEMON_VERSION_SOURCE_CODE)"
+  fi
+
   mkdir -p "$SUIBASE_BIN_DIR"
   \cp -f "$_SRC" "$SUIBASE_DAEMON_BIN"
   # Update the installed version file.
@@ -346,7 +366,7 @@ start_suibase_daemon_as_needed() {
     if need_suibase_daemon_upgrade; then
       _PERFORM_UPGRADE=true
 
-      # To try to minimize race conditions, wait until a concurrent script 
+      # To try to minimize race conditions, wait until a concurrent script
       # is done doing the same. Not perfect... good enough.
       #
       # This also hint the VSCode extension to step back from using the
@@ -374,7 +394,7 @@ start_suibase_daemon_as_needed() {
 
     if [ "$_PERFORM_UPGRADE" = true ]; then
       trap 'rm -f /tmp/.suibase/suibase-daemon-upgrading >/dev/null 2>&1' EXIT
-      touch /tmp/.suibase/suibase-daemon-upgrading      
+      touch /tmp/.suibase/suibase-daemon-upgrading
       local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
       build_suibase_daemon
       update_SUIBASE_DAEMON_VERSION_INSTALLED
