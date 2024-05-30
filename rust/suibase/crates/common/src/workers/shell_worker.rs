@@ -42,7 +42,7 @@ impl ShellWorker {
         let resp: Option<String>;
 
         let log_details = if let Some(command) = &msg.command {
-            !command.ends_with("status")
+            !command.ends_with("status --daemoncall")
         } else {
             false
         };
