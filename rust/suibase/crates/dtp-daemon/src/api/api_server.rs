@@ -14,7 +14,10 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use crate::{admin_controller::AdminControllerTx, shared_types::Globals};
 
-use common::basic_types::{AutoThread, Runnable};
+use common::{
+    basic_types::{AutoThread, Runnable},
+    log_safe,
+};
 
 use super::GeneralApiServer;
 use crate::api::impl_general_api::GeneralApiImpl;
@@ -25,10 +28,7 @@ use crate::api::impl_dtp_api::DtpApiImpl;
 use super::PackagesApiServer;
 use crate::api::impl_packages_api::PackagesApiImpl;
 
-use jsonrpsee::{
-    core::server::Methods,
-    server::ServerBuilder,
-};
+use jsonrpsee::{core::server::Methods, server::ServerBuilder};
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -75,15 +75,15 @@ impl Runnable<APIServerParams> for APIServerThread {
     }
 
     async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("started");
+        log_safe!("started");
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(_) => {
-                log::info!("normal thread exit (2)");
+                log_safe!("normal thread exit (2)");
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("normal thread exit (1)");
+                log_safe!("normal thread exit (1)");
                 Ok(())
             }
         }
@@ -102,8 +102,7 @@ impl APIServerThread {
             .allow_headers(vec![axum::http::header::CONTENT_TYPE]);
         let middleware = tower::ServiceBuilder::new().layer(cors);
 
-        let builder = ServerBuilder::default()            
-            .set_http_middleware(middleware);
+        let builder = ServerBuilder::default().set_http_middleware(middleware);
 
         // TODO Put here the suibase.yaml proxy_port_number.
         let server = builder

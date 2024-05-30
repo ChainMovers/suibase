@@ -31,6 +31,7 @@ futures.workspace = true
 jsonrpsee.workspace = true
 jsonrpsee-proc-macros.workspace = true
 md5.workspace = true
+once_cell.workspace = true
 rusqlite.workspace = true
 schemars.workspace = true
 serde_json.workspace = true

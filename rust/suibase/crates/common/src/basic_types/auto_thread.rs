@@ -14,6 +14,8 @@ use std::marker::PhantomData;
 use tokio::time::Duration;
 use tokio_graceful_shutdown::{ErrorAction, SubsystemBuilder, SubsystemHandle};
 
+use crate::log_safe;
+
 #[async_trait]
 pub trait Runnable<Parameter: Send> {
     fn new(name: String, params: Parameter) -> Self;
@@ -51,7 +53,7 @@ impl<Thread: Runnable<Parameter> + Send + 'static, Parameter: Send + Clone> Runn
     async fn run(self, subsys: SubsystemHandle) -> Result<()> {
         let outer_thread_name = format!("{}-outer", self.name);
         let inner_thread_name = format!("{}-inner", self.name);
-        log::info!("{} started", outer_thread_name);
+        log_safe!(format!("{} started", outer_thread_name));
         loop {
             // Create an instance of the Thread. If it panics, then
             // we will just start a new instance on next loop iteration.
@@ -84,10 +86,14 @@ impl<Thread: Runnable<Parameter> + Send + 'static, Parameter: Send + Clone> Runn
             // because they normally restart every ~30 seconds because of
             // "normal" connection closing from many public servers.
             if self.name != "WebSocketWorker" {
-                log::info!("{} restarting...", inner_thread_name);
+                log_safe!(format!("{} restarting...", inner_thread_name));
+                // Sleep 1 second before restarting the inner thread.
+                // This is in-case of thread start failure, we don't want
+                // the CPU spinning on restarts attempts.
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         }
-        log::info!("{} normal thread exit", outer_thread_name);
+        log_safe!(format!("{} normal thread exit", outer_thread_name));
         Ok(())
     }
 }
