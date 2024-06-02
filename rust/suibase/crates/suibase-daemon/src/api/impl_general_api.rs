@@ -510,6 +510,7 @@ impl GeneralApiServer for GeneralApiImpl {
         let mut resp = VersionsResponse::new();
         resp.header.method = "getVersions".to_string();
         resp.header.key = Some(workdir.clone());
+        resp.header.semver = Some(env!("CARGO_PKG_VERSION").to_string());
 
         // Allow only one API request for a given workdir at the time to avoid race conditions.
         let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;

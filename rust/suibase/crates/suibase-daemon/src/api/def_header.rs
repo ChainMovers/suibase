@@ -4,6 +4,10 @@ use serde_with::serde_as;
 
 use common::basic_types::SafeUuid;
 
+fn is_empty_string(s: &String) -> bool {
+    s.is_empty()
+}
+
 #[serde_as]
 #[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +29,7 @@ pub struct Header {
     //        lower than the previous one for this method (e.g. system time went backward) or the PID of
     //        the process changes. Complements data_uuid for added reliability on various edge cases.
     //
+    #[serde(skip_serializing_if = "is_empty_string")]
     pub method: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method_uuid: Option<String>,
@@ -32,6 +37,8 @@ pub struct Header {
     pub data_uuid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semver: Option<String>, // Semantic versioning of the backend API.
 }
 
 // A trait for comparing two objects for equivalence, excluding the header fields (if any).

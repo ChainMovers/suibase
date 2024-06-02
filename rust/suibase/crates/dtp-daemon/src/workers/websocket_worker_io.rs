@@ -761,7 +761,7 @@ impl WebSocketWorkerIOThread {
             if host_sla_idx.is_none() {
                 // TODO It should have been created on "publish", but can be created here as needed.
                 // For now, just error out.
-                log::error!("REQUEST processing failed. Missing host_sla_idx in GlobalsConnsStateServerST for service_idx={} host_addr={}", 
+                log::error!("REQUEST processing failed. Missing host_sla_idx in GlobalsConnsStateServerST for service_idx={} host_addr={}",
                 service_idx, srv_host_addr);
 
                 return Ok(());
@@ -1128,17 +1128,19 @@ impl WebSocketWorkerIOThread {
                     let latest = move_config.latest_package.as_ref().unwrap();
                     // Check if the package is already in the packages HashMap.
                     if !self.package_subs.contains_key(&latest.package_id) {
+                        /*
                         if move_config.path.is_none() {
                             log::error!("Missing path in move_config {:?}", move_config);
                             continue;
                         }
-                        let toml_path = move_config.path.as_ref().unwrap().clone();
+                        let toml_path = move_config.path.as_ref().unwrap().clone();*/
 
                         // Create a new PackagesTracking.
                         let package_tracking = SubscriptionTracking::new_for_managed_package(
-                            toml_path,
+                            //toml_path,
                             latest.package_name.clone(),
                             uuid.to_string(),
+                            latest.package_timestamp.clone(),
                             latest.package_id.clone(),
                         );
                         // Add the PackagesTracking to the packages HashMap.
@@ -1313,17 +1315,18 @@ impl WebSocketWorkerIOThread {
                 let latest = move_config.latest_package.as_ref().unwrap();
                 // Check if the package is already in the packages HashMap.
                 if !self.package_subs.contains_key(&latest.package_id) {
-                    if move_config.path.is_none() {
+                    /*if move_config.path.is_none() {
                         log::error!("Missing path in move_config {:?}", move_config);
                         continue;
                     }
-                    let toml_path = move_config.path.as_ref().unwrap().clone();
+                    let toml_path = move_config.path.as_ref().unwrap().clone();*/
 
                     // Create a new PackagesTracking.
                     let package_tracking = SubscriptionTracking::new_for_managed_package(
-                        toml_path,
+                        //toml_path,
                         latest.package_name.clone(),
                         uuid.to_string(),
+                        latest.package_timestamp.clone(),
                         latest.package_id.clone(),
                     );
                     // Add the PackagesTracking to the packages HashMap.

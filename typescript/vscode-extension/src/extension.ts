@@ -6,8 +6,8 @@ import { SuibaseSidebar } from "./sidebar/SuibaseSidebar";
 import { SuibaseExec } from "./SuibaseExec";
 import { SuibaseCommands } from "./SuibaseCommands";
 import { BaseWebview } from "./bases/BaseWebview";
-import { SuibaseData } from "./common/SuibaseData";
 import { BackendSync } from "./BackendSync";
+import { LogChannels } from "./LogChannels";
 
 // This method is called *once* when the extension is activated by VSCode.
 export function activate(context: vscode.ExtensionContext) {
@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Each will perform their own registrations.
 
   // Low-level APIs
-  SuibaseData.activate(); // Some global state/status storage (no app logic).
+  LogChannels.activate(); // VSCode 'Output' channels.
   SuibaseExec.activate(context); // Shell commands, JSON-RPC call and websocket subscribe with suibase-daemon.
   BaseWebview.activate(context); // Base class for all webview.
 

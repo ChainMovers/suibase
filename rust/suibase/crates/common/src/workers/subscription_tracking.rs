@@ -51,9 +51,11 @@ impl From<SubscriptionTrackingState> for u32 {
 #[derive(Debug, Default)]
 pub struct SubscriptionTracking {
     // Set once on instantiation for managed packages.
-    toml_path: String,
+    //toml_path: String,
+    // TODO: Replace with PackagePath?
     name: String,
     uuid: String,
+    timestamp: String,
 
     is_managed_package: bool, // Package exists locally and has a suibase.toml file.
     package_filter: Option<String>, // Package ID ("0x" string)
@@ -95,9 +97,10 @@ impl SubscriptionTracking {
     pub fn new(package_id: String, src_addr: Option<String>, sender_addr: Option<String>) -> Self {
         let now = tokio::time::Instant::now();
         Self {
-            toml_path: String::new(),
+            //toml_path: String::new(),
             name: String::new(),
             uuid: String::new(),
+            timestamp: String::new(),
             is_managed_package: false,
             package_filter: Some(package_id),
             sender_filter: sender_addr,
@@ -115,16 +118,18 @@ impl SubscriptionTracking {
     }
 
     pub fn new_for_managed_package(
-        toml_path: String,
+        //toml_path: String,
         name: String,
         uuid: String,
+        timestamp: String,
         id: String,
     ) -> Self {
         let now = tokio::time::Instant::now();
         Self {
-            toml_path,
+            //toml_path,
             name,
             uuid,
+            timestamp,
             is_managed_package: true,
             package_filter: Some(id),
             sender_filter: None,
@@ -140,10 +145,10 @@ impl SubscriptionTracking {
             remove_request: false,
         }
     }
-
+/*
     pub fn toml_path(&self) -> &String {
         &self.toml_path
-    }
+    }*/
 
     pub fn name(&self) -> &String {
         &self.name
@@ -155,6 +160,10 @@ impl SubscriptionTracking {
 
     pub fn uuid(&self) -> &String {
         &self.uuid
+    }
+
+    pub fn timestamp(&self) -> &String {
+        &self.timestamp
     }
 
     pub fn is_managed_package(&self) -> bool {

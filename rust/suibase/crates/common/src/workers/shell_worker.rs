@@ -4,7 +4,9 @@
 //   - Run concurrently when for different workdir.
 //   - Run sequentially when for the same workdir.
 //
-use std::{path::PathBuf, process::Command};
+use std::path::PathBuf;
+use tokio::process::Command;
+use tokio::time::{self, Duration};
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
@@ -33,7 +35,7 @@ impl ShellWorker {
         }
     }
 
-    fn do_exec(&mut self, msg: GenericChannelMsg) {
+    async fn do_exec(&mut self, msg: GenericChannelMsg) {
         // No error return here. Once the execution is completed, the output
         // of the response is returned to requester with a one shot message.
         //
@@ -41,7 +43,7 @@ impl ShellWorker {
         let mut pre_call_error: Option<String> = None;
         let resp: Option<String>;
 
-        let log_details = if let Some(command) = &msg.command {
+        let is_status_call = if let Some(command) = &msg.command {
             !command.ends_with("status --daemoncall")
         } else {
             false
@@ -68,7 +70,7 @@ impl ShellWorker {
             let cmd = &msg.command.clone().unwrap();
             let cwd = format!("{}/suibase", self.home_dir.display());
 
-            if log_details {
+            if is_status_call {
                 log::info!(
                     "do_exec() cwd={} cmd={:?} for workdir_idx={:?}",
                     cwd,
@@ -95,32 +97,58 @@ impl ShellWorker {
                 resp = Some(error_msg);
             } else {
                 let child = child.unwrap();
-                let output = child.wait_with_output();
+                let timeout = Duration::from_secs(if is_status_call { 30 } else { 60 });
+                let timeout_result = time::timeout(
+                    timeout,
+                    tokio::task::spawn_blocking(move || child.wait_with_output()),
+                )
+                .await;
 
-                match output {
-                    Ok(output) => {
-                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                        let mut outputs = if stderr.is_empty() {
-                            stdout
-                        } else {
-                            format!("{}\n{}", stderr, stdout)
-                        };
-                        outputs = outputs.trim().to_string();
-                        if output.status.success() {
-                            resp = Some(outputs);
-                        } else {
+                match timeout_result {
+                    Ok(spawn_result) => match spawn_result {
+                        Ok(output_future) => match output_future.await {
+                            Ok(output) => {
+                                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                                let mut outputs = if stderr.is_empty() {
+                                    stdout
+                                } else {
+                                    format!("{}\n{}", stderr, stdout)
+                                };
+                                outputs = outputs.trim().to_string();
+                                if output.status.success() {
+                                    resp = Some(outputs);
+                                } else {
+                                    let error_msg = format!(
+                                        "Error: do_exec({:?}, {:?}) returned {}",
+                                        msg.workdir_idx, cmd, outputs
+                                    );
+                                    log::error!("{}", error_msg);
+                                    resp = Some(error_msg);
+                                }
+                            }
+                            Err(e) => {
+                                let error_msg = format!(
+                                    "Error: do_exec({:?}, {:?}) command call failed: {}",
+                                    msg.workdir_idx, cmd, e
+                                );
+                                log::error!("{}", error_msg);
+                                resp = Some(error_msg);
+                            }
+                        },
+                        Err(e) => {
                             let error_msg = format!(
-                                "Error: do_exec({:?}, {:?}) returned {}",
-                                msg.workdir_idx, cmd, outputs
+                                "Error: do_exec({:?}, {:?}) join error: {}",
+                                msg.workdir_idx, cmd, e
                             );
                             log::error!("{}", error_msg);
                             resp = Some(error_msg);
                         }
-                    }
+                    },
+                    // Handle timeout error.
                     Err(e) => {
                         let error_msg = format!(
-                            "Error: do_exec({:?}, {:?}) error 1: {}",
+                            "Error: do_exec({:?}, {:?}) timeout: {}",
                             msg.workdir_idx, cmd, e
                         );
                         log::error!("{}", error_msg);
@@ -142,7 +170,7 @@ impl ShellWorker {
 
             if let Err(e) = &resp_channel.send(resp) {
                 let error_msg = format!(
-                    "Error: do_exec({:?}, {:?}) error 3: {}",
+                    "Error: do_exec({:?}, {:?}) resp_channel closed: {}",
                     msg.workdir_idx, msg.command, e
                 );
                 log::error!("{}", error_msg);
@@ -155,7 +183,7 @@ impl ShellWorker {
             // Wait for a message.
             if let Some(msg) = self.event_rx.recv().await {
                 // Process the message.
-                self.do_exec(msg);
+                self.do_exec(msg).await;
             } else {
                 // Channel closed or shutdown requested.
                 return;

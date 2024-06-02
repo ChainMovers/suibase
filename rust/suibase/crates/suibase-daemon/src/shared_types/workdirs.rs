@@ -242,6 +242,10 @@ impl Workdir {
         &self.path
     }
 
+    pub fn path_cloned(&self) -> PathBuf {
+        self.path.clone()
+    }
+
     pub fn state_path(&self) -> &Path {
         &self.state_path
     }
@@ -363,8 +367,12 @@ impl GlobalsWorkdirsST {
     }
 
     // Write access to a Workdir stored in globals.
-    pub async fn get_workdir_mut(&mut self, workdir_idx: WorkdirIdx) -> Option<&mut Workdir> {
+    pub fn get_workdir_mut(&mut self, workdir_idx: WorkdirIdx) -> Option<&mut Workdir> {
         self.workdirs.get_mut(workdir_idx)
+    }
+
+    pub fn get_workdir(&self, workdir_idx: WorkdirIdx) -> Option<&Workdir> {
+        self.workdirs.get(workdir_idx)
     }
 
     // Utility that returns the workdir_idx from the globals

@@ -1,5 +1,7 @@
 import {
   API_URL,
+  BACKEND_MIN_VERSION,
+  SETUP_ISSUE_BACKEND_UPDATE_NEEDED,
   SETUP_ISSUE_GIT_NOT_INSTALLED,
   SETUP_ISSUE_SUIBASE_NOT_INSTALLED,
   SETUP_ISSUE_SUIBASE_NOT_ON_PATH,
@@ -19,6 +21,8 @@ import {
 import { SuibaseJson, SuibaseJsonVersions } from "./common/SuibaseJson";
 import { SuibaseExec } from "./SuibaseExec";
 import * as vscode from "vscode";
+import { LogChannels } from "./LogChannels";
+import * as semver from "semver";
 
 // One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
 class BackendWorkdirTracking {
@@ -106,7 +110,7 @@ export class BackendSync {
         void this.replyWorkdirStatus(message as RequestWorkdirStatus);
       } else if (message.name === "RequestWorkdirPackages") {
         void this.replyWorkdirPackages(message as RequestWorkdirPackages);
-      } else if (message.name === "OpenDiagnosticPanel") {
+      } else if (message.name === "OpenDashboardPanel") {
         // Call the VSCode command "suibase.dashboard" to open/reveal the dashboard panel.
         vscode.commands.executeCommand("suibase.dashboard").then(undefined, (error) => {
           console.error(`Error executing suibase.dashboard command: ${error}`);
@@ -276,6 +280,15 @@ export class BackendSync {
     BaseWebview.broadcastMessage(msg);
   }
 
+  private reportSetupIssue(issueMsg: string) {
+    this.mForceRefreshOnNextReconnect = true;
+
+    const msg = new UpdateVersions(WEBVIEW_BACKEND, 0, undefined);
+
+    msg.setSetupIssue(issueMsg);
+    BaseWebview.broadcastMessage(msg);
+  }
+
   private async updateUsingBackend(forceRefresh: boolean) {
     // Do getVersions for every possible workdir.
     //
@@ -309,10 +322,18 @@ export class BackendSync {
           // Sanity check that the data is valid.
           //  - result should have a header with method "getVersions".
           //  - the key must match the workdir.
-          if (data?.result?.header?.method !== "getVersions" || data?.result?.header?.key !== workdir) {
+          const header = data?.result?.header;
+          if (!header || header.method !== "getVersions" || header.key !== workdir) {
             await this.diagnoseBackendError(workdirIdx);
             return;
           }
+
+          if (!header.semver || semver.lt(header.semver, BACKEND_MIN_VERSION)) {
+            this.reportSetupIssue(SETUP_ISSUE_BACKEND_UPDATE_NEEDED);
+            return;
+          }
+
+          // Check the version of the backend, tell user to upgrade as needed.
 
           // In the UI, the asuiSelection should always be one of "localnet", "mainnet", "testnet", "devnet".
           //
@@ -323,6 +344,9 @@ export class BackendSync {
             // Got a valid active workdir from backend, make it the last known valid.
             this.activeWorkdir = data.result.asuiSelection;
           }
+
+          // Keep LogsChannel in-sync with the active workdir (user choice).
+          LogChannels.getInstance().setActiveWorkdir(this.activeWorkdir);
 
           // Update the SuibaseJson instance for the workdir.
           const workdirTracking = this.mWorkdirTrackings[workdirIdx];

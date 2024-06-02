@@ -7,6 +7,7 @@ use chrono::{Duration, Utc};
 use log::info;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -27,6 +28,12 @@ impl LogSafe {
     }
 
     pub async fn info(&self, msg: &str, file: &str, line: u32) {
+        // Remove the path portion in 'file'
+        // Uses OsStr to make sure this never panic.
+        let file = Path::new(file)
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .unwrap_or("unknown");
         let caller = format!("{}:{}", file, line);
         let state = {
             let mut logger_states = self.logger_states.lock().await;
@@ -53,9 +60,9 @@ impl LogSafe {
                 // If it's been more than a minute since the last log or if this is the first log,
                 // log the counter (if this isn't the first log), reset the counter and update the last log time
                 if state.counter > 0 {
-                    info!("(repeat {}) caller=[{}] [{}]", state.counter, caller, msg);
+                    info!("(repeat {}) {} [{}]", state.counter, caller, msg);
                 } else {
-                    info!("caller=[{}] [{}]", caller, msg);
+                    info!("{} [{}]", caller, msg);
                 }
                 state.counter = 0;
                 state.last_log_time = Some(now);

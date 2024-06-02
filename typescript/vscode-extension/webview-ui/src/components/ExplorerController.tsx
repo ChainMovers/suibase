@@ -1,33 +1,34 @@
-
 import { useCommonController } from "./CommonController";
 import { WORKDIRS_LABELS, WORKDIRS_KEYS } from "../common/Consts";
 import { useEffect, useState } from "react";
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
 import { Box, CircularProgress, Link, Typography } from "@mui/material";
 import { VSCode } from "../lib/VSCode";
-import { WorkdirCommand, OpenDiagnosticPanel } from "../common/ViewMessages";
+import { WorkdirCommand, OpenDashboardPanel } from "../common/ViewMessages";
 import { WEBVIEW_EXPLORER } from "../../../src/common/Consts";
 import { ExplorerTreeView } from "./ExplorerTreeView";
 import SetupIssue from "./SetupIssue";
 
 export const ExplorerController = () => {
-  const {common, workdirs, statusTrigger, commonTrigger, packagesTrigger} = useCommonController(WEBVIEW_EXPLORER, {trackStatus: true, trackPackages: true});
+  const { common, workdirs, statusTrigger, commonTrigger, packagesTrigger } = useCommonController(
+    WEBVIEW_EXPLORER,
+    { trackStatus: true, trackPackages: true }
+  );
 
   const [requestedActive, setRequestedActive] = useState("");
   const [dropdownActive, setDropdownActive] = useState(common.current.activeWorkdir);
   const [allDisabled, setAllDisabled] = useState(false);
-  
+
   const handleDropdownChange = (event: any) => {
     const newValue = event.target.value;
-    if (newValue !== common.current.activeWorkdir) {    
+    if (newValue !== common.current.activeWorkdir) {
       setRequestedActive(newValue);
       setDropdownActive(newValue);
       // Do CLI "set-active" to the requested workdir.
       const workdirIdx = WORKDIRS_KEYS.indexOf(newValue);
       if (workdirIdx !== -1) {
-        VSCode.postMessage(new WorkdirCommand(WEBVIEW_EXPLORER,workdirIdx, "set-active"));
+        VSCode.postMessage(new WorkdirCommand(WEBVIEW_EXPLORER, workdirIdx, "set-active"));
       }
-      
     } else {
       setRequestedActive("");
       setDropdownActive(common.current.activeWorkdir);
@@ -68,91 +69,95 @@ export const ExplorerController = () => {
 
   const renderDropdown = () => {
     return (
-        <Box flexDirection="column" justifyContent="center" width="100%" paddingLeft={1} paddingTop={1}>
-          {common.current.activeLoaded ? (
-            <>
-              <VSCodeDropdown value={dropdownActive} onChange={handleDropdownChange}>
-                {WORKDIRS_KEYS.map((key,index) => {                
-                  const viewData = workdirs[index];
-                  const isSelected = (key === dropdownActive);
-                  const isDisabled = !isSelected && (viewData.workdirStatus.status === "DISABLED");
-                  return (
-                    <VSCodeOption
-                      key={key}
-                      value={key}
-                      selected={isSelected}
-                      disabled={isDisabled}
-                    >
-                      {WORKDIRS_LABELS[index]}
-                    </VSCodeOption>
-                  );
-                })}
-              </VSCodeDropdown>
-              {requestedActive && <CircularProgress size={15} style={{ marginLeft: '3px' }}/>}
-            </>
-          ) : (<CircularProgress size={15}/>)
-          }
-        </Box>
-
+      <Box flexDirection="column" justifyContent="center" width="100%" paddingLeft={1} paddingTop={1}>
+        {common.current.activeLoaded ? (
+          <>
+            <VSCodeDropdown value={dropdownActive} onChange={handleDropdownChange}>
+              {WORKDIRS_KEYS.map((key, index) => {
+                const viewData = workdirs[index];
+                const isSelected = key === dropdownActive;
+                const isDisabled = !isSelected && viewData.workdirStatus.status === "DISABLED";
+                return (
+                  <VSCodeOption key={key} value={key} selected={isSelected} disabled={isDisabled}>
+                    {WORKDIRS_LABELS[index]}
+                  </VSCodeOption>
+                );
+              })}
+            </VSCodeDropdown>
+            {requestedActive && <CircularProgress size={15} style={{ marginLeft: "3px" }} />}
+          </>
+        ) : (
+          <CircularProgress size={15} />
+        )}
+      </Box>
     );
-  }
+  };
 
   const renderCommunityLink = () => {
     return (
       <Box display="flex" justifyContent="center" width="100%" paddingTop={1}>
-        <Typography variant="caption" sx={{ alignContent: 'center', fontSize: '9px' }}>Need help? Try the&nbsp;
-          <Link color='inherit' href="https://suibase.io/community/" target="_blank" rel="noopener noreferrer">sui community</Link>
+        <Typography variant="caption" sx={{ alignContent: "center", fontSize: "9px" }}>
+          Need help? Try the&nbsp;
+          <Link
+            color="inherit"
+            href="https://suibase.io/community/"
+            target="_blank"
+            rel="noopener noreferrer">
+            sui community
+          </Link>
         </Typography>
       </Box>
     );
-  }
+  };
 
   const renderTreeView = () => {
     return (
       <Box width="100%" paddingTop={1}>
-        {common.current.activeLoaded && 
-          <ExplorerTreeView packagesTrigger={packagesTrigger}
-                            packagesJson={workdirs[common.current.activeWorkdirIdx].workdirPackages} 
-                            workdir={common.current.activeWorkdir}
-                            workdirIdx={common.current.activeWorkdirIdx}/>
-        }
+        {common.current.activeLoaded && (
+          <ExplorerTreeView
+            packagesTrigger={packagesTrigger}
+            packagesJson={workdirs[common.current.activeWorkdirIdx].workdirPackages}
+            workdir={common.current.activeWorkdir}
+            workdirIdx={common.current.activeWorkdirIdx}
+          />
+        )}
       </Box>
     );
-  }
+  };
 
   const renderAllDisabledHelp = () => {
     return (
       <Box display="flex" justifyContent="center" width="100%" paddingTop={1}>
         <Typography variant="body2">
           There is no workdir enabled. Do 'testnet start' command in a terminal or try the&nbsp;
-          <Link 
+          <Link
             component="button"
             variant="body2"
             onClick={() => {
               // Post a message to the extension
-              VSCode.postMessage(new OpenDiagnosticPanel());
-            }}
-          >
-          dashboard
-          </Link>.
+              VSCode.postMessage(new OpenDashboardPanel());
+            }}>
+            dashboard
+          </Link>
+          .
         </Typography>
       </Box>
     );
-  }
+  };
 
   const renderControls = !common.current.setupIssue && !allDisabled;
 
   return (
-        <>
-        {common.current.setupIssue && <SetupIssue issue={common.current.setupIssue}/>}
-        
-        {!common.current.setupIssue && allDisabled && renderAllDisabledHelp()}
+    <>
+      {common.current.setupIssue && <SetupIssue issue={common.current.setupIssue} />}
 
-        {renderControls && renderDropdown()}
+      {!common.current.setupIssue && allDisabled && renderAllDisabledHelp()}
 
-        {renderCommunityLink()}
+      {renderControls && renderDropdown()}
 
-        {renderControls && renderTreeView()}
-        </>
+      {renderCommunityLink()}
+
+      {renderControls && renderTreeView()}
+    </>
   );
-}
+};

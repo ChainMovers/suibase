@@ -602,6 +602,10 @@ impl GlobalsWorkdirsST {
     pub fn get_workdir_mut(&mut self, workdir_idx: WorkdirIdx) -> Option<&mut Workdir> {
         self.workdirs.get_mut(workdir_idx)
     }
+
+    pub fn get_workdir(&self, workdir_idx: WorkdirIdx) -> Option<&Workdir> {
+        self.workdirs.get(workdir_idx)
+    }
 }
 
 impl Default for GlobalsWorkdirsST {

@@ -96,7 +96,7 @@ export class SuibaseJsonVersions extends SuibaseJson {
   // Return false if the SuibaseJson param is *same* or *newer* (or in some error cases).
   //
   // When true, the newer methodUuid and dataUuid expected is returned.
-  public isWorkdirPackagesUpdateNeeded(candidate: SuibaseJsonWorkdirPackages): [boolean, string, string] {    
+  public isWorkdirPackagesUpdateNeeded(candidate: SuibaseJsonWorkdirPackages): [boolean, string, string] {
     return this.isUpdateNeeded(candidate, "getWorkdirPackages");
   }
 
@@ -191,79 +191,3 @@ export class SuibaseJsonWorkdirPackages extends SuibaseJson {
     this.isLoaded = true;
   }
 }
-
-// This is to be used internally by SuibaseJSONStorage only.
-/*
-class StorageValue {
-  public suibaseJson: SuibaseJson;
-  public onChangeCallbacks: Array<SuibaseJsonCallback>;
-  // Constructor
-  constructor(suibaseJson: SuibaseJson) {
-    this.suibaseJson = suibaseJson;
-    this.onChangeCallbacks = [];
-  }
-}*/
-
-/*
-export class SuibaseJSONStorage {
-  // Map key string to SuibaseJson elements.
-
-  private map: Map<string, StorageValue>;
-
-  // Constructor
-  constructor() {
-    this.map = new Map<string, StorageValue>();
-  }
-
-  // Get a JSON element from the map.
-  // If not in the map, then create a SuibaseJson with the
-  // default for the requested type. This default is also
-  // added to the map.
-  public get(type: string): SuibaseJson {
-    const found = this.map.get(type);
-    if (found) {
-      return found.suibaseJson;
-    }
-    return this.addDefaultElement(type).suibaseJson;
-  }
-
-  // Add a JSON element to the map.
-  // Replace an existing one only if the version is higher.
-  public set(newJSON: SuibaseJson) {
-    const mappedElement = this.map.get(newJSON.type);
-    if (mappedElement) {
-      const mappedJSON = mappedElement.suibaseJson;
-      if (mappedJSON.version < newJSON.version) {
-        mappedJSON.update(newJSON);
-        mappedElement.onChangeCallbacks.forEach((callback) => callback(mappedJSON));
-      }
-    } else {
-      // Creating the default element first just to update it after is not the most efficient,
-      // but it reduces initialization sequence variations (and need fro more tests).
-      const newMappedElement = this.addDefaultElement(newJSON.type);
-      newMappedElement.suibaseJson.update(newJSON);
-      // Note: new element created here... no callback possibly added yet.
-    }
-  }
-
-  // Add a callback for a given type.
-  // If not in the map, then create a SuibaseJson with the
-  // default for the requested type. This default is also
-  // added to the map.
-  public addCallback(type: string, onChange: SuibaseJsonCallback) {
-    let mappedElement = this.map.get(type);
-    if (!mappedElement) {
-      mappedElement = this.addDefaultElement(type);
-    }
-    mappedElement.onChangeCallbacks.push(onChange);
-    onChange(mappedElement.suibaseJson);
-  }
-
-  private addDefaultElement(type: string): StorageValue {
-    const newMappedJSON = new SuibaseJson(type, 0, "");
-    const newMappedElement = new StorageValue(newMappedJSON);
-    this.map.set(type, newMappedElement);
-    return newMappedElement;
-  }
-}
-*/

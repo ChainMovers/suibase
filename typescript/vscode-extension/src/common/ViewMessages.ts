@@ -133,8 +133,8 @@ export class RequestWorkdirPackages extends ViewMessages {
   }
 }
 
-export class OpenDiagnosticPanel extends ViewMessages {
+export class OpenDashboardPanel extends ViewMessages {
   constructor() {
-    super("OpenDiagnosticPanel", "");
+    super("OpenDashboardPanel", "");
   }
 }

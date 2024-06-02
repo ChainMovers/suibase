@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { BaseWebview } from "../bases/BaseWebview";
-import { SuibaseData } from "../common/SuibaseData";
 import { WEBVIEW_EXPLORER } from "../common/Consts";
 
 export class SuibaseSidebar extends BaseWebview {
@@ -52,19 +51,4 @@ export class SuibaseSidebar extends BaseWebview {
   }
 
   // Override BaseWebview::handleMessage
-
-  protected handleMessage(message: any): void {
-    //console.log("SuibaseSidebar.handleMessage() called");
-    //console.log(message);
-    const sbData = SuibaseData.getInstance();
-    switch (message.type) {
-      case "init-view":
-        super.postMessage({ type: "init-global-states", message: sbData.globalStates.serialize() });
-        // TODO Initialize the other states...
-        break;
-      // TODO Implement new message types to handle workdir states.
-      // TODO Implement new message types to handle console states.
-      // TODO Implement new message types to handle wallet states.
-    }
-  }
 }

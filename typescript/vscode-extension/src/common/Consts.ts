@@ -6,6 +6,8 @@
 //
 // No dependency allowed here.
 
+export const BACKEND_MIN_VERSION = "0.0.10";
+
 // workdir_idx are hard coded for performance.
 // Note: These matches the definition used in the backend.
 export const WORKDIR_IDX_MAINNET = 0;
@@ -92,3 +94,4 @@ export const TREE_ID_INSERT_ADDR = "[TREE_ID_INSERT_ADDR]";
 export const SETUP_ISSUE_SUIBASE_NOT_INSTALLED = "Suibase not installed";
 export const SETUP_ISSUE_SUIBASE_NOT_ON_PATH = "Suibase scripts not on $PATH";
 export const SETUP_ISSUE_GIT_NOT_INSTALLED = "Git not installed";
+export const SETUP_ISSUE_BACKEND_UPDATE_NEEDED = "Suibase CLI update needed. Do '~/suibase/update'";

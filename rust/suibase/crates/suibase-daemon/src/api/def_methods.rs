@@ -1,6 +1,9 @@
-use std::collections::HashMap;
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, HashMap},
+};
 
-use common::workers::SubscriptionTrackingState;
+use crate::shared_types::PackagePath;
 
 // Defines the JSON-RPC API.
 //
@@ -23,7 +26,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeSeq, Deserialize, Serialize, Serializer};
 use serde_with::serde_as;
 
 #[serde_as]
@@ -281,38 +284,142 @@ impl Default for SuccessResponse {
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SuiObjectInstance {
-    object_id: String,
+pub struct SuiObjectType {
+    // Note: Use one letter label here to keep the JSON small.
+    #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
+    package_id: Option<String>, //Package ID. Hexa (without 0x). Assume "self" if None.
+    #[serde(rename = "m")]
+    module: String,
+    #[serde(rename = "n")]
+    name: String,
 }
 
-impl SuiObjectInstance {
-    pub fn new(object_id: String) -> Self {
-        Self { object_id }
-    }
-    pub fn object_id(&self) -> &str {
-        &self.object_id
+impl SuiObjectType {
+    pub fn new(package_id: Option<String>, module: String, name: String) -> Self {
+        Self {
+            package_id,
+            module,
+            name,
+        }
     }
 }
 
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct SuiObjectInstance {
+    // Note: Use one letter label here to keep the JSON small.
+    #[serde(rename = "i")]
+    object_id: String, // Object ID
+    #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
+    object_type: Option<SuiObjectType>,
+}
+
+impl SuiObjectInstance {
+    pub fn new(object_id: String, object_type: Option<SuiObjectType>) -> Self {
+        Self {
+            object_id,
+            object_type,
+        }
+    }
+    pub fn object_id(&self) -> &str {
+        &self.object_id
+    }
+}
+
+/*
+mod package_path_serializer {
+    use super::PackagePath;
+    use serde::{self, Serializer};
+
+    pub fn serialize<S>(package_path: &PackagePath, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = format!(
+            "{}{}",
+            package_path.get_package_name(),
+            package_path.get_package_timestamp()
+        );
+        serializer.serialize_str(&s)
+    }
+}*/
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct PackageInstance {
-    pub package_id: String, // Hexa (no 0x).
-    pub package_name: String,
-    pub package_timestamp: String,
-    pub init_objects: Option<Vec<SuiObjectInstance>>,
+    pid: String, // Package ID. Hexa (no 0x)
+    name: String,
+    ts: String, // 64 bits Epoch Timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    owner: Option<String>, // Hexa account address (no 0x)
+    init: Option<Vec<SuiObjectInstance>>,
+
+    #[serde(skip)]
+    package_path: PackagePath, // Conveniently contains the UUID.
 }
 
 impl PackageInstance {
-    pub fn new(package_id: String, package_name: String, package_timestamp: String) -> Self {
+    pub fn new(package_id: String, package_path: PackagePath) -> Self {
+        // Make sure does not have whitespaces, quotes or leading 0x.
+        let package_id = package_id
+            .trim()
+            .replace("\"", "")
+            .replace("'", "")
+            .trim_start_matches("0x")
+            .to_string();
         Self {
-            package_id,
-            package_name,
-            package_timestamp,
-            init_objects: None,
+            pid: package_id,
+            name: package_path.get_package_name().to_string(),
+            ts: package_path.get_package_timestamp().to_string(),
+            owner: None,
+            init: None,
+            package_path,
         }
     }
+
+    pub fn set_package_owner(&mut self, package_owner: String) {
+        self.owner = Some(package_owner);
+    }
+
+    pub fn set_init_objects(&mut self, init_objects: Vec<SuiObjectInstance>) {
+        self.init = Some(init_objects);
+    }
+
+    pub fn get_package_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn get_package_timestamp(&self) -> &str {
+        &self.ts
+    }
+
+    pub fn get_package_path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
+    pub fn get_package_id(&self) -> &str {
+        &self.pid
+    }
+
+    pub fn get_package_uuid(&self) -> &str {
+        self.package_path.get_package_uuid()
+    }
+}
+
+fn serialize_packages<S>(
+    packages: &BTreeMap<Reverse<String>, PackageInstance>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut seq = serializer.serialize_seq(Some(packages.len()))?;
+    for value in packages.values() {
+        seq.serialize_element(value)?;
+    }
+    seq.end()
 }
 
 #[serde_as]
@@ -325,26 +432,48 @@ pub struct MoveConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 
-    // Last publish instance of the package.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_package: Option<PackageInstance>,
+    // Sorted packages (most recently published first).
+    #[serde(serialize_with = "serialize_packages")]
+    packages: BTreeMap<Reverse<String>, PackageInstance>, // Key is timestamp.
 
-    // Packages previously published (does not include the current).
-    // Useful for tracking older package id for debug browsing.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub older_packages: Vec<PackageInstance>,
-
-    pub tracking_state: u32, // Helpful for debugging.
+                                                          // pub tracking_state: u32, Helpful for debugging.?
 }
 
 impl MoveConfig {
     pub fn new() -> Self {
         Self {
             path: None,
-            latest_package: None,
-            older_packages: Vec::new(),
-            tracking_state: SubscriptionTrackingState::new().into(),
+            packages: BTreeMap::new(),
+            //tracking_state: SubscriptionTrackingState::new().into(),
         }
+    }
+
+    pub fn get_packages(&self) -> &BTreeMap<Reverse<String>, PackageInstance> {
+        &self.packages
+    }
+
+    pub fn contains(&self, package_timestamp: &str) -> bool {
+        self.packages
+            .contains_key(&Reverse(package_timestamp.to_string()))
+    }
+
+    fn delete_package_instance(&mut self, package_path: &PackagePath) -> bool {
+        // Remove the package_instance from the map.
+        self.packages
+            .remove(&Reverse(package_path.get_package_timestamp().to_string()))
+            .is_some()
+    }
+
+    fn add_package_instance(&mut self, package_instance: PackageInstance) -> bool {
+        // Check if the package_instance is already in the map.
+        if self.contains(&package_instance.ts) {
+            return false;
+        }
+
+        // Insert the package_instance into the map.
+        self.packages
+            .insert(Reverse(package_instance.ts.to_string()), package_instance);
+        true
     }
 }
 
@@ -372,7 +501,7 @@ pub struct WorkdirPackagesResponse {
     // Among the move_configs, there is an additional constraint:
     //   - The MoveConfig.path must all be distinct.
     //
-    pub move_configs: HashMap<String, MoveConfig>,
+    move_configs: HashMap<String, MoveConfig>, // Key is the UUID
 }
 
 impl WorkdirPackagesResponse {
@@ -380,8 +509,130 @@ impl WorkdirPackagesResponse {
         Self {
             header: Header::default(),
             move_configs: HashMap::new(),
+            //move_configs_set: HashSet::new(),
         }
     }
+
+    pub fn contains(&self, package_path: &PackagePath) -> bool {
+        if let Some(move_config) = self.move_configs.get(package_path.get_package_uuid()) {
+            return move_config.contains(package_path.get_package_timestamp());
+        }
+        false
+    }
+
+    pub fn is_most_recent(&self, package_uuid: &str, package_timestamp: &str) -> bool {
+        if let Some(move_config) = self.move_configs.get(package_uuid) {
+            if let Some((timestamp, _)) = move_config.packages.iter().next() {
+                return timestamp.0 == package_timestamp;
+            }
+        }
+        false
+    }
+
+    pub fn package_count(&self) -> usize {
+        self.move_configs
+            .iter()
+            .map(|(_, move_config)| move_config.packages.len())
+            .sum()
+    }
+
+    // Create an iterator of all PackagePath in the WorkdirPackagesResponse.
+    pub fn iter_package_paths(&self) -> impl Iterator<Item = &PackagePath> {
+        self.move_configs.iter().flat_map(|(_, move_config)| {
+            move_config
+                .packages
+                .iter()
+                .map(|(_, package_instance)| package_instance.get_package_path())
+        })
+    }
+
+    // Create an iterator of *most recent* PackageInstance for every UUID.
+    pub fn iter_most_recent_package_instance(&self) -> impl Iterator<Item = &PackageInstance> {
+        self.move_configs.iter().filter_map(|(_, move_config)| {
+            move_config
+                .packages
+                .iter()
+                .next()
+                .map(|(_, package_instance)| package_instance)
+        })
+    }
+
+    pub fn iter_mut_most_recent_package_instance(
+        &mut self,
+    ) -> impl Iterator<Item = &mut PackageInstance> {
+        self.move_configs.iter_mut().filter_map(|(_, move_config)| {
+            move_config
+                .packages
+                .iter_mut()
+                .next()
+                .map(|(_, package_instance)| package_instance)
+        })
+    }
+
+    // Returns true if a change was performed.
+    pub fn delete_package_instance(&mut self, package_path: &PackagePath) -> bool {
+        if let Some(move_config) = self.move_configs.get_mut(package_path.get_package_uuid()) {
+            return move_config.delete_package_instance(package_path);
+        }
+        false
+    }
+
+    // Returns true if a change was performed.
+    pub fn add_package_instance(
+        &mut self,
+        package_instance: PackageInstance,
+        move_toml_path: Option<String>,
+    ) -> bool {
+        if let Some(move_config) = self
+            .move_configs
+            .get_mut(package_instance.get_package_uuid())
+        {
+            return move_config.add_package_instance(package_instance);
+        } else {
+            // Delete any other move_configs element where path equals move_toml_path.
+            if let Some(move_toml_path) = &move_toml_path {
+                self.move_configs.retain(|_, config| {
+                    if let Some(path) = &config.path {
+                        if path == move_toml_path {
+                            return false;
+                        }
+                    }
+                    true
+                });
+            }
+
+            // Create a new MoveConfig in move_configs for this UUID.
+            let package_uuid = package_instance.get_package_uuid().to_string();
+            let mut move_config = MoveConfig::new();
+            move_config.path = move_toml_path;
+            move_config.add_package_instance(package_instance);
+            self.move_configs.insert(package_uuid, move_config);
+            true
+        }
+    }
+
+    // Follow-up with calling this after all changes with add/delete_package_instance() are done.
+    /*
+    pub fn update_move_configs_set(&mut self) -> &HashSet<PackagePath> {
+        // Costly operation, do only when move_configs was changed.
+        self.move_configs_set = self
+            .move_configs
+            .iter()
+            .flat_map(|(uuid, move_config)| {
+                let mut packages = Vec::new();
+                for older_package in &move_config.packages {
+                    packages.push(PackagePath::new(
+                        older_package.package_name.clone(),
+                        uuid.clone(),
+                        older_package.package_timestamp.clone(),
+                    ));
+                }
+                packages
+            })
+            .collect();
+
+        &self.move_configs_set
+    }*/
 }
 
 impl Default for WorkdirPackagesResponse {

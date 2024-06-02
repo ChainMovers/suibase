@@ -1,13 +1,18 @@
 # Change Log
 
-Important: 
-  When upgrading the extension, do also "~/suibase/update" to get the latest Suibase CLI.
+Important:
+  Do "~/suibase/update" to get latest Suibase CLI when upgrading the extension.
+
+## 0.1.8
+  - Tell user when Suibase CLI is outdated.
+  - Fix "copy to clipboard" and "open explorer" buttons.
+  - New "Sui Console" in outputs (work-in-progress).
 
 ## 0.1.7
-  - Better UI to help the user get started. Less "unexplained" spinners...
+  - Better UI to help user get started.
 
 ## 0.1.6
-  - Make installation/upgrade more user friendly, better error messages.
+  - Make installation/upgrade more user-friendly, better error messages.
 
 ## 0.1.5
   - Various fix related to installation.
@@ -15,7 +20,7 @@ Important:
 ## 0.1.4
   - Warn user if some Sui prerequisites are not installed (git and rustc)
   - Start suibase-daemon if not running.
-  
+
 ## 0.1.2
-  - Warn about requiring suibase to be installed.
+  - Warn about requiring Suibase to be installed.
 
