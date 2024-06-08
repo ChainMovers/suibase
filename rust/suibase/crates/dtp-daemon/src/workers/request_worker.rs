@@ -28,6 +28,7 @@ impl RequestWorker {
         let _ = self
             .client
             .request(reqwest::Method::POST, uri)
+            .timeout(std::time::Duration::from_secs(5))
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .header(reqwest::header::USER_AGENT, "curl/7.68.0")
             .header(reqwest::header::ACCEPT, "*/*")

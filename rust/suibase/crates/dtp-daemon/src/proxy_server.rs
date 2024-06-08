@@ -378,6 +378,7 @@ impl ProxyServer {
         let shared_states: Arc<SharedStates> = Arc::new(SharedStates {
             port_idx,
             client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
                 .no_proxy()
                 .connection_verbose(true)
                 .build()?,

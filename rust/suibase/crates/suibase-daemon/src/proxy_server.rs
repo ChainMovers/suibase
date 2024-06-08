@@ -19,7 +19,7 @@ use crate::shared_types::{
 
 use anyhow::{anyhow, Result};
 use axum::{
-    body::{HttpBody, Body},
+    body::{Body, HttpBody},
     extract::State,
     http::{header, Request, Response},
     routing::get,
@@ -391,6 +391,7 @@ impl ProxyServer {
         let shared_states: Arc<SharedStates> = Arc::new(SharedStates {
             port_idx,
             client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
                 .no_proxy()
                 .connection_verbose(true)
                 .build()?,
@@ -452,11 +453,11 @@ impl ProxyServer {
     }
 }
 
-async fn graceful_shutdown(subsys: SubsystemHandle, axum_handle: axum_server::Handle) {    
+async fn graceful_shutdown(subsys: SubsystemHandle, axum_handle: axum_server::Handle) {
     // Run as a thread. Block until shutdown requested.
-    subsys.on_shutdown_requested().await; 
+    subsys.on_shutdown_requested().await;
     // Signal the axum server to shutdown.
-    axum_handle.graceful_shutdown(Some(Duration::from_secs(30)));    
+    axum_handle.graceful_shutdown(Some(Duration::from_secs(30)));
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
