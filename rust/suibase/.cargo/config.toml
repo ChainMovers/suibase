@@ -1,2 +1,4 @@
-[target.'cfg(all())'] 
+[target.'cfg(all())']
 rustflags = ["--cfg", "uuid_unstable"]
+# Use the following if enabling tokio-console for instrumentation.
+# rustflags = ["--cfg", "uuid_unstable", "--cfg", "tokio_unstable" ]

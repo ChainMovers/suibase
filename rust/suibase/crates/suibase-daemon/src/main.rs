@@ -41,6 +41,7 @@ use clap::*;
 
 use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
+use common::basic_types::MPSC_Q_SIZE;
 use env_logger::{Builder, Env};
 
 mod admin_controller;
@@ -89,8 +90,8 @@ impl Command {
                 //
                 // The NetworkMonitor handles events about network stats and periodic health checks.
                 //
-                let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(100);
-                let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(10000);
+                let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
                 // Instantiate and connect all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(
@@ -156,6 +157,10 @@ impl Command {
 
 #[tokio::main]
 async fn main() {
+    // Un-comment the following for tokio-console
+    //   https://github.com/tokio-rs/console
+    // console_subscriber::init();
+
     // Allocate the globals "singleton".
     //
     // Globals are cloned by reference count.

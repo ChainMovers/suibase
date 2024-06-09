@@ -83,7 +83,7 @@ macro_rules! log_safe {
 }
 
 // A macro that check if a MPSC channel has more element queued
-// then the threshold. When exceeding, display a message using
+// than the threshold. When exceeding, display a message using
 // a safe logger.
 #[macro_export]
 macro_rules! mpsc_q_check {

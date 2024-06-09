@@ -30,6 +30,7 @@ use clap::*;
 
 use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
+use common::basic_types::MPSC_Q_SIZE;
 use env_logger::{Builder, Env};
 
 mod admin_controller;
@@ -76,8 +77,8 @@ impl Command {
                 //
                 // The AdminController handles events about configuration changes
                 //
-                let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(100);
-                let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(10000);
+                let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
                 // Instantiate and connect all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(
