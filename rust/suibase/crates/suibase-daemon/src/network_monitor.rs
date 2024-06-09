@@ -791,7 +791,7 @@ impl NetworkMonitor {
         log::info!("started");
 
         // Start another thread to initiate requests toward target servers (e.g. health check)
-        let (request_worker_tx, request_worker_rx) = tokio::sync::mpsc::channel(1000);
+        let (request_worker_tx, request_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
         let request_worker = RequestWorker::new(request_worker_rx);
         subsys.start(SubsystemBuilder::new("request-worker", |a| {
             request_worker.run(a)

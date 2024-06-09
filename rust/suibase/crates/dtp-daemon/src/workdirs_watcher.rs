@@ -168,6 +168,7 @@ impl WorkdirsWatcher {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = local_rx.recv().await {
+                common::mpsc_q_check!(local_rx);
                 if msg.need_rescan() {
                     // TODO Implement rescan of all workdirs (assume events were missed).
                     log::error!("watch_loop() need_rescan (not implemented!)");

@@ -81,3 +81,21 @@ macro_rules! log_safe {
             .await;
     };
 }
+
+// A macro that check if a MPSC channel has more element queued
+// then the threshold. When exceeding, display a message using
+// a safe logger.
+#[macro_export]
+macro_rules! mpsc_q_check {
+    ($param:expr) => {
+        if $param.len() > $crate::basic_types::MPSC_Q_THRESHOLD {
+            $crate::basic_types::LOG_SAFE
+                .info(
+                    &format!("Queue size over threshold: {}", $param.len()),
+                    file!(),
+                    line!(),
+                )
+                .await;
+        }
+    };
+}

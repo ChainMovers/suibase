@@ -99,6 +99,7 @@ impl ShellWorker {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = self.event_rx.recv().await {
+                common::mpsc_q_check!(self.event_rx);
                 // Process the message.
                 self.do_exec(msg).await;
             } else {

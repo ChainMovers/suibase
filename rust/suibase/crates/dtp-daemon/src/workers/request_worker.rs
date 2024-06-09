@@ -48,6 +48,7 @@ impl RequestWorker {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = self.netmon_rx.recv().await {
+                common::mpsc_q_check!(self.netmon_rx);
                 // Process the message.
                 self.do_request(msg).await;
             } else {

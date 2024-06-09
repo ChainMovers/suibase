@@ -220,7 +220,7 @@ impl AdminController {
 
         // Instantiate and start the ShellWorker if not already done.
         if wd_tracking.shell_worker_handle.is_none() {
-            let (shell_worker_tx, shell_worker_rx) = tokio::sync::mpsc::channel(100);
+            let (shell_worker_tx, shell_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
             wd_tracking.shell_worker_tx = Some(shell_worker_tx);
             let shell_worker = ShellWorker::new(shell_worker_rx, Some(workdir_idx));
             let nested = subsys.start(SubsystemBuilder::new("shell-worker", |a| {
@@ -464,7 +464,7 @@ impl AdminController {
             && workdir_config.is_user_request_start()
             && wd_tracking.websocket_worker_handle.is_none()
         {
-            let (websocket_worker_tx, websocket_worker_rx) = tokio::sync::mpsc::channel(100);
+            let (websocket_worker_tx, websocket_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
             let websocket_worker_params = EventsWriterWorkerParams::new(
                 self.globals.clone(),
@@ -489,6 +489,7 @@ impl AdminController {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = self.admctrl_rx.recv().await {
+                common::mpsc_q_check!(self.admctrl_rx);
                 match msg.event_id {
                     EVENT_AUDIT => {
                         self.process_audit_msg(msg).await;

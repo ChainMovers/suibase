@@ -14,7 +14,7 @@ use crate::{
 };
 
 use common::basic_types::{
-    self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
+    self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx, MPSC_Q_SIZE,
 };
 
 use anyhow::Result;
@@ -90,7 +90,7 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
         log::info!("started for {}", self.params.workdir_name);
 
         // Start a child websocket_worker thread (in future, more than one might be started).
-        let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(1000);
+        let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
         let ws_worker_params = WebSocketWorkerParams::new(
             self.params.globals.clone(),
             worker_rx,
@@ -103,7 +103,7 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
         self.ws_workers_channel.push(worker_tx);
 
         // Start a single child db_worker thread.
-        let (db_worker_tx, db_worker_rx) = tokio::sync::mpsc::channel(1000);
+        let (db_worker_tx, db_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
         let db_worker_params = DBWorkerParams::new(
             self.params.globals.clone(),
             db_worker_rx,
@@ -183,6 +183,7 @@ impl EventsWriterThread {
         while !subsys.is_shutdown_requested() {
             // Wait for a suibase internal message (not a websocket message!).
             if let Some(msg) = event_rx.recv().await {
+                common::mpsc_q_check!(event_rx);
                 // Process the message.
                 match msg.event_id {
                     basic_types::EVENT_AUDIT => {

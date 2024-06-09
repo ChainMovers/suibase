@@ -26,7 +26,7 @@ use crate::{
 };
 
 use common::basic_types::{
-    self, AutoSizeVecMapVec, AutoThread, GenericChannelMsg, Runnable, WorkdirIdx,
+    self, AutoSizeVecMapVec, AutoThread, GenericChannelMsg, Runnable, WorkdirIdx, MPSC_Q_SIZE,
 };
 
 use anyhow::Result;
@@ -113,9 +113,9 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
 
         // For now, just start a single instance of each SubThread.
 
-        let (worker_io_tx, worker_io_rx) = tokio::sync::mpsc::channel(1000);
-        let (worker_tx_tx, _worker_tx_rx) = tokio::sync::mpsc::channel(1000);
-        let (worker_rx_tx, _worker_rx_rx) = tokio::sync::mpsc::channel(1000);
+        let (worker_io_tx, worker_io_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+        let (worker_tx_tx, _worker_tx_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+        let (worker_rx_tx, _worker_rx_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
         // Add a reference to all TX channels into the globals.
         {
@@ -155,7 +155,7 @@ impl Runnable<WebSocketWorkerParams> for WebSocketThread {
 
         // Start a single child db_worker thread.
         /* Not applicable for now
-        let (db_worker_tx, db_worker_rx) = tokio::sync::mpsc::channel(1000);
+        let (db_worker_tx, db_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
         let db_worker_params = DBWorkerParams::new(
             self.params.globals.clone(),
             db_worker_rx,
@@ -242,6 +242,7 @@ impl WebSocketThread {
         while !subsys.is_shutdown_requested() {
             // Wait for a suibase internal message (not a websocket message!).
             if let Some(msg) = event_rx.recv().await {
+                common::mpsc_q_check!(event_rx);
                 match msg {
                     WebSocketWorkerMsg::Generic(msg) => {
                         // Process the message.

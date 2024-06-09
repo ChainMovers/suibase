@@ -12,6 +12,7 @@ use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use crate::basic_types::{GenericChannelMsg, GenericRx, WorkdirIdx};
+use crate::mpsc_q_check;
 
 use home::home_dir;
 
@@ -182,6 +183,7 @@ impl ShellWorker {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = self.event_rx.recv().await {
+                mpsc_q_check!(self.event_rx);
                 // Process the message.
                 self.do_exec(msg).await;
             } else {

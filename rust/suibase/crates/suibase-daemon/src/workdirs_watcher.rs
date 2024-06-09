@@ -1,4 +1,4 @@
-use common::basic_types::AutoSizeVec;
+use common::basic_types::{AutoSizeVec, MPSC_Q_SIZE};
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
@@ -167,6 +167,7 @@ impl WorkdirsWatcher {
         while !subsys.is_shutdown_requested() {
             // Wait for a message.
             if let Some(msg) = local_rx.recv().await {
+                common::mpsc_q_check!(local_rx);
                 if msg.need_rescan() {
                     // TODO Implement rescan of all workdirs (assume events were missed).
                     log::error!("watch_loop() need_rescan (not implemented!)");
@@ -262,7 +263,7 @@ impl WorkdirsWatcher {
 
         // Use a local channel to process "raw" events from notify-rs and then watch_loop()
         // translate them into higher level messages toward the AdminController.
-        let (local_tx, local_rx) = tokio::sync::mpsc::channel::<notify::event::Event>(1000);
+        let (local_tx, local_rx) = tokio::sync::mpsc::channel::<notify::event::Event>(MPSC_Q_SIZE);
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::shared_types::InputPort;
-use common::basic_types::*;
+use common::{basic_types::*, mpsc_q_check};
 
 use crate::shared_types::{
     GlobalsProxyMT, RequestFailedReason, SendFailedReason, ServerStats, TargetServer,
@@ -760,6 +760,7 @@ impl NetworkMonitor {
             if cur_msg.is_none() {
                 // Wait for a message.
                 cur_msg = self.netmon_rx.recv().await;
+                mpsc_q_check!(self.netmon_rx);
                 if cur_msg.is_none() || subsys.is_shutdown_requested() {
                     // Channel closed or shutdown requested.
                     return;
@@ -791,7 +792,7 @@ impl NetworkMonitor {
         log::info!("started");
 
         // Start another thread to initiate requests toward target servers (e.g. health check)
-        let (request_worker_tx, request_worker_rx) = tokio::sync::mpsc::channel(1000);
+        let (request_worker_tx, request_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
         let request_worker = RequestWorker::new(request_worker_rx);
         subsys.start(SubsystemBuilder::new("request-worker", |a| {
             request_worker.run(a)

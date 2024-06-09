@@ -12,6 +12,9 @@ pub const EVENT_LEVEL_TRACE: u8 = 5u8;
 pub const EVENT_LEVEL_MIN: u8 = EVENT_LEVEL_ERROR;
 pub const EVENT_LEVEL_MAX: u8 = EVENT_LEVEL_TRACE;
 
+pub const MPSC_Q_SIZE: usize = 200;
+pub const MPSC_Q_THRESHOLD: usize = 150; // Will log an error if queue reaching this level.
+
 /*
 use std::sync::atomic::{AtomicUsize, Ordering};
 
