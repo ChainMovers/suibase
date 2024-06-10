@@ -18,8 +18,11 @@ use crate::shared_types::{
 use anyhow::Result;
 use axum::async_trait;
 
-use common::basic_types::{
-    self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
+use common::{
+    basic_types::{
+        self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
+    },
+    mpsc_q_check,
 };
 
 use futures::{
@@ -30,6 +33,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
+use common::basic_types::remove_generic_event_dups;
 use common::workers::{SubscriptionTracking, SubscriptionTrackingState};
 
 #[derive(Clone)]
@@ -841,12 +845,15 @@ impl WebSocketWorkerThread {
         let event_rx = Arc::clone(&self.params.event_rx);
         let mut event_rx = event_rx.lock().await;
 
-        // Check to establish a websocket connection (as needed).
         if self.websocket.write.is_none() && !self.open_websocket().await {
             // Delay of 5 seconds before retrying.
             // TODO Replace delay with checking time elapsed.
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            return;
+
+            // Remove duplicate of EVENT_AUDIT and EVENT_UPDATE in the event_rx queue.
+            remove_generic_event_dups(&mut event_rx, &self.params.event_tx);
+            mpsc_q_check!(event_rx); // Just to help verify if the Q unexpectedly "accumulate".
+            return; // This will restart the thread.
         }
 
         while !subsys.is_shutdown_requested() {

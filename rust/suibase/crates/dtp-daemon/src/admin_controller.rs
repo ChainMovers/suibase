@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use common::basic_types::*;
 use common::shared_types::{GlobalsWorkdirConfigST, WorkdirUserConfig};
+use common::{basic_types::*, log_safe};
 
 use crate::network_monitor::NetMonTx;
 use crate::shared_types::{Globals, InputPort, WebSocketWorkerMsg, WebSocketWorkerTx};
@@ -44,8 +44,8 @@ struct WorkdirTracking {
     shell_worker_tx: Option<GenericTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
 
-    websocket_worker_tx: Option<WebSocketWorkerTx>,
-    websocket_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
+    events_worker_tx: Option<WebSocketWorkerTx>,
+    events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
 }
 
 impl std::fmt::Debug for WorkdirTracking {
@@ -132,10 +132,12 @@ impl AdminController {
     pub async fn send_event_audit(tx_channel: &AdminControllerTx) -> Result<()> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_AUDIT;
-        tx_channel.send(msg).await.map_err(|e| {
-            log::debug!("failed {}", e);
-            anyhow!("failed {}", e)
-        })
+        if let Err(e) = tx_channel.try_send(msg) {
+            let err_msg = format!("send_event_audit: {}", e);
+            log_safe!(err_msg);
+            return Err(anyhow!(err_msg));
+        }
+        Ok(())
     }
 
     async fn process_audit_msg(&mut self, msg: AdminControllerMsg) {
@@ -147,27 +149,40 @@ impl AdminController {
 
         // Forward an audit message to every websocket thread.
         for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
-            if wd_tracking.websocket_worker_tx.is_none() {
+            if wd_tracking.events_worker_tx.is_none() {
                 continue;
             }
-            let worker_tx = wd_tracking.websocket_worker_tx.as_ref().unwrap();
+            let worker_tx = wd_tracking.events_worker_tx.as_ref().unwrap();
 
             let mut msg = GenericChannelMsg::new();
             msg.event_id = EVENT_AUDIT;
             msg.workdir_idx = Some(workdir_idx);
 
             let ws_msg = WebSocketWorkerMsg::Generic(msg);
-            worker_tx.send(ws_msg).await.unwrap();
+            match worker_tx.try_send(ws_msg) {
+                Ok(()) => {}
+                Err(e) => {
+                    log_safe!(format!(
+                        "try_send EVENT_AUDIT forward to websocket worker failed: {}",
+                        e
+                    ));
+                }
+            }
         }
     }
 
     pub async fn send_event_post_publish(tx_channel: &AdminControllerTx) -> Result<()> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_POST_PUBLISH;
-        tx_channel.send(msg).await.map_err(|e| {
-            log::debug!("failed {}", e);
-            anyhow!("failed {}", e)
-        })
+        if let Err(e) = tx_channel.try_send(msg) {
+            let err_msg = format!(
+                "try_send EVENT_POST_PUBLISH to admin controller failed: {}",
+                e
+            );
+            log_safe!(err_msg);
+            return Err(anyhow!(err_msg));
+        }
+        Ok(())
     }
 
     async fn process_post_publish_msg(&mut self, msg: AdminControllerMsg) {
@@ -185,12 +200,15 @@ impl AdminController {
         // Forward an update message to the related workdir events writer.
         let wd_tracking = self.wd_tracking.get_mut(msg_workdir_idx);
 
-        if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
+        if let Some(worker_tx) = wd_tracking.events_worker_tx.as_ref() {
             let mut msg = GenericChannelMsg::new();
             msg.event_id = EVENT_UPDATE;
             msg.workdir_idx = Some(msg_workdir_idx);
             let ws_msg = WebSocketWorkerMsg::Generic(msg);
-            worker_tx.send(ws_msg).await.unwrap();
+            if let Err(e) = worker_tx.try_send(ws_msg) {
+                let err_msg = format!("try_send EVENT_POST_PUBLISH to worker failed: {}", e);
+                log_safe!(err_msg);
+            }
         }
     }
 
@@ -237,7 +255,10 @@ impl AdminController {
         worker_msg.command = msg.data_string;
         worker_msg.workdir_idx = msg.workdir_idx;
         worker_msg.resp_channel = msg.resp_channel;
-        shell_worker_tx.send(worker_msg).await.unwrap();
+        if let Err(e) = shell_worker_tx.try_send(worker_msg) {
+            let err_msg = format!("try_send EVENT_SHELL_EXEC to worker failed: {}", e);
+            log_safe!(err_msg);
+        }
     }
 
     async fn process_debug_print_msg(&mut self, msg: AdminControllerMsg) {
@@ -461,9 +482,10 @@ impl AdminController {
         }*/
 
         // As needed, start a WebSocketWorker for this workdir.
-        if wd_tracking.websocket_worker_handle.is_none() {
+        if wd_tracking.events_worker_handle.is_none() {
             if workdir_config.is_user_request_start() {
-                let (websocket_worker_tx, websocket_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let (websocket_worker_tx, websocket_worker_rx) =
+                    tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
                 let websocket_worker_params = WebSocketWorkerParams::new(
                     self.globals.clone(),
@@ -471,22 +493,27 @@ impl AdminController {
                     websocket_worker_tx.clone(),
                     workdir_idx,
                 );
-                wd_tracking.websocket_worker_tx = Some(websocket_worker_tx);
+                wd_tracking.events_worker_tx = Some(websocket_worker_tx);
 
                 let events_writer_worker = WebSocketWorker::new(websocket_worker_params);
                 let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
                     events_writer_worker.run(a)
                 }));
-                wd_tracking.websocket_worker_handle = Some(nested);
+                wd_tracking.events_worker_handle = Some(nested);
             }
         } else {
             // Send EVENT_UPDATE to the WebSocketWorker (already started).
-            if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
+            if let Some(worker_tx) = wd_tracking.events_worker_tx.as_ref() {
                 let mut msg = GenericChannelMsg::new();
                 msg.event_id = EVENT_UPDATE;
                 msg.workdir_idx = Some(workdir_idx);
                 let ws_msg = WebSocketWorkerMsg::Generic(msg);
-                worker_tx.send(ws_msg).await.unwrap();
+                if let Err(e) = worker_tx.try_send(ws_msg) {
+                    log_safe!(format!(
+                        "send EVENT_UPDATE to websocket worker failed: {}",
+                        e
+                    ));
+                }
             }
         }
 

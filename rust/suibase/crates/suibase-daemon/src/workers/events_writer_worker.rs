@@ -146,6 +146,8 @@ impl EventsWriterThread {
         self.forward_to_db_worker(msg).await;
     }
 
+
+
     async fn forward_to_db_worker(&mut self, msg: GenericChannelMsg) {
         // Forward the message to the single self.db_worker_channel.
         if let Some(tx) = &self.db_worker_channel {

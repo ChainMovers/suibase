@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use common::basic_types::*;
+use common::{basic_types::*, log_safe};
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
@@ -54,8 +54,8 @@ struct WorkdirTracking {
     shell_worker_tx: Option<GenericTx>,
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
 
-    websocket_worker_tx: Option<GenericTx>,
-    websocket_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
+    events_worker_tx: Option<GenericTx>,
+    events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
 }
 
 impl std::fmt::Debug for WorkdirTracking {
@@ -142,10 +142,12 @@ impl AdminController {
     pub async fn send_event_audit(tx_channel: &AdminControllerTx) -> Result<()> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_AUDIT;
-        tx_channel.send(msg).await.map_err(|e| {
-            log::debug!("failed {}", e);
-            anyhow!("failed {}", e)
-        })
+        if let Err(e) = tx_channel.try_send(msg) {
+            let err_msg = format!("send_event_audit: {}", e);
+            log_safe!(err_msg);
+            return Err(anyhow!(err_msg));
+        }
+        Ok(())
     }
 
     async fn process_audit_msg(&mut self, msg: AdminControllerMsg) {
@@ -155,27 +157,40 @@ impl AdminController {
             return;
         }
 
-        // Forward an audit message to every events writer.
+        // Forward an audit message to every events worker.
         for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
-            if wd_tracking.websocket_worker_tx.is_none() {
+            if wd_tracking.events_worker_tx.is_none() {
                 continue;
             }
-            let worker_tx = wd_tracking.websocket_worker_tx.as_ref().unwrap();
+            let worker_tx = wd_tracking.events_worker_tx.as_ref().unwrap();
 
             let mut worker_msg = GenericChannelMsg::new();
             worker_msg.event_id = EVENT_AUDIT;
             worker_msg.workdir_idx = Some(workdir_idx);
-            worker_tx.send(worker_msg).await.unwrap();
+            match worker_tx.try_send(worker_msg) {
+                Ok(()) => {}
+                Err(e) => {
+                    log_safe!(format!(
+                        "try_send EVENT_AUDIT forward to websocket worker failed: {}",
+                        e
+                    ));
+                }
+            }
         }
     }
 
     pub async fn send_event_post_publish(tx_channel: &AdminControllerTx) -> Result<()> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_POST_PUBLISH;
-        tx_channel.send(msg).await.map_err(|e| {
-            log::debug!("failed {}", e);
-            anyhow!("failed {}", e)
-        })
+        if let Err(e) = tx_channel.try_send(msg) {
+            let err_msg = format!(
+                "try_send EVENT_POST_PUBLISH to admin controller failed: {}",
+                e
+            );
+            log_safe!(err_msg);
+            return Err(anyhow!(err_msg));
+        }
+        Ok(())
     }
 
     async fn process_post_publish_msg(&mut self, msg: AdminControllerMsg) {
@@ -193,11 +208,14 @@ impl AdminController {
         // Forward an update message to the related workdir events writer.
         let wd_tracking = self.wd_tracking.get_mut(msg_workdir_idx);
 
-        if let Some(worker_tx) = wd_tracking.websocket_worker_tx.as_ref() {
-            let mut worker_msg = GenericChannelMsg::new();
-            worker_msg.event_id = EVENT_UPDATE;
-            worker_msg.workdir_idx = Some(msg_workdir_idx);
-            worker_tx.send(worker_msg).await.unwrap();
+        if let Some(worker_tx) = wd_tracking.events_worker_tx.as_ref() {
+            let mut ws_msg = GenericChannelMsg::new();
+            ws_msg.event_id = EVENT_UPDATE;
+            ws_msg.workdir_idx = Some(msg_workdir_idx);
+            if let Err(e) = worker_tx.try_send(ws_msg) {
+                let err_msg = format!("try_send EVENT_POST_PUBLISH to worker failed: {}", e);
+                log_safe!(err_msg);
+            }
         }
     }
 
@@ -241,7 +259,10 @@ impl AdminController {
         worker_msg.command = msg.data_string;
         worker_msg.workdir_idx = msg.workdir_idx;
         worker_msg.resp_channel = msg.resp_channel;
-        shell_worker_tx.send(worker_msg).await.unwrap();
+        if let Err(e) = shell_worker_tx.try_send(worker_msg) {
+            let err_msg = format!("try_send EVENT_SHELL_EXEC to worker failed: {}", e);
+            log_safe!(err_msg);
+        }
     }
 
     async fn process_debug_print_msg(&mut self, msg: AdminControllerMsg) {
@@ -462,9 +483,10 @@ impl AdminController {
         // For now, only localnet is supported.
         if workdir_name == "localnet"
             && workdir_config.is_user_request_start()
-            && wd_tracking.websocket_worker_handle.is_none()
+            && wd_tracking.events_worker_handle.is_none()
         {
-            let (websocket_worker_tx, websocket_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+            let (websocket_worker_tx, websocket_worker_rx) =
+                tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
             let websocket_worker_params = EventsWriterWorkerParams::new(
                 self.globals.clone(),
@@ -472,13 +494,13 @@ impl AdminController {
                 websocket_worker_tx.clone(),
                 workdir_idx,
             );
-            wd_tracking.websocket_worker_tx = Some(websocket_worker_tx);
+            wd_tracking.events_worker_tx = Some(websocket_worker_tx);
 
             let events_writer_worker = EventsWriterWorker::new(websocket_worker_params);
             let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
                 events_writer_worker.run(a)
             }));
-            wd_tracking.websocket_worker_handle = Some(nested);
+            wd_tracking.events_worker_handle = Some(nested);
         }
 
         // Remember the changes that were applied.
