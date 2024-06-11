@@ -170,7 +170,7 @@ suibase_repair() {
     cd "$REPAIR_SB_DIR/rust/helper-uniffi" && (cargo clean)
     cd "$REPAIR_SB_DIR/rust/suibase" && (cargo clean)
     # Force a rebuild and restart of the suibase-daemon.
-    rm -rf "$REPAIR_SB_DIR/workdirs/common/bin/suibase-daemon"
+    rm -rf "$REPAIR_SB_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
   fi
 
   # Basic repairs should be done by now.

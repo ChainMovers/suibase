@@ -1892,10 +1892,10 @@ export -f start_sui_process
 publish_clear_output() {
   local _DIR=$1
   # Only clear potential last publication.
-  rm -f "$_DIR/publish-output.txt"
-  rm -f "$_DIR/publish-output.json"
-  rm -f "$_DIR/created-objects.json"
-  rm -f "$_DIR/package-id.json"
+  rm -f "$_DIR/publish-output.txt" >/dev/null 2>&1
+  rm -f "$_DIR/publish-output.json" >/dev/null 2>&1
+  rm -f "$_DIR/created-objects.json" >/dev/null 2>&1
+  rm -f "$_DIR/package-id.json" >/dev/null 2>&1
 }
 export -f publish_clear_output
 
@@ -2290,7 +2290,7 @@ create_empty_keystore_file() {
   local _DST_FILE="$_DIR/sui.keystore"
   # Wipe out the keystore.
   mkdir -p "$_DIR"
-  rm -rf "$_DST_FILE"
+  rm -rf "$_DST_FILE" >/dev/null 2>&1
   printf '[\n]' >|"$_DST_FILE"
 }
 
@@ -2849,7 +2849,7 @@ download_PRECOMP_REMOTE() {
 
     if [ "$_DO_EXTRACTION" = "true" ]; then
       # echo "Extracting into $_EXTRACT_DIR"
-      rm -rf "$_EXTRACT_DIR"
+      rm -rf "$_EXTRACT_DIR" >/dev/null 2>&1
       mkdir -p "$_EXTRACT_DIR"
       tar -xzf "$_DOWNLOAD_FILEPATH" -C "$_EXTRACT_DIR"
     fi
@@ -2869,8 +2869,8 @@ download_PRECOMP_REMOTE() {
       if [ $i -lt 2 ]; then
         warn_user "Failed to extract binary. Trying to re-download again"
       fi
-      rm -rf "$_EXTRACT_DIR"
-      rm -rf "$_DOWNLOAD_FILEPATH"
+      rm -rf "$_EXTRACT_DIR" >/dev/null 2>&1
+      rm -rf "$_DOWNLOAD_FILEPATH" >/dev/null 2>&1
     fi
 
     if [ -n "$_USE_VERSION" ]; then

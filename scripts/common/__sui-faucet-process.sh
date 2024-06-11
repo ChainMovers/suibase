@@ -29,7 +29,7 @@ start_sui_faucet_process() {
     if $SUI_BASE_NET_MOCK; then
       export SUI_FAUCET_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
-      rm -f "$CONFIG_DATA_DIR/sui-faucet-process.log"
+      rm -f "$CONFIG_DATA_DIR/sui-faucet-process.log" >/dev/null 2>&1
       env SUI_CONFIG_DIR="$WORKDIRS/$WORKDIR/faucet" "$SUI_BIN_DIR/sui-faucet" \
         --amount "${CFG_sui_faucet_coin_value:?}" \
         --host-ip "${CFG_sui_faucet_host_ip:?}" \

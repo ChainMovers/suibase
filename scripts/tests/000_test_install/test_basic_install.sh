@@ -30,7 +30,7 @@ tests() {
 }
 
 test_no_workdirs() {
-  rm -rf ~/suibase/workdirs
+  rm -rf ~/suibase/workdirs >/dev/null 2>&1
   # Make sure not in a directory that was deleted.
   cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
 

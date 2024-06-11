@@ -68,7 +68,7 @@ create_faucet_keystore() {
   local _PUBKEY
   local _KEYPAIR
 
-  rm -rf "$_DEST_DIR"
+  rm -rf "$_DEST_DIR" >/dev/null 2>&1
   mkdir -p "$_DEST_DIR"
 
   # Create a new "faucet" client/keystore at $_DESTDIR using
@@ -126,7 +126,7 @@ workdir_init_local() {
 
   if is_sui_repo_dir_default; then
     local _GENDATA_DIR="$GENERATED_GENESIS_DATA_DIR/default"
-    rm -rf "$_GENDATA_DIR"
+    rm -rf "$_GENDATA_DIR" >/dev/null 2>&1
     mkdir -p "$_GENDATA_DIR"
 
     # Generate the templates to be used for building our own config.yaml
@@ -137,7 +137,7 @@ workdir_init_local() {
     sed '/accounts:/q' "$_GENDATA_DIR/template/config.yaml" >"$_GENDATA_DIR/config.yaml.template_head"
     # Check in case there is trailing stuff after the accounts section (for now it is empty).
     sed -n '/accounts:/,$p' "$_GENDATA_DIR/template/config.yaml" | sed '/^accounts/d' | sed -n '/^[a-z]/,$p' >"$_GENDATA_DIR/config.yaml.template_tail"
-    rm -rf "$_GENDATA_DIR/template"
+    rm -rf "$_GENDATA_DIR/template" >/dev/null 2>&1
     # Find which static genesis_data version should be used.
     if version_greater_equal "$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" -V)" "sui 0.31"; then
       _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.31"
@@ -260,7 +260,7 @@ workdir_init_local() {
   update_client_yaml_active_address
 
   # Install the faucet config.
-  rm -rf "$WORKDIRS/$WORKDIR/faucet"
+  rm -rf "$WORKDIRS/$WORKDIR/faucet" >/dev/null 2>&1
   mkdir -p "$WORKDIRS/$WORKDIR/faucet"
   \cp -rf "$_GENDATA_DIR/faucet/sui.keystore" "$WORKDIRS/$WORKDIR/faucet"
   \cp -rf "$_GENDATA_DIR/faucet/client.yaml" "$WORKDIRS/$WORKDIR/faucet"

@@ -89,11 +89,11 @@ build_suibase_daemon() {
   # (re)build suibase-daemon and install it.
   #
   echo "Building $SUIBASE_DAEMON_NAME"
-  rm -f "$SUIBASE_DAEMON_VERSION_FILE"
+  rm -f "$SUIBASE_DAEMON_VERSION_FILE" >/dev/null 2>&1
 
   if [ "${CFG_proxy_enabled:?}" != "dev" ]; then
     # Clean the build directory.
-    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target"
+    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
   fi
 
   (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
@@ -129,7 +129,7 @@ build_suibase_daemon() {
 
   if [ "${CFG_proxy_enabled:?}" != "dev" ]; then
     # Clean the build directory.
-    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target"
+    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
   fi
 }
 export -f build_suibase_daemon

@@ -810,11 +810,11 @@ workdir_exec() {
     if ! $is_local; then
       # Do more precise deletion for testnet/devnet/mainnet to preserve key.
       (if cd "$SUI_REPO_DIR" >/dev/null 2>&1; then cargo clean; fi)
-      rm -rf "$WORKDIRS/$WORKDIR/logs/sui.log"
-      rm -rf "$WORKDIRS/$WORKDIR/config/sui-process.log"
-      rm -rf "$WORKDIRS/$WORKDIR/config/sui-faucet-process.log"
+      rm -rf "$WORKDIRS/$WORKDIR/logs/sui.log" >/dev/null 2>&1
+      rm -rf "$WORKDIRS/$WORKDIR/config/sui-process.log" >/dev/null 2>&1
+      rm -rf "$WORKDIRS/$WORKDIR/config/sui-faucet-process.log" >/dev/null 2>&1
       if [ -d "$WORKDIRS/$WORKDIR/sui-repo-default" ]; then
-        rm -rf "$WORKDIRS/$WORKDIR/sui-repo-default"
+        rm -rf "$WORKDIRS/$WORKDIR/sui-repo-default" >/dev/null 2>&1
         info_exit "Logs, default repo and artifacts deleted. sui.keystore and client.yaml are NEVER deleted for '$WORKDIR'."
       else
         info_exit "$WORKDIR is already deleted"
@@ -889,14 +889,14 @@ workdir_exec() {
     RM_DIR="$CONFIG_DATA_DIR_DEFAULT"
     if [ -d "$RM_DIR" ]; then
       echo "Clearing existing localnet data"
-      rm -rf "$RM_DIR"
-      rm -rf "$WORKDIRS/$WORKDIR/.state/dns"
+      rm -rf "$RM_DIR" >/dev/null 2>&1
+      rm -rf "$WORKDIRS/$WORKDIR/.state/dns" >/dev/null 2>&1
     fi
 
     # Delete localnet publish directory (if exists) to force re-publication.
     RM_DIR="$PUBLISHED_DATA_DIR"
     if [ -d "$RM_DIR" ]; then
-      rm -rf "$RM_DIR"
+      rm -rf "$RM_DIR" >/dev/null 2>&1
     fi
   fi
 
@@ -927,7 +927,7 @@ workdir_exec() {
       # Clean-up generated genesis data because did succesfully switch repo.
       RM_DIR="$GENERATED_GENESIS_DATA_DIR"
       if [ -d "$RM_DIR" ]; then
-        rm -rf "$RM_DIR"
+        rm -rf "$RM_DIR" >/dev/null 2>&1
       fi
     fi
 

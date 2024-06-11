@@ -41,7 +41,7 @@ test_init() {
     return
   fi
   TEST_INIT_CALLED=true
-  rm -rf "$OUT"
+  rm -rf "$OUT" >/dev/null 2>&1
   # This script should not be called from under workdirs since it will get deleted.
   local _USER_CWD
   _USER_CWD=$(pwd -P)

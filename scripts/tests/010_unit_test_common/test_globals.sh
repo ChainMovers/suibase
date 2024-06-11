@@ -23,7 +23,7 @@ tests() {
   test_string_utils
   test_has_param
   cd "$HOME" || fail "cd $HOME"
-  rm -rf "${WORKDIRS:?}"
+  rm -rf "${WORKDIRS:?}" >/dev/null 2>&1
   localnet create || fail "localnet create"
 
   # Some tests are in two phases, with *at least* one second
@@ -252,7 +252,7 @@ test_file_newer_than_phase_2() {
   fi
 
   # Clean up the temporary files.
-  rm "$FILE1_TMP" "$FILE2_TMP"
+  rm "$FILE1_TMP" "$FILE2_TMP" >/dev/null 2>&1
 }
 
 test_has_param() {
