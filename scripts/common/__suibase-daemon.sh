@@ -155,19 +155,6 @@ start_suibase_daemon() {
     return
   fi
 
-  # MacOs does not have flock normally installed.
-  # If missing, then try to install it.
-  update_HOST_vars
-  if [ "$HOST_PLATFORM" = "Darwin" ]; then
-    if ! which flock >/dev/null 2>&1; then
-      if which brew >/dev/null 2>&1; then
-        brew install flock >/dev/null 2>&1
-      fi
-      if ! which flock >/dev/null 2>&1; then
-        setup_error "Must install flock. Try 'brew install flock'"
-      fi
-    fi
-  fi
 
   echo "Starting $SUIBASE_DAEMON_NAME"
 

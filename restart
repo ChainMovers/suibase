@@ -23,6 +23,9 @@ main() {
   # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
   source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
+  exit_if_not_installed
+  exit_if_deps_missing
+
   # Block users from running any concurrent CLI commands.
   cli_mutex_lock "localnet"
   cli_mutex_lock "mainnet"

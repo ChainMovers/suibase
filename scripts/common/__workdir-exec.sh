@@ -174,6 +174,7 @@ usage() {
 workdir_exec() {
   trap cleanup EXIT
   exit_if_not_installed
+  exit_if_deps_missing
 
   CMD_REQ=$1
   shift # Consume the command.
@@ -367,9 +368,12 @@ workdir_exec() {
     fi
   fi
 
+
+
   # CLI Mutex to prevent concurrent conflicting commands.
   # (only "status" is allowed to run concurrently)
   if [ "$CMD_STATUS_REQ" = false ]; then
+
     cli_mutex_lock "$WORKDIR"
     # Note: Will be unlock on trap EXIT.
   fi

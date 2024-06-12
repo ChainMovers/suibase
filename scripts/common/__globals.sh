@@ -3287,3 +3287,19 @@ progress_suibase_daemon_upgrading() {
   touch /tmp/.suibase/suibase-daemon-upgrading
 }
 export -f progress_suibase_daemon_upgrading
+
+exit_if_deps_missing() {
+  # MacOs does not have flock normally installed.
+  # If missing, then try to install it. Exit if not successful.
+  update_HOST_vars
+  if [ "$HOST_PLATFORM" = "Darwin" ]; then
+    if ! which flock >/dev/null 2>&1; then
+      if which brew >/dev/null 2>&1; then
+        brew install flock >/dev/null 2>&1
+      fi
+      if ! which flock >/dev/null 2>&1; then
+        setup_error "Must install flock. Try 'brew install flock'"
+      fi
+    fi
+  fi
+}
