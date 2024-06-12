@@ -40,26 +40,11 @@ case "$PARAM_NAME" in
   ;;
 esac
 
-# Check what is available, prefer flock over lockf.
-# Reference: https://github.com/Freaky/run-one/blob/master/run-one
-if is_installed flock; then
-  _LOCK_CMD="flock -xn"
-else
-  if is_installed lockf; then
-    _LOCK_CMD="lockf -st0"
-  else
-    setup_error "Neither 'flock' or 'lockf' are available! Install one of them"
-  fi
-fi
-
-locked_command() {
-  exec $_LOCK_CMD "$@"
-}
 
 force_stop_all_services() {
   # This is called in rare cases.
   #
-  # It will force stop all processes for all workdirs, but not touch
+  # It will force stop all processes for localnet, but not touch
   # the "user_request" to preserve the user intent.
   #
   # It will create a "force_stop" key-value in each .state workdir
@@ -68,6 +53,8 @@ force_stop_all_services() {
   #
   # It is assumed that the daemon will delete the force_stop,
   # and resume the services as configured by "user_request".
+
+
   update_SUI_FAUCET_PROCESS_PID_var
   if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
     set_key_value "localnet" "force_stop" "true"
@@ -123,7 +110,7 @@ main() {
   if [ "$PARAM_CMD" == "foreground" ]; then
     # Run in foreground, with no restart on exit/panic.
     # shellcheck disable=SC2086,SC2016
-    locked_command "$_LOCKFILE" /bin/sh -uec '"$@" 2>&1 | tee -a $0' "$_LOG" $_CMD_LINE
+    try_locked_command "$_LOCKFILE" /bin/sh -uec '"$@" 2>&1 | tee -a $0' "$_LOG" $_CMD_LINE
   else
     # Run in background, with auto-restart on exit/panic.
     echo "Starting $_DAEMON_NAME in background. Check logs at: $_LOG"
@@ -160,13 +147,17 @@ main() {
         done
 
         if [ $_BLOCKED = true ]; then
-          echo "WARNING: $_DAEMON_NAME lock exists and the daemon is not running. Stopping all services."
+          # This is to recover when the lockfile exists, but the suibase-daemon
+          # is NOT running (e.g. was killed). Killing only the daemon is problematic
+          # when its child process are left running. This is why all potential
+          # child services are stopped here.
           force_stop_all_services
         fi
       fi
-      # shellcheck disable=SC2086,SC2016
-      locked_command "$_LOCKFILE" /bin/sh -uec 'while true; do "$@" > $0 2>&1; echo "Restarting process" > $0 2>&1; sleep 1; done' "$_LOG" $_CMD_LINE
     fi
+
+    # shellcheck disable=SC2086,SC2016
+    try_locked_command "$_LOCKFILE" /bin/sh -uec 'while true; do "$@" > $0 2>&1; echo "Restarting process" > $0 2>&1; sleep 1; done' "$_LOG" $_CMD_LINE
   fi
 
 }

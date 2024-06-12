@@ -143,6 +143,60 @@ export SUI_BASE_NET_MOCK_PID="999999"
 # such that no "key" information gets actually log.
 export NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF $SUI_BIN_DIR/sui keytool"
 
+# Cleanup should be always called on outer script exit.
+#
+# It is assumed that a "trap cleanup EXIT" will be initialized
+# by the outer script (the one who sources __globals.sh).
+
+# Initialize an associative array to track whether the lock has been acquired for each _WORKDIR
+export SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET=0
+export SUIBASE_CLI_LOCK_ACQUIRED_DEVNET=0
+export SUIBASE_CLI_LOCK_ACQUIRED_TESTNET=0
+export SUIBASE_CLI_LOCK_ACQUIRED_MAINNET=0
+export SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=0
+export SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+
+cleanup() {
+  # echo "Cleanup called"
+  # Clear progress files created by this script.
+  if [ "$SUIBASE_DAEMON_UPGRADING" == "1" ]; then
+    rm -f /tmp/.suibase/suibase-daemon-upgrading >/dev/null 2>&1
+  fi
+
+  # Associative arrays are not working for the trap. bash limitation?
+  # Did workaround by painfully defining variables for each workdir.
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET" == "1" ]; then
+    cli_mutex_release "localnet"
+    SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET=0
+  fi
+
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_DEVNET" == "1" ]; then
+    cli_mutex_release "devnet"
+    SUIBASE_CLI_LOCK_ACQUIRED_DEVNET=0
+  fi
+
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_TESTNET" == "1" ]; then
+    cli_mutex_release "testnet"
+    SUIBASE_CLI_LOCK_ACQUIRED_TESTNET=0
+  fi
+
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_MAINNET" == "1" ]; then
+    cli_mutex_release "mainnet"
+    SUIBASE_CLI_LOCK_ACQUIRED_MAINNET=0
+  fi
+
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN" == "1" ]; then
+    cli_mutex_release "cargobin"
+    SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=0
+  fi
+
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE" == "1" ]; then
+    cli_mutex_release "active"
+    SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+  fi
+
+}
+
 # Add color
 function __echo_color() {
   if [[ "${CFG_terminal_color:?}" == 'false' ]]; then
@@ -294,6 +348,200 @@ is_installed() {
   true
   return
 }
+
+
+SUIBASE_LOCK_CMD=""
+SUIBASE_LOCK_TRY_PARAMS=""
+#SUIBASE_LOCK_BLOCKING_PARAMS=""
+
+init_SUIBASE_LOCK_vars() {
+  if [ -n "$SUIBASE_LOCK_CMD" ]; then
+    return
+  fi
+  # Check what is available, prefer flock over lockf.
+  # Reference: https://github.com/Freaky/run-one/blob/master/run-one
+  if is_installed flock; then
+    SUIBASE_LOCK_CMD="flock"
+    SUIBASE_LOCK_TRY_PARAMS="-xn"
+    #SUIBASE_LOCK_BLOCKING_PARAMS="-x"
+  else
+    if is_installed lockf; then
+      SUIBASE_LOCK_CMD="lockf"
+      SUIBASE_LOCK_TRY_PARAMS="-xt0"
+      #SUIBASE_LOCK_BLOCKING_PARAMS="-x"
+    else
+      setup_error "Neither 'flock' or 'lockf' are available! Install one of them"
+    fi
+  fi
+  # All locks should be located in same place.
+  mkdir -p "$SUIBASE_TMP_DIR"
+}
+
+try_locked_command() {
+  init_SUIBASE_LOCK_vars
+  exec $SUIBASE_LOCK_CMD $SUIBASE_LOCK_TRY_PARAMS "$@"
+}
+export -f try_locked_command
+
+
+cli_mutex_lock()
+{
+  # mutex is re-entrant (only first call to cli_mutex_lock will acquire the lock).
+
+  # Design choice:
+  #  The mkdir+trap trick is admitedly not perfect, but we have to make
+  #  a compromise here.
+  #
+  #  The more robust flock approach cannot be used because of complication
+  #  with inherited file descriptors hold indefinitely by child processes
+  #  (e.g. when starting background sui or sui-faucet)
+  #
+  #  The drawback of mkdir+trap are:
+  #    - Stale lock if the script is killed *between* the mkdir creation success and
+  #      the setting of the lock acquired flag ("<1 microseconds" window?).
+  #    - Not working atomicly if /tmp is on NFS (unlikely!)
+  #    - other scenario where the trap EXIT is not called?
+  #
+  # Worst case, because the lock is in /tmp, a stale lock can be workaround with a reboot...
+
+  local _WORKDIR=$1
+
+  if [ -z "$_WORKDIR" ]; then
+    setup_error "Internal error. cli_mutex_lock called without a workdir specified"
+  fi
+
+  init_SUIBASE_LOCK_vars
+
+  # Only acquire the lock if it has not been acquired yet
+  local _IS_ACQUIRED=0
+  case $_WORKDIR in
+  localnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET
+    ;;
+  devnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_DEVNET
+    ;;
+  testnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_TESTNET
+    ;;
+  mainnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_MAINNET
+    ;;
+  cargobin)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN
+    ;;
+  active)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE
+    ;;
+  *)
+    setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
+    ;;
+  esac
+  if [ "$_IS_ACQUIRED" == "1" ]; then
+    return
+  fi
+
+  local _LOCKFILE="$SUIBASE_TMP_DIR/cli-$_WORKDIR.lock"
+
+  # Block until getting the lock. The lock is released by the "trap cleanup EXIT".
+  while ! mkdir "$_LOCKFILE" 2>/dev/null; do
+    sleep 0.2
+  done
+
+  case $_WORKDIR in
+  localnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET=1
+    ;;
+  devnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_DEVNET=1
+    ;;
+  testnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_TESTNET=1
+    ;;
+  mainnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_MAINNET=1
+    ;;
+  cargobin)
+    SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=1
+    ;;
+  active)
+    SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=1
+    ;;
+  *)
+    setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
+    ;;
+  esac
+
+  # echo "Lock acquired for $_WORKDIR"
+}
+export -f cli_mutex_lock
+
+cli_mutex_release()
+{
+  # Use with care, this will release the lock regardless of how many
+  # times cli_mutex_lock() was called.
+  #
+  local _WORKDIR=$1
+  if [ -z "$_WORKDIR" ]; then
+    setup_error "Internal error. cli_mutex_release called without a workdir specified"
+  fi
+
+  local _IS_ACQUIRED=0
+  case $_WORKDIR in
+  localnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET
+    ;;
+  devnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_DEVNET
+    ;;
+  testnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_TESTNET
+    ;;
+  mainnet)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_MAINNET
+    ;;
+  cargobin)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN
+    ;;
+  active)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE
+    ;;
+  *)
+    setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
+    ;;
+  esac
+  if [ "$_IS_ACQUIRED" == "0" ]; then
+    return
+  fi
+
+  local _LOCKFILE="$SUIBASE_TMP_DIR/cli-$_WORKDIR.lock"
+  rmdir "$_LOCKFILE" >/dev/null 2>&1
+
+  # Mark the lock as released
+  case $_WORKDIR in
+  localnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET=0
+    ;;
+  devnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_DEVNET=0
+    ;;
+  testnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_TESTNET=0
+    ;;
+  mainnet)
+    SUIBASE_CLI_LOCK_ACQUIRED_MAINNET=0
+    ;;
+  cargobin)
+    SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=0
+    ;;
+  active)
+    SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+    ;;
+  esac
+
+  #echo "Lock released for $_WORKDIR"
+}
+export -f cli_mutex_release
 
 set_key_value() {
   local _WORKDIR=$1
@@ -3032,3 +3280,10 @@ has_param() {
   return
 }
 export -f has_param
+
+export SUIBASE_DAEMON_UPGRADING=0
+progress_suibase_daemon_upgrading() {
+  SUIBASE_DAEMON_UPGRADING=1
+  touch /tmp/.suibase/suibase-daemon-upgrading
+}
+export -f progress_suibase_daemon_upgrading

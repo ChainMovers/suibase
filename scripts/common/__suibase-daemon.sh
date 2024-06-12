@@ -309,9 +309,13 @@ update_SUIBASE_DAEMON_PID_var() {
 
   local _PID
   _PID=$(lsof -t -a -c suibase "$SUIBASE_TMP_DIR"/"$SUIBASE_DAEMON_NAME".lock 2>/dev/null)
+  local _LSOF_RETURN_CODE=$?
 
   #shellcheck disable=SC2181
-  if [ $? -eq 0 ]; then
+  if [ $_LSOF_RETURN_CODE -eq 0 ]; then
+    # Trim potential whitespace and carriage return from _PID
+    _PID=$(echo "$_PID" | tr -d '[:space:]')
+
     # Verify _PID is a number. Otherwise, assume it is an error.
     if [[ "$_PID" =~ ^[0-9]+$ ]]; then
       export SUIBASE_DAEMON_PID="$_PID"
@@ -319,7 +323,7 @@ update_SUIBASE_DAEMON_PID_var() {
     fi
   fi
 
-  # For all error case.
+  # For error case or daemon not running...
 
   # Check if lsof is not installed, then inform the user to install it.
   if ! is_installed lsof; then
@@ -398,8 +402,7 @@ start_suibase_daemon_as_needed() {
     fi
 
     if [ "$_PERFORM_UPGRADE" = true ]; then
-      trap 'rm -f /tmp/.suibase/suibase-daemon-upgrading >/dev/null 2>&1' EXIT
-      touch /tmp/.suibase/suibase-daemon-upgrading
+      progress_suibase_daemon_upgrading
       local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
       build_suibase_daemon
       update_SUIBASE_DAEMON_VERSION_INSTALLED

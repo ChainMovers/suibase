@@ -200,7 +200,7 @@ export class SuibaseExec {
     // This function must always resolve its promise.
     let suibaseRunning = false;
     try {
-      const result = await execShell("lsof /tmp/.suibase/suibase-daemon.lock");
+      const result = await execShell("lsof /tmp/.suibase/suibase-daemon.lock 2>/dev/null");
       // Check if "suibase" can be found in first column of one of the outputted line"
       const lines = result.split("\n");
       for (let i = 0; i < lines.length && !suibaseRunning; i++) {
@@ -224,11 +224,10 @@ export class SuibaseExec {
     //
     // This function must always resolve its promise.
     try {
-      return await this.fileExists("/tmp/.suibase/suibase-daemon-upgrading")
+      return await this.fileExists("/tmp/.suibase/suibase-daemon-upgrading");
     } catch (error) {
       return false;
     }
-
   }
 
   public async version(): Promise<string> {

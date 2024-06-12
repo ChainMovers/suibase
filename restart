@@ -18,9 +18,18 @@ main() {
 
   # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
   source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+  trap cleanup EXIT
 
   # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
   source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
+
+  # Block users from running any concurrent CLI commands.
+  cli_mutex_lock "localnet"
+  cli_mutex_lock "mainnet"
+  cli_mutex_lock "devnet"
+  cli_mutex_lock "testnet"
+  cli_mutex_lock "cargobin"
+  cli_mutex_lock "active"
 
   restart_suibase_daemon
 }

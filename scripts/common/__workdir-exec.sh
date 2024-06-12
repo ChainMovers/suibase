@@ -172,7 +172,7 @@ usage() {
 }
 
 workdir_exec() {
-
+  trap cleanup EXIT
   exit_if_not_installed
 
   CMD_REQ=$1
@@ -365,6 +365,13 @@ workdir_exec() {
       echo "Path [ $OPTIONAL_PATH ] not found"
       exit
     fi
+  fi
+
+  # CLI Mutex to prevent concurrent conflicting commands.
+  # (only "status" is allowed to run concurrently)
+  if [ "$CMD_STATUS_REQ" = false ]; then
+    cli_mutex_lock "$WORKDIR"
+    # Note: Will be unlock on trap EXIT.
   fi
 
   ###################################################################
