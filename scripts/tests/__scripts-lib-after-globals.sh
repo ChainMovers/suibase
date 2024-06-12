@@ -46,7 +46,7 @@ assert_workdir_ok() {
   if [ ! "$_RESULT" -eq 0 ]; then
     fail "workdir-exec usage should not be an error"
   fi
-  _FIRST_WORD=$(echo "$_HELP" | head -n1 | awk '{print $1;}')
+  _FIRST_WORD=$(echo "$_HELP" | { head -n 1; cat >/dev/null 2>&1; } | awk '{print $1;}')
   # Note: Must use contain because of the ANSI color escape code.
   [[ "$_FIRST_WORD" == *"$1"* ]] || fail "usage first word [$_FIRST_WORD] not [$1]"
 
@@ -66,7 +66,7 @@ assert_build_ok() {
   # Verify that the Sui binary execution is OK.
   local _VERSION _FIRST_WORD
   _VERSION=$($_SUI_BIN --version)
-  _FIRST_WORD=$(echo "$_VERSION" | head -n1 | awk '{print $1;}')
+  _FIRST_WORD=$(echo "$_VERSION" | { head -n 1; cat >/dev/null 2>&1; } | awk '{print $1;}')
   [ "$_FIRST_WORD" = "sui" ] || fail "sui --version did not work [$_VERSION]"
   if [ "${CFG_default_repo_branch:?}" = "main" ]; then
     # "Cutting edge" branch is not precompiled by Mysten Labs.

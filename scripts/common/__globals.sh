@@ -1982,10 +1982,10 @@ get_process_pid() {
     # More info: https://github.com/ChainMovers/suibase/issues/79
 
     # shellcheck disable=SC2009
-    _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+    _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
   else
     # shellcheck disable=SC2009
-    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "$_PROC $_ARGS" | grep -v grep | head -n 1 | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | head -n 1)
+    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "$_PROC $_ARGS" | grep -v grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
   fi
 
   if [ -n "$_PID" ]; then
@@ -2355,7 +2355,7 @@ add_test_addresses() {
   # Set highest address as active. Best-effort... just warn if fails.
   local _HIGH_ADDR
   local _SET_ACTIVE_SUCCESS=false
-  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep -v "activeAddress" | grep "0x" | sort -r | head -n 1)
+  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep -v "activeAddress" | grep "0x" | sort -r | { head -n 1; cat >/dev/null 2>&1; })
   if [[ "$_HIGH_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
     _HIGH_ADDR="${BASH_REMATCH[0]}"
 
@@ -2925,7 +2925,7 @@ update_PRECOMP_REMOTE_var() {
       fi
 
       # Find the binary asset for that release.
-      _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | head -1)
+      _DOWNLOAD_URL=$(echo "$_OUT" | grep "browser_download_url" | grep "$_DOWNLOAD_SUBSTRING" | grep "$_TAG_NAME" | sort -r | { head -n 1; cat >/dev/null 2>&1; })
       _DOWNLOAD_URL="${_DOWNLOAD_URL#*\:}" # Remove the ":" and everything before
       _DOWNLOAD_URL="${_DOWNLOAD_URL#*\"}" # Remove the first '"' and everything before
       _DOWNLOAD_URL="${_DOWNLOAD_URL%\"*}" # Remove the last '"' and everything after
