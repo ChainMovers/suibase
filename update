@@ -10,7 +10,8 @@ cd "$SUIBASE_DIR" || {
   exit 1
 }
 
-_CUR_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
+_LOCALNET_CMD_OUTPUT=$("$SUIBASE_DIR/scripts/localnet")
+_CUR_VER=$(echo "$_LOCALNET_CMD_OUTPUT" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
 
 # Check if there are significant local changes. If any, protect the user
 # from doing further git operations.
@@ -44,7 +45,8 @@ if [ "$V1" != "$V2" ]; then
   # Check for repair/update (noop if no change needed).
   ("$SUIBASE_DIR/repair")
 
-  _NEW_VER=$("$SUIBASE_DIR/scripts/localnet" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
+  _LOCALNET_CMD_OUTPUT=$("$SUIBASE_DIR/scripts/localnet")
+  _NEW_VER=$(echo "$_LOCALNET_CMD_OUTPUT" | head -n 1 | sed 's/.*suibase \(.*\)/\1/g')
 
   if [ -n "$_CUR_VER" ]; then
     echo "Old version $_CUR_VER"
