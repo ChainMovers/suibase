@@ -12,14 +12,17 @@
 //   - Shell command on different workdir can be executed concurrently.
 //
 // flatten everything under "workers" module.
+pub(crate) use self::cli_poller::*;
 pub(crate) use self::db_worker::*;
 pub(crate) use self::events_writer_worker::*;
-//pub(crate) use self::log_worker::*;
+pub(crate) use self::packages_poller::*;
 pub(crate) use self::request_worker::*;
 pub(crate) use self::websocket_worker::*;
 
+mod cli_poller;
 mod db_worker;
 mod events_writer_worker;
 mod log_worker;
+mod packages_poller;
 mod request_worker;
 mod websocket_worker;

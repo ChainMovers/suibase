@@ -182,9 +182,6 @@ pub struct WorkdirStatusResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network_version: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asui_selection: Option<String>,
-
     // Finer grain status for each process/feature/service.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub services: Option<Vec<StatusService>>,
@@ -198,7 +195,6 @@ impl WorkdirStatusResponse {
             status_info: None,
             client_version: None,
             network_version: None,
-            asui_selection: None,
             services: None,
         }
     }
@@ -217,7 +213,6 @@ impl VersionedEq for WorkdirStatusResponse {
             && self.status_info == other.status_info
             && self.client_version == other.client_version
             && self.network_version == other.network_version
-            && self.asui_selection == other.asui_selection
             && self.services == other.services
     }
 }
@@ -741,6 +736,16 @@ pub trait GeneralApi {
     // Returns success only after confirmed applied to Suibase (retry may have occurred).
     #[method(name = "setAsuiSelection")]
     async fn set_asui_selection(&self, workdir: String) -> RpcResult<SuccessResponse>;
+
+    // Notify the daemon to update its status for a specific workdir.
+    //
+    // Should be called only when a CLI command was executed and is known
+    // to have modified "something".
+    //
+    // The backend periodically refresh all its status. This notification
+    // just trig an "immediate" refresh.
+    #[method(name = "workdirRefresh")]
+    async fn workdir_refresh(&self, workdir: String) -> RpcResult<SuccessResponse>;
 }
 
 #[rpc(server)]

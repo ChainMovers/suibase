@@ -59,7 +59,9 @@ pub struct GlobalsWorkdirStatusST {
 
 impl GlobalsWorkdirStatusST {
     pub fn new() -> Self {
-        Self { ui: None }
+        Self {
+            ui: None
+        }
     }
 }
 
@@ -223,6 +225,8 @@ pub struct Globals {
     pub api_mutex_devnet: GlobalsAPIMutexMT,
     pub api_mutex_testnet: GlobalsAPIMutexMT,
     pub api_mutex_mainnet: GlobalsAPIMutexMT,
+
+    asui_selection: Arc<tokio::sync::Mutex<Option<String>>>,
 }
 
 impl Globals {
@@ -247,6 +251,7 @@ impl Globals {
             api_mutex_devnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
             api_mutex_testnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
             api_mutex_mainnet: Arc::new(tokio::sync::Mutex::new(GlobalsAPIMutexST::new())),
+            asui_selection: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -303,6 +308,17 @@ impl Globals {
             _ => None,
         }
     }
+
+    pub async fn get_asui_selection(&self) -> Option<String> {
+        let selection = self.asui_selection.lock().await;
+        selection.clone()
+    }
+
+    pub async fn set_asui_selection(&mut self, new_value: Option<String>) {
+        let mut selection = self.asui_selection.lock().await;
+        *selection = new_value;
+    }
+
 }
 
 impl Default for Globals {

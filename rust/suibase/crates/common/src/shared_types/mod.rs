@@ -2,7 +2,7 @@
 //
 // This is a submodule specific to suibase-daemon.
 //
-// flatten everything under "shared_type" module.
+// flatten everything under "common::shared_type" module.
 pub use self::workdirs::*;
 
 mod workdirs;

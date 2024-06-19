@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { useMessage } from './lib/CustomHooks';
+//import { useMessage } from './lib/CustomHooks';
 
 import { ConsoleController } from './components/ConsoleController';
 import { ExplorerController } from './components/ExplorerController';
@@ -15,7 +15,7 @@ import { WEBVIEW_CONSOLE, WEBVIEW_DASHBOARD, WEBVIEW_EXPLORER } from '../../src/
 const cssVar = (variableName: string) => {
   try {
   // Get the computed style of the :root element (document.documentElement)
-  const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();  
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
   return value || purple[500];
   } catch (error) {
     console.error(`Error getting CSS variable ${variableName}: ${error}`);
@@ -25,7 +25,7 @@ const cssVar = (variableName: string) => {
 
 const useExternalCssVariable = (variableName: string) => {
   const [value, setValue] = useState(getComputedStyle(document.documentElement).getPropertyValue(variableName));
-  
+
   useEffect(() => {
     const intervalId = setInterval(() => {
       const newValue = getComputedStyle(document.documentElement).getPropertyValue(variableName);
@@ -41,17 +41,16 @@ const useExternalCssVariable = (variableName: string) => {
 };
 
 function App() {
-  const { setMessage } = useMessage();
 
   // Observe a single vscode CSS var periodically to trigger a refresh of the MUI palette.
   const vscodeThemeChange = useExternalCssVariable('--vscode-editor-foreground');
 
   // See https://code.visualstudio.com/api/references/theme-color
-  
+
   const adaptiveTheme = React.useMemo(() => createTheme({
-    components:{    
+    components:{
       MuiCssBaseline: {
-        styleOverrides: {        
+        styleOverrides: {
           body: {
             padding: 0,
           },
@@ -72,20 +71,20 @@ function App() {
                     padding: 0
                 },
                 "& .MuiSnackbarContent-message": {
-                    padding: 0, 
+                    padding: 0,
                     paddingLeft: '2px'
                 }
             }
         }
-      },*/      
-    },    
+      },*/
+    },
     /*
     typography: {
       fontSize: 12,
     },*/
 
     palette: {
-/*      
+/*
   primary?: PaletteColorOptions;
   secondary?: PaletteColorOptions;
   error?: PaletteColorOptions;
@@ -130,16 +129,6 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [vscodeThemeChange]);
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data) {
-        setMessage(event.data);
-      }             
-    }    
-    window.addEventListener('message', handleMessage); 
-    return () => window.removeEventListener('message', handleMessage);    
-  }, [setMessage]);
-
   let controller;
   switch (globalThis.suibase_view_key) {
     case WEBVIEW_DASHBOARD:
@@ -154,7 +143,7 @@ function App() {
     default:
       controller = null;
   }
-  
+
   return (
     <>
     <ThemeProvider theme={adaptiveTheme}>

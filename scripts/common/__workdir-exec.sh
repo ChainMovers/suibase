@@ -472,6 +472,9 @@ workdir_exec() {
         update_JSON_VALUE "status" "$JSON_RESP"
         if [ -n "$JSON_VALUE" ]; then
           _MLINK_STATUS="$JSON_VALUE"
+        else
+          _MLINK_STATUS="DOWN"
+          _MLINK_INFO="Proxy not responding"
         fi
         update_JSON_VALUE "info" "$JSON_RESP"
         if [ -n "$JSON_VALUE" ]; then
@@ -811,6 +814,7 @@ workdir_exec() {
       info_exit "$WORKDIR is already active"
     else
       set_active_symlink_force "$WORKDIR"
+      notify_suibase_daemon_workdir_change
       info_exit "$WORKDIR is now active"
     fi
   fi
@@ -1218,6 +1222,7 @@ stop_all_services() {
     # Transition to "stop" state successful.
     notify_suibase_daemon_fs_change
     notify_dtp_daemon_fs_change
+    notify_suibase_daemon_workdir_change
     return 0
   fi
 
@@ -1244,6 +1249,7 @@ stop_all_services() {
   # Success. All process that needed to be stopped were stopped.
   notify_suibase_daemon_fs_change
   notify_dtp_daemon_fs_change
+  notify_suibase_daemon_workdir_change
   return 0
 }
 export -f stop_all_services
@@ -1258,6 +1264,7 @@ start_all_services() {
   #      (Note: suibase-daemon and dtp-daemon are not *particular* to a workdir)
   local _OLD_USER_REQUEST
   _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
+  local _CHANGE_ATTEMPTED=false
 
   set_key_value "$WORKDIR" "user_request" "start"
 
@@ -1274,8 +1281,7 @@ start_all_services() {
   fi
 
   if [ "$_OLD_USER_REQUEST" != "start" ]; then
-    notify_suibase_daemon_fs_change
-    notify_dtp_daemon_fs_change
+    _CHANGE_ATTEMPTED=true
   fi
 
   # Verify if all other expected process are running.
@@ -1288,6 +1294,9 @@ start_all_services() {
       return 1
     fi
     # Transition to "start" state successful.
+    notify_suibase_daemon_fs_change
+    notify_dtp_daemon_fs_change
+    notify_suibase_daemon_workdir_change
     return 0
   fi
 
@@ -1313,13 +1322,13 @@ start_all_services() {
     return 1
   fi
 
-  # One or more other process need to be started.
 
   if [ -z "$SUI_PROCESS_PID" ]; then
     # Note: start_sui_process has to call sync_client_yaml itself to remove the
     #       use of the proxy. This explains why start_sui_process is called on
     #       the exit of this function and not before.
     start_sui_process
+    _CHANGE_ATTEMPTED=true
   fi
 
   if [ -z "$SUI_PROCESS_PID" ]; then
@@ -1329,11 +1338,18 @@ start_all_services() {
   if $_SUPPORT_FAUCET; then
     if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
       start_sui_faucet_process
+      _CHANGE_ATTEMPTED=true
     fi
 
     if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
       setup_error "Faucet not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
     fi
+  fi
+
+  if [ "$_CHANGE_ATTEMPTED" = true ]; then
+    notify_suibase_daemon_fs_change
+    notify_dtp_daemon_fs_change
+    notify_suibase_daemon_workdir_change
   fi
 
   # Success. All process that needed to be started were started.

@@ -232,10 +232,10 @@ impl GeneralApiImpl {
         resp.header.method = "getWorkdirStatus".to_string();
         resp.header.key = Some(workdir.clone());
 
-        // Get an update with a "<workdir> status --json" shell call.
+        // TODO Get an update with a "<workdir> status --json" shell call.
         // Map it into the resp.
         let cmd_resp = match self
-            .shell_exec(workdir_idx, format!("{} status", workdir))
+            .shell_exec(workdir_idx, format!("{} status --daemoncall", workdir))
             .await
         {
             Ok(cmd_resp) => cmd_resp,

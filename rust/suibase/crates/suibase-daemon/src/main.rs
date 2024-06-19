@@ -4,35 +4,39 @@
 // main.rs does:
 //  - Validate command line.
 //  - Telemetry setup
-//  - Top level threads started here. These runs until the program terminates:
+//  - Top level tasks started here. These runs until the program terminates:
 //     - AdminController: The "leader" thread validating and applying the config changes and user actions.
 //     - NetworkMonitor: Maintains all remote server stats. Info coming from multiple sources (on a mpsc channel).
 //     - APIServer: Does "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
 //     - ClockTrigger: Send periodic audit events to other threads.
 //
-// Other threads (not started here):
+// Other tasks (not started here):
 //
 //  - ProxyServer:        One long-running thread instance per listening port. Async handling of all user traffic.
 //                        Uses axum::Server and reqwest::Client. Started/stopped by the AdminController.
 //
-//  - RequestWorker:      Perform on-demand requests to target servers for health check+latency test.
+//  - RequestWorker:      Perform on-demand health check+latency test of RPC servers.
 //                        Uses reqwest::Client. Started/stopped by the NetworkMonitor.
 //
 //  - WorkdirsWatcher:    Watch for changes to config files in the suibase workdirs. Send events to AdminController.
 //                        Started/stopped by the AdminController.
 //
-//  - ShellWorker:        Perform external call to Suibase command line. One instance per workdir (by design, will
-//                        serialize all command execution). Started/stopped by the AdminController.
-//
-//  - EventsWriterWorker: Manage connection(s) to subscribe/receive/dedup Sui events. Data written to FS (SQLite).
+//  - EventsWriterWorker: Manage connection(s) to subscribe/receive/dedup Sui events.
 //                        One instance per workdir. Started/stopped by the AdminController.
 //                        Does "sandboxing" of WebSocketWorker and DBWorker.
 //
 //  - WebSocketWorker:    Manage subscribe/unsubscribe and receiving Sui events for a single connection. Forwards
 //                        subscribed sui events to its parent EventsWriterWorker for dedup. Uses tokio-tungstenite.
 //
-//  - DBWorker:           Manage the embedded database file for a single workdir. Write to SQLite DB the already
-//                        validated and dedup output from its parent (EventsWriterWorker).
+//  - DBWorker:           Manage the in-memory (or file) DB for a single workdir. Write to DB the already
+//                        validated and dedup Sui events from its parent (EventsWriterWorker).
+//
+//  - CliPoller:          Periodic/on-demand CLI "status" command. Parse CLI output, update globals and generate
+//                        events on changes. Sandboxed in case of parsing error (auto-restart on panic).
+//                        Started by the AdminController.
+//
+//  - ShellWorker:        Perform external call to Suibase command line. One instance per workdir (by design, will
+//                        serialize all command execution). Started/stopped by the AdminController.
 //
 use anyhow::Result;
 

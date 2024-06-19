@@ -70,6 +70,19 @@ pub struct GenericChannelMsg {
     pub resp_channel: Option<tokio::sync::oneshot::Sender<String>>,
 }
 
+impl Clone for GenericChannelMsg {
+    fn clone(&self) -> Self {
+        Self {
+            event_id: self.event_id,
+            command: self.command.clone(),
+            params: self.params.clone(),
+            data_json: self.data_json.clone(),
+            workdir_idx: self.workdir_idx,
+            resp_channel: None, // Watch-out... resp_channel is not cloneable!
+        }
+    }
+}
+
 impl GenericChannelMsg {
     pub fn new() -> Self {
         Self::default()

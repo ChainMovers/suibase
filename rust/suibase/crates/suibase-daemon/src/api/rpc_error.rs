@@ -33,6 +33,9 @@ pub enum RpcSuibaseError {
     FileAccessError(String),
     #[error("outdated uuid")]
     OutdatedUUID(),
+    #[error("{0}")]
+    InfoError(String),
+
 }
 
 impl RpcInputError {

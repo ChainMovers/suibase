@@ -47,6 +47,16 @@ pub trait VersionedEq {
 }
 
 impl Header {
+    pub fn new(method: &str) -> Self {
+        Self {
+            method: method.to_string(),
+            method_uuid: None,
+            data_uuid: None,
+            key: None,
+            semver: None,
+        }
+    }
+
     pub fn set_from_uuids(&mut self, uuids: &SafeUuid) {
         self.method_uuid = Some(uuids.get_method_uuid());
         self.data_uuid = Some(uuids.get_data_uuid());
@@ -79,6 +89,16 @@ impl<T: Clone + PartialEq + VersionedEq> Versioned<T> {
             self.uuid.increment();
         }
         self.uuid.clone()
+    }
+
+    pub fn take_if_not_equal(&mut self, new_data: T) -> bool {
+        if !self.data.versioned_eq(&new_data) {
+            self.data = new_data;
+            self.uuid.increment();
+            true
+        } else {
+            false
+        }
     }
 
     // When owner did get_mut_data and made modifications to the data

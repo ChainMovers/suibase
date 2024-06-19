@@ -845,14 +845,13 @@ impl WebSocketWorkerThread {
         let event_rx = Arc::clone(&self.params.event_rx);
         let mut event_rx = event_rx.lock().await;
 
-        if self.websocket.write.is_none() && !self.open_websocket().await {
-            // Delay of 5 seconds before retrying.
-            // TODO Replace delay with checking time elapsed.
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        // Remove duplicate of EVENT_AUDIT and EVENT_UPDATE in the event_rx queue.
+        remove_generic_event_dups(&mut event_rx, &self.params.event_tx);
+        mpsc_q_check!(event_rx); // Just to help verify if the Q unexpectedly "accumulate".
 
-            // Remove duplicate of EVENT_AUDIT and EVENT_UPDATE in the event_rx queue.
-            remove_generic_event_dups(&mut event_rx, &self.params.event_tx);
-            mpsc_q_check!(event_rx); // Just to help verify if the Q unexpectedly "accumulate".
+        if self.websocket.write.is_none() && !self.open_websocket().await {
+            // Delay to avoid fast restart loop.
+            tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
             return; // This will restart the thread.
         }
 
@@ -860,6 +859,12 @@ impl WebSocketWorkerThread {
             let ws_stream_future =
                 futures::FutureExt::fuse(self.websocket.read.as_mut().unwrap().next());
             let event_rx_future = futures::FutureExt::fuse(event_rx.recv());
+
+            // TODO Add testnet support at least...
+            // For now, only localnet works reliably (subscription service not yet reliable, may be graphql is the solution?)
+            if self.params.workdir_idx != WORKDIR_IDX_LOCALNET {
+                continue;
+            }
 
             tokio::select! {
                 msg = ws_stream_future => {

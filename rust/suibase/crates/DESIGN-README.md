@@ -1,3 +1,19 @@
+**Layers**
+
+Dependencies (top to bottom)
+
+  entry point                main.rs
+  periodic event generator:  clock_trigger
+  orchestrator task:         admin_controller
+  high level tasks:          network_monitor, proxy_server, cli_poller...
+  low level tasks:           workers::log_worker, workers::websocket_worker...
+  data structures:           shared_types
+
+  common::workers
+  common::utils
+  common::shared_types
+  common::basic_types
+
 **Crates**
 common
 ======
@@ -27,9 +43,9 @@ All daemon uses:
   - Tokio thread and async Mutex/RwLock.
   - Generic error handling with 'anyhow'.
   - Mostly Arc<RwLock> globals for multi-threading safe data sharing.
-  - Most threads supports auto-restart on panic. This is implemented with 
+  - Most threads supports auto-restart on panic. This is implemented with
        https://docs.rs/tokio-graceful-shutdown/latest/tokio_graceful_shutdown/
-    
+
 **State Coordination**
 Because thread can be restarted at any time, we need to be careful about state coordination.
 
@@ -38,8 +54,8 @@ State change are mostly reactive (inform all consumer of the change with message
 All threads are design to handle 3 type of messages:
 
   - EVENT_AUDIT: A fast consistency check. Read-only access to shared variables for performance reason. Should emit an EVENT_UPDATE to self when detecting the need to mutate a shared variable (e.g. globals).
-  
+
   - EVENT_UPDATE: Similar to audit, but allowed to apply shared variables state changes.
-  
+
   - EVENT_EXEC: This is the reactive mechanism to execute what is specified by the params (command, data_string...). Shared variables (e.g. globals) write access allowed.
 

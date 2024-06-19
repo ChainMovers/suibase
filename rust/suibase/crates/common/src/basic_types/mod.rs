@@ -1,6 +1,6 @@
 // This is a submodule specific to suibase-daemon.
 //
-// flatten everything under "api" module.
+// flatten everything under "common::basic_types" module.
 pub use self::auto_thread::*;
 pub use self::autosize_vec::*;
 pub use self::autosize_vec_map_vec::*;

@@ -440,7 +440,7 @@ get_suibase_daemon_status() {
   local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR_NAME\",\"$_DISP\":true}}"
 
   export JSON_RESP
-  JSON_RESP=$(curl -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+  JSON_RESP=$(curl --max-time 2 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
 }
 export -f get_suibase_daemon_status
 
@@ -567,9 +567,30 @@ notify_suibase_daemon_fs_change() {
 
   local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"fsChange\",\"params\":{\"path\":\"$WORKDIR_NAME\"}}"
 
-  curl --max-time 5 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
+  curl --max-time 1 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
 }
 export -f notify_suibase_daemon_fs_change
+
+notify_suibase_daemon_workdir_change() {
+  # Best-effort notification to the suibase-daemon that a state/config changed on
+  # the filesystem for that workdir. Purposely leave the "path" parameter vague
+  # so that the daemon can audit/check *everything*.
+
+  if ! is_suibase_daemon_running; then
+    return
+  fi
+
+  if [ -z "$WORKDIR_NAME" ]; then
+    return
+  fi
+
+  local _HEADERS="Content-Type: application/json"
+
+  local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"workdirRefresh\",\"params\":{\"workdir\":\"$WORKDIR_NAME\"}}"
+
+  curl --max-time 1 -x "" -s --location -X POST "http://${CFG_proxy_host_ip:?}:${CFG_suibase_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" >/dev/null 2>&1 &
+}
+export -f notify_suibase_daemon_workdir_change
 
 # Step done after a network publication.
 #

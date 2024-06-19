@@ -1,12 +1,17 @@
 use std::error::Error;
+use std::time::Duration;
 
+use common::shared_types::WORKDIRS_KEYS;
 use common::{basic_types::*, log_safe};
 
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::shared_types::{Globals, InputPort, WorkdirUserConfig};
+use crate::shared_types::{Globals, InputPort, WorkdirUserConfig, WORKDIR_IDX_LOCALNET};
 use crate::workdirs_watcher::WorkdirsWatcher;
-use crate::workers::{EventsWriterWorker, EventsWriterWorkerParams};
+use crate::workers::{
+    CliPollerParams, CliPollerWorker, EventsWriterWorker, EventsWriterWorkerParams,
+    PackagesPollerParams, PackagesPollerWorker,
+};
 use common::workers::ShellWorker;
 
 use anyhow::{anyhow, Result};
@@ -52,10 +57,19 @@ struct WorkdirTracking {
     last_read_config: Option<WorkdirUserConfig>,
 
     shell_worker_tx: Option<GenericTx>,
-    shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
+    shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the ShellWorker is started.
 
     events_worker_tx: Option<GenericTx>,
-    events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
+    events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the EventsWriterWorker is started.
+
+    cli_poller_tx: Option<GenericTx>,
+    cli_poller_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the CliPollerWorker is started.
+
+    packages_poller_tx: Option<GenericTx>,
+    packages_poller_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the PackagesPollerWorker is started.
+
+    process_watchdog_last_check_timestamp: Option<tokio::time::Instant>,
+    process_watchdog_last_recovery_timestamp: Option<tokio::time::Instant>,
 }
 
 impl std::fmt::Debug for WorkdirTracking {
@@ -139,6 +153,7 @@ impl AdminController {
         }
     }
 
+    // Use the send_XXXXXX functions to queue a message to the AdminController.
     pub async fn send_event_audit(tx_channel: &AdminControllerTx) -> Result<()> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_AUDIT;
@@ -150,6 +165,53 @@ impl AdminController {
         Ok(())
     }
 
+    pub async fn send_event_update(
+        tx_channel: &AdminControllerTx,
+        workdir_idx: WorkdirIdx,
+    ) -> Result<()> {
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_UPDATE;
+        msg.workdir_idx = Some(workdir_idx);
+        if let Err(e) = tx_channel.try_send(msg) {
+            let err_msg = format!("send_event_update: {}", e);
+            log_safe!(err_msg);
+            return Err(anyhow!(err_msg));
+        }
+        Ok(())
+    }
+
+    pub async fn send_shell_exec(
+        tx_channel: &AdminControllerTx,
+        workdir_idx: WorkdirIdx,
+        cmd: String,
+    ) -> Result<String> {
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_SHELL_EXEC;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        msg.resp_channel = Some(tx);
+        msg.workdir_idx = Some(workdir_idx);
+        msg.data_string = Some(cmd.clone());
+        // The purpose of the timeout is the error log to help debugging
+        // if the shell call is apparently "stuck".
+        const TIMEOUT: Duration = Duration::from_secs(3600); // 1 hour!
+        if (tx_channel.send(msg).await).is_ok() {
+            match tokio::time::timeout(TIMEOUT, rx).await {
+                Ok(Ok(resp_str)) => {
+                    return Ok(resp_str);
+                }
+                Ok(Err(e)) => {
+                    return Err(anyhow!("send_shell_exec internal error: {}", e.to_string()));
+                }
+                Err(_) => {
+                    let timeout_err = format!("send_shell_exec timeout {}", cmd);
+                    log::error!("{}", timeout_err);
+                    return Err(anyhow!(timeout_err));
+                }
+            }
+        }
+        Err(anyhow!("send_shell_exec failed"))
+    }
+
     async fn process_audit_msg(&mut self, msg: AdminControllerMsg) {
         if msg.event_id != EVENT_AUDIT {
             log::error!("Unexpected event_id {:?}", msg.event_id);
@@ -157,31 +219,209 @@ impl AdminController {
             return;
         }
 
-        // Forward an audit message to every events worker.
-        for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
-            if wd_tracking.events_worker_tx.is_none() {
-                continue;
-            }
-            let worker_tx = wd_tracking.events_worker_tx.as_ref().unwrap();
+        // Forward an audit message to various "per workdir" worker(s).
+        let mut worker_msg = GenericChannelMsg::new();
+        worker_msg.event_id = EVENT_AUDIT;
 
-            let mut worker_msg = GenericChannelMsg::new();
-            worker_msg.event_id = EVENT_AUDIT;
+        for (workdir_idx, wd_tracking) in self.wd_tracking.iter_mut() {
             worker_msg.workdir_idx = Some(workdir_idx);
-            match worker_tx.try_send(worker_msg) {
+
+            if let Some(worker_tx) = wd_tracking.events_worker_tx.as_ref() {
+                match worker_tx.try_send(worker_msg.clone()) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        log_safe!(format!(
+                            "try_send EVENT_AUDIT forward to events worker failed: {}",
+                            e
+                        ));
+                    }
+                }
+            }
+
+            if let Some(worker_tx) = wd_tracking.cli_poller_tx.as_ref() {
+                match worker_tx.try_send(worker_msg.clone()) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        log_safe!(format!(
+                            "try_send EVENT_AUDIT forward to cli poller failed: {}",
+                            e
+                        ));
+                    }
+                }
+            }
+
+            if let Some(worker_tx) = wd_tracking.packages_poller_tx.as_ref() {
+                match worker_tx.try_send(worker_msg.clone()) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        log_safe!(format!(
+                            "try_send EVENT_AUDIT forward to packages poller failed: {}",
+                            e
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Check for potential need for local process restart/recovery.
+        self.watchdog_local_processes().await;
+    }
+
+    async fn send_msg_to_cli_poller(wd_tracking: &WorkdirTracking, msg: GenericChannelMsg) {
+        if let Some(worker_tx) = wd_tracking.cli_poller_tx.as_ref() {
+            let workdir_idx = msg.workdir_idx;
+            match worker_tx.try_send(msg) {
                 Ok(()) => {}
                 Err(e) => {
                     log_safe!(format!(
-                        "try_send EVENT_AUDIT forward to websocket worker failed: {}",
-                        e
+                        "try_send to {:?} cli poller failed: {}",
+                        workdir_idx, e
                     ));
                 }
             }
         }
     }
 
-    pub async fn send_event_post_publish(tx_channel: &AdminControllerTx) -> Result<()> {
+    async fn send_msg_to_packages_poller(wd_tracking: &WorkdirTracking, msg: GenericChannelMsg) {
+        if let Some(worker_tx) = wd_tracking.packages_poller_tx.as_ref() {
+            let workdir_idx = msg.workdir_idx;
+            match worker_tx.try_send(msg) {
+                Ok(()) => {}
+                Err(e) => {
+                    log_safe!(format!(
+                        "try_send to {:?} packages poller failed: {}",
+                        workdir_idx, e
+                    ));
+                }
+            }
+        }
+    }
+
+    async fn process_update_msg(&mut self, msg: AdminControllerMsg) {
+        if msg.event_id != EVENT_UPDATE {
+            log::error!("Unexpected event_id {:?}", msg.event_id);
+            // Do nothing. Consume the message.
+            return;
+        }
+
+        // If workdir_idx is specified, forward an update message to
+        // related workdir worker(s). If not specified, then
+        // forward to all workdir worker(s).
+
+        // Forward an update message to various "per workdir" worker(s).
+        let mut worker_msg = GenericChannelMsg::new();
+        worker_msg.event_id = EVENT_UPDATE;
+
+        if let Some(workdir_idx) = msg.workdir_idx {
+            if let Some(wd_tracking) = self.wd_tracking.get_if_some(workdir_idx) {
+                worker_msg.workdir_idx = Some(workdir_idx);
+                Self::send_msg_to_cli_poller(wd_tracking, worker_msg.clone()).await;
+                Self::send_msg_to_packages_poller(wd_tracking, worker_msg.clone()).await;
+            }
+        } else {
+            for (workdir_idx, wd_tracking) in self.wd_tracking.iter() {
+                worker_msg.workdir_idx = Some(workdir_idx);
+                Self::send_msg_to_cli_poller(wd_tracking, worker_msg.clone()).await;
+                Self::send_msg_to_packages_poller(wd_tracking, worker_msg.clone()).await;
+            }
+        }
+    }
+
+    async fn watchdog_local_processes(&mut self) {
+        let (last_check_timestamp, last_recovery_timestamp) = {
+            if let Some(workdir_tracking) = self.wd_tracking.get_if_some(WORKDIR_IDX_LOCALNET) {
+                (
+                    workdir_tracking.process_watchdog_last_check_timestamp,
+                    workdir_tracking.process_watchdog_last_recovery_timestamp,
+                )
+            } else {
+                return;
+            }
+        };
+
+        // Prevent burst of checks.
+        if let Some(last_check_timestamp) = last_check_timestamp {
+            if last_check_timestamp.elapsed().as_secs() < 5 {
+                return;
+            }
+        }
+
+        // Using read access to globals, detect if a local processes need to be re-started.
+        //
+        // Uses the services status stored in the localnet workdir globals.
+        //
+        // If the status is not "OK", and one of the service is shown as "NOT RUNNING" then
+        // call "localnet start" to attempt recovery.
+        let need_restart = {
+            let globals_guard = self.globals.get_status(WORKDIR_IDX_LOCALNET).read().await;
+            let globals = &*globals_guard;
+            let mut need_restart = false;
+            if let Some(ui) = &globals.ui {
+                let ui = ui.get_data();
+                if let Some(status) = &ui.status {
+                    if status != "OK" {
+                        if let Some(services) = &ui.services {
+                            for service in services {
+                                if let Some(service_status) = &service.status {
+                                    if (service.label == "Localnet process"
+                                        || service.label == "Faucet process")
+                                        && service_status == "NOT RUNNING"
+                                    {
+                                        need_restart = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            need_restart
+        };
+
+        let mut update_recovery_timestamp = false;
+        if need_restart {
+            // Do nothing if last recovery attempt was less than 2 minutes ago.
+            let mut send_restart_msg = true;
+
+            if let Some(last_recovery_timestamp) = last_recovery_timestamp {
+                if last_recovery_timestamp.elapsed().as_secs() < 120 {
+                    send_restart_msg = false;
+                }
+            }
+
+            // Restart the localnet service.
+            if send_restart_msg {
+                let mut msg = AdminControllerMsg::new();
+                msg.event_id = EVENT_SHELL_EXEC;
+                msg.workdir_idx = Some(WORKDIR_IDX_LOCALNET);
+                msg.data_string = Some("localnet start --daemoncall".to_string());
+                if let Err(e) = self.admctrl_tx.try_send(msg) {
+                    log_safe!(format!(
+                        "try_send EVENT_SHELL_EXEC localnet start failed: {}",
+                        e
+                    ));
+                }
+                update_recovery_timestamp = true;
+            }
+        }
+
+        let workdir_tracking = self.wd_tracking.get_mut(WORKDIR_IDX_LOCALNET);
+        let now = tokio::time::Instant::now();
+        if update_recovery_timestamp {
+            workdir_tracking.process_watchdog_last_recovery_timestamp = Some(now);
+        }
+        workdir_tracking.process_watchdog_last_check_timestamp = Some(now);
+    }
+
+    pub async fn send_event_post_publish(
+        tx_channel: &AdminControllerTx,
+        workdir_idx: WorkdirIdx,
+    ) -> Result<()> {
         let mut msg = AdminControllerMsg::new();
         msg.event_id = EVENT_POST_PUBLISH;
+        msg.workdir_idx = Some(workdir_idx);
         if let Err(e) = tx_channel.try_send(msg) {
             let err_msg = format!(
                 "try_send EVENT_POST_PUBLISH to admin controller failed: {}",
@@ -195,27 +435,34 @@ impl AdminController {
 
     async fn process_post_publish_msg(&mut self, msg: AdminControllerMsg) {
         if msg.event_id != EVENT_POST_PUBLISH {
-            log::error!("Unexpected event_id {:?}", msg.event_id);
+            log::error!(
+                "process_post_publish_msg unexpected event_id {:?}",
+                msg.event_id
+            );
             return;
         }
 
         if msg.workdir_idx.is_none() {
-            log::error!("EVENT_POST_PUBLISH missing workdir_idx");
+            log::error!("process_post_publish_msg missing workdir_idx");
             return;
         }
+        let workdir_idx = msg.workdir_idx.unwrap();
 
-        let msg_workdir_idx = msg.workdir_idx.unwrap();
-        // Forward an update message to the related workdir events writer.
-        let wd_tracking = self.wd_tracking.get_mut(msg_workdir_idx);
-
-        if let Some(worker_tx) = wd_tracking.events_worker_tx.as_ref() {
-            let mut ws_msg = GenericChannelMsg::new();
-            ws_msg.event_id = EVENT_UPDATE;
-            ws_msg.workdir_idx = Some(msg_workdir_idx);
-            if let Err(e) = worker_tx.try_send(ws_msg) {
-                let err_msg = format!("try_send EVENT_POST_PUBLISH to worker failed: {}", e);
-                log_safe!(err_msg);
-            }
+        // Just make the packages_poller do an update immediatly instead of
+        // waiting until next periodical audit.
+        if let Some(wd_tracking) = self.wd_tracking.get_if_some(workdir_idx) {
+            let mut worker_msg = GenericChannelMsg::new();
+            worker_msg.event_id = EVENT_UPDATE;
+            worker_msg.workdir_idx = Some(workdir_idx);
+            Self::send_msg_to_packages_poller(wd_tracking, worker_msg.clone()).await;
+            // A CLI publish may have started the workdir services, so update that as well.
+            Self::send_msg_to_cli_poller(wd_tracking, worker_msg).await;
+        } else {
+            log::error!(
+                "process_post_publish_msg workdir tracking not found: {:?}",
+                workdir_idx
+            );
+            return;
         }
     }
 
@@ -479,30 +726,6 @@ impl AdminController {
             }
         }
 
-        // As needed, start an events_writer_worker for this workdir.
-        // For now, only localnet is supported.
-        if workdir_name == "localnet"
-            && workdir_config.is_user_request_start()
-            && wd_tracking.events_worker_handle.is_none()
-        {
-            let (websocket_worker_tx, websocket_worker_rx) =
-                tokio::sync::mpsc::channel(MPSC_Q_SIZE);
-
-            let websocket_worker_params = EventsWriterWorkerParams::new(
-                self.globals.clone(),
-                websocket_worker_rx,
-                websocket_worker_tx.clone(),
-                workdir_idx,
-            );
-            wd_tracking.events_worker_tx = Some(websocket_worker_tx);
-
-            let events_writer_worker = EventsWriterWorker::new(websocket_worker_params);
-            let nested = subsys.start(SubsystemBuilder::new("events-writer-worker", |a| {
-                events_writer_worker.run(a)
-            }));
-            wd_tracking.events_worker_handle = Some(nested);
-        }
-
         // Remember the changes that were applied.
         wd_tracking.last_read_config = Some(workdir_config);
     }
@@ -524,6 +747,12 @@ impl AdminController {
                     }
                     EVENT_SHELL_EXEC => {
                         self.process_shell_exec_msg(msg, subsys).await;
+                    }
+                    EVENT_UPDATE => {
+                        self.process_update_msg(msg).await;
+                    }
+                    EVENT_POST_PUBLISH => {
+                        self.process_post_publish_msg(msg).await;
                     }
                     _ => {
                         log::error!("Unknown event_id {}", msg.event_id);
@@ -549,6 +778,79 @@ impl AdminController {
             subsys.start(SubsystemBuilder::new("workdirs-watcher", move |a| {
                 workdirs_watcher.run(a)
             }));
+        }
+
+        // Create a WorkdirTracking for every possible workdir.
+        for workdir_idx in 0..WORKDIRS_KEYS.len() {
+            let workdir_idx = workdir_idx as u8;
+            let wd_tracking = self.wd_tracking.get_mut(workdir_idx);
+
+            // Starts the task handling Sui events for latest published packages.
+            if workdir_idx == WORKDIR_IDX_LOCALNET {
+                if wd_tracking.events_worker_handle.is_none() {
+                    let (events_worker_tx, events_worker_rx) =
+                        tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+
+                    let events_worker_params = EventsWriterWorkerParams::new(
+                        self.globals.clone(),
+                        events_worker_rx,
+                        events_worker_tx.clone(),
+                        workdir_idx,
+                    );
+                    wd_tracking.events_worker_tx = Some(events_worker_tx);
+
+                    let events_worker = EventsWriterWorker::new(events_worker_params);
+                    let nested = subsys.start(SubsystemBuilder::new(
+                        format!("events-worker-{}", workdir_idx),
+                        |a| events_worker.run(a),
+                    ));
+                    wd_tracking.events_worker_handle = Some(nested);
+                }
+            }
+
+            // Start a CLI poller.
+            if wd_tracking.cli_poller_handle.is_none() {
+                let (poller_tx, poller_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let params = CliPollerParams::new(
+                    self.globals.clone(),
+                    poller_rx,
+                    poller_tx.clone(),
+                    self.admctrl_tx.clone(),
+                    workdir_idx,
+                );
+                wd_tracking.cli_poller_tx = Some(poller_tx);
+
+                let poller = CliPollerWorker::new(params);
+                let nested = subsys.start(SubsystemBuilder::new(
+                    format!("cli-poller-{}", workdir_idx),
+                    |a| poller.run(a),
+                ));
+                wd_tracking.cli_poller_handle = Some(nested);
+            }
+
+            // Start a packages poller.
+            if wd_tracking.packages_poller_handle.is_none() {
+                let (poller_tx, poller_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+
+                let params = PackagesPollerParams::new(
+                    self.globals.clone(),
+                    poller_rx,
+                    poller_tx.clone(),
+                    self.admctrl_tx.clone(),
+                    wd_tracking.events_worker_tx.clone(),
+                    workdir_idx,
+                );
+                wd_tracking.packages_poller_tx = Some(poller_tx);
+
+                let poller = PackagesPollerWorker::new(params);
+                let nested = subsys.start(SubsystemBuilder::new(
+                    format!("packages-poller-{}", workdir_idx),
+                    |a| poller.run(a),
+                ));
+                wd_tracking.packages_poller_handle = Some(nested);
+            } else {
+                log::error!("Missing events_worker_tx for packages poller");
+            }
         }
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {

@@ -41,8 +41,14 @@ pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 struct WorkdirTracking {
     last_read_config: Option<WorkdirUserConfig>,
 
-    shell_worker_tx: Option<GenericTx>,
-    shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
+    // Two shell workers.
+    // First is for any "mutating and long running" commands (e.g. stop,start,regen...)
+    // Second is for fast status and set-active commands.
+    shell_slow_worker_tx: Option<GenericTx>,
+    shell_slow_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
+
+    shell_fast_worker_tx: Option<GenericTx>,
+    shell_fast_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the shell_worker is started.
 
     events_worker_tx: Option<WebSocketWorkerTx>,
     events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the events_writer_worker is started.
@@ -231,23 +237,52 @@ impl AdminController {
         // Find the corresponding ShellWorker in wd_tracking using the workdir_idx.
         let wd_tracking = self.wd_tracking.get_mut(workdir_idx);
 
-        // Instantiate and start the ShellWorker if not already done.
-        if wd_tracking.shell_worker_handle.is_none() {
+        // Instantiate and start the ShellWorkers when not already done.
+        if wd_tracking.shell_slow_worker_handle.is_none() {
             let (shell_worker_tx, shell_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
-            wd_tracking.shell_worker_tx = Some(shell_worker_tx);
+            wd_tracking.shell_slow_worker_tx = Some(shell_worker_tx);
             let shell_worker =
                 ShellWorker::new(self.globals.clone(), shell_worker_rx, Some(workdir_idx));
-            let nested = subsys.start(SubsystemBuilder::new("shell-worker", |a| {
-                shell_worker.run(a)
-            }));
-            wd_tracking.shell_worker_handle = Some(nested);
+
+            let nested = subsys.start(SubsystemBuilder::new(
+                format!("shell-slow-worker-{}", workdir_idx),
+                |a| shell_worker.run(a),
+            ));
+            wd_tracking.shell_slow_worker_handle = Some(nested);
         }
 
-        if wd_tracking.shell_worker_tx.is_none() {
-            log::error!("EVENT_SHELL_EXEC missing shell_worker_tx");
+        if wd_tracking.shell_slow_worker_tx.is_none() {
+            log::error!("EVENT_SHELL_EXEC missing shell_slow_worker_tx");
             return;
         }
-        let shell_worker_tx = wd_tracking.shell_worker_tx.as_ref().unwrap();
+
+        if wd_tracking.shell_fast_worker_handle.is_none() {
+            let (shell_worker_tx, shell_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+            wd_tracking.shell_fast_worker_tx = Some(shell_worker_tx);
+            let shell_worker =
+                ShellWorker::new(self.globals.clone(), shell_worker_rx, Some(workdir_idx));
+            let nested = subsys.start(SubsystemBuilder::new(
+                format!("shell-fast-worker-{}", workdir_idx),
+                |a| shell_worker.run(a),
+            ));
+            wd_tracking.shell_fast_worker_handle = Some(nested);
+        }
+
+        if wd_tracking.shell_fast_worker_tx.is_none() {
+            log::error!("EVENT_SHELL_EXEC missing shell_fast_worker_tx");
+            return;
+        }
+
+        // Identify if the second word of the command is either "status" or "set-active".
+        let mut is_fast_command = false;
+        if let Some(command) = msg.data_string.as_ref() {
+            let mut words = command.split_whitespace();
+            if let Some(second_word) = words.nth(1) {
+                if second_word == "status" || second_word == "set-active" {
+                    is_fast_command = true;
+                }
+            }
+        };
 
         // Forward the message to the ShellWorker.
         let mut worker_msg = GenericChannelMsg::new();
@@ -255,6 +290,13 @@ impl AdminController {
         worker_msg.command = msg.data_string;
         worker_msg.workdir_idx = msg.workdir_idx;
         worker_msg.resp_channel = msg.resp_channel;
+
+        let shell_worker_tx = if is_fast_command {
+            wd_tracking.shell_fast_worker_tx.as_ref().unwrap()
+        } else {
+            wd_tracking.shell_slow_worker_tx.as_ref().unwrap()
+        };
+
         if let Err(e) = shell_worker_tx.try_send(worker_msg) {
             let err_msg = format!("try_send EVENT_SHELL_EXEC to worker failed: {}", e);
             log_safe!(err_msg);

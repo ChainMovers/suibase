@@ -24,7 +24,7 @@ import * as vscode from "vscode";
 import { LogChannels } from "./LogChannels";
 import * as semver from "semver";
 
-// One instance per workdir, instantiated in same size and order as WORKDIRS_KEYS.
+// One instance per workdir, instantiated in order as the elements of WORKDIRS_KEYS.
 class BackendWorkdirTracking {
   versions: SuibaseJsonVersions; // Result from getVersions backend call.
   workdirStatus: SuibaseJson; // Result from getWorkdirStatus backend call.
@@ -98,7 +98,6 @@ export class BackendSync {
   public handleViewMessage(message: any): void {
     try {
       if (message.name === "ForceVersionsRefresh" || message.name === "InitView") {
-        // TODO For now just send the versions. InitView should proactively send more.
         this.forceRefresh();
       } else if (message.name === "WorkdirCommand") {
         let workdir = "";
@@ -147,10 +146,10 @@ export class BackendSync {
       }
 
       if (forceRefresh === false) {
-        // Schedule another call in one second.
+        // Schedule for the periodical update.
         setTimeout(() => {
           this.syncLoop(forceRefresh);
-        }, 1000);
+        }, 600); // milliseconds
       }
     }); // End of loop_mutex section
   }
@@ -328,12 +327,12 @@ export class BackendSync {
             return;
           }
 
+          // Check the version of the backend, tell user to upgrade as needed.
+          // TODO Call to ~/suibase/update should be automated.
           if (!header.semver || semver.lt(header.semver, BACKEND_MIN_VERSION)) {
             this.reportSetupIssue(SETUP_ISSUE_BACKEND_UPDATE_NEEDED);
             return;
           }
-
-          // Check the version of the backend, tell user to upgrade as needed.
 
           // In the UI, the asuiSelection should always be one of "localnet", "mainnet", "testnet", "devnet".
           //

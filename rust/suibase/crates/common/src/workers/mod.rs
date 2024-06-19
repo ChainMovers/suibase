@@ -1,6 +1,6 @@
 // This is a submodule specific to suibase-daemon.
 //
-// flatten everything under "api" module.
+// flatten everything under "common::workders" module.
 pub use self::shell_worker::*;
 pub use self::subscription_tracking::*;
 

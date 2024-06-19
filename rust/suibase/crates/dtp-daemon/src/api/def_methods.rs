@@ -241,9 +241,6 @@ pub struct WorkdirStatusResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network_version: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asui_selection: Option<String>,
-
     // Finer grain status for each process/feature/service.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub services: Option<Vec<StatusService>>,
@@ -267,7 +264,6 @@ impl WorkdirStatusResponse {
             status_info: None,
             client_version: None,
             network_version: None,
-            asui_selection: None,
             services: None,
             display: None,
             debug: None,
@@ -288,7 +284,6 @@ impl VersionedEq for WorkdirStatusResponse {
             && self.status_info == other.status_info
             && self.client_version == other.client_version
             && self.network_version == other.network_version
-            && self.asui_selection == other.asui_selection
             && self.services == other.services
     }
 }
