@@ -169,7 +169,7 @@ start_suibase_daemon() {
   end=$((SECONDS + 30))
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
-  for _i in {1..3}; do
+  for _i in {1..5}; do
     # Try to start a script that keeps alive the suibase-daemon.
     #
     # Will not try if there is already another instance running.
@@ -180,6 +180,7 @@ start_suibase_daemon() {
     # safely be ignored to /dev/null.
     nohup "$HOME/suibase/scripts/common/run-daemon.sh" suibase >/dev/null 2>&1 &
 
+    local _NEXT_RETRY=$((SECONDS + 6))
     while [ $SECONDS -lt $end ]; do
       if is_suibase_daemon_running; then
         ALIVE=true
@@ -190,15 +191,13 @@ start_suibase_daemon() {
         AT_LEAST_ONE_SECOND=true
       fi
       # Detect if should do a retry at starting it.
-      # This is unlikely needed, but just in case there is a bug in
-      # the startup logic...
-      if [ $SECONDS -gt $((SECONDS + 10)) ]; then
+      if [ $SECONDS -gt $_NEXT_RETRY ]; then
         break
       fi
     done
 
-    # If it is alive, then break the retry loop.
-    if [ "$ALIVE" = true ]; then
+    # If it is alive or timeout, then break the retry loop.
+    if [ "$ALIVE" = true ] || [ $SECONDS -ge $end ]; then
       break
     fi
   done
