@@ -79,6 +79,10 @@ export const enSidebar = sidebar({
           text: "Workdir Conventions",
           link: "references.md",
         },
+        {
+          text: "Integration",
+          link: "how-to/integration.md",
+        },
       ],
     },
     {
