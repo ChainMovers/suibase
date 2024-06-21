@@ -16,7 +16,7 @@ _CUR_VER=$(echo "$_LOCALNET_CMD_OUTPUT" | { head -n 1; cat >/dev/null 2>&1; } | 
 # Check if there are significant local changes. If any, protect the user
 # from doing further git operations.
 # shellcheck disable=SC2126
-if [ ! "$(git status --porcelain | grep -v "Cargo.lock" | grep -v "Move.lock" | grep -v "??" | wc -l)" -eq "0" ]; then
+if [ ! "$(git status --porcelain | grep -vE "Cargo.lock|Move.lock|\?\?|Cargo.toml|Move.toml|Suibase.toml" | wc -l)" -eq "0" ]; then
   if [ -n "$_CUR_VER" ]; then
     echo "Current version $_CUR_VER"
     echo
