@@ -169,7 +169,7 @@ function buildTreeViewPackage(folderPath: string, json: any): TreeViewBaseItem |
 interface ExplorerTreeViewProps {
   workdir: string;
   workdirIdx: number;
-  packagesTrigger: boolean;
+  packagesTrigger: number;
   packagesJson: SuibaseJsonWorkdirPackages;
 }
 

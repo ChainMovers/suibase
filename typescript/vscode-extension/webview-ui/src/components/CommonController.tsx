@@ -119,9 +119,9 @@ export const useCommonController = (sender: string, options?: CommonControllerOp
   // States to force re-renders for ALL components using useCommonController.
   // useEffects dependencies on these can be used for more selectively
   // reacting to changes.
-  const [commonTrigger, setUpdateTrigger] = useState(false);
-  const [statusTrigger, setStatusTrigger] = useState(false);
-  const [packagesTrigger, setPackagesTrigger] = useState(false);
+  const [commonTrigger, setUpdateTrigger] = useState(0);
+  const [statusTrigger, setStatusTrigger] = useState(0);
+  const [packagesTrigger, setPackagesTrigger] = useState(0);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -132,7 +132,6 @@ export const useCommonController = (sender: string, options?: CommonControllerOp
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
-
 
   useEffect(() => {
     // This is also called when this component is mounted.
@@ -221,7 +220,6 @@ export const useCommonController = (sender: string, options?: CommonControllerOp
                 }
 
                 // Do same for WorkdirPackages.
-                // TODO Make these configurable by the view (using a prop).
                 if (trackPackages) {
                   const [isUpdateNeeded, methodUuid, dataUuid] =
                     workdirTracking.versions.isWorkdirPackagesUpdateNeeded(workdirTracking.workdirPackages);
@@ -270,20 +268,19 @@ export const useCommonController = (sender: string, options?: CommonControllerOp
         }
 
         if (do_common_trigger) {
-          setUpdateTrigger((prev) => !prev);
+          setUpdateTrigger((prev) => prev + 1);
         }
         if (do_status_trigger) {
-          setStatusTrigger((prev) => !prev);
+          setStatusTrigger((prev) => prev + 1);
         }
         if (do_packages_trigger) {
-          setPackagesTrigger((prev) => !prev);
+          setPackagesTrigger((prev) => prev + 1);
         }
       }
     } catch (error) {
       console.error("An error occurred in useCommonController:", error);
     }
   };
-
 
   // Note: Triggers are intended as "finer grain" dependencies for useEffects.
   //       Also, it makes possible reaction on changes *within* objects/arrays.
