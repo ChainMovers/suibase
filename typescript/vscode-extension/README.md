@@ -13,7 +13,6 @@ Implemented features:
 Coming soon features:
   - Wallet/alias editor 
   - Manage local instance of Mysten Labs "suiexplorer"
-  - View most recent published packages (and created objects).
   - Debug console for Move programs.
   - Proxy server interface
   

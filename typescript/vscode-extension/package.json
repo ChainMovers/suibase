@@ -8,7 +8,7 @@
   },
   "license": "Apache-2.0",
   "icon": "media/logo_128.png",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "repository": {
     "type": "git",
     "url": "https://github.com/ChainMovers/suibase.git"
@@ -84,7 +84,8 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "dev": "npm run esbuild-base -- --sourcemap --watch",
     "vscode:prepublish": "npm run esbuild-base -- --minify",
-    "package": "vsce package"
+    "package": "vsce package patch",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",

@@ -3,6 +3,9 @@
 Important:
   Do "~/suibase/update" to get latest Suibase CLI when upgrading the extension.
 
+## 0.1.9
+  - New Move packages tracking feature (in sidebar).
+
 ## 0.1.8
   - Tell user when Suibase CLI is outdated.
   - Fix "copy to clipboard" and "open explorer" buttons.

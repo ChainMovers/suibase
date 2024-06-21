@@ -8,7 +8,9 @@
 .vscode-test/**
 
 # Ignore build artifacts
+# (see exceptions at bottom of this file)
 out/**
+dist/**
 
 # Ignore source code
 src/**
@@ -36,6 +38,8 @@ node_modules
 **/.eslintrc.cjs
 **/*.map
 **/*.ts
+.env.production
+.env.development
 
 # Ignore markdown docs.
 **/*.md

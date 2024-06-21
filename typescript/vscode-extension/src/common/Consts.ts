@@ -6,7 +6,7 @@
 //
 // No dependency allowed here.
 
-export const BACKEND_MIN_VERSION = "0.0.10";
+export const BACKEND_MIN_VERSION = "0.0.12";
 
 // workdir_idx are hard coded for performance.
 // Note: These matches the definition used in the backend.
