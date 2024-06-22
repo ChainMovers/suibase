@@ -13,7 +13,9 @@ import * as vscode from "vscode";
 import * as cp from "child_process";
 //import WebSocket from "ws";
 import * as OS from "os";
+import * as fs from "fs/promises";
 
+// Execute the shell command and return its output. This is a blocking call.
 const execShell = (cmd: string) =>
   new Promise<string>((resolve, reject) => {
     cp.exec(cmd, (err, out) => {
@@ -24,14 +26,20 @@ const execShell = (cmd: string) =>
     });
   });
 
-const execShellBackground = (cmd: string) =>
+// Execute the shell command in the background.
+//
+// This is a non-blocking call.
+//
+// It is assumed the caller does not depend on the command output
+// to verify its success.
+const execShellBackground = (cmd: string): Promise<void> =>
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  new Promise<string>((resolve, _reject) => {
+  new Promise<void>((resolve) => {
     cp.exec(cmd, (err, stdout, stderr) => {
       if (err) {
-        console.warn(err);
+        console.warn(err,`${stdout}${stderr}`);
       }
-      resolve(stdout ? stdout : stderr);
+      resolve();
     });
   });
 
@@ -122,7 +130,7 @@ export class SuibaseExec {
       if (result.startsWith("rustc") && !result.includes("error")) {
         return true;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("rustc not installed");
     }
     return false;
@@ -142,28 +150,28 @@ export class SuibaseExec {
     return false;
   }
 
+  public canonicalPath(pathname: string): string {
+    // Expand the pathname to its absolute path.
+    // This function must always resolve its promise.
+    if (pathname.startsWith("~")) {
+      pathname = pathname.replace(/^~/, SuibaseExec.homedir);
+    }
+    return pathname;
+  }
+
   public async fileExists(pathname: string): Promise<boolean> {
     // Returns true if the file exists on the filesystem.
     // Returns false on any error.
     //
     // This function must always resolve its promise.
-    pathname = pathname.replace("~", SuibaseExec.homedir);
     try {
-      let result = await execShell(`ls ${pathname}`);
-      result = result.toLowerCase();
-      if (
-        !result.includes(pathname) ||
-        result.includes("cannot access") ||
-        result.includes("no such") ||
-        result.includes("not found")
-      ) {
-        console.error(`File ${pathname} not found`);
-        return false;
-      }
-    } catch (error) {
-      return false;
+      // Attempt to access the file
+      await fs.access(this.canonicalPath(pathname));
+      return true; // If no error is thrown, the file exists
+    } catch (error: any) {
+      // console.error(`File ${pathname} not found:`, error.message);
+      return false; // If an error is thrown, the file does not exist
     }
-    return true;
   }
 
   public async isSuibaseInstalled(): Promise<boolean> {
@@ -255,7 +263,8 @@ export class SuibaseExec {
 
       if (!suibaseRunning) {
         // Start suibase daemon
-        void execShellBackground("~/suibase/scripts/common/run-daemon.sh suibase");
+        const pathname = this.canonicalPath("~/suibase/scripts/common/run-daemon.sh");
+        void execShellBackground( `${pathname} suibase` );
 
         // Check for up to ~5 seconds that it is started.
         let attempts = 10;

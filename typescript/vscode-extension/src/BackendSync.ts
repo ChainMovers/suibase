@@ -40,14 +40,13 @@ class BackendWorkdirTracking {
 export class BackendSync {
   private static sInstance?: BackendSync;
 
-  private mWorkdir: string; // Last known active workdir. One of "localnet", "mainnet", "testnet", "devnet".
   private mWorkdirTrackings: BackendWorkdirTracking[] = []; // One instance per workdir, align with WORKDIRS_KEYS.
   private mForceRefreshOnNextReconnect: boolean; // Force some refresh when there was a lost of backend connection.
   private activeWorkdir: string = WORKDIRS_KEYS[WORKDIR_IDX_TESTNET];
+  private consecutiveNotRespondingCount = 0;
 
   // Singleton
   private constructor() {
-    this.mWorkdir = "";
     this.mForceRefreshOnNextReconnect = false;
 
     // Create one instance of BackendWorkdirTracking for each element in WORKDIRS_KEYS.
@@ -91,9 +90,6 @@ export class BackendSync {
     return BackendSync.sInstance;
   }
 
-  public get workdir(): string {
-    return this.mWorkdir;
-  }
 
   public handleViewMessage(message: any): void {
     try {
@@ -249,6 +245,8 @@ export class BackendSync {
     const msg = new UpdateVersions(WEBVIEW_BACKEND, workdirIdx, undefined);
 
     const sb = SuibaseExec.getInstance();
+    let isUnknownErr = false;
+
     if (sb === undefined) {
       msg.setSetupIssue("Internal error. Shell commands failed.");
     } else if ((await sb.isGitInstalled()) === false) {
@@ -267,16 +265,33 @@ export class BackendSync {
         // Started, but need a moment for the backend to init/respond.
         msg.setSetupIssue("Suibase backend connecting...");
       } else {
-        // Did not start this time, but assumes the caller will retry, so
-        // report as still "starting" for now...
-        msg.setSetupIssue("Suibase backend starting...");
+        isUnknownErr = true;
       }
     } else {
-      // Unknown cause... a temporary connectivity hiccup?
-      msg.setSetupIssue("Suibase backend not responding");
+      isUnknownErr = true;
+    }
+
+    if (isUnknownErr) {
+      // Report as "connecting" at first, and "not responding" after a while.
+      this.incrementNotRespondingCount(msg);
+    } else {
+      this.clearNotRespondingCount();
     }
 
     BaseWebview.broadcastMessage(msg);
+  }
+
+  private clearNotRespondingCount() {
+    this.consecutiveNotRespondingCount = 0;
+  }
+
+  private incrementNotRespondingCount(msg: UpdateVersions) {
+    this.consecutiveNotRespondingCount++;
+    if (this.consecutiveNotRespondingCount > 60) {
+      msg.setSetupIssue("Suibase backend not responding");
+    } else {
+      msg.setSetupIssue("Suibase backend connecting...");
+    }
   }
 
   private reportSetupIssue(issueMsg: string) {
@@ -306,6 +321,9 @@ export class BackendSync {
       }
 
       if (data) {
+        // The backend did respond with something...
+        this.clearNotRespondingCount();
+
         try {
           //console.log("update versions: ", JSON.stringify(data));
           // This is an example of data:
