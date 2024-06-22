@@ -92,3 +92,6 @@ yarn.lock
 # thumbnail cache on Windows
 Thumbs.db
 *.vsix
+
+# Exceptions
+!.vscode/launch.json
