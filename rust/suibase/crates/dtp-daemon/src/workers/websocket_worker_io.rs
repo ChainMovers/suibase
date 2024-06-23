@@ -145,7 +145,7 @@ struct WebSocketWorkerIOThread {
     //   this thread panic/restart (for any reason).
     //
     //   Use globals to persist data outside this thread.
-    thread_name: String,
+    task_name: String,
     params: WebSocketWorkerIOParams,
 
     // Key is the object address ("0x" string).
@@ -181,9 +181,9 @@ struct WebSocketWorkerIOThread {
 
 #[async_trait]
 impl Runnable<WebSocketWorkerIOParams> for WebSocketWorkerIOThread {
-    fn new(thread_name: String, params: WebSocketWorkerIOParams) -> Self {
+    fn new(task_name: String, params: WebSocketWorkerIOParams) -> Self {
         Self {
-            thread_name,
+            task_name,
             params,
             package_subs: HashMap::new(),
             localhost_subs: HashMap::new(),

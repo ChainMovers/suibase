@@ -76,7 +76,7 @@ impl Runnable<APIServerParams> for APIServerThread {
     }
 
     async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        log_safe!("started");
+        log_safe!(format!("{} started", self.name ));
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(_) => {

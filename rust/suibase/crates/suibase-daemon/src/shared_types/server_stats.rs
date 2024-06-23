@@ -20,9 +20,8 @@ pub const REQUEST_FAILED_RESP_BYTES_RX: u8 = 3;
 pub const REQUEST_FAILED_RESP_BUILDER: u8 = 4;
 pub const REQUEST_FAILED_NETWORK_DOWN: u8 = 5; // Not implemented yet.
 pub const REQUEST_FAILED_BAD_REQUEST_HTTP: u8 = 6; // Got HTTP Bad Request (400), Bad Method (405), etc.
-pub const REQUEST_FAILED_BAD_REQUEST_JSON: u8 = 7; // Got a valid JSON-RPC response indicating an error.
-pub const REQUEST_FAILED_CONFIG_DISABLED: u8 = 8;
-pub const REQUEST_FAILED_NOT_STARTED: u8 = 9;
+pub const REQUEST_FAILED_CONFIG_DISABLED: u8 = 7;
+pub const REQUEST_FAILED_NOT_STARTED: u8 = 8;
 
 // !!! Update the following whenever you append a new reason above.
 pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_NOT_STARTED;

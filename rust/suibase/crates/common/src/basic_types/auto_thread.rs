@@ -51,23 +51,23 @@ impl<Thread: Runnable<Parameter> + Send + 'static, Parameter: Send + Clone> Runn
     }
 
     async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        let outer_thread_name = format!("{}-outer", self.name);
-        let inner_thread_name = format!("{}-inner", self.name);
-        log_safe!(format!("{} started", outer_thread_name));
+        let outer_task_name = format!("{}-outer", self.name);
+        let inner_task_name = format!("{}-inner", self.name);
+        log_safe!(format!("{} started", outer_task_name));
         loop {
             // Create an instance of the Thread. If it panics, then
             // we will just start a new instance on next loop iteration.
             let inner_thread = Thread::new(self.name.clone(), self.params.clone());
 
             let nested_subsys = subsys.start(
-                SubsystemBuilder::new(inner_thread_name.clone(), |a| inner_thread.run(a))
+                SubsystemBuilder::new(inner_task_name.clone(), |a| inner_thread.run(a))
                     .on_failure(ErrorAction::CatchAndLocalShutdown)
                     .on_panic(ErrorAction::CatchAndLocalShutdown),
             );
 
             if let Err(err) = nested_subsys.join().await {
                 // TODO Restart the process on excess of errors for tentative recovery (e.g. memory leaks?)
-                log::error!("{}: {}", inner_thread_name, err);
+                log::error!("{}: {}", inner_task_name, err);
                 // Something went wrong, wait a couple of second before restarting
                 // the inner server, but do not block from exiting.
                 for _ in 0..4 {
@@ -86,14 +86,14 @@ impl<Thread: Runnable<Parameter> + Send + 'static, Parameter: Send + Clone> Runn
             // because they normally restart every ~30 seconds because of
             // "normal" connection closing from many public servers.
             if self.name != "WebSocketWorker" {
-                log_safe!(format!("{} restarting...", inner_thread_name));
+                log_safe!(format!("{} restarting...", inner_task_name));
                 // Sleep 1 second before restarting the inner thread.
                 // This is in-case of thread start failure, we don't want
                 // the CPU spinning on restarts attempts.
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         }
-        log_safe!(format!("{} normal thread exit", outer_thread_name));
+        log_safe!(format!("{} normal thread exit", outer_task_name));
         Ok(())
     }
 }

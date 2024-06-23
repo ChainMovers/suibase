@@ -69,7 +69,7 @@ impl EventsWriterWorker {
 }
 
 struct EventsWriterThread {
-    name: String,
+    task_name: String,
     params: EventsWriterWorkerParams,
     ws_workers_channel: Vec<Sender<GenericChannelMsg>>,
     db_worker_channel: Option<Sender<GenericChannelMsg>>,
@@ -77,9 +77,9 @@ struct EventsWriterThread {
 
 #[async_trait]
 impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
-    fn new(name: String, params: EventsWriterWorkerParams) -> Self {
+    fn new(task_name: String, params: EventsWriterWorkerParams) -> Self {
         Self {
-            name,
+            task_name,
             params,
             ws_workers_channel: Vec::new(),
             db_worker_channel: None,
@@ -87,7 +87,11 @@ impl Runnable<EventsWriterWorkerParams> for EventsWriterThread {
     }
 
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("started for {}", self.params.workdir_name);
+        log::info!(
+            "{} started for {}",
+            self.task_name,
+            self.params.workdir_name
+        );
 
         // Start a child websocket_worker thread (in future, more than one might be started).
         let (worker_tx, worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
@@ -145,8 +149,6 @@ impl EventsWriterThread {
         // Forward the message to the single self.db_worker_channel.
         self.forward_to_db_worker(msg).await;
     }
-
-
 
     async fn forward_to_db_worker(&mut self, msg: GenericChannelMsg) {
         // Forward the message to the single self.db_worker_channel.

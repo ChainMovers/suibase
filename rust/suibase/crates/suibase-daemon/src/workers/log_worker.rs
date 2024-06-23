@@ -99,7 +99,7 @@ impl LogManagement {
 }
 
 struct LogWorkerThread {
-    thread_name: String,
+    task_name: String,
     params: LogWorkerParams,
     log: Vec<LogManagement>,
     workdir: Workdir,
@@ -107,9 +107,9 @@ struct LogWorkerThread {
 
 #[async_trait]
 impl Runnable<LogWorkerParams> for LogWorkerThread {
-    fn new(thread_name: String, params: LogWorkerParams) -> Self {
+    fn new(task_name: String, params: LogWorkerParams) -> Self {
         Self {
-            thread_name,
+            task_name,
             params,
             log: Vec::new(),
             workdir: Default::default(),

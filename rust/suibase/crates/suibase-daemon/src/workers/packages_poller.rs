@@ -104,11 +104,11 @@ impl Runnable<PackagesPollerParams> for PackagesPollerWorkerTask {
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {
-                log::info!("normal thread exit (2)");
+                log::info!("{} normal thread exit (2)", self.task_name);
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("normal thread exit (1)");
+                log::info!("{} normal thread exit (1)", self.task_name);
                 Ok(())
             }
         }
@@ -330,7 +330,7 @@ impl PackagesPollerWorkerTask {
         let published_data_path = match self.get_published_data_path(workdir_idx).await {
             Ok(published_data_path) => published_data_path,
             Err(e) => {
-                let err_msg = format!("{} {}", workdir, e.to_string());
+                let err_msg = format!("{} {}", workdir, e);
                 log::error!("{}", err_msg);
                 return;
             }

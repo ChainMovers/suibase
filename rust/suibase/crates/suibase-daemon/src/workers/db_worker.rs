@@ -25,15 +25,6 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 // Schema: One entry per Package.
 
-fn sanitize_table_name(name: String) -> String {
-    name.chars()
-        .map(|c| match c {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => c,
-            _ => '_',
-        })
-        .collect()
-}
-
 #[derive(Clone, Debug)]
 struct Package {
     id: u64, // This is the DB id. The network package_id is stored in one of the child PackageInstance.
@@ -56,7 +47,7 @@ impl DBTable for Package {
             "CREATE TABLE IF NOT EXISTS {0}_{1}_package (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 package_uuid    TEXT NOT NULL,
-                package_name    TEXT NOT NULL,                
+                package_name    TEXT NOT NULL,
                 latest_instance_id INTEGER REFERENCES {0}_{1}_package_instance (id)
             )",
             workdir_name,
@@ -161,7 +152,7 @@ impl Package {
                         package_id: package_id.clone(),
                     };
                     if let Err(e) = new_row.insert_in_db(conn, self) {
-                        log::error!("Failed to insert new Package instance in {} for parent_id={} and package_id={} row: {:?}", 
+                        log::error!("Failed to insert new Package instance in {} for parent_id={} and package_id={} row: {:?}",
                             table_name, self.id, package_id, e);
                         return Err(e);
                     } else {
@@ -410,7 +401,7 @@ impl DBTable for SuiEvent {
             "CREATE TABLE IF NOT EXISTS {0}_{1}_event_{2} (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 package_instance_id INTEGER NOT NULL REFERENCES {0}_{1}_package_instance (id) ON DELETE CASCADE,
-                timestamp       INTEGER NOT NULL,                
+                timestamp       INTEGER NOT NULL,
                 event_json      TEXT NOT NULL
             )",
             workdir_name,
@@ -542,7 +533,7 @@ impl DBManagement {
 }
 
 struct DBWorkerThread {
-    thread_name: String,
+    task_name: String,
     params: DBWorkerParams,
     db: DBManagement,
     workdir: Workdir,
@@ -550,9 +541,9 @@ struct DBWorkerThread {
 
 #[async_trait]
 impl Runnable<DBWorkerParams> for DBWorkerThread {
-    fn new(thread_name: String, params: DBWorkerParams) -> Self {
+    fn new(task_name: String, params: DBWorkerParams) -> Self {
         Self {
-            thread_name,
+            task_name,
             params,
             db: DBManagement::new(),
             workdir: Default::default(),
@@ -560,7 +551,10 @@ impl Runnable<DBWorkerParams> for DBWorkerThread {
     }
 
     async fn run(mut self, subsys: SubsystemHandle) -> anyhow::Result<()> {
-        let output = format!("started for {}", self.params.workdir_name);
+        let output = format!(
+            "{} started for {}",
+            self.task_name, self.params.workdir_name
+        );
         log::info!("{}", output);
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
@@ -577,14 +571,6 @@ impl Runnable<DBWorkerParams> for DBWorkerThread {
 }
 
 impl DBWorkerThread {
-    async fn update_globals_in_db(&mut self) {
-        // Check to update globals in DB.
-        //
-        // If a difference is found two things happen:
-        //  - The DB is updated for all changed fields.
-        //  - The websocket user(s) receive a single DB change notification.
-    }
-
     async fn process_audit_msg(&mut self, msg: GenericChannelMsg) {
         if msg.event_id != basic_types::EVENT_AUDIT {
             log::error!("Unexpected event_id {:?}", msg);

@@ -104,7 +104,7 @@ impl WebSocketManagement {
 }
 
 struct WebSocketWorkerThread {
-    thread_name: String,
+    task_name: String,
     params: WebSocketWorkerParams,
 
     // Key is the package_id.
@@ -115,9 +115,9 @@ struct WebSocketWorkerThread {
 
 #[async_trait]
 impl Runnable<WebSocketWorkerParams> for WebSocketWorkerThread {
-    fn new(thread_name: String, params: WebSocketWorkerParams) -> Self {
+    fn new(task_name: String, params: WebSocketWorkerParams) -> Self {
         Self {
-            thread_name,
+            task_name,
             params,
             package_subs: HashMap::new(),
             websocket: WebSocketManagement::new(),
@@ -134,7 +134,7 @@ impl Runnable<WebSocketWorkerParams> for WebSocketWorkerThread {
                 Ok(())
             }
             Err(_cancelled_by_shutdown) => {
-                log::info!("normal thread exit (1)");
+                log::info!("{} normal thread exit (1)", self.task_name);
                 Ok(())
             }
         }

@@ -430,8 +430,6 @@ pub struct MoveConfig {
     // Sorted packages (most recently published first).
     #[serde(serialize_with = "serialize_packages")]
     packages: BTreeMap<Reverse<String>, PackageInstance>, // Key is timestamp.
-
-                                                          // pub tracking_state: u32, Helpful for debugging.?
 }
 
 impl MoveConfig {
@@ -439,12 +437,7 @@ impl MoveConfig {
         Self {
             path: None,
             packages: BTreeMap::new(),
-            //tracking_state: SubscriptionTrackingState::new().into(),
         }
-    }
-
-    pub fn get_packages(&self) -> &BTreeMap<Reverse<String>, PackageInstance> {
-        &self.packages
     }
 
     pub fn contains(&self, package_timestamp: &str) -> bool {

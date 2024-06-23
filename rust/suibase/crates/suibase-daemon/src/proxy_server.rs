@@ -45,13 +45,11 @@ pub struct SharedStates {
     globals: GlobalsProxyMT,
 }
 
-pub struct ProxyServer {
-    enabled: bool,
-}
+pub struct ProxyServer {}
 
 impl ProxyServer {
     pub fn new() -> Self {
-        Self { enabled: false }
+        Self {}
     }
 
     /*

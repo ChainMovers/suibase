@@ -57,7 +57,7 @@ impl DBTable for Package {
             "CREATE TABLE IF NOT EXISTS {0}_{1}_package (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 package_uuid    TEXT NOT NULL,
-                package_name    TEXT NOT NULL,                
+                package_name    TEXT NOT NULL,
                 latest_instance_id INTEGER REFERENCES {0}_{1}_package_instance (id)
             )",
             workdir_name,
@@ -162,7 +162,7 @@ impl Package {
                         package_id: package_id.clone(),
                     };
                     if let Err(e) = new_row.insert_in_db(conn, self) {
-                        log::error!("Failed to insert new Package instance in {} for parent_id={} and package_id={} row: {:?}", 
+                        log::error!("Failed to insert new Package instance in {} for parent_id={} and package_id={} row: {:?}",
                             table_name, self.id, package_id, e);
                         return Err(e);
                     } else {
@@ -411,7 +411,7 @@ impl DBTable for SuiEvent {
             "CREATE TABLE IF NOT EXISTS {0}_{1}_event_{2} (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 package_instance_id INTEGER NOT NULL REFERENCES {0}_{1}_package_instance (id) ON DELETE CASCADE,
-                timestamp       INTEGER NOT NULL,                
+                timestamp       INTEGER NOT NULL,
                 event_json      TEXT NOT NULL
             )",
             workdir_name,
@@ -543,7 +543,7 @@ impl DBManagement {
 }
 
 struct DBWorkerThread {
-    thread_name: String,
+    task_name: String,
     params: DBWorkerParams,
     db: DBManagement,
     workdir: Workdir,
@@ -551,9 +551,9 @@ struct DBWorkerThread {
 
 #[async_trait]
 impl Runnable<DBWorkerParams> for DBWorkerThread {
-    fn new(thread_name: String, params: DBWorkerParams) -> Self {
+    fn new(task_name: String, params: DBWorkerParams) -> Self {
         Self {
-            thread_name,
+            task_name,
             params,
             db: DBManagement::new(),
             workdir: Default::default(),
@@ -854,9 +854,11 @@ impl DBWorkerThread {
 
     async fn open_db(&mut self) -> bool {
         // Get copy of latest workdir info from globals.
-        let workdir =
-            self.params.globals.get_workdir_by_idx(self.params.workdir_idx)
-                .await;
+        let workdir = self
+            .params
+            .globals
+            .get_workdir_by_idx(self.params.workdir_idx)
+            .await;
         if workdir.is_none() {
             log::error!(
                 "Failed to get workdir info for workdir_idx {:?}",

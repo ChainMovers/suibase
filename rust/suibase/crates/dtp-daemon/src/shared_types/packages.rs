@@ -9,14 +9,12 @@ pub struct PackagesWorkdirConfig {
     // as the response of the GetEventsConfig API. That way,
     // the UI queries can be served very quickly.
     pub ui: Option<Versioned<PackagesConfigResponse>>,
-    pub last_ui_update: tokio::time::Instant,
 }
 
 impl PackagesWorkdirConfig {
     pub fn new() -> Self {
         Self {
             ui: None,
-            last_ui_update: tokio::time::Instant::now(),
         }
     }
 }

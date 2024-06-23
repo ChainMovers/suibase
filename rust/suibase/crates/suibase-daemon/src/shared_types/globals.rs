@@ -8,17 +8,14 @@
 //
 //  - A thread can lock read/write access on the single-thread 'ST' instance.
 //
-//  - Although globals are not encouraged, they are carefully used here in a balanced way. Also,
-//    mutex blocking are carefully kept fine grain (split by workdir, by data type etc...).
-//
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
 use crate::api::{Versioned, VersionsResponse, WorkdirPackagesResponse, WorkdirStatusResponse};
 use crate::shared_types::InputPort;
-use common::basic_types::{AutoSizeVec, ManagedVec, WorkdirIdx};
+use common::basic_types::{ManagedVec, WorkdirIdx};
 
-use super::{workdirs, GlobalsEventsDataST, GlobalsWorkdirPackagesST, GlobalsWorkdirsST};
+use super::{workdirs, GlobalsEventsDataST, GlobalsWorkdirsST};
 
 #[derive(Debug)]
 pub struct GlobalsProxyST {
@@ -59,9 +56,7 @@ pub struct GlobalsWorkdirStatusST {
 
 impl GlobalsWorkdirStatusST {
     pub fn new() -> Self {
-        Self {
-            ui: None
-        }
+        Self { ui: None }
     }
 }
 
@@ -79,34 +74,33 @@ pub struct GlobalsWorkdirConfigST {
     pub precompiled_bin: bool,
 }
 
-#[derive(Debug)]
-pub struct APIResponses {
-    // Every response type for JSON-RPC clients.
-    //
-    // Used for:
-    //  - delta detection and manage uuids.
-    //  - micro-caching on excessive calls.
-    //  - debugging
-    //
-    // versions are Versioned<> here, while all others are Versioned<> by its
-    // original source variable (somewhere else in the globals).
-    //
-    pub versions: Option<Versioned<VersionsResponse>>,
-    pub workdir_status: Option<WorkdirStatusResponse>,
-    pub workdir_packages: Option<WorkdirPackagesResponse>,
+#[derive(Debug, Clone)]
+pub struct GlobalsWorkdirPackagesST {
+    // Mostly store everything in the same struct
+    // as the response of the GetWorkdirPackages API. That way,
+    // the UI queries can be served very quickly.
+    pub ui: Option<Versioned<WorkdirPackagesResponse>>,
 }
 
-impl APIResponses {
+impl GlobalsWorkdirPackagesST {
     pub fn new() -> Self {
-        Self {
-            versions: None,
-            workdir_status: None,
-            workdir_packages: None,
-        }
+        Self { ui: None }
+    }
+
+    pub fn init_empty_ui(&mut self, workdir: String) {
+        // As needed, initialize globals.ui with resp.
+        let mut empty_resp = WorkdirPackagesResponse::new();
+        empty_resp.header.method = "getWorkdirPackages".to_string();
+        empty_resp.header.key = Some(workdir);
+
+        let new_versioned_resp = Versioned::new(empty_resp.clone());
+        // Copy the newly created UUID in the inner response header (so the caller can use these also).
+        new_versioned_resp.write_uuids_into_header_param(&mut empty_resp.header);
+        self.ui = Some(new_versioned_resp);
     }
 }
 
-impl Default for APIResponses {
+impl Default for GlobalsWorkdirPackagesST {
     fn default() -> Self {
         Self::new()
     }
@@ -116,7 +110,7 @@ impl Default for APIResponses {
 pub struct GlobalsAPIMutexST {
     pub last_get_workdir_status_time: tokio::time::Instant,
     pub last_get_workdir_packages_time: tokio::time::Instant,
-    pub last_responses: APIResponses,
+    pub last_versions_response: Option<Versioned<VersionsResponse>>,
 }
 
 impl GlobalsAPIMutexST {
@@ -124,7 +118,7 @@ impl GlobalsAPIMutexST {
         Self {
             last_get_workdir_status_time: tokio::time::Instant::now(),
             last_get_workdir_packages_time: tokio::time::Instant::now(),
-            last_responses: APIResponses::default(),
+            last_versions_response: None,
         }
     }
 }
@@ -142,9 +136,6 @@ pub struct GlobalsConfigST {
     // files, workdir CLI operations).
     pub daemon_ip: String,
     pub daemon_port: u16,
-
-    // Uses same index as the ManagedVec WorkdirsST::workdirs
-    pub workdirs: AutoSizeVec<GlobalsWorkdirConfigST>,
 }
 
 impl GlobalsConfigST {
@@ -152,7 +143,6 @@ impl GlobalsConfigST {
         Self {
             daemon_ip: "0.0.0.0".to_string(),
             daemon_port: 44399,
-            workdirs: AutoSizeVec::new(),
         }
     }
 }
@@ -318,7 +308,6 @@ impl Globals {
         let mut selection = self.asui_selection.lock().await;
         *selection = new_value;
     }
-
 }
 
 impl Default for Globals {

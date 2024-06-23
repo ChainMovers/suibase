@@ -212,14 +212,13 @@ impl GeneralApiServer for GeneralApiImpl {
         }
 
         // Initialize the uuids in the response header.
-        // Use api_mutex.last_responses to detect if this response is equivalent to the previous one.
-        // If not, increment the uuid_data.
+        // Use api_mutex.last_versions_response to detect if this response is different.
+        // If yes, then increment its uuid_data.
         {
             let mut api_mutex_guard = self.globals.get_api_mutex(workdir_idx).lock().await;
             let api_mutex = &mut *api_mutex_guard;
 
-            let last = &mut api_mutex.last_responses;
-            if let Some(last_versions) = &mut last.versions {
+            if let Some(last_versions) = &mut api_mutex.last_versions_response {
                 // Update globals.ui with resp if different. This will update the uuid_data accordingly.
                 let uuids = last_versions.set(&resp);
                 // Make the inner header in the response have the proper uuids.
@@ -229,7 +228,7 @@ impl GeneralApiServer for GeneralApiImpl {
                 let new_versioned_resp = Versioned::new(resp.clone());
                 // Copy the newly created UUID in the inner response header (so the caller can use these also).
                 new_versioned_resp.write_uuids_into_header_param(&mut resp.header);
-                last.versions = Some(new_versioned_resp);
+                api_mutex.last_versions_response = Some(new_versioned_resp);
             }
         }
 

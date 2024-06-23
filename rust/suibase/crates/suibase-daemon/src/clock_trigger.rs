@@ -55,7 +55,7 @@ impl Runnable<ClockTriggerParams> for ClockTriggerThread {
     }
 
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        log::info!("started");
+        log::info!("{} started", self.name);
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(()) => {

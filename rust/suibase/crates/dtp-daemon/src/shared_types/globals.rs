@@ -11,9 +11,6 @@
 //
 //  - A thread can lock read/write access on the single writer thread 'ST' instance.
 //
-//  - Although globals are not encouraged, they are carefully used here for data that
-//    is often read, but relatively rarely changed. They are protected by a read-write lock.
-//
 // Note: This app also uses message passing between threads to minimize sharing. See NetmonMsg as an example.
 use std::sync::Arc;
 
@@ -109,47 +106,16 @@ impl std::default::Default for GlobalsChannelsST {
 }
 
 #[derive(Debug)]
-pub struct APIResponses {
-    // Every response type for JSON-RPC clients.
-    //
-    // Used for:
-    //  - delta detection and manage uuids.
-    //  - micro-caching on excessive calls.
-    //  - debugging
-    //
-    // versions are Versioned<> here, while all others are Versioned<> by its
-    // original source variable (somewhere else in the globals).
-    //
-    pub versions: Option<Versioned<VersionsResponse>>,
-    pub workdir_status: Option<WorkdirStatusResponse>,
-}
-
-impl APIResponses {
-    pub fn new() -> Self {
-        Self {
-            versions: None,
-            workdir_status: None,
-        }
-    }
-}
-
-impl Default for APIResponses {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug)]
 pub struct GlobalsAPIMutexST {
     pub last_api_call_timestamp: tokio::time::Instant,
-    pub last_responses: APIResponses,
+    pub last_versions_response: Option<Versioned<VersionsResponse>>,
 }
 
 impl GlobalsAPIMutexST {
     pub fn new() -> Self {
         Self {
             last_api_call_timestamp: tokio::time::Instant::now(),
-            last_responses: APIResponses::default(),
+            last_versions_response: None,
         }
     }
 }
