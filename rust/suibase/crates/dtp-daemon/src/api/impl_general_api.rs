@@ -4,9 +4,8 @@ use anyhow::Result;
 
 use jsonrpsee::core::RpcResult;
 
-use common::basic_types::WorkdirIdx;
+use common::basic_types::{AdminControllerMsg, AdminControllerTx, WorkdirIdx};
 
-use crate::admin_controller::{AdminControllerMsg, AdminControllerTx, EVENT_SHELL_EXEC};
 use crate::shared_types::Globals;
 
 use super::{
@@ -31,7 +30,7 @@ impl GeneralApiImpl {
 
     async fn shell_exec(&self, workdir_idx: WorkdirIdx, cmd: String) -> Result<String> {
         let mut msg = AdminControllerMsg::new();
-        msg.event_id = EVENT_SHELL_EXEC;
+        msg.event_id = common::basic_types::EVENT_SHELL_EXEC;
         let (tx, rx) = tokio::sync::oneshot::channel();
         msg.resp_channel = Some(tx);
         msg.workdir_idx = Some(workdir_idx);

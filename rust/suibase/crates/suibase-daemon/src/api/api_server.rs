@@ -13,10 +13,10 @@ use axum::async_trait;
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::{admin_controller::AdminControllerTx, shared_types::Globals};
+use crate::shared_types::Globals;
 
 use common::{
-    basic_types::{AutoThread, Runnable},
+    basic_types::{AdminControllerTx, AutoThread, Runnable},
     log_safe,
 };
 
@@ -76,7 +76,7 @@ impl Runnable<APIServerParams> for APIServerThread {
     }
 
     async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        log_safe!(format!("{} started", self.name ));
+        log_safe!(format!("{} started", self.name));
 
         match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
             Ok(_) => {

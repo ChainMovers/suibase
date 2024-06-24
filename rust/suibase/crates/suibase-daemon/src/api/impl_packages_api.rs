@@ -4,13 +4,14 @@ use axum::async_trait;
 
 use anyhow::Result;
 
+use common::basic_types::AdminControllerTx;
 use common::log_safe;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_types::ErrorObjectOwned as RpcError;
 
 use chrono::Utc;
 
-use crate::admin_controller::{AdminController, AdminControllerTx};
+use crate::admin_controller::AdminController;
 
 use crate::api::RpcSuibaseError;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};

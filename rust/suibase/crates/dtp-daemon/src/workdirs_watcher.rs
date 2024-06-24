@@ -1,11 +1,8 @@
-use common::basic_types::AutoSizeVec;
+use common::basic_types::{AdminControllerMsg, AdminControllerTx, AutoSizeVec};
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::admin_controller::{
-    AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
-};
 use crate::shared_types::GlobalsWorkdirsMT;
 use common::shared_types::Workdir;
 
@@ -37,7 +34,7 @@ impl WorkdirsWatcher {
     async fn send_notif_config_file_change(&self, path: String) {
         log::info!("Sending notif {}", path);
         let mut msg = AdminControllerMsg::new();
-        msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
+        msg.event_id = common::basic_types::EVENT_NOTIF_CONFIG_FILE_CHANGE;
         msg.data_string = Some(path);
         let _ = self.admctrl_tx.send(msg).await.map_err(|e| {
             log::debug!("failed {}", e);

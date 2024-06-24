@@ -1,4 +1,4 @@
-// Child thread of admin_controller
+// Child task of admin_controller
 //
 // One instance per workdir.
 //
@@ -6,209 +6,100 @@
 //  - Periodically and on-demand check published packages
 //    under ~/suibase/workdirs and update globals.
 //
-// The thread is auto-restart in case of panic.
-
-use std::sync::Arc;
+// The task is auto-restart in case of panic.
 
 use anyhow::anyhow;
-use common::{basic_types::WorkdirIdx, log_safe};
+use common::{
+    basic_types::{Instantiable, WorkdirContext, WorkdirIdx},
+    log_safe,
+    shared_types::WORKDIRS_KEYS,
+    workers::{PollerWorker, PollingTrait},
+};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::{
-    admin_controller::AdminControllerTx,
     api::{PackageInstance, SuiObjectInstance, SuiObjectType},
-    shared_types::{Globals, PackagePath, WORKDIRS_KEYS},
+    shared_types::{Globals, PackagePath},
 };
 
 use anyhow::Result;
 
 use axum::async_trait;
-use common::{
-    basic_types::{self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable},
-    mpsc_q_check,
-};
+use common::basic_types::{self, GenericChannelMsg, GenericTx};
 
-use tokio::sync::Mutex;
-use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
-
-use common::basic_types::remove_generic_event_dups;
+use tokio_graceful_shutdown::SubsystemHandle;
 
 #[derive(Clone)]
 pub struct PackagesPollerParams {
     globals: Globals,
-    event_rx: Arc<Mutex<GenericRx>>, // To receive MSPC messages.
-    event_tx: GenericTx,             // To send messages to self.
-    admctrl_tx: AdminControllerTx,   // To send messages to parent
     sui_events_worker_tx: Option<GenericTx>, // To send messages to related Sui event worker.
     workdir_idx: WorkdirIdx,
-    workdir_name: String,
+}
+
+impl WorkdirContext for PackagesPollerParams {
+    fn workdir_idx(&self) -> WorkdirIdx {
+        self.workdir_idx
+    }
 }
 
 impl PackagesPollerParams {
     pub fn new(
         globals: Globals,
-        event_rx: GenericRx,
-        event_tx: GenericTx,
-        admctrl_tx: AdminControllerTx,
         sui_events_worker_tx: Option<GenericTx>,
         workdir_idx: WorkdirIdx,
     ) -> Self {
         Self {
             globals,
-            event_rx: Arc::new(Mutex::new(event_rx)),
-            event_tx,
-            admctrl_tx,
             sui_events_worker_tx,
             workdir_idx,
-            workdir_name: WORKDIRS_KEYS[workdir_idx as usize].to_string(),
         }
     }
 }
 
-pub struct PackagesPollerWorker {
-    auto_thread: AutoThread<PackagesPollerWorkerTask, PackagesPollerParams>,
+pub struct PackagesPoller {
+    // "Glue" the specialized PollingTraitObject with its parameters.
+    // The worker does all the background task/events handling.
+    poller: PollerWorker<PollingTraitObject, PackagesPollerParams>,
 }
 
-impl PackagesPollerWorker {
-    pub fn new(params: PackagesPollerParams) -> Self {
-        Self {
-            auto_thread: AutoThread::new(
-                format!("PackagesPollerWorker-{}", params.workdir_idx),
-                params,
-            ),
-        }
+pub struct PollingTraitObject {
+    params: PackagesPollerParams,
+}
+
+#[async_trait]
+impl PollingTrait for PollingTraitObject {
+    // This is called by the PollerWorker task.
+    async fn update(&mut self) {
+        self.update_globals_workdir_packages().await;
+    }
+}
+
+// This allow the PollerWorker to instantiate the PollingTraitObject.
+impl Instantiable<PackagesPollerParams> for PollingTraitObject {
+    fn new(params: PackagesPollerParams) -> Self {
+        Self { params }
+    }
+}
+
+impl PackagesPoller {
+    pub fn new(params: PackagesPollerParams, subsys: &SubsystemHandle) -> Self {
+        let poller =
+            PollerWorker::<PollingTraitObject, PackagesPollerParams>::new(params.clone(), subsys);
+        Self { poller }
     }
 
-    pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
-        self.auto_thread.run(subsys).await
+    pub fn get_tx_channel(&self) -> GenericTx {
+        self.poller.get_tx_channel()
     }
 }
 
 struct PackagesPollerWorkerTask {
     task_name: String,
     params: PackagesPollerParams,
-    last_update_timestamp: Option<tokio::time::Instant>,
 }
 
-#[async_trait]
-impl Runnable<PackagesPollerParams> for PackagesPollerWorkerTask {
-    fn new(task_name: String, params: PackagesPollerParams) -> Self {
-        Self {
-            task_name,
-            params,
-            last_update_timestamp: None,
-        }
-    }
-
-    async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
-        match self.event_loop(&subsys).cancel_on_shutdown(&subsys).await {
-            Ok(()) => {
-                log::info!("{} normal thread exit (2)", self.task_name);
-                Ok(())
-            }
-            Err(_cancelled_by_shutdown) => {
-                log::info!("{} normal thread exit (1)", self.task_name);
-                Ok(())
-            }
-        }
-    }
-}
-
-impl PackagesPollerWorkerTask {
-    async fn process_audit_msg(&mut self, msg: GenericChannelMsg) {
-        // This function takes care of periodic operation synchronizing
-        // between the filesystem published package data and the globals.
-
-        if msg.event_id != basic_types::EVENT_AUDIT {
-            log::error!("Unexpected event_id {:?}", msg);
-            return;
-        }
-
-        // Verify that the workdir_idx is as expected.
-        if let Some(workdir_idx) = msg.workdir_idx {
-            if workdir_idx != self.params.workdir_idx {
-                log::error!(
-                    "Unexpected workdir_idx {:?} (expected {:?})",
-                    workdir_idx,
-                    self.params.workdir_idx
-                );
-                return;
-            }
-        } else {
-            log::error!("Missing workdir_idx {:?}", msg);
-            return;
-        }
-
-        // Simply convert the periodic audit into an update, but do
-        // not force it.
-        let force = false;
-        self.update_globals_workdir_packages(force).await;
-    }
-
-    async fn process_update_msg(&mut self, msg: GenericChannelMsg) {
-        // This function takes care of synchronizing between the filesystem
-        // published package data and the globals.
-
-        // Make sure the event_id is EVENT_UPDATE.
-        if msg.event_id != basic_types::EVENT_UPDATE {
-            log::error!("Unexpected event_id {:?}", msg);
-            return;
-        }
-
-        // Verify that the workdir_idx is as expected.
-        if let Some(workdir_idx) = msg.workdir_idx {
-            if workdir_idx != self.params.workdir_idx {
-                log::error!(
-                    "Unexpected workdir_idx {:?} (expected {:?})",
-                    workdir_idx,
-                    self.params.workdir_idx
-                );
-                return;
-            }
-        } else {
-            log::error!("Unexpected workdir_idx {:?}", msg);
-            return;
-        }
-
-        let force = true;
-        self.update_globals_workdir_packages(force).await;
-    }
-
-    async fn event_loop(&mut self, subsys: &SubsystemHandle) {
-        // Take mutable ownership of the event_rx channel as long this thread is running.
-        let event_rx = Arc::clone(&self.params.event_rx);
-        let mut event_rx = event_rx.lock().await;
-
-        // Remove duplicate of EVENT_AUDIT and EVENT_UPDATE in the event_rx queue.
-        // (handle the case where the task was auto-restarted).
-        remove_generic_event_dups(&mut event_rx, &self.params.event_tx);
-        mpsc_q_check!(event_rx); // Just to help verify if the Q unexpectedly "accumulate".
-
-        while !subsys.is_shutdown_requested() {
-            // Wait for a message.
-            if let Some(msg) = event_rx.recv().await {
-                common::mpsc_q_check!(event_rx);
-                match msg.event_id {
-                    basic_types::EVENT_AUDIT => {
-                        // Periodic processing.
-                        self.process_audit_msg(msg).await;
-                    }
-                    basic_types::EVENT_UPDATE => {
-                        // On-demand/reactive processing.
-                        self.process_update_msg(msg).await;
-                    }
-                    _ => {
-                        log::error!("Unexpected event_id {:?}", msg);
-                    }
-                }
-            } else {
-                // Channel closed or shutdown requested.
-                return;
-            }
-        }
-    }
-
+impl PollingTraitObject {
     async fn create_package_instance(
         &self,
         package_path: PackagePath,
@@ -298,19 +189,9 @@ impl PackagesPollerWorkerTask {
         Ok(ret_value)
     }
 
-    async fn update_globals_workdir_packages(&mut self, force: bool) {
-        // Debounce excessive refresh request on short period of time.
-        if !force {
-            if let Some(last_update_timestamp) = self.last_update_timestamp {
-                if last_update_timestamp.elapsed() < tokio::time::Duration::from_millis(50) {
-                    return;
-                }
-            };
-        }
-        self.last_update_timestamp = Some(tokio::time::Instant::now());
-
-        let workdir = &self.params.workdir_name;
+    async fn update_globals_workdir_packages(&mut self) {
         let workdir_idx = self.params.workdir_idx;
+        let workdir = WORKDIRS_KEYS[workdir_idx as usize].to_string();
 
         // Multiple steps for efficiency:
         // Step 1) Read the Filesystem to get all the published PackagePath.

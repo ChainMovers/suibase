@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::bail;
 use axum::async_trait;
 
-use common::basic_types::{GenericChannelMsg, ManagedVecU16, WorkdirIdx};
+use common::basic_types::{AdminControllerMsg, AdminControllerTx, GenericChannelMsg, ManagedVecU16, WorkdirIdx};
 use dtp_sdk::{Connection, DTP};
 
 use jsonrpsee::core::RpcResult;
@@ -11,9 +11,6 @@ use log::info;
 
 use tokio::sync::Mutex;
 
-use crate::admin_controller::{
-    AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
-};
 use crate::shared_types::{
     DTPConnStateDataClient, DTPConnStateDataServer, ExtendedWebSocketWorkerIOMsg, Globals,
     WebSocketWorkerIOMsg,
@@ -189,7 +186,7 @@ impl DtpApiServer for DtpApiImpl {
 
         // Inform the AdminController that something changed...
         let mut msg = AdminControllerMsg::new();
-        msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
+        msg.event_id = common::basic_types::EVENT_NOTIF_CONFIG_FILE_CHANGE;
         msg.data_string = Some(path);
 
         // TODO: Implement response to handle errors... but is it really needed here?

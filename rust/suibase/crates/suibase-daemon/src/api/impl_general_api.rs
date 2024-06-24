@@ -1,8 +1,9 @@
 use axum::async_trait;
 
+use common::basic_types::AdminControllerTx;
 use jsonrpsee::core::RpcResult;
 
-use crate::admin_controller::{AdminController, AdminControllerTx};
+use crate::admin_controller::AdminController;
 use crate::shared_types::{Globals, GlobalsWorkdirsST};
 
 use super::{

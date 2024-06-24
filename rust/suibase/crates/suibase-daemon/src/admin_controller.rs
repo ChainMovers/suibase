@@ -9,8 +9,8 @@ use crate::proxy_server::ProxyServer;
 use crate::shared_types::{Globals, InputPort, WorkdirUserConfig, WORKDIR_IDX_LOCALNET};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::{
-    CliPollerParams, CliPollerWorker, EventsWriterWorker, EventsWriterWorkerParams,
-    PackagesPollerParams, PackagesPollerWorker,
+    CliPoller, CliPollerParams, EventsWriterWorker, EventsWriterWorkerParams, PackagesPoller,
+    PackagesPollerParams,
 };
 use common::workers::ShellWorker;
 
@@ -49,9 +49,6 @@ pub struct AdminController {
     port_tracking: AutoSizeVec<InputPortTracking>,
 }
 
-pub type AdminControllerTx = tokio::sync::mpsc::Sender<AdminControllerMsg>;
-pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
-
 #[derive(Default)]
 struct WorkdirTracking {
     last_read_config: Option<WorkdirUserConfig>,
@@ -62,11 +59,9 @@ struct WorkdirTracking {
     events_worker_tx: Option<GenericTx>,
     events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the EventsWriterWorker is started.
 
-    cli_poller_tx: Option<GenericTx>,
-    cli_poller_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the CliPollerWorker is started.
+    cli_poller: Option<CliPoller>,
 
-    packages_poller_tx: Option<GenericTx>,
-    packages_poller_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the PackagesPollerWorker is started.
+    packages_poller: Option<PackagesPoller>,
 
     process_watchdog_last_check_timestamp: Option<tokio::time::Instant>,
     process_watchdog_last_recovery_timestamp: Option<tokio::time::Instant>,
@@ -95,45 +90,6 @@ impl std::fmt::Debug for InputPortTracking {
             .finish()
     }
 }
-
-pub struct AdminControllerMsg {
-    // Message sent toward the AdminController from various sources.
-    pub event_id: AdminControllerEventID,
-    pub workdir_idx: Option<WorkdirIdx>,
-    pub data_string: Option<String>,
-    // Channel to send a one-time response.
-    pub resp_channel: Option<tokio::sync::oneshot::Sender<String>>,
-}
-
-impl AdminControllerMsg {
-    pub fn new() -> Self {
-        Self {
-            event_id: 0,
-            workdir_idx: None,
-            data_string: None,
-            resp_channel: None,
-        }
-    }
-    pub fn data_string(&self) -> Option<String> {
-        self.data_string.clone()
-    }
-}
-
-impl std::fmt::Debug for AdminControllerMsg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AdminControllerMsg")
-            .field("event_id", &self.event_id)
-            .field("data_string", &self.data_string)
-            .finish()
-    }
-}
-
-// Events ID
-pub type AdminControllerEventID = u8;
-pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 128;
-pub const EVENT_DEBUG_PRINT: u8 = 129;
-pub const EVENT_SHELL_EXEC: u8 = 130;
-pub const EVENT_POST_PUBLISH: u8 = 131;
 
 impl AdminController {
     pub fn new(
@@ -238,29 +194,8 @@ impl AdminController {
                 }
             }
 
-            if let Some(worker_tx) = wd_tracking.cli_poller_tx.as_ref() {
-                match worker_tx.try_send(worker_msg.clone()) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        log_safe!(format!(
-                            "try_send EVENT_AUDIT forward to cli poller failed: {}",
-                            e
-                        ));
-                    }
-                }
-            }
-
-            if let Some(worker_tx) = wd_tracking.packages_poller_tx.as_ref() {
-                match worker_tx.try_send(worker_msg.clone()) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        log_safe!(format!(
-                            "try_send EVENT_AUDIT forward to packages poller failed: {}",
-                            e
-                        ));
-                    }
-                }
-            }
+            Self::send_msg_to_cli_poller(wd_tracking, worker_msg.clone()).await;
+            Self::send_msg_to_packages_poller(wd_tracking, worker_msg.clone()).await;
         }
 
         // Check for potential need for local process restart/recovery.
@@ -268,14 +203,15 @@ impl AdminController {
     }
 
     async fn send_msg_to_cli_poller(wd_tracking: &WorkdirTracking, msg: GenericChannelMsg) {
-        if let Some(worker_tx) = wd_tracking.cli_poller_tx.as_ref() {
+        if let Some(poller) = wd_tracking.cli_poller.as_ref() {
             let workdir_idx = msg.workdir_idx;
-            match worker_tx.try_send(msg) {
+            let event_id = msg.event_id;
+            match poller.get_tx_channel().try_send(msg) {
                 Ok(()) => {}
                 Err(e) => {
                     log_safe!(format!(
-                        "try_send to {:?} cli poller failed: {}",
-                        workdir_idx, e
+                        "try_send event id={:?} to {:?} cli poller failed: {}",
+                        event_id, workdir_idx, e
                     ));
                 }
             }
@@ -283,14 +219,15 @@ impl AdminController {
     }
 
     async fn send_msg_to_packages_poller(wd_tracking: &WorkdirTracking, msg: GenericChannelMsg) {
-        if let Some(worker_tx) = wd_tracking.packages_poller_tx.as_ref() {
+        if let Some(poller) = wd_tracking.packages_poller.as_ref() {
             let workdir_idx = msg.workdir_idx;
-            match worker_tx.try_send(msg) {
+            let event_id = msg.event_id;
+            match poller.get_tx_channel().try_send(msg) {
                 Ok(()) => {}
                 Err(e) => {
                     log_safe!(format!(
-                        "try_send to {:?} packages poller failed: {}",
-                        workdir_idx, e
+                        "try_send event id={:?} to {:?} packages poller failed: {}",
+                        event_id, workdir_idx, e
                     ));
                 }
             }
@@ -809,47 +746,28 @@ impl AdminController {
             }
 
             // Start a CLI poller.
-            if wd_tracking.cli_poller_handle.is_none() {
-                let (poller_tx, poller_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+            if wd_tracking.cli_poller.is_none() {
                 let params = CliPollerParams::new(
                     self.globals.clone(),
-                    poller_rx,
-                    poller_tx.clone(),
                     self.admctrl_tx.clone(),
                     workdir_idx,
                 );
-                wd_tracking.cli_poller_tx = Some(poller_tx);
 
-                let poller = CliPollerWorker::new(params);
-                let nested = subsys.start(SubsystemBuilder::new(
-                    format!("cli-poller-{}", workdir_idx),
-                    |a| poller.run(a),
-                ));
-                wd_tracking.cli_poller_handle = Some(nested);
+                let poller = CliPoller::new(params, &subsys);
+
+                wd_tracking.cli_poller = Some(poller);
             }
 
             // Start a packages poller.
-            if wd_tracking.packages_poller_handle.is_none() {
-                let (poller_tx, poller_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
-
+            if wd_tracking.packages_poller.is_none() {
                 let params = PackagesPollerParams::new(
                     self.globals.clone(),
-                    poller_rx,
-                    poller_tx.clone(),
-                    self.admctrl_tx.clone(),
                     wd_tracking.events_worker_tx.clone(),
                     workdir_idx,
                 );
-                wd_tracking.packages_poller_tx = Some(poller_tx);
 
-                let poller = PackagesPollerWorker::new(params);
-                let nested = subsys.start(SubsystemBuilder::new(
-                    format!("packages-poller-{}", workdir_idx),
-                    |a| poller.run(a),
-                ));
-                wd_tracking.packages_poller_handle = Some(nested);
-            } else {
-                log::error!("Missing events_worker_tx for packages poller");
+                let poller = PackagesPoller::new(params, &subsys);
+                wd_tracking.packages_poller = Some(poller);
             }
         }
 

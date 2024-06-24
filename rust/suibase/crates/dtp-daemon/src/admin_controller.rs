@@ -34,8 +34,6 @@ pub struct AdminController {
     port_tracking: AutoSizeVec<InputPortTracking>,
 }
 
-pub type AdminControllerTx = tokio::sync::mpsc::Sender<AdminControllerMsg>;
-pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
 
 #[derive(Default)]
 struct WorkdirTracking {
@@ -77,45 +75,6 @@ impl std::fmt::Debug for InputPortTracking {
             .finish()
     }
 }
-
-pub struct AdminControllerMsg {
-    // Message sent toward the AdminController from various sources.
-    pub event_id: AdminControllerEventID,
-    pub workdir_idx: Option<WorkdirIdx>,
-    pub data_string: Option<String>,
-    // Channel to send a one-time response.
-    pub resp_channel: Option<tokio::sync::oneshot::Sender<String>>,
-}
-
-impl AdminControllerMsg {
-    pub fn new() -> Self {
-        Self {
-            event_id: 0,
-            workdir_idx: None,
-            data_string: None,
-            resp_channel: None,
-        }
-    }
-    pub fn data_string(&self) -> Option<String> {
-        self.data_string.clone()
-    }
-}
-
-impl std::fmt::Debug for AdminControllerMsg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AdminControllerMsg")
-            .field("event_id", &self.event_id)
-            .field("data_string", &self.data_string)
-            .finish()
-    }
-}
-
-// Events ID
-pub type AdminControllerEventID = u8;
-pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 128;
-pub const EVENT_DEBUG_PRINT: u8 = 129;
-pub const EVENT_SHELL_EXEC: u8 = 130;
-pub const EVENT_POST_PUBLISH: u8 = 131;
 
 impl AdminController {
     pub fn new(

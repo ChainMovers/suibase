@@ -4,11 +4,8 @@ use axum::async_trait;
 
 use jsonrpsee::core::RpcResult;
 
-use crate::admin_controller::{
-    AdminControllerMsg, AdminControllerTx, EVENT_NOTIF_CONFIG_FILE_CHANGE,
-};
 use crate::shared_types::{GlobalsProxyMT, ServerStats};
-use common::basic_types::{SafeUuid, TargetServerIdx};
+use common::basic_types::{AdminControllerMsg, AdminControllerTx, SafeUuid, TargetServerIdx};
 
 use super::{InfoResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
@@ -497,7 +494,7 @@ impl ProxyApiServer for ProxyApiImpl {
         if debug {
             // Communicate with AdminController to append its own debug state.
             let mut msg = AdminControllerMsg::new();
-            msg.event_id = crate::admin_controller::EVENT_DEBUG_PRINT;
+            msg.event_id = common::basic_types::EVENT_DEBUG_PRINT;
             let (tx, rx) = tokio::sync::oneshot::channel();
             msg.resp_channel = Some(tx);
             if (self.admctrl_tx.send(msg).await).is_ok() {
@@ -540,7 +537,7 @@ impl ProxyApiServer for ProxyApiImpl {
 
         // Inform the AdminController that something changed...
         let mut msg = AdminControllerMsg::new();
-        msg.event_id = EVENT_NOTIF_CONFIG_FILE_CHANGE;
+        msg.event_id = common::basic_types::EVENT_NOTIF_CONFIG_FILE_CHANGE;
         msg.data_string = Some(path);
 
         // TODO: Implement response to handle errors... but is it really needed here?

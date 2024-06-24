@@ -3,12 +3,9 @@ use anyhow::Result;
 use axum::async_trait;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
-use crate::{
-    admin_controller::{AdminControllerMsg, AdminControllerTx},
-    network_monitor::{NetMonTx, NetworkMonitor},
-};
+use crate::network_monitor::{NetMonTx, NetworkMonitor};
 
-use common::basic_types::{self, AutoThread, Runnable};
+use common::basic_types::{self, AdminControllerMsg, AdminControllerTx, AutoThread, Runnable};
 
 use tokio::time::{interval, Duration};
 
