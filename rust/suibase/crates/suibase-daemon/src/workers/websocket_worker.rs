@@ -22,7 +22,7 @@ use common::{
     basic_types::{
         self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
     },
-    mpsc_q_check,
+    log_safe, mpsc_q_check,
 };
 
 use futures::{
@@ -828,9 +828,9 @@ impl WebSocketWorkerThread {
             }
             Err(e) => {
                 if !e.to_string().contains("Connection refused") {
-                    // ConnectionRefused is annoying when localnet is not running, so ignore it.
+                    // "Connection refused" is annoying when localnet is not running, so ignore it.
                     // TODO Make this more "aware" about if localnet should be running or not.
-                    log::error!("connect_async error: {:?}", e);
+                    log_safe!(format!("connect_async error: {:?}", e));
                 }
                 self.websocket.write = None;
                 self.websocket.read = None;

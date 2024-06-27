@@ -16,6 +16,7 @@ use crate::shared_types::{
     WebSocketWorkerIORx, WebSocketWorkerIOTx, WebSocketWorkerMsg, WebSocketWorkerTx,
 };
 
+use common::log_safe;
 use common::shared_types::{
     WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
     WORKDIR_IDX_TESTNET,
@@ -1813,8 +1814,12 @@ impl WebSocketWorkerIOThread {
                 self.websocket.read = Some(read);
             }
             Err(e) => {
-                // Display only once.
-                log::error!("connect_async error: {:?} to {:?}", e, &socket_url);
+                if !e.to_string().contains("Connection refused") {
+                    // "Connection refused" is annoying when localnet is not running, so ignore it.
+                    // TODO Make this more "aware" about if localnet should be running or not.
+                    log_safe!(format!("connect_async error: {:?}", e));
+                }
+
                 self.websocket.write = None;
                 self.websocket.read = None;
             }
