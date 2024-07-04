@@ -43,7 +43,7 @@ sui_faucet_client_timeout_secs: 10
 # the use of your own repo (e.g. 'localnet set-sui-repo --path ~/my-repo' )
 #
 default_repo_url: "https://github.com/MystenLabs/sui.git"
-default_repo_branch: "devnet"
+default_repo_branch: "testnet"
 
 # Allow to force using a specific tag (e.g. "testnet-1.18.0")
 force_tag: ~
