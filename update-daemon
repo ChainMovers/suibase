@@ -1,0 +1,6 @@
+rm ~/suibase/workdirs/common/bin/suibase-daemon >/dev/null 2>&1
+PID=$(lsof /tmp/.suibase/suibase-daemon.lock 2>/dev/null | grep "^suibase-d " | while read c1 c2 c3; do echo $c2; done)
+if [ -n "$PID" ]; then
+  kill -s SIGTERM $PID
+fi
+testnet links 
