@@ -229,147 +229,182 @@ impl ProxyServer {
             }
         };
 
+        const MAX_RETRIES: u8 = 4; // Must be >= 1
+
         for (server_idx, target_uri) in targets.iter() {
-            // Build the request toward the current target server.
-            let req_builder = states
-                .client
-                .request(method.clone(), target_uri)
-                .headers(headers.clone())
-                .body(bytes.clone());
+            let mut same_server_attempt = true;
 
-            // Following works also (if one day bytes and cloning won't be needed):
-            //       .body(req.into_body())
+            while same_server_attempt && retry_count < MAX_RETRIES {
+                same_server_attempt = false; // Will change to true in this loop if need to retry *same* server.
 
-            let req_initiation_time = EpochTimestamp::now();
-            // Execute the request.
-            let resp = req_builder.send().await;
+                // Build the request toward the current target server.
+                let req_builder = states
+                    .client
+                    .request(method.clone(), target_uri)
+                    .headers(headers.clone())
+                    .body(bytes.clone());
 
-            let resp = match resp {
-                Ok(resp) => resp,
-                Err(_err) => {
-                    // TODO Map _err to SendFailureReason for debugging.
+                // Following works also (if one day bytes and cloning won't be needed):
+                //       .body(req.into_body())
 
-                    // Report a 'send' error, which is a failure to connect to a target server.
-                    // This is not intended to count in the total *request* count stats (because
-                    // may succeed on a retry on another server) but will affect the health score
-                    // of this target server.
-                    let _ = report
-                        .send_failed(
-                            *server_idx,
-                            req_initiation_time,
-                            SEND_FAILED_UNSPECIFIED_ERROR,
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                        )
-                        .await;
-                    // Try with another server.
-                    retry_count += 1;
-                    continue;
-                }
-            };
+                let req_initiation_time = EpochTimestamp::now();
+                // Execute the request.
+                let resp = req_builder.send().await;
 
-            let resp_received = EpochTimestamp::now();
+                let resp = match resp {
+                    Ok(resp) => resp,
+                    Err(_err) => {
+                        // TODO Map _err to SendFailureReason for debugging.
 
-            // Check HTTP errors
-            let resp = match resp.error_for_status() {
-                Ok(resp) => resp,
-                Err(err) => {
-                    // Decide if trying another server or not depending if the HTTP
-                    // problem is with the request or with the server.
-                    // When in doubt, this will assume a problem with the server.
-                    //
-                    // Note: http_response_err does a "req_fail" when returning false.
-                    let try_next_server = report
-                        .http_response_error(
-                            server_idx,
-                            req_initiation_time,
-                            resp_received,
-                            retry_count,
-                            &err,
-                        )
-                        .await;
-                    if try_next_server {
+                        // Report a 'send' error, which is a failure to connect to a target server.
+                        // This is not intended to count in the total *request* count stats (because
+                        // may succeed on a retry on another server) but will affect the health score
+                        // of this target server.
+                        let _ = report
+                            .send_failed(
+                                *server_idx,
+                                req_initiation_time,
+                                SEND_FAILED_UNSPECIFIED_ERROR,
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                            )
+                            .await;
+                        // Try with another server.
                         retry_count += 1;
                         continue;
-                    } else {
+                    }
+                };
+
+                let resp_received = EpochTimestamp::now();
+
+                // Check HTTP errors
+                let resp = match resp.error_for_status() {
+                    Ok(resp) => resp,
+                    Err(err) => {
+                        // Decide if trying another server or not depending if the HTTP
+                        // problem is with the request or with the server.
+                        // When in doubt, this will assume a problem with the server.
+                        //
+                        // Note: http_response_err does a "req_fail" when returning false.
+                        let try_next_server = report
+                            .http_response_error(
+                                server_idx,
+                                req_initiation_time,
+                                resp_received,
+                                retry_count,
+                                &err,
+                            )
+                            .await;
+                        if try_next_server {
+                            retry_count += 1;
+                            continue;
+                        } else {
+                            return Err(err.into());
+                        }
+                    }
+                };
+
+                let resp_bytes = resp.bytes().await;
+
+                let resp_bytes = match resp_bytes {
+                    Ok(resp_bytes) => resp_bytes,
+                    Err(err) => {
+                        let _ = report
+                            .req_resp_err(
+                                *server_idx,
+                                req_initiation_time,
+                                resp_received,
+                                retry_count,
+                                REQUEST_FAILED_RESP_BYTES_RX,
+                            )
+                            .await;
+                        // TODO worth logging a few of these.
                         return Err(err.into());
                     }
-                }
-            };
+                };
 
-            let resp_bytes = resp.bytes().await;
+                // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
 
-            let resp_bytes = match resp_bytes {
-                Ok(resp_bytes) => resp_bytes,
-                Err(err) => {
-                    let _ = report
-                        .req_resp_err(
-                            *server_idx,
-                            req_initiation_time,
-                            resp_received,
-                            retry_count,
-                            REQUEST_FAILED_RESP_BYTES_RX,
-                        )
-                        .await;
-                    // TODO worth logging a few of these.
-                    return Err(err.into());
-                }
-            };
+                // if the response is a JSON error then add proxy specific 'data' to it to help
+                // find the problem.
+                //
+                // Do first a "weak" but "very fast" check before starting to do costly JSON serde.
+                //
+                // Also, check to retry with a different server some failed requests when safe to do so.
 
-            // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
+                let mut modified_resp_bytes: Option<Bytes> = None;
+                let mut find_json_error = memmem::find_iter(&resp_bytes, "\"error\":");
+                if find_json_error.next().is_some() {
+                    if let Ok(json_resp) = serde_json::from_slice::<serde_json::Value>(&resp_bytes)
+                    {
+                        // Check for a failed JSON-RPC that can be safely retried.
+                        // Why MAX_RETRIES-1?
+                        // At some point, have to stop retrying and return a "success with NotExists error" to
+                        // the user (instead of keep going until reaching "failure for too much retry").
+                        if retry_count < (MAX_RETRIES - 1) {
+                            if let Ok(safe_retry_approved) =
+                                Self::is_retryable_sui_level_error(&bytes, &json_resp).await
+                            {
+                                if safe_retry_approved {
+                                    // Safe to retry after a delay of 1 secs.
+                                    tokio::time::sleep(Duration::from_secs(1)).await;
+                                    // Retry with a different server, except when there is no other server
+                                    // left to try.
+                                    retry_count += 1;
+                                    if retry_count as usize >= targets.len() {
+                                        same_server_attempt = true;
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
 
-            // if the response is a JSON error then add proxy specific 'data' to it to help
-            // find the problem.
-            //
-            // Do first a "weak" but "very fast" check before starting to do costly JSON serde.
-            let mut modified_resp_bytes: Option<Bytes> = None;
-            let mut find_json_error = memmem::find_iter(&resp_bytes, "\"error\":");
-            if find_json_error.next().is_some() {
-                // Deserialize resp_bytes into a JSON-RPC response structure.
-                if let Ok(json_resp) = serde_json::from_slice::<serde_json::Value>(&resp_bytes) {
-                    if let Some(err_obj) = json_resp["error"].as_object() {
-                        if !err_obj.contains_key("data") {
-                            // Insert our own "data" field.
-                            let data = JsonRpcErrorDataObject::new(target_uri.clone(), retry_count);
-                            let mut json_resp = json_resp.clone();
-                            if let Ok(data_obj) = serde_json::to_value(data) {
-                                json_resp["data"] = data_obj;
-                                modified_resp_bytes =
-                                    Some(serde_json::to_vec(&json_resp).unwrap().into());
+                        // This is the standard way to handle JSON-RPC errors (with "error" object).
+                        if let Some(err_obj) = json_resp["error"].as_object() {
+                            if !err_obj.contains_key("data") {
+                                // Insert our own "data" field.
+                                let data =
+                                    JsonRpcErrorDataObject::new(target_uri.clone(), retry_count);
+                                let mut json_resp = json_resp.clone();
+                                if let Ok(data_obj) = serde_json::to_value(data) {
+                                    json_resp["data"] = data_obj;
+                                    modified_resp_bytes =
+                                        Some(serde_json::to_vec(&json_resp).unwrap().into());
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            let builder = if let Some(modified_resp_bytes) = modified_resp_bytes {
-                Response::builder().body(Body::from(modified_resp_bytes))
-            } else {
-                Response::builder().body(Body::from(resp_bytes))
-            };
+                let builder = if let Some(modified_resp_bytes) = modified_resp_bytes {
+                    Response::builder().body(Body::from(modified_resp_bytes))
+                } else {
+                    Response::builder().body(Body::from(resp_bytes))
+                };
 
-            let resp = match builder {
-                Ok(resp) => resp,
-                Err(err) => {
-                    let _ = report
-                        .req_resp_err(
-                            *server_idx,
-                            req_initiation_time,
-                            resp_received,
-                            retry_count,
-                            REQUEST_FAILED_RESP_BUILDER,
-                        )
-                        .await;
-                    // TODO worth logging a few of these.
-                    return Err(err.into());
-                }
-            };
+                let resp = match builder {
+                    Ok(resp) => resp,
+                    Err(err) => {
+                        let _ = report
+                            .req_resp_err(
+                                *server_idx,
+                                req_initiation_time,
+                                resp_received,
+                                retry_count,
+                                REQUEST_FAILED_RESP_BUILDER,
+                            )
+                            .await;
+                        // TODO worth logging a few of these.
+                        return Err(err.into());
+                    }
+                };
 
-            let _ = report
-                .req_resp_ok(*server_idx, req_initiation_time, resp_received, retry_count)
-                .await;
+                let _ = report
+                    .req_resp_ok(*server_idx, req_initiation_time, resp_received, retry_count)
+                    .await;
 
-            return Ok(resp);
-        }
+                return Ok(resp);
+            } // while (same_server_attempt)
+        } // for (server_idx, target_uri)
 
         // If we get here, then all the retries failed.
         let _ = report
@@ -448,6 +483,69 @@ impl ProxyServer {
         }
 
         Ok(())
+    }
+
+    async fn is_retryable_sui_level_error(
+        request: &Bytes,
+        json_resp: &serde_json::Value,
+    ) -> Result<bool> {
+        // Extract the JSON-RPC method field from the request.
+        let sui_req_method: String =
+            if let Ok(json_req) = serde_json::from_slice::<serde_json::Value>(request) {
+                if let Some(method) = json_req.get("method").and_then(|v| v.as_str()) {
+                    method.to_owned()
+                } else {
+                    return Ok(false);
+                }
+            } else {
+                return Ok(false);
+            };
+        //log::info!("method: {}", sui_req_method);
+
+        // Extract the result->error->code field from the response.
+        //
+        // Note: Sui RPC server error format sometimes a "result" object
+        // even when it is an error (this is not typical of JSON-RPC).
+        if let Some(result_obj) = json_resp.get("result").and_then(|v| v.as_object()) {
+            // Handle errors returned within a "suc"
+            if let Some(err_obj) = result_obj.get("error").and_then(|v| v.as_object()) {
+                if let Some(code_str) = err_obj["code"].as_str() {
+                    if code_str == "notExists" {
+                        match sui_req_method.as_str() {
+                            "suix_getDynamicFieldObject"
+                            | "suix_getDynamicFields"
+                            | "suix_getOwnedObjects"
+                            | "sui_getObject"
+                            | "sui_tryGetPastObject" => return Ok(true),
+                            _ => (),
+                        }
+                    }
+                }
+            }
+        } else if let Some(err_obj) = json_resp.get("error").and_then(|v| v.as_object()) {
+            if let Some(message) = err_obj.get("message").and_then(|v| v.as_str()) {
+                // Example of error:
+                // ~$ curl -H "Content-Type: application/json"
+                //    -H 'client-target-api-version: 1.28.0' -H 'client-sdk-version: 1.28.0'
+                //    --data '{ "id":2, "jsonrpc":"2.0", "method":"sui_getEvents",
+                //              "params": ["4UM3m1Kz7p596UVnyr2QNVAMobrfEZV9RYXkMUX8NYxJ"]}' http://0.0.0.0:44343
+                //
+                // Response:
+                // {"jsonrpc":"2.0","error":{"code":-32602,
+                //   "message":"Could not find the referenced transaction [TransactionDigest(4UM3m1Kz7p596UVnyr2QNVAMobrfEZV9RYXkMUX8NYxJ)]."},
+                //  "id":2,"data":{"origin":"https://rpc-mainnet.suiscan.xyz:443","retry":3}}
+                match sui_req_method.as_str() {
+                    "sui_getEvents" => {
+                        if message.contains("not find") || message.contains("otExists") {
+                            return Ok(true);
+                        }
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        Ok(false)
     }
 }
 

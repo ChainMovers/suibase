@@ -216,7 +216,7 @@ impl InputPort {
             // Get the first 'RETRY_COUNT' TargetServerIdx stored in self.selection_vectors[x][y] by incrementing x first then y.
             //
             // This allows to group TargetServer for load balancing and distribute evenly over a selection_vector[x].
-            const RETRY_COUNT: usize = 3;
+            const RETRY_COUNT: usize = 4;
             let mut count = 0;
             let mut vector_idx: usize = 0;
 
@@ -259,15 +259,17 @@ impl InputPort {
                 }
             }
 
-            // If we are here, it means there was not enough healthy TargetServer so fallback
-            // to choose among the worst selections (least known worst first).
-            // Note: This can happen on initialization or hard recovery.
-            for &idx in &self.selection_worst {
-                if let Some(uri) = self.uri(idx) {
-                    target_servers.push((idx, uri));
-                    count += 1;
-                    if count == RETRY_COUNT {
-                        return; // Done
+            if self.target_servers.len() == 0 {
+                // Not a single healthy TargetServer so fallback to choose among the
+                // worst selections.
+                // Note: This can normally happen on initialization or hard recovery.
+                for &idx in &self.selection_worst {
+                    if let Some(uri) = self.uri(idx) {
+                        target_servers.push((idx, uri));
+                        count += 1;
+                        if count == RETRY_COUNT {
+                            return; // Done
+                        }
                     }
                 }
             }
