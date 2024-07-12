@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::shared_types::InputPort;
+use crate::shared_types::{InputPort, REQUEST_FAILED_NO_SERVER_AVAILABLE};
 use common::basic_types::*;
 
 use crate::shared_types::{
@@ -120,6 +120,7 @@ pub struct NetworkMonitor {
     globals: GlobalsProxyMT,
     netmon_rx: NetMonRx,
     mon_map: HashMap<(InputPortIdx, TargetServerIdx), MonitorData>,
+    init_time: EpochTimestamp,
 }
 
 // This is how the ProxyHandler communicate with the NetworkMonitor.
@@ -285,7 +286,7 @@ impl<'a> ProxyHandlerReport<'a> {
                     *server_idx,
                     req_initiation_time,
                     SEND_FAILED_RESP_HTTP_STATUS,
-                    status.as_u16()
+                    status.as_u16(),
                 )
                 .await;
         } else {
@@ -311,6 +312,7 @@ impl NetworkMonitor {
             globals,
             netmon_rx,
             mon_map: HashMap::new(),
+            init_time: EpochTimestamp::now(),
         }
     }
 
@@ -642,21 +644,28 @@ impl NetworkMonitor {
                         }
                     }
                     EVENT_REPORT_REQ_FAILED => {
-                        // Update the stats. Not related to a specific target server
-                        // so update only the all_servers stats.
-                        if let Some(stats) =
-                            crate::NetworkMonitor::get_mut_all_servers_stats(input_ports, &cur_msg)
+                        // Having no server available on startup is "normal". Ignore these for
+                        // first 15 seconds uptime of this task.
+                        if !(cur_msg.para8[1] == REQUEST_FAILED_NO_SERVER_AVAILABLE
+                            && self.init_time.elapsed() < Duration::from_secs(15))
                         {
-                            if cur_msg
-                                .flags
-                                .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
-                            {
-                                stats.handle_req_failed_internal(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[1],
-                                );
-                            } else {
-                                stats.handle_req_failed(cur_msg.timestamp, cur_msg.para8[1]);
+                            // Update the stats. Not related to a specific target server
+                            // so update only the all_servers stats.
+                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
+                                input_ports,
+                                &cur_msg,
+                            ) {
+                                if cur_msg
+                                    .flags
+                                    .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
+                                {
+                                    stats.handle_req_failed_internal(
+                                        cur_msg.timestamp,
+                                        cur_msg.para8[1],
+                                    );
+                                } else {
+                                    stats.handle_req_failed(cur_msg.timestamp, cur_msg.para8[1]);
+                                }
                             }
                         }
                     }
