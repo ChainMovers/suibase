@@ -155,7 +155,6 @@ start_suibase_daemon() {
     return
   fi
 
-
   echo "Starting $SUIBASE_DAEMON_NAME"
 
   if [ "${CFG_proxy_enabled:?}" = "dev" ]; then
@@ -220,6 +219,73 @@ start_suibase_daemon() {
   echo "$SUIBASE_DAEMON_NAME started (process pid $SUIBASE_DAEMON_PID)"
 }
 export -f start_suibase_daemon
+
+wait_for_json_rpc_up() {
+  local _CMD=$1 # "any" or "exclude-localnet"
+
+  # Block for up to 20 seconds for the JSON-RPC to be confirm up.
+  #
+  # Pick one of the workdir that is started by the user and favor first
+  # the WORKDIR_NAME related to the command.
+  local _WORKDIRS_LIST
+  _WORKDIRS_LIST=("$WORKDIR_NAME" "localnet" "testnet" "devnet" "mainnet")
+
+  local _WORKDIR_NAME
+  local _WORKDIR_FOUND=false
+  for _WORKDIR_NAME in "${_WORKDIRS_LIST[@]}"; do
+    if [ "$_WORKDIR_NAME" = "localnet" ] && [ "$_CMD" = "exclude-localnet" ]; then
+      continue;
+    fi
+    local _USER_REQUEST
+    _USER_REQUEST=$(get_key_value "$_WORKDIR_NAME" "user_request")
+    if [ "$_USER_REQUEST" = "start" ]; then
+      _WORKDIR_FOUND=true
+      break
+    fi
+  done
+
+  # If no workdir is found to be stared by user, then just return.
+  if [ "$_WORKDIR_FOUND" = false ]; then
+    return
+  fi
+
+  local _SUI_EXEC="$WORKDIRS/$_WORKDIR_NAME/sui-exec"
+  local _SUI_RESP
+  local _AT_LEAST_ONE_DOT=false
+  local _JSON_RPC_UP=false
+  for _i in {1..20}; do
+    # Do a sui "client gas" call, and verify that
+    # it returns something valid.
+
+    _SUI_RESP=$("$_SUI_EXEC" client gas --json 2>&1)
+    if [ -n "$_SUI_RESP" ]; then
+      # Valid if starts with [ and end with ]
+      if [[ "$_SUI_RESP" =~ ^\[.*\]$ ]]; then
+        _JSON_RPC_UP=true
+        break
+      fi
+    fi
+    # Wait one second before trying again.
+    if [ "$_i" -eq 3 ]; then
+      echo -n "Verifying JSON-RPC is responding..."
+      _AT_LEAST_ONE_DOT=true
+    fi
+    if [ "$_i" -gt 3 ]; then
+      echo -n "."
+    fi
+    sleep 1
+  done
+  if [ "$_AT_LEAST_ONE_DOT" = true ]; then
+    echo
+    if [ "$_JSON_RPC_UP" = true ]; then
+      echo "JSON-RPC for $_WORKDIR_NAME is up"
+    else
+      echo "JSON-RPC for $_WORKDIR_NAME not responding. Try again?"
+    fi
+  fi
+
+}
+export -f wait_for_json_rpc_up
 
 restart_suibase_daemon() {
   update_SUIBASE_DAEMON_PID_var
@@ -325,7 +391,12 @@ update_suibase_daemon_as_needed() {
 }
 export -f update_suibase_daemon_as_needed
 
+export SUIBASE_DAEMON_STARTED=false
 start_suibase_daemon_as_needed() {
+
+  # Changes to true if the daemon is tentatively started
+  # anywhere within this call.
+  SUIBASE_DAEMON_STARTED=false
 
   # When _UPGRADE_ONLY=true:
   #  - Always check to upgrade the daemon.
@@ -403,6 +474,7 @@ start_suibase_daemon_as_needed() {
         # Restart only if already running.
         if [ -n "$SUIBASE_DAEMON_PID" ]; then
           restart_suibase_daemon
+          SUIBASE_DAEMON_STARTED=true
         fi
       else
         # (re)start
@@ -412,11 +484,13 @@ start_suibase_daemon_as_needed() {
           # Needed for the upgrade to take effect.
           restart_suibase_daemon
         fi
+        SUIBASE_DAEMON_STARTED=true
       fi
     else
       if [ -z "$SUIBASE_DAEMON_PID" ] && [ "$_UPGRADE_ONLY" = false ]; then
         # There was no upgrade, but the process need to be started.
         start_suibase_daemon
+        SUIBASE_DAEMON_STARTED=true
       fi
     fi
   fi
@@ -456,6 +530,11 @@ show_suibase_daemon_get_links() {
 
   if ! start_suibase_daemon_as_needed; then
     error_exit "proxy server is not running. Do '$WORKDIR start'."
+  fi
+
+  if [ $SUIBASE_DAEMON_STARTED = true ]; then
+    # Give a moment for the daemon to start.
+    wait_for_json_rpc_up "exclude-localnet"
   fi
 
   local _DISP

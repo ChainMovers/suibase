@@ -1291,12 +1291,14 @@ start_all_services() {
     sync_client_yaml
     if [ "$_OLD_USER_REQUEST" = "start" ]; then
       # Was already started.
+      wait_for_json_rpc_up "exclude-localnet"
       return 1
     fi
     # Transition to "start" state successful.
     notify_suibase_daemon_fs_change
     notify_dtp_daemon_fs_change
     notify_suibase_daemon_workdir_change
+    wait_for_json_rpc_up "exclude-localnet"
     return 0
   fi
 
@@ -1319,6 +1321,7 @@ start_all_services() {
 
   if [ "$_ALL_RUNNING" = true ]; then
     sync_client_yaml
+    wait_for_json_rpc_up "any"
     return 1
   fi
 
@@ -1354,6 +1357,7 @@ start_all_services() {
 
   # Success. All process that needed to be started were started.
   sync_client_yaml
+  wait_for_json_rpc_up "any"
   return 0
 }
 

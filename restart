@@ -35,6 +35,8 @@ main() {
   cli_mutex_lock "active"
 
   restart_suibase_daemon
+  # Check for any JSON-RPC up, except for localnet.
+  wait_for_json_rpc_up "exclude-localnet"
 }
 
 main "$@"
