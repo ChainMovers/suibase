@@ -15,20 +15,22 @@ outputs:
     value: "${{ steps.diff.outputs.isScript }}"
   isDocHelperAPI:
     description: True when changes to Helper API (docs)
-    value: "${{ steps.diff.outputs.isDoc }}"
+    value: "${{ steps.diff.outputs.isDocHelperAPI }}"
+  isSuibaseDaemon:
+    description: True when changes to Suibase Daemon code
+    value: "${{ steps.diff.outputs.isSuibaseDaemon }}"
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Detect Changes
-      uses: dorny/paths-filter@v2.11.1
+      uses: dorny/paths-filter@v3.0.2
       id: diff      
       with:
         filters: |
           isRust:
             - 'rust/**'
-            - '.github/workflows/rust.yml'
           isDoc:
             - 'docs/**'
             - 'README.md'
@@ -47,4 +49,7 @@ runs:
           isDocHelperAPI:
             - 'rust/helper/lib.rs'
             - 'rust/helper/error.rs'
-            - '.github/workflows/trig-ext-repos.yml'
+            - '.github/workflows/trig-rust-api-docs.yml'
+          isSuibaseDaemon:
+            - 'rust/suibase'
+            - '.github/workflows/trig-sui-binaries.yml'
