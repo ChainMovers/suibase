@@ -17,7 +17,7 @@ outputs:
     description: True when changes to Helper API (docs)
     value: "${{ steps.diff.outputs.isDocHelperAPI }}"
   isSuibaseDaemon:
-    description: True when changes to Suibase Daemon code
+    description: True when changes to Suibase Daemon
     value: "${{ steps.diff.outputs.isSuibaseDaemon }}"
 
 runs:
@@ -51,5 +51,5 @@ runs:
             - 'rust/helper/error.rs'
             - '.github/workflows/trig-rust-api-docs.yml'
           isSuibaseDaemon:
-            - 'rust/suibase'
+            - 'rust/suibase/Cargo.toml'
             - '.github/workflows/trig-sui-binaries.yml'
