@@ -30,7 +30,7 @@ jobs:
       - name: Push Cargo.toml to trigger other repos
         uses: dmnemec/copy_file_to_another_repo_action@main
         env:
-          API_TOKEN_GITHUB: ${{ secrets.SUIBASE_BINARIES }}
+          API_TOKEN_GITHUB: ${{ secrets.SUIBASE_BINARIES_TOKEN }}
         with:
           source_file: "suibase/rust/suibase/Cargo.toml"
           destination_repo: "chainmovers/suibase-binaries"
