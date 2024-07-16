@@ -32,7 +32,7 @@ jobs:
         env:
           API_TOKEN_GITHUB: ${{ secrets.SUI_BINARIES_TOKEN }}
         with:
-          source_file: "suibase/rust/suibase/Cargo.toml"
+          source_file: "rust/suibase/Cargo.toml"
           destination_repo: "chainmovers/sui-binaries"
           destination_folder: 'triggers/suibase-daemon'
           user_email: "4542410+mario4tier@users.noreply.github.com"
