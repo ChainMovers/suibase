@@ -2,9 +2,19 @@
 
 A fork of [sui-explorer](https://github.com/MystenLabs/sui-explorer), originally developed by MystenLabs and now discontinued.
 
-The purpose of this fork is to provide Sui Explorer for the local net for easier contract development.
+The purpose of this fork is to provide Sui Explorer for the local net.
 
-## License and copyright
+## Unique Features
+
+- Tailored to the localnet
+- No third-party trackers
+- [Single file](/apps/explorer/build/) build
+
+## How to Use
+
+The simplest way to use it is through [Local Sui Explorer: Cli](https://github.com/kkomelin/sui-explorer-local) - 
+
+## License & Copyright
 
 &copy; MystenLabs, Apache-2.0
 

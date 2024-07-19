@@ -8,7 +8,7 @@
 
 Dependencies are managed using [`pnpm`](https://pnpm.io/). You can start by installing dependencies in the root of the Sui repository:
 
-```
+```bash
 $ pnpm install
 ```
 
@@ -18,8 +18,8 @@ $ pnpm install
 
 To start the explorer dev server, you can run the following command:
 
-```
-pnpm explorer dev
+```bash
+pnpm --filter explorer dev
 ```
 
 This will start the dev server on port 3000, which should be accessible on http://localhost:3000/
@@ -35,21 +35,21 @@ cargo run --bin sui-test-validator
 In a a separate terminal, you can now run the end-to-end tests:
 
 ```bash
-pnpm --filter sui-explorer playwright test
+pnpm --filter explorer playwright test
 ```
 
 # Other pnpm commands
 
-### `pnpm explorer test`
+### `pnpm --filter explorer test`
 
 This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
-### `pnpm explorer build`
+### `pnpm --filter explorer build`
 
 Builds the app for production to the `build` folder.
 
 It bundles React in production mode and optimizes the build for the best performance.
 
-### `pnpm explorer lint`
+### `pnpm --filter explorer lint`
 
 Run linting check (prettier/eslint).
