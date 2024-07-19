@@ -97,9 +97,12 @@ impl WebserverTask {
             format!("{}/{}", self.websites_root, self.params.website_name)
         };
 
+        let index_html_fallback = format!("{}/index.html", static_files_path);
+
         // Use tower to handle the serving of the static files + index.html
         let tower_srvc = tower_http::services::ServeDir::new(static_files_path)
-            .append_index_html_on_directories(true);
+            .append_index_html_on_directories(true)
+            .not_found_service(tower_http::services::ServeFile::new(index_html_fallback));
 
         // Setup the router to always use the tower service.
         //
