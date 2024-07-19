@@ -70,6 +70,9 @@ use tokio_graceful_shutdown::{
     SubsystemBuilder, Toplevel,
 };
 
+use workers::WebserverParams;
+use workers::WebserverWorker;
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
 #[clap(
@@ -114,11 +117,16 @@ impl Command {
                 let clock_params = ClockTriggerParams::new(netmon_tx.clone(), admctrl_tx.clone());
                 let clock: ClockTrigger = ClockTrigger::new(clock_params);
 
+                let suiexplorer_params =
+                    WebserverParams::new(globals.clone(), admctrl_tx.clone(), "sui-explorer");
+                let suiexplorer = WebserverWorker::new(suiexplorer_params);
+
                 // Start all top levels subsystems.
                 let errors = Toplevel::new(|s| async move {
                     s.start(SubsystemBuilder::new("admctrl", |a| admctrl.run(a)));
                     s.start(SubsystemBuilder::new("netmon", |a| netmon.run(a)));
                     s.start(SubsystemBuilder::new("clock", |a| clock.run(a)));
+                    s.start(SubsystemBuilder::new("suiexplorer", |a| suiexplorer.run(a)));
                     s.start(SubsystemBuilder::new("apiserver", |a| apiserver.run(a)));
                 })
                 .catch_signals()

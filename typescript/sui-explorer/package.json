@@ -1,0 +1,16 @@
+{
+  "name": "sui-explorer",
+  "version": "2.0.0",
+  "description": "Local Sui Explorer",
+  "main": "apps/explorer/build/index.html",
+  "scripts": {
+    "build": "pnpm --filter explorer build",
+    "serve": "pnpm --filter explorer serve"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "husky": "^9.1.1"
+  }
+}
