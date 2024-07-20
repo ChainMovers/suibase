@@ -141,7 +141,7 @@ pub struct GlobalsConfigST {
 impl GlobalsConfigST {
     pub fn new() -> Self {
         Self {
-            daemon_ip: "0.0.0.0".to_string(),
+            daemon_ip: "localhost".to_string(),
             daemon_port: 44399,
         }
     }

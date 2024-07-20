@@ -104,20 +104,35 @@ impl WebserverTask {
             .append_index_html_on_directories(true)
             .not_found_service(tower_http::services::ServeFile::new(index_html_fallback));
 
+        // CORS to accept requests from any origin
+        /*let cors = tower_http::cors::CorsLayer::new()
+                    .allow_origin(tower_http::cors::AllowOrigin::list(vec![
+                        axum::http::HeaderValue::from_static("http://localhost:9000"),
+                    ]))
+                    .allow_methods(tower_http::cors::Any)
+                    .allow_headers(tower_http::cors::Any);
+        */
+        let cors = tower_http::cors::CorsLayer::new()
+            .allow_origin(tower_http::cors::AllowOrigin::any())
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any);
+
         // Setup the router to always use the tower service.
         //
         // There is no caching, the files are purposely read and served on each request.
         //
         // Why? The Suibase webserver favor KISS over performance (modifying the files
         // update the "website" on next request/refresh).
-        let app = axum::Router::new().fallback(
-            axum::routing::get_service(tower_srvc).handle_error(|error| async move {
-                (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            }),
-        );
+        let app = axum::Router::new()
+            .fallback(
+                axum::routing::get_service(tower_srvc).handle_error(|error| async move {
+                    (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Unhandled internal error: {}", error),
+                    )
+                }),
+            )
+            .layer(cors);
 
         // Define the address to serve on
         //

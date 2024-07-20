@@ -3,7 +3,9 @@ use std::sync::Arc;
 use anyhow::bail;
 use axum::async_trait;
 
-use common::basic_types::{AdminControllerMsg, AdminControllerTx, GenericChannelMsg, ManagedVecU16, WorkdirIdx};
+use common::basic_types::{
+    AdminControllerMsg, AdminControllerTx, GenericChannelMsg, ManagedVecU16, WorkdirIdx,
+};
 use dtp_sdk::{Connection, DTP};
 
 use jsonrpsee::core::RpcResult;
@@ -335,7 +337,7 @@ impl DtpApiServer for DtpApiImpl {
                 return Err(RpcSuibaseError::InternalError(error_message).into());
             }
             let mut dtp = dtp.unwrap();
-            if let Err(e) = dtp.add_rpc_url("http://0.0.0.0:44340").await {
+            if let Err(e) = dtp.add_rpc_url("http://localhost:44340").await {
                 return Err(RpcSuibaseError::InternalError(e.to_string()).into());
             }
             dtp.set_package_id(package_id).await;
@@ -640,7 +642,7 @@ impl DtpApiServer for DtpApiImpl {
                 let mut new_dtp = new_dtp.unwrap();
 
                 // TODO Remove hard coding
-                if let Err(e) = new_dtp.add_rpc_url("http://0.0.0.0:44340").await {
+                if let Err(e) = new_dtp.add_rpc_url("http://localhost:44340").await {
                     return Err(RpcSuibaseError::InternalError(e.to_string()).into());
                 }
                 new_dtp.set_gas_address(gas_addr).await;

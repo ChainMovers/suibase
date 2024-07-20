@@ -3,7 +3,7 @@ keystore:
   File: <PUT_WORKING_DIR_PATH_HERE>/config-default/sui.keystore
 envs:
   - alias: testnet_proxy
-    rpc: "http://0.0.0.0:44342"
+    rpc: "http://localhost:44342"
     ws: ~
   - alias: testnet
     rpc: "https://fullnode.testnet.sui.io:443"

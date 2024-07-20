@@ -810,7 +810,7 @@ impl WebSocketWorkerThread {
         // TODO Change this to the actual server URL from the config.
         // For now, use hard coded Mysten Labs servers...
         let socket_url = match self.params.workdir_idx {
-            WORKDIR_IDX_LOCALNET => "ws://0.0.0.0:9000",
+            WORKDIR_IDX_LOCALNET => "ws://localhost:9000",
             WORKDIR_IDX_DEVNET => "wss://fullnode.devnet.sui.io:443",
             WORKDIR_IDX_TESTNET => "wss://fullnode.testnet.sui.io:443",
             WORKDIR_IDX_MAINNET => "wss://fullnode.mainnet.sui.io:443",

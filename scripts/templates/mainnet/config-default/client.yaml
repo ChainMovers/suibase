@@ -3,7 +3,7 @@ keystore:
   File: <PUT_WORKING_DIR_PATH_HERE>/config-default/sui.keystore
 envs:
   - alias: mainnet_proxy
-    rpc: "http://0.0.0.0:44343"
+    rpc: "http://localhost:44343"
     ws: ~
   - alias: mainnet
     rpc: "https://fullnode.mainnet.sui.io:443"

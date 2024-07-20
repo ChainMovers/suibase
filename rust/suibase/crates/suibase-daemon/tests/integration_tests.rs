@@ -13,7 +13,7 @@ fn init() {
 
 async fn api_request(method: &str) -> serde_json::Value {
     let client = reqwest::Client::new();
-    let request_url = "http://0.0.0.0:44399";
+    let request_url = "http://localhost:44399";
     let request_body = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -46,7 +46,7 @@ async fn api_request(method: &str) -> serde_json::Value {
 #[tokio::test]
 async fn test_sanity_api() {
     init();
-    // Do a JSON-RPC 2.0 call of the method getStatus at http://0.0.0.0:44340
+    // Do a JSON-RPC 2.0 call of the method getStatus at http://localhost:44340
     let response = api_request("getStatus").await;
 
     // Example of valid response:

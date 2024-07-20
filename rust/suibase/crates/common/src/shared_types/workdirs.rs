@@ -256,12 +256,12 @@ impl WorkdirUserConfig {
         //
         // links:
         //   - alias: "localnet"
-        //     rpc: "http://0.0.0.0:9000"
-        //     ws: "ws://0.0.0.0:9000"
+        //     rpc: "http://localhost:9000"
+        //     ws: "ws://localhost:9000"
         //     priority: 10
         //   - alias: "localnet"
         //     enabled: false
-        //     rpc: "http://0.0.0.0:9000"
+        //     rpc: "http://localhost:9000"
         //
         // dtp_package_id: "0x9c0c8b2b487fd0dcc00cb070df45a82b302ba6bc8244edd85c82e1409ad430ca"
         //
@@ -552,13 +552,13 @@ impl GlobalsWorkdirsST {
             suibase_yaml_common,
 
             // TODO Get these really from the common suibase.yaml. Hard coded for now.
-            suibase_web_ip: "0.0.0.0".to_string(),
+            suibase_web_ip: "localhost".to_string(),
             suibase_web_port: 44380,
 
-            suibase_api_ip: "0.0.0.0".to_string(),
+            suibase_api_ip: "localhost".to_string(),
             suibase_api_port: 44399,
 
-            dtp_api_ip: "0.0.0.0".to_string(),
+            dtp_api_ip: "localhost".to_string(),
             dtp_api_port: 44398,
         }
     }

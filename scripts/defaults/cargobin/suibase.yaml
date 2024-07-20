@@ -8,7 +8,7 @@ initial_fund_per_address: ~
 # sui-faucet not applicable to cargobin
 sui_faucet_enabled: false
 sui_faucet_genesis_funding: ~
-sui_faucet_host_ip: "0.0.0.0"
+sui_faucet_host_ip: "localhost"
 sui_faucet_port: 9124
 sui_faucet_max_request_per_second: 100
 sui_faucet_num_coins: 1
@@ -30,12 +30,12 @@ cargo_add_options: ~
 
 # proxy not applicable to cargobin
 proxy_enabled: false
-proxy_host_ip: "0.0.0.0"
+proxy_host_ip: "localhost"
 proxy_port_number: ~
 
 # dtp not applicable to cargobin
 dtp_enabled: false
-dtp_host_ip: "0.0.0.0"
+dtp_host_ip: "localhost"
 dtp_web_port_number: 44380
 dtp_api_port_number: 44398
 

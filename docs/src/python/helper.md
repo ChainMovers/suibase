@@ -58,10 +58,10 @@ True
 '0x0fc530455ee4132b761ed82dab732990cb7af73e69cd6e719a2a5badeaed105b'
 
 >>> helper.rpc_url()
-'http://0.0.0.0:9000'
+'http://localhost:9000'
 
 >>> helper.ws_url()
-'ws://0.0.0.0:9000'
+'ws://localhost:9000'
 
 >>> helper.package_id("demo")
 '0x794fc1d80f18a02eb0b7094d2f5a9f9f40bcf653996291f7a7086404689a19b5'

@@ -20,7 +20,7 @@ export const WORKDIR_IDX_LOCALNET = 3;
 export const WORKDIRS_KEYS = ["mainnet", "testnet", "devnet", "localnet"];
 export const WORKDIRS_LABELS = ["Mainnet", "Testnet", "Devnet", "Localnet"];
 
-export const API_URL = "http://0.0.0.0:44399";
+export const API_URL = "http://localhost:44399";
 
 // Unique identifier for each participant exchanging messages.
 //

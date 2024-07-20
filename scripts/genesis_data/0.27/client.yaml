@@ -3,7 +3,7 @@ keystore:
   File: <PUT_CONFIG_DEFAULT_PATH_HERE>/sui.keystore
 envs:
   - alias: localnet
-    rpc: "http://0.0.0.0:9000"
+    rpc: "http://localhost:9000"
     ws: ~
 active_env: localnet
 active_address: "0xfa51d742a62e447a79e61da2b394781baf53ab54"

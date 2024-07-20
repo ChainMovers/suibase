@@ -139,12 +139,12 @@ impl WorkdirUserConfig {
         //
         // links:
         //  - alias: "localnet"
-        //    rpc: "http://0.0.0.0:9000"
-        //    ws: "ws://0.0.0.0:9000"
+        //    rpc: "http://localhost:9000"
+        //    ws: "ws://localhost:9000"
         //    priority: 12
         //  - alias: "localnet"
         //    enabled: false
-        //    rpc: "http://0.0.0.0:9000"
+        //    rpc: "http://localhost:9000"
         let contents = std::fs::read_to_string(path)?;
         let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
 

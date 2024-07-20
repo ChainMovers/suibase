@@ -24,7 +24,7 @@ impl RequestWorker {
     async fn do_request(&mut self, msg: NetmonMsg) {
         let server_idx = msg.server_idx().to_string();
 
-        let uri = format!("http://0.0.0.0:{}", msg.para16()[0]);
+        let uri = format!("http://localhost:{}", msg.para16()[0]);
         let _ = self
             .client
             .request(reqwest::Method::POST, uri)

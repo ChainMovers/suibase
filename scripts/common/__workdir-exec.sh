@@ -29,7 +29,7 @@ usage_local() {
   if [ "${CFG_proxy_enabled:?}" != "false" ]; then
     echo "${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}"
   else
-    echo "0.0.0.0:9000"
+    echo "localhost:9000"
   fi
   echo
   echo "  If not sure what to do, then type '$WORKDIR start' and all that is"

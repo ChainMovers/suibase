@@ -28,7 +28,7 @@ initial_fund_per_address: 150000000000000000
 # Control the sui-faucet process.
 sui_faucet_enabled: true
 sui_faucet_genesis_funding: 150000000000000000
-sui_faucet_host_ip: "0.0.0.0"
+sui_faucet_host_ip: "localhost"
 sui_faucet_port: 9123
 sui_faucet_max_request_per_second: 100
 sui_faucet_num_coins: 5
@@ -87,21 +87,21 @@ cargo_add_options: ~
 
 # Proxy server related configurations. See https://suibase.io/how-to/proxy
 proxy_enabled: true
-proxy_host_ip: "0.0.0.0"
+proxy_host_ip: "localhost"
 proxy_port_number: 44340
 
 dtp_enabled: false
-dtp_host_ip: "0.0.0.0"
+dtp_host_ip: "localhost"
 dtp_web_port_number: 44397
 dtp_api_port_number: 44398
 
 suibase_api_port_number: 44399
 
 sui_explorer_enabled: true
-sui_explorer_host_ip: "0.0.0.0"
+sui_explorer_host_ip: "localhost"
 sui_explorer_port_number: 44380
 
 links:
   - alias: "localnet"
-    rpc: "http://0.0.0.0:9000"
-    ws: "ws://0.0.0.0:9000"
+    rpc: "http://localhost:9000"
+    ws: "ws://localhost:9000"

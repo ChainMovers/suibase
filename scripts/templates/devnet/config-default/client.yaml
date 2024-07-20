@@ -3,7 +3,7 @@ keystore:
   File: <PUT_WORKING_DIR_PATH_HERE>/config-default/sui.keystore
 envs:
   - alias: devnet_proxy
-    rpc: "http://0.0.0.0:44341"
+    rpc: "http://localhost:44341"
     ws: ~
   - alias: devnet
     rpc: "https://fullnode.devnet.sui.io:443"

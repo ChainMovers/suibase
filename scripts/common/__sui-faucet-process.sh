@@ -30,9 +30,15 @@ start_sui_faucet_process() {
       export SUI_FAUCET_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
       rm -f "$CONFIG_DATA_DIR/sui-faucet-process.log" >/dev/null 2>&1
+      # sui-faucet does not support "localhost", so translate it to 127.0.0.1
+      local _HOST_IP=${CFG_sui_faucet_host_ip:?}
+      if [ "$_HOST_IP" = "localhost" ]; then
+        _HOST_IP="127.0.0.1"
+      fi
+      echo "Starting sui-faucet process at http://$_HOST_IP:${CFG_sui_faucet_port:?}"
       env SUI_CONFIG_DIR="$WORKDIRS/$WORKDIR/faucet" "$SUI_BIN_DIR/sui-faucet" \
         --amount "${CFG_sui_faucet_coin_value:?}" \
-        --host-ip "${CFG_sui_faucet_host_ip:?}" \
+        --host-ip "$_HOST_IP" \
         --max-request-per-second "${CFG_sui_faucet_max_request_per_second:?}" \
         --num-coins "${CFG_sui_faucet_num_coins:?}" \
         --port "${CFG_sui_faucet_port:?}" \

@@ -90,7 +90,6 @@ export class BackendSync {
     return BackendSync.sInstance;
   }
 
-
   public handleViewMessage(message: any): void {
     try {
       if (message.name === "ForceVersionsRefresh" || message.name === "InitView") {
@@ -152,7 +151,7 @@ export class BackendSync {
 
   private async fetchBackend<T = any>(method: string, params: Record<string, any> = {}): Promise<T> {
     // Do a POST request equivalent to:
-    //   curl -H "Content-Type: application/json" --data '{ "id":1, "jsonrpc":"2.0", "method":"getVersions", "params": {"workdir":"localnet"}}' http://0.0.0.0:44399
+    //   curl -H "Content-Type: application/json" --data '{ "id":1, "jsonrpc":"2.0", "method":"getVersions", "params": {"workdir":"localnet"}}' http://localhost:44399
     //
     // On error, throw an exception.
     // On success, return the parsed JSON response.

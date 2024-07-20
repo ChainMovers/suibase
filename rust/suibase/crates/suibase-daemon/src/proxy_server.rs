@@ -528,7 +528,7 @@ impl ProxyServer {
                 // ~$ curl -H "Content-Type: application/json"
                 //    -H 'client-target-api-version: 1.28.0' -H 'client-sdk-version: 1.28.0'
                 //    --data '{ "id":2, "jsonrpc":"2.0", "method":"sui_getEvents",
-                //              "params": ["4UM3m1Kz7p596UVnyr2QNVAMobrfEZV9RYXkMUX8NYxJ"]}' http://0.0.0.0:44343
+                //              "params": ["4UM3m1Kz7p596UVnyr2QNVAMobrfEZV9RYXkMUX8NYxJ"]}' http://localhost:44343
                 //
                 // Response:
                 // {"jsonrpc":"2.0","error":{"code":-32602,

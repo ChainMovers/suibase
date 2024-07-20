@@ -34,7 +34,6 @@ pub struct AdminController {
     port_tracking: AutoSizeVec<InputPortTracking>,
 }
 
-
 #[derive(Default)]
 struct WorkdirTracking {
     last_read_config: Option<WorkdirUserConfig>,
@@ -618,14 +617,14 @@ fn test_load_config_from_suibase_default() {
     assert!(result.is_ok());
     // Expected:
     // - alias: "localnet"
-    //   rpc: "http://0.0.0.0:9000"
-    //   ws: "ws://0.0.0.0:9000"
+    //   rpc: "http://localhost:9000"
+    //   ws: "ws://localhost:9000"
     assert_eq!(config.links_overrides(), false);
     assert_eq!(config.links().len(), 1);
     assert!(config.links().contains_key("localnet"));
     assert!(config.links().get("localnet").unwrap().rpc.is_some());
     assert!(config.links().get("localnet").unwrap().ws.is_some());
     let link = config.links().get("localnet").unwrap();
-    assert_eq!(link.rpc.as_ref().unwrap(), "http://0.0.0.0:9000");
-    assert_eq!(link.ws.as_ref().unwrap(), "ws://0.0.0.0:9000");
+    assert_eq!(link.rpc.as_ref().unwrap(), "http://localhost:9000");
+    assert_eq!(link.ws.as_ref().unwrap(), "ws://localhost:9000");
 }
