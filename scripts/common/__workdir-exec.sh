@@ -483,6 +483,21 @@ workdir_exec() {
       fi
     fi
 
+    # Verify from suibase.yaml if sui explorer services are expected.
+    # If yes, then populate STATUS/INFO.
+    local _SUPPORT_SUI_EXPLORER
+    local _SHOW_SUI_EXPLORER
+    if $IS_DAEMON_CALL; then
+      _SUPPORT_SUI_EXPLORER=false
+      _SHOW_SUI_EXPLORER=false
+    elif [ "${CFG_sui_explorer_enabled:?}" == "false" ]; then
+      _SUPPORT_SUI_EXPLORER=false
+      _SHOW_SUI_EXPLORER=$is_local
+    else
+      _SUPPORT_SUI_EXPLORER=true
+      _SHOW_SUI_EXPLORER=$is_local
+    fi
+
     # Verify from suibase.yaml if dtp services are expected.
     # If yes, then populate STATUS/INFO.
     local _SUPPORT_DTP
@@ -538,6 +553,9 @@ workdir_exec() {
             _DEGRADED=true
           fi
           if $_SUPPORT_PROXY && [ -z "$SUIBASE_DAEMON_PID" ]; then
+            _DEGRADED=true
+          fi
+          if $_SUPPORT_SUI_EXPLORER && [ -z "$SUIBASE_DAEMON_PID" ]; then
             _DEGRADED=true
           fi
           if $_SUPPORT_DTP && [ -z "$DTP_DAEMON_PID" ]; then
@@ -605,6 +623,16 @@ workdir_exec() {
           echo_blue "${CFG_proxy_port_number:?}"
         )
         echo_process "Proxy server" "$_SUPPORT_PROXY" "$SUIBASE_DAEMON_PID" "$_INFO"
+      fi
+
+      if $_SHOW_SUI_EXPLORER; then
+        _INFO=$(
+          echo -n "http://"
+          echo_blue "${CFG_sui_explorer_host_ip:?}"
+          echo -n ":"
+          echo_blue "${CFG_sui_explorer_port_number:?}"
+        )
+        echo_process "Sui explorer" "$_SUPPORT_SUI_EXPLORER" "$SUIBASE_DAEMON_PID" "$_INFO"
       fi
 
       if [ "$_SUPPORT_PROXY" = true ]; then

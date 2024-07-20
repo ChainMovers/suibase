@@ -34,10 +34,14 @@ proxy_port_number: 44342
 
 dtp_enabled: false
 dtp_host_ip: "0.0.0.0"
-dtp_web_port_number: 44380
+dtp_web_port_number: 44397
 dtp_api_port_number: 44398
 
 suibase_api_port_number: 44399
+
+sui_explorer_enabled: true
+sui_explorer_host_ip: "suiscan.xyz"
+sui_explorer_port_number: 443
 
 links:
   - alias: "sui.io"
@@ -46,9 +50,6 @@ links:
     priority: 10
   - alias: "allnodes.com"
     rpc: "https://sui-testnet.publicnode.com:443"
-    priority: 20
-  - alias: "allthatnode.com"
-    rpc: "https://sui-testnet-rpc.allthatnode.com:443"
     priority: 20
   - alias: "ankr.com"
     rpc: "https://rpc.ankr.com/sui_testnet"

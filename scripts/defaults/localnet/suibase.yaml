@@ -92,10 +92,14 @@ proxy_port_number: 44340
 
 dtp_enabled: false
 dtp_host_ip: "0.0.0.0"
-dtp_web_port_number: 44380
+dtp_web_port_number: 44397
 dtp_api_port_number: 44398
 
 suibase_api_port_number: 44399
+
+sui_explorer_enabled: true
+sui_explorer_host_ip: "0.0.0.0"
+sui_explorer_port_number: 44380
 
 links:
   - alias: "localnet"
