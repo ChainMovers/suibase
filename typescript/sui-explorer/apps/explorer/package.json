@@ -101,7 +101,6 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.3.3",
     "vite": "^4.4.4",
-    "vite-plugin-singlefile": "^2.0.2",
     "vite-plugin-svgr": "^3.2.0",
     "vitest": "^0.33.0"
   },

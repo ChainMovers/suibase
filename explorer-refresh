@@ -11,7 +11,7 @@ EXPLORER_DEST_DIR="$HOME/suibase/typescript"
 rm -rf "$EXPLORER_DEST_DIR/sui-explorer"
 mkdir -p "$EXPLORER_DEST_DIR/sui-explorer"
 cd "$EXPLORER_DEST_DIR" || exit 1
-git clone https://github.com/kkomelin/sui-explorer.git -b single-file-build
+git clone https://github.com/kkomelin/sui-explorer.git -b single-file-build --depth 1
 
 
 
