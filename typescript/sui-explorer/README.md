@@ -8,11 +8,10 @@ The purpose of this fork is to provide Sui Explorer for the local net.
 
 - Tailored to the localnet
 - No third-party trackers
-- [Single file](/apps/explorer/build/i) build
 
 ## How to Use
 
-The simplest way to use it is through [Local Sui Explorer: Cli](https://github.com/kkomelin/sui-explorer-local) - 
+The simplest way to use it is through [Local Sui Explorer: Cli](https://github.com/kkomelin/sui-explorer-local)
 
 ## License & Copyright
 
