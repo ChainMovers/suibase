@@ -632,7 +632,7 @@ workdir_exec() {
           echo -n ":"
           echo_blue "${CFG_sui_explorer_port_number:?}"
         )
-        echo_process "Sui explorer" "$_SUPPORT_SUI_EXPLORER" "$SUIBASE_DAEMON_PID" "$_INFO"
+        echo_process "Explorer" "$_SUPPORT_SUI_EXPLORER" "$SUIBASE_DAEMON_PID" "$_INFO"
       fi
 
       if [ "$_SUPPORT_PROXY" = true ]; then

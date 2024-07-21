@@ -11,10 +11,10 @@ export enum Network {
 }
 
 export const NetworkConfigs: Record<Network, { url: string }> = {
-	[Network.LOCAL]: { url: getFullnodeUrl('localnet') },
-	[Network.DEVNET]: { url: 'https://sui-devnet.mystenlabs.com/json-rpc' },
-	[Network.TESTNET]: { url: 'https://sui-testnet.mystenlabs.com/json-rpc' },
-	[Network.MAINNET]: { url: 'https://sui-mainnet.mystenlabs.com/json-rpc' },
+  [Network.LOCAL]: { url: getFullnodeUrl("localnet") },
+  [Network.DEVNET]: { url: getFullnodeUrl("devnet") },
+  [Network.TESTNET]: { url: getFullnodeUrl("testnet") },
+  [Network.MAINNET]: { url: getFullnodeUrl("mainnet") },
 };
 
 const defaultClientMap: Map<Network | string, SuiClient> = new Map();
