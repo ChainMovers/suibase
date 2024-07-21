@@ -139,10 +139,38 @@ publish_all() {
   echo "Package ID also in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/package-id.json]"
   echo "Created objects in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$MOVE_TOML_PACKAGE_NAME/most-recent/created-objects.json]"
   echo "Complete output in [~/suibase/workdirs/$WORKDIR_NAME/published-data/$_SUB_INSTALL_DIR/publish-output.json]"
-  echo "==================== Explorer Links ======================"
-  echo "Package [https://suiexplorer.com/object/$_ID_PACKAGE_FOR_LINK?network=$_WORKDIR_NAME_FOR_LINK]"
-  if [ -n "$SUI_PUBLISH_TXDIGEST" ]; then
-    echo "TxBlock [https://suiexplorer.com/txblock/$SUI_PUBLISH_TXDIGEST?network=$_WORKDIR_NAME_FOR_LINK]"
+
+  if [ "${CFG_sui_explorer_enabled:?}" = "true" ] && [ "${CFG_sui_explorer_host_ip:?}" != "~" ]; then
+    echo "==================== Explorer Links ======================"
+    # Build the URL using the yaml config. Example of config:
+    #
+    #   sui_explorer_enabled: true
+    #   sui_explorer_scheme: "http://"
+    #   sui_explorer_host_ip: "localhost"
+    #   sui_explorer_port_number: 44380
+    #   sui_explorer_object_path: "/object/{ID}"
+    #   sui_explorer_txn_path: "/txblock/{ID}"
+    #
+    local _URL_BASE
+    if [ -n "${CFG_sui_explorer_scheme}" ] && [ "${CFG_sui_explorer_scheme}" != "~" ]; then
+      _URL_BASE="${CFG_sui_explorer_scheme}${CFG_sui_explorer_host_ip:?}"
+    else
+      _URL_BASE="http://${CFG_sui_explorer_host_ip:?}"
+    fi
+
+    if [ -n "${CFG_sui_explorer_port_number}" ] && [ "${CFG_sui_explorer_port_number}" != "~" ]; then
+      _URL_BASE="${_URL_BASE}:${CFG_sui_explorer_port_number:?}"
+    fi
+
+    if [ -n "${CFG_sui_explorer_package_path:?}" ] && [ -n "$_ID_PACKAGE_FOR_LINK" ]; then
+      local _URL_PATH="${CFG_sui_explorer_package_path//\{ID\}/$_ID_PACKAGE_FOR_LINK}"
+      echo "Package [${_URL_BASE}${_URL_PATH}]"
+    fi
+
+    if [ -n "${CFG_sui_explorer_txn_path}" ] && [ -n "$SUI_PUBLISH_TXDIGEST" ]; then
+      local _URL_PATH="${CFG_sui_explorer_txn_path//\{ID\}/$SUI_PUBLISH_TXDIGEST}"
+      echo "TxBlock [${_URL_BASE}${_URL_PATH}]"
+    fi
   fi
 
   # Push new information to suibase-daemon.

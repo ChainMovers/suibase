@@ -40,8 +40,12 @@ dtp_api_port_number: 44398
 suibase_api_port_number: 44399
 
 sui_explorer_enabled: true
+sui_explorer_scheme: "https://"
 sui_explorer_host_ip: "suiscan.xyz"
-sui_explorer_port_number: 443
+sui_explorer_port_number: ~
+sui_explorer_object_path: "/mainnet/object/{ID}"
+sui_explorer_package_path: "/mainnet/object/{ID}/contracts"
+sui_explorer_txn_path: "/mainnet/tx/{ID}"
 
 links:
   - alias: "sui.io"

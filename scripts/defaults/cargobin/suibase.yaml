@@ -41,9 +41,13 @@ dtp_api_port_number: 44398
 
 suibase_api_port_number: 44399
 
-sui_explorer_enabled: true
-sui_explorer_host_ip: "suiscan.xyz"
-sui_explorer_port_number: 443
+sui_explorer_enabled: false
+sui_explorer_scheme: ~
+sui_explorer_host_ip: ~
+sui_explorer_port_number: ~
+sui_explorer_object_path: ~
+sui_explorer_package_path: ~
+sui_explorer_txn_path: ~
 
 links:
   - alias: "devnet"

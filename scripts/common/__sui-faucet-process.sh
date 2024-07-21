@@ -35,7 +35,6 @@ start_sui_faucet_process() {
       if [ "$_HOST_IP" = "localhost" ]; then
         _HOST_IP="127.0.0.1"
       fi
-      echo "Starting sui-faucet process at http://$_HOST_IP:${CFG_sui_faucet_port:?}"
       env SUI_CONFIG_DIR="$WORKDIRS/$WORKDIR/faucet" "$SUI_BIN_DIR/sui-faucet" \
         --amount "${CFG_sui_faucet_coin_value:?}" \
         --host-ip "$_HOST_IP" \
