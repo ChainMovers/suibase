@@ -33,6 +33,7 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 | :--------------------------------: | :-------------------------------: |
 | [Move Analyzer](https://marketplace.visualstudio.com/items?itemName=mysten.move) | Official Mysten Labs move-analyzer (recommended as of 2024) |
 | [Suibase](https://marketplace.visualstudio.com/items?itemName=suibase.suibase) | Sui binaries management, debugging/testing tools |
+| [Move syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax) | Move syntax support |
 
 ## Other IDE
 |                               Name                               |                                                           Description                                                            |
@@ -47,6 +48,7 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 | [status.sui.io](https://status.sui.io/) | Official Mysten Labs network status |
 |     [suiscan.xyz](https://suiscan.xyz)     | Rich blockchain explorer for validators, packages, analytics |
 |     [suivision.xyz](https://suivision.xyz)     | Well-done explorer, with portfolio view support for many Defi  |
+|     [Local Sui Explorer](https://www.npmjs.com/package/sui-explorer-local)     | Basic explorer aimed for localnet, which is also included in Suibase  |
 
 
 ## Wallets
@@ -63,4 +65,4 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 | [Interest Protocol](https://interestprotocol.com/) | DeFi protocol and other open-source contributions | [github](https://github.com/interest-protocol/) [suitears](https://www.suitears.com/) |
 | [Polymedia](https://polymedia.app/) | Various open-source projects from JuzyBits (active Sui community contributor)|[github](https://github.com/juzybits) |
 | [OriginByte](https://originbyte.io/)&nbsp; | Gaming SDK (Unity/Unreal), Sui NFT Standard | [github](https://github.com/Origin-Byte)<br/>[docs](https://docs.originbyte.io) |
-
+| [Sui dApp Starter](https://sui-dapp-starter.dev/)&nbsp; | Full-Stack Sui Template with Suibase integrated | [github](https://github.com/kkomelin/sui-dapp-starter)<br/>[docs](https://sui-dapp-starter.dev/docs/)<br/>[demo](https://demo.sui-dapp-starter.dev/) |
