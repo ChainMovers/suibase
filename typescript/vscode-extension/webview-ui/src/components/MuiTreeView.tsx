@@ -108,10 +108,8 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(
         const shortPackageId = shortAddr(packageId);
         label = label.toString().replace(TREE_ID_INSERT_ADDR, shortPackageId);
         to_clipboard = packageId;
-        if (workdir != "localnet") {
-          to_browser_id = "0x" + packageId;
-          to_browser_type = "package";
-        }
+        to_browser_id = "0x" + packageId;
+        to_browser_type = "package";
       }
     }
   }
