@@ -19,6 +19,7 @@ SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="$(basename "$(dirname "$SCRIPT_COMMON_CALLER")")"
 # shellcheck source=SCRIPTDIR/../common/__globals.sh
 source "$HOME/suibase/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
 
 # Call the common code that can handle all the possible context.
 # shellcheck source=SCRIPTDIR/../common/__workdir-exec.sh

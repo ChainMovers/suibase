@@ -18,6 +18,7 @@ source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
 
 # shellcheck source=SCRIPTDIR/../../common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
 
 # shellcheck source=SCRIPTDIR/../__scripts-lib-after-globals.sh
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"

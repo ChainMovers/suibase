@@ -23,6 +23,7 @@ SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="none"
 # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
 
 function main() {
     # Verify pre-requisite

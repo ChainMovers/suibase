@@ -182,6 +182,7 @@ suibase_repair() {
     WORKDIR="active"
     # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
     source "$REPAIR_SB_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+    trap cleanup EXIT
   fi
 
   if [ -z "$SUIBASE_DAEMON_VERSION_FILE" ]; then

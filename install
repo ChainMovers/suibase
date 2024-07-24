@@ -182,6 +182,7 @@ main() {
   WORKDIR="active"
   # shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
   source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+  trap cleanup EXIT
 
   create_cargobin_as_needed
 

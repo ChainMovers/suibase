@@ -227,12 +227,14 @@ wait_for_json_rpc_up() {
   #
   # Pick one of the workdir that is started by the user and favor first
   # the WORKDIR_NAME related to the command.
-  local _WORKDIRS_LIST
-  _WORKDIRS_LIST=("$WORKDIR_NAME" "localnet" "testnet" "devnet" "mainnet")
+
+  local _WORKDIRS_ORDERED_LIST
+  _WORKDIRS_ORDERED_LIST=("$WORKDIR_NAME" "localnet" "testnet" "devnet" "mainnet")
+  local _WORKDIRS_STARTED_LIST=()
 
   local _WORKDIR_NAME
   local _WORKDIR_FOUND=false
-  for _WORKDIR_NAME in "${_WORKDIRS_LIST[@]}"; do
+  for _WORKDIR_NAME in "${_WORKDIRS_ORDERED_LIST[@]}"; do
     if [ "$_WORKDIR_NAME" = "localnet" ] && [ "$_CMD" = "exclude-localnet" ]; then
       continue;
     fi
@@ -240,20 +242,29 @@ wait_for_json_rpc_up() {
     _USER_REQUEST=$(get_key_value "$_WORKDIR_NAME" "user_request")
     if [ "$_USER_REQUEST" = "start" ]; then
       _WORKDIR_FOUND=true
-      break
+      # Add _WORKDIR_NAME to _WORKDIRS_STARTED_LIST
+      _WORKDIRS_STARTED_LIST+=("$_WORKDIR_NAME")
     fi
   done
 
-  # If no workdir is found to be stared by user, then just return.
+  # If no workdir is found to be started by user, then just return.
   if [ "$_WORKDIR_FOUND" = false ]; then
     return
   fi
 
-  local _SUI_EXEC="$WORKDIRS/$_WORKDIR_NAME/sui-exec"
+
   local _SUI_RESP
   local _AT_LEAST_ONE_DOT=false
   local _JSON_RPC_UP=false
+  local _WORKDIRS_IDX=0
   for _i in {1..20}; do
+
+    # Cycle through the _WORKDIRS_STARTED_LIST
+    _WORKDIR_NAME=${_WORKDIRS_STARTED_LIST[$_WORKDIRS_IDX]}
+    _WORKDIRS_IDX=$(((_WORKDIRS_IDX + 1) % ${#_WORKDIRS_STARTED_LIST[@]}))
+
+    local _SUI_EXEC="$WORKDIRS/$_WORKDIR_NAME/sui-exec"
+
     # Do a sui "client gas" call, and verify that
     # it returns something valid.
 
@@ -278,7 +289,7 @@ wait_for_json_rpc_up() {
   if [ "$_AT_LEAST_ONE_DOT" = true ]; then
     echo
     if [ "$_JSON_RPC_UP" = true ]; then
-      echo "JSON-RPC for $_WORKDIR_NAME is up"
+      echo "JSON-RPC is up"
     else
       echo "JSON-RPC for $_WORKDIR_NAME not responding. Try again?"
     fi
@@ -391,6 +402,11 @@ update_suibase_daemon_as_needed() {
 }
 export -f update_suibase_daemon_as_needed
 
+update_suibase_daemon_and_start() {
+  start_suibase_daemon_as_needed "force-start"
+}
+export -f update_suibase_daemon_and_start
+
 export SUIBASE_DAEMON_STARTED=false
 start_suibase_daemon_as_needed() {
 
@@ -409,6 +425,9 @@ start_suibase_daemon_as_needed() {
   local _SUPPORT_PROXY
   if [ "$1" = "force-update" ]; then
     _UPGRADE_ONLY=true
+    _SUPPORT_PROXY=true
+  elif [ "$1" = "force-start" ]; then
+    _UPGRADE_ONLY=false
     _SUPPORT_PROXY=true
   else
     # Verify from suibase.yaml if the suibase daemon should be started.

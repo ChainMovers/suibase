@@ -24,6 +24,7 @@ SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="active"
 # shellcheck source=SCRIPTDIR/common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
 
 exit_if_not_installed;
 

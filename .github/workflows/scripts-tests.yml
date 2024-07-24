@@ -15,7 +15,7 @@ jobs:
     outputs:
       isChanged: ${{ steps.diff.outputs.isScript == 'true' || steps.diff.outputs.isRust == 'true' }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -62,7 +62,7 @@ jobs:
           docker-images: true
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1

@@ -172,7 +172,6 @@ usage() {
 }
 
 workdir_exec() {
-  trap cleanup EXIT
   exit_if_not_installed
   exit_if_deps_missing
 

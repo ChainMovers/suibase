@@ -23,6 +23,8 @@ SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 WORKDIR="cargobin"
 # shellcheck source=SCRIPTDIR/common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
 # shellcheck source=SCRIPTDIR/common/__sui-exec.sh
 source "$SUIBASE_DIR/scripts/common/__sui-exec.sh"
 

@@ -21,6 +21,7 @@ WORKDIR="localnet"
 
 # shellcheck source=SCRIPTDIR/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
 
 # Switch case on $1 being "suibase" or "dtp".
 case "$PARAM_NAME" in
