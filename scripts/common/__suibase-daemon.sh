@@ -165,7 +165,7 @@ start_suibase_daemon() {
 
   # Try until can confirm the suibase-daemon is running healthy, or exit
   # if takes too much time.
-  end=$((SECONDS + 30))
+  end=$((SECONDS + 50))
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
   for _i in {1..5}; do
@@ -179,7 +179,7 @@ start_suibase_daemon() {
     # safely be ignored to /dev/null.
     nohup "$HOME/suibase/scripts/common/run-daemon.sh" suibase >/dev/null 2>&1 &
 
-    local _NEXT_RETRY=$((SECONDS + 6))
+    local _NEXT_RETRY=$((SECONDS + 10))
     while [ $SECONDS -lt $end ]; do
       if is_suibase_daemon_running; then
         ALIVE=true

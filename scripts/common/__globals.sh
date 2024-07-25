@@ -3284,7 +3284,8 @@ export -f has_param
 export SUIBASE_DAEMON_UPGRADING=0
 progress_suibase_daemon_upgrading() {
   SUIBASE_DAEMON_UPGRADING=1
-  touch /tmp/.suibase/suibase-daemon-upgrading
+  mkdir -p "$SUIBASE_TMP_DIR"
+  touch "$SUIBASE_TMP_DIR/suibase-daemon-upgrading"
 }
 export -f progress_suibase_daemon_upgrading
 
