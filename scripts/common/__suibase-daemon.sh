@@ -252,7 +252,6 @@ wait_for_json_rpc_up() {
     return
   fi
 
-
   local _SUI_RESP
   local _AT_LEAST_ONE_DOT=false
   local _JSON_RPC_UP=false
@@ -277,11 +276,11 @@ wait_for_json_rpc_up() {
       fi
     fi
     # Wait one second before trying again.
-    if [ "$_i" -eq 3 ]; then
+    if [ "$_i" -eq 5 ]; then
       echo -n "Verifying JSON-RPC is responding..."
       _AT_LEAST_ONE_DOT=true
     fi
-    if [ "$_i" -gt 3 ]; then
+    if [ "$_i" -gt 5 ]; then
       echo -n "."
     fi
     sleep 1
@@ -291,10 +290,9 @@ wait_for_json_rpc_up() {
     if [ "$_JSON_RPC_UP" = true ]; then
       echo "JSON-RPC is up"
     else
-      echo "JSON-RPC for $_WORKDIR_NAME not responding. Try again?"
+      echo "JSON-RPC not responding. Try again later?"
     fi
   fi
-
 }
 export -f wait_for_json_rpc_up
 

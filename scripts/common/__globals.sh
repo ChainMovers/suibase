@@ -2809,6 +2809,10 @@ sync_client_yaml() {
         warn_user "Failed to switch sui client env to [$_EXPECTED_ENV]."
       fi
     fi
+    if [ "$_EXPECTED_ENV" == "${WORKDIR_NAME}_proxy" ]; then
+      # Block until verified that the proxy is responding (or timeout).
+      wait_for_json_rpc_up "any"
+    fi
   fi
 }
 export -f sync_client_yaml
