@@ -91,6 +91,36 @@ impl Command {
     pub async fn execute(self, globals: Globals) -> Result<(), anyhow::Error> {
         match self {
             Command::Run {} => {
+                // Verify that this process is the one running under file lock ~/tmp/.suibase-daemon.lock
+                // If not, exit with an exit code of 13 (which is detected as "do no restart" by Suibase run-daemon.sh)
+                // This is a safeguard against a user trying to start suibase-daemon without the proper locking.
+
+                // Get the pid of this process.
+                let my_pid = std::process::id();
+
+                // Call the bash script "~/suibase/scripts/verify-suibase-daemon-lock $my_pid"
+                let home_dir = home::home_dir().expect("Failed to get home directory");
+                let script_path = home_dir.join("suibase/scripts/common/verify-suibase-daemon-lock.sh");
+
+                // Call the bash script "~/suibase/scripts/verify-suibase-daemon-lock $my_pid"
+                // Returns OK when the process is the one running under file lock ~/tmp/.suibase-daemon.lock
+                let output = std::process::Command::new("/bin/bash")
+                    .arg("-c")
+                    .arg(format!("{} {}", script_path.display(), my_pid))
+                    .output();
+
+                let mut force_exit = true;
+
+                if let Ok(output) = output {
+                    if output.status.success() && output.stdout.starts_with(b"OK") {
+                        force_exit = false;
+                    }
+                }
+
+                if force_exit {
+                    std::process::exit(13);
+                }
+
                 // Create mpsc channels (internal messaging between threads).
                 //
                 // The AdminController handles events about configuration changes

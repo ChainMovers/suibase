@@ -43,9 +43,7 @@ esac
 
 
 force_stop_all_services() {
-  # This is called in rare cases.
-  #
-  # It will force stop all processes for localnet, but not touch
+  # This will force stop all processes for localnet, but not touch
   # the "user_request" to preserve the user intent.
   #
   # It will create a "force_stop" key-value in each .state workdir
@@ -54,7 +52,6 @@ force_stop_all_services() {
   #
   # It is assumed that the daemon will delete the force_stop,
   # and resume the services as configured by "user_request".
-
 
   update_SUI_FAUCET_PROCESS_PID_var
   if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
@@ -67,6 +64,22 @@ force_stop_all_services() {
     set_key_value "localnet" "force_stop" "true"
     stop_sui_process
   fi
+
+  # Wait until all process confirm stopped (or timeout).
+  count=0
+  while [ $count -lt 10 ]; do
+    if is_suibase_daemon_running; then
+      # Already running? then do nothing.
+      exit 0
+    fi
+    update_SUI_FAUCET_PROCESS_PID_var
+    update_SUI_PROCESS_PID_var
+    if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
+      break
+    fi
+    sleep 1
+    count=$((count + 1))
+  done
 }
 export -f force_stop_all_services
 
@@ -132,33 +145,37 @@ main() {
     # The suibase-daemon is responsible to properly re-start the child processes/services.
     if [ "$PARAM_NAME" = "suibase" ]; then
       if [ -f "$_LOCKFILE" ]; then
-        local _BLOCKED=true
         for i in 1 2 3; do
           if is_suibase_daemon_running; then
-            _BLOCKED=false
-            break
+            # Already running? then do nothing.
+            exit 0
           fi
 
           if ! [ -f "$_LOCKFILE" ]; then
-            _BLOCKED=false
             break
           fi
 
-          sleep 1
-        done
-
-        if [ $_BLOCKED = true ]; then
           # This is to recover when the lockfile exists, but the suibase-daemon
           # is NOT running (e.g. was killed). Killing only the daemon is problematic
           # when its child process are left running. This is why all potential
           # child services are stopped here.
           force_stop_all_services
-        fi
+        done
       fi
     fi
 
     # shellcheck disable=SC2086,SC2016
-    try_locked_command "$_LOCKFILE" /bin/sh -uec 'while true; do "$@" > $0 2>&1; echo "Restarting process" > $0 2>&1; sleep 1; done' "$_LOG" $_CMD_LINE
+    try_locked_command "$_LOCKFILE" /bin/sh -uec '
+    while true; do
+      "$@" > $0 2>&1
+      exit_status=$?
+      if [ $exit_status -eq 13 ]; then
+        echo "Process exited with status 13. Exiting loop." > $0 2>&1
+        break
+      fi
+      echo "Restarting process" > $0 2>&1
+      sleep 1
+    done' "$_LOG" $_CMD_LINE
   fi
 
 }
