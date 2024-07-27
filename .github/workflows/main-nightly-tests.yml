@@ -1,0 +1,78 @@
+# Periodic extensive tests of Suibase main branch
+#
+name: main nightly tests
+
+# Controls when the workflow will run
+on:
+  schedule:
+    - cron: "0 6 * * *" # every day 5AM
+
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+        include:
+          - ci_branch: main
+            ci_cache_all_crates: false
+            ci_cache_provider: buildjet
+
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # 'true' means remove...
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false # Not sure if needed for heavy link... keep it for now.
+
+      - name: Checkout Main Branch
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false" # Control cache in "Rust Caching" step instead.
+
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+        env:
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.os }}-${{ matrix.ci_branch }}
+        with:
+          workspaces: |
+            rust/demo-app
+            rust/helper-uniffi
+            rust/helper
+            rust/suibase
+          cache-provider: ${{ matrix.ci_cache_provider }}
+          cache-all-crates: ${{ matrix.ci_cache_all_crates }}
+
+      - name: Sui Prerequesites (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+
+      - name: Sui Prerequesites (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install curl cmake
+
+      - name: Prepare environment
+        run: |
+          mkdir -p $HOME/.local/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          ln -s $GITHUB_WORKSPACE $HOME/suibase
+
+      - name: Exhaustive Tests of Suibase main branch (the only release branch).
+        env:
+          CI_BRANCH: ${{ matrix.ci_branch }}
+        run: $HOME/suibase/scripts/tests/run-all.sh --github_token ${{ secrets.GITHUB_TOKEN }}
