@@ -26,7 +26,7 @@ jobs:
         os: [macOS-latest]
         ci_workdir: [localnet]
         include:
-          - ci_branch: main
+          - ci_branch: dev
             ci_workdir: localnet
             ci_cache_all_crates: false
             ci_cache_provider: buildjet
@@ -45,7 +45,10 @@ jobs:
           docker-images: true
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
-      - uses: actions/checkout@v3
+      - name: Checkout Dev Branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev
 
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
