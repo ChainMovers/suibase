@@ -15,7 +15,7 @@ jobs:
     outputs:
       isDoc: ${{ steps.diff.outputs.isDoc }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -27,8 +27,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Note: fetch-depth 0 is required to get the whole history, which is used to
+      #       generate the contributors list.
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -38,9 +40,9 @@ jobs:
           python-version: "3.10"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 9
           run_install: true
 
       - name: Copy pnpm dependency files
@@ -49,9 +51,9 @@ jobs:
           cp -f $GITHUB_WORKSPACE/docs/ci/package.json.ci $GITHUB_WORKSPACE/docs/package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: pnpm
           cache-dependency-path: "docs/pnpm-lock.yaml"
 
