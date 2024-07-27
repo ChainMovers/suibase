@@ -1,5 +1,10 @@
 #!/bin/bash
 
+BRANCH="main"
+if [ -n "$1" ] && [ "$1" == "--dev" ]; then
+  BRANCH="dev"
+fi
+
 SUIBASE_DIR="$HOME/suibase"
 if [ -d "$HOME/sui-base" ] && [ ! -d "$SUIBASE_DIR" ]; then
   ("$HOME/sui-base/repair")
@@ -29,16 +34,24 @@ if [ ! "$(git status --porcelain | grep -vE "Cargo.lock|Move.lock|\?\?|Cargo.tom
   exit 1
 fi
 
-# Check if there is actually a new version
+# Get latest from remote
 git remote update >/dev/null 2>&1
+
+# Switch branch (as needed)
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+  echo "Switching to branch $BRANCH"
+  git checkout $BRANCH >/dev/null 2>&1
+fi
+
 V1=$(git rev-parse HEAD)
 V2=$(git rev-parse '@{u}')
 if [ "$V1" != "$V2" ]; then
   echo "Updating..."
   # Does more than needed, but should recover from most operator errors...
   (cd "$SUI_REPO_DIR" && git fetch >/dev/null)
-  (cd "$SUI_REPO_DIR" && git reset --hard origin/main >/dev/null)
-  (cd "$SUI_REPO_DIR" && git merge '@{u}' >/dev/null)
+  (cd "$SUI_REPO_DIR" && git reset --hard origin/$BRANCH >/dev/null)
+  (cd "$SUI_REPO_DIR" && git merge "origin/$BRANCH" >/dev/null)
 
   # TODO Should stop services while update and restart only the ones that were running.
 
@@ -56,11 +69,17 @@ if [ "$V1" != "$V2" ]; then
   fi
 
   echo
-  echo "suibase updated successfully"
+  echo -n "suibase updated successfully"
 else
   if [ -n "$_CUR_VER" ]; then
     echo "Current version $_CUR_VER"
   fi
   echo
-  echo "suibase is already up to date"
+  echo -n "suibase is already up to date"
+fi
+
+if [ $BRANCH == "dev" ]; then
+  echo " (dev)"
+else
+  echo
 fi
