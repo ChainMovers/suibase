@@ -5,16 +5,19 @@ Do '<workdir_name> update' when you instead want to update only a local Sui repo
 
 Only notable changes are documented here. See github commits for all changes.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unpublished]
 
 ### Added
+- New built-in sui explorer (do "localnet status" to see URL). Code from https://github.com/kkomelin/sui-explorer
+- New VSCode extension https://marketplace.visualstudio.com/items?itemName=suibase.suibase
 
 ### Fixed
-  
+- More robust handling of backend ( suibase-daemon )
+
 ### Changed
+- For better stability, localnet uses Mysten Labs testnet branch (instead of devnet).
 
 ### Removed
 
@@ -28,7 +31,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - (#65) Fix support for 'sui client publish' and 'sui move' when path and/or install-dir are not specified.
 - (#24) Fix help for faucet.
 - Misc fix to support sui client >1.10.x for CLI new output format (tables).
-  
+
 ### Changed
 
 ### Removed
