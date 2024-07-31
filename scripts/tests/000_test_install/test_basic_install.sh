@@ -2,7 +2,7 @@
 
 # Tests for ~/suibase/install
 #
-# At the end of this script, a valid installation should be in place.
+# At the end of this script, a valid localnet installation should be in place.
 #
 SUIBASE_DIR="$HOME/suibase"
 
@@ -28,6 +28,9 @@ source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 tests() {
   # shellcheck source=SCRIPTDIR/../../../../suibase/install
   test_no_workdirs
+  if ! $SCRIPTS_TESTS_OPTION; then
+    return;
+  fi
 }
 
 test_no_workdirs() {
@@ -39,11 +42,15 @@ test_no_workdirs() {
   (localnet create >"$OUT" 2>&1) || fail "create"
   assert_workdir_ok "localnet"
 
-  #rm -rf ~/suibase/workdirs
-  #echo "localnet update"
-  #(localnet update >"$OUT" 2>&1) || fail "update"
-  #assert_workdir_ok "localnet"
-  #assert_build_ok "localnet"
+  if $SCRIPTS_TESTS_OPTION; then
+    rm -rf ~/suibase/workdirs
+    echo "localnet update"
+    (localnet update >"$OUT" 2>&1) || fail "update"
+    assert_workdir_ok "localnet"
+    assert_build_ok "localnet"
+    #TODO A lot more scripts tests
+  fi
+
 }
 export -f test_no_workdirs
 

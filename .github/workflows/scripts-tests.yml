@@ -1,11 +1,11 @@
-name: Scripts Test Runner
+name: Scripts Tests
 
 # Controls when the workflow will run
 on:
   push:
-    branches: ["*"]
+    branches: ["dev"]
   pull_request:
-    branches: ["*"]
+    branches: ["dev"]
 
   workflow_dispatch:
 
@@ -19,9 +19,11 @@ jobs:
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
+        with:
+          ref: ${{ github.ref }}
 
   test:
-    name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
+    name: Test ${{ matrix.os }}
     needs: diff
     if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
 
@@ -29,24 +31,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macOS-latest]
-        ci_workdir: [localnet, devnet, testnet, mainnet]
-        include:
-          - ci_branch: devnet
-            ci_workdir: localnet
-            ci_cache_all_crates: false
-            ci_cache_provider: github
-          - ci_branch: devnet
-            ci_workdir: devnet
-            ci_cache_all_crates: false
-            ci_cache_provider: github
-          - ci_branch: testnet
-            ci_workdir: testnet
-            ci_cache_all_crates: false
-            ci_cache_provider: buildjet
-          - ci_branch: mainnet
-            ci_workdir: mainnet
-            ci_cache_all_crates: true
-            ci_cache_provider: buildjet
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -63,24 +47,13 @@ jobs:
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: "false" # Control cache in "Rust Caching" step instead.
-
-      - name: Rust Caching
-        uses: Swatinem/rust-cache@v2
-        env:
-          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.os }}-${{ matrix.ci_branch }}
-        with:
-          workspaces: |
-            rust/demo-app
-            rust/helper-uniffi
-            rust/helper
-            rust/suibase
-          cache-provider: ${{ matrix.ci_cache_provider }}
-          cache-all-crates: ${{ matrix.ci_cache_all_crates }}
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
@@ -98,8 +71,5 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
 
-      - name: Run suibase sanity tests only
-        env:
-          CI_WORKDIR: ${{ matrix.ci_workdir }}
-          CI_BRANCH: ${{ matrix.ci_branch }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --fast --github_token ${{ secrets.GITHUB_TOKEN }}
+      - name: Run suibase CLI sanity tests only
+        run: $HOME/suibase/scripts/tests/run-all.sh --scripts-tests --github_token ${{ secrets.GITHUB_TOKEN }}

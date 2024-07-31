@@ -13,9 +13,22 @@ jobs:
       isDocHelperAPI: ${{ steps.diff.outputs.isDocHelperAPI }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Upload Trigger Artifact
+        if: ${{ steps.diff.outputs.isDocHelperAPI == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHANGELOG.md
+          path: ./CHANGELOG.md
+          if-no-files-found: error
+          retention-days: 1
 
   trig:
     needs: diff
@@ -24,15 +37,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Download Trigger Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CHANGELOG.md
+          path: .
 
-      - name: Pushes test file
+      - name: Push CHANGELOG.md to trigger other repos
         uses: dmnemec/copy_file_to_another_repo_action@main
         env:
           API_TOKEN_GITHUB: ${{ secrets.SUIBASE_API_DOC_TOKEN }}
         with:
           source_file: "CHANGELOG.md"
           destination_repo: "chainmovers/suibase-api-docs"
+          destination_folder: "."
           user_email: "4542410+mario4tier@users.noreply.github.com"
           user_name: "Mario Fortier"

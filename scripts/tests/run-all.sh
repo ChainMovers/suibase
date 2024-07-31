@@ -30,18 +30,16 @@ main() {
   #
   # By default the tests are extensive and can take >1hour.
   #
-  # 2 options (can be combined):
-  #   --fast: Intended to validate quickly. Just a few sanity tests. Goal is <5 minutes.
-  #   --main_branch: Tests using main branch of Mysten Labs. For "on the edge" validation.
-  #
   local _PASSTHRU_OPTIONS=()
   while [[ "$#" -gt 0 ]]; do
     case $1 in
-    #-t|--target) target="$2"; shift ;; That's an example with a parameter
-    # -f|--flag) flag=1 ;; That's an example flag
-    --fast)
-      _PASSTHRU_OPTIONS+=("$1")
-      ;;
+    --fast|\
+    --scripts-tests|\
+    --suibase-daemon-tests|\
+    --rust-tests|\
+    --release-tests|\
+    --main-merge-check|\
+    --dev-push-check|\
     --main_branch)
       _PASSTHRU_OPTIONS+=("$1")
       ;;
