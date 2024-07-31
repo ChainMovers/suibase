@@ -1,4 +1,4 @@
-name: Rust Tests
+name: Suibase Daemon Tests
 # Test for suibase-daemon
 #
 # These tests **rebuild** the binaries from latest in branch (does not use pre-built)
@@ -21,8 +21,6 @@ jobs:
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
-        with:
-          ref: ${{ github.ref }}
 
       - name: Upload Trigger Artifact
         if: ${{ steps.diff.outputs.isSuibaseDaemon == 'true' }}

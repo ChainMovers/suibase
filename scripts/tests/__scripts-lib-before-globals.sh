@@ -66,7 +66,7 @@ init_common_template() {
   # As needed, create a common suibase.yaml template file.
   if [ -n "$USE_GITHUB_TOKEN" ]; then
     # Do the following only if github_token is not already in the file.
-    if ! grep -q "github_token:" "$HOME/suibase/scripts/templates/common/suibase.yaml"; then
+    if ! grep -q "github_token:" "$HOME/suibase/scripts/templates/common/suibase.yaml" 2>/dev/null; then
       echo "Creating templates/common/suibase.yaml"
       mkdir -p "$HOME/suibase/scripts/templates/common"
       echo "github_token: $USE_GITHUB_TOKEN" >>"$HOME/suibase/scripts/templates/common/suibase.yaml"

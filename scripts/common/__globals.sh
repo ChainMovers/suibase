@@ -2811,7 +2811,7 @@ sync_client_yaml() {
     fi
     if [ "$_EXPECTED_ENV" == "${WORKDIR_NAME}_proxy" ]; then
       # Block until verified that the proxy is responding (or timeout).
-      wait_for_json_rpc_up "any"
+      wait_for_json_rpc_up "${WORKDIR_NAME}"
     fi
   fi
 }

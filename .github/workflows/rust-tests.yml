@@ -21,8 +21,6 @@ jobs:
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
-        with:
-          ref: ${{ github.ref }}
 
   test:
     name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}

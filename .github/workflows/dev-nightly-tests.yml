@@ -25,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
         ci_workdir: [localnet]
-         include:
+        include:
           - ci_branch: main
             ci_workdir: localnet
             ci_cache_all_crates: false
