@@ -91,7 +91,9 @@ jobs:
           ln -s $GITHUB_WORKSPACE $HOME/suibase
 
       - name: Run suibase rust apps only
-        run: $HOME/suibase/scripts/tests/run-all.sh --suibase-daemon-tests --github_token ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: $HOME/suibase/scripts/tests/run-all.sh --suibase-daemon-tests
 
   trig:
     needs: test

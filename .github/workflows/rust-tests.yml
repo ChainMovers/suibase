@@ -105,4 +105,5 @@ jobs:
         env:
           CI_WORKDIR: ${{ matrix.ci_workdir }}
           CI_BRANCH: ${{ matrix.ci_branch }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --rust-tests --github_token ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: $HOME/suibase/scripts/tests/run-all.sh --rust-tests

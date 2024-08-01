@@ -47,4 +47,6 @@ jobs:
           ln -s $GITHUB_WORKSPACE $HOME/suibase
 
       - name: Only sanity tests the release
-        run: $HOME/suibase/scripts/tests/run-all.sh --release-tests --github_token ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: $HOME/suibase/scripts/tests/run-all.sh --release-tests
