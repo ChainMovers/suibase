@@ -1,8 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["crates/suibase-daemon",
-           "crates/dtp-daemon",
            "crates/common",
+          ]
+
+exclude = ["crates/dtp-daemon",
            "crates/dtp-core",
            "crates/dtp-sdk"
           ]
