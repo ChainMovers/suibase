@@ -933,6 +933,7 @@ workdir_exec() {
       echo "Clearing existing localnet data"
       rm -rf "$RM_DIR" >/dev/null 2>&1
       rm -rf "$WORKDIRS/$WORKDIR/.state/dns" >/dev/null 2>&1
+      rm -rf "$HOME/.sui/sui_config/full_node_db" >/dev/null 2>&1
     fi
 
     # Delete localnet publish directory (if exists) to force re-publication.
