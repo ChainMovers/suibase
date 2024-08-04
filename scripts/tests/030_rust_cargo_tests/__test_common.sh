@@ -38,6 +38,13 @@ if [[ "$CARGO_DIR" == *"demo-app"* ]] || [[ "$CARGO_DIR" == *"helper"* ]]; then
   fi
 fi
 
+# When testing for release, just validate Suibase CLI.
+# More extensive tests are done nightly.
+if [ "$RELEASE_TESTS_OPTION" = "true" ]; then
+  echo "Skipping $CARGO_DIR (not done on release tests)"
+  return 2
+fi
+
 localnet start
 localnet set-active
 

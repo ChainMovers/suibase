@@ -36,6 +36,13 @@ if [ "$FAST_OPTION" = "true" ]; then
   fi
 fi
 
+# When testing for release, just validate with localnet and testnet.
+if [ "$RELEASE_TESTS_OPTION" = "true" ]; then
+  if [ "$WORKDIR" != "localnet" ] && [ "$WORKDIR" != "testnet" ]; then
+    return 2
+  fi
+fi
+
 # shellcheck source=SCRIPTDIR/../../common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 trap cleanup EXIT
