@@ -75,4 +75,5 @@ jobs:
       - name: Exhaustive Tests of Suibase main branch (the only release branch).
         env:
           CI_BRANCH: ${{ matrix.ci_branch }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --github_token ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: $HOME/suibase/scripts/tests/run-all.sh

@@ -28,7 +28,7 @@ tests() {
   localnet create || fail "localnet create"
 
   # Some tests are in two phases, with *at least* one second
-  # one second apart from the first phase.
+  # apart from the first phase.
   sleep 1
   test_file_newer_than_phase_2
 }

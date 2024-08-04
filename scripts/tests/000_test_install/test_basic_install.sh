@@ -2,7 +2,7 @@
 
 # Tests for ~/suibase/install
 #
-# At the end of this script, a valid installation should be in place.
+# At the end of this script, a valid localnet installation should be in place.
 #
 SUIBASE_DIR="$HOME/suibase"
 
@@ -28,6 +28,9 @@ source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 tests() {
   # shellcheck source=SCRIPTDIR/../../../../suibase/install
   test_no_workdirs
+  if ! $SCRIPTS_TESTS_OPTION; then
+    return;
+  fi
 }
 
 test_no_workdirs() {
@@ -35,15 +38,33 @@ test_no_workdirs() {
   # Make sure not in a directory that was deleted.
   cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
 
+  if $SCRIPTS_TESTS_OPTION; then
+    rm -rf ~/suibase/workdirs
+    echo "localnet update"
+    (localnet update >"$OUT" 2>&1) || fail "update"
+    assert_workdir_ok "localnet"
+    assert_build_ok "localnet"
+
+    # Will cleanly stop the processes (if any).
+    echo "localnet delete"
+    (localnet delete >"$OUT" 2>&1) || fail "delete"
+
+    rm -rf ~/suibase/workdirs
+    echo "localnet start"
+    (localnet start >"$OUT" 2>&1) || fail "start"
+    assert_workdir_ok "localnet"
+    assert_build_ok "localnet"
+
+    echo "localnet stop"
+    (localnet stop >"$OUT" 2>&1) || fail "stop"
+    assert_workdir_ok "localnet"
+    assert_build_ok "localnet"
+  fi
+
+  rm -rf ~/suibase/workdirs
   echo "localnet create"
   (localnet create >"$OUT" 2>&1) || fail "create"
   assert_workdir_ok "localnet"
-
-  #rm -rf ~/suibase/workdirs
-  #echo "localnet update"
-  #(localnet update >"$OUT" 2>&1) || fail "update"
-  #assert_workdir_ok "localnet"
-  #assert_build_ok "localnet"
 }
 export -f test_no_workdirs
 

@@ -1,11 +1,12 @@
 name: Detect Changes
-description: Defines variables indicating the parts of the code that changed
+description: Variables indicating the type of change to the repos
+
 outputs:
   isDoc:
-    description: True when changes related to documentation
+    description: True when changes related to docs/website.
     value: "${{ steps.diff.outputs.isDoc }}"
   isRust:
-    description: True when changes related to Rust
+    description: True when changes related to Rust.
     value: "${{ steps.diff.outputs.isRust }}"
   isMove:
     description: True when changes related to Move
@@ -19,15 +20,18 @@ outputs:
   isSuibaseDaemon:
     description: True when changes to Suibase Daemon
     value: "${{ steps.diff.outputs.isSuibaseDaemon }}"
+  isVSCodeExtension:
+    description: True when changes to Suibase VSCode extension
+    value: "${{ steps.diff.outputs.isVSCodeExtension }}"
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
     - name: Detect Changes
       uses: dorny/paths-filter@v3.0.2
-      id: diff      
+      id: diff
       with:
+        base: ${{ github.ref }}
         filters: |
           isRust:
             - 'rust/**'
@@ -45,11 +49,15 @@ runs:
             - 'update'
             - 'repair'
             - 'pip-install'
+            - 'update-daemon'
+            - 'restart'
             - '.github/workflows/scripts-tests.yml'
           isDocHelperAPI:
             - 'rust/helper/lib.rs'
             - 'rust/helper/error.rs'
             - '.github/workflows/trig-rust-api-docs.yml'
           isSuibaseDaemon:
-            - 'rust/suibase/Cargo.toml'
+            - 'rust/suibase/**'
             - '.github/workflows/trig-sui-binaries.yml'
+          isVSCodeExtension::
+            - 'typescript/vscode-extension/**'

@@ -1,33 +1,52 @@
-# Periodic tests of Suibase dev branch with latest main branch from Mysten Labs.
+name: Rust Tests
+# Test for rust API/demo.
 #
-# This is for early detection of breaking changes while Mysten Labs
-# independently modify the Sui client.
-#
-# Note: the Mysten Labs main branch is not for mainnet! The main branch
-#       is the cutting edge changes that are to be merge next into
-#       Mysten Labs devnet branch.
-#
+# Does not include testing suibase-daemon (check instead with suibase-daemon-tests.yml).
 
-name: dev nightly tests
-
-# Controls when the workflow will run
 on:
-  schedule:
-    - cron: "0 6 * * *" # every day 5AM
+  push:
+    branches: ["dev"]
+  pull_request:
+    branches: ["dev"]
 
   workflow_dispatch:
 
 jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isChanged: ${{ steps.diff.outputs.isScript == 'true' || steps.diff.outputs.isRust == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
   test:
     name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
+    needs: diff
+    if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
+
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macOS-latest]
-        ci_workdir: [localnet]
+        ci_workdir: [localnet, devnet, testnet, mainnet]
         include:
-          - ci_branch: main
+          - ci_branch: testnet
             ci_workdir: localnet
+            ci_cache_all_crates: false
+            ci_cache_provider: github
+          - ci_branch: devnet
+            ci_workdir: devnet
+            ci_cache_all_crates: false
+            ci_cache_provider: github
+          - ci_branch: testnet
+            ci_workdir: testnet
+            ci_cache_all_crates: false
+            ci_cache_provider: buildjet
+          - ci_branch: mainnet
+            ci_workdir: mainnet
             ci_cache_all_crates: false
             ci_cache_provider: buildjet
 
@@ -45,10 +64,9 @@ jobs:
           docker-images: true
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
-      - name: Checkout Dev Branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: ${{ github.ref }}
 
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -67,16 +85,6 @@ jobs:
           cache-provider: ${{ matrix.ci_cache_provider }}
           cache-all-crates: ${{ matrix.ci_cache_all_crates }}
 
-      - name: Rust suibase-daemon caching
-        uses: Swatinem/rust-cache@v2
-        env:
-          RUST_ADD_CACHE_KEY_COMPONENT: suibase-daemon-${{ matrix.os }}-${{ github.ref_name }}
-        with:
-          workspaces: |
-            rust/suibase
-          cache-provider: buildjet
-          cache-all-crates: true
-
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -93,8 +101,9 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
 
-      - name: Tests with Mysten Labs main branch (cutting edge)
+      - name: Run rust demo/api tests only
         env:
+          CI_WORKDIR: ${{ matrix.ci_workdir }}
           CI_BRANCH: ${{ matrix.ci_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --main_branch
+        run: $HOME/suibase/scripts/tests/run-all.sh --rust-tests

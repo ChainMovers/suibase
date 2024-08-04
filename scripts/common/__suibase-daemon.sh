@@ -221,17 +221,43 @@ start_suibase_daemon() {
 export -f start_suibase_daemon
 
 wait_for_json_rpc_up() {
-  local _CMD=$1 # "any" or "exclude-localnet"
+  local _CMD=$1 # a specif workdir, "any" or "exclude-localnet"
+
+  # Array of valid workdirs
+  local _WORKDIRS_VALID_LIST=("localnet" "testnet" "devnet" "mainnet")
+  # Verify if $_CMD is one of the element of _WORKDIRS_VALID_LIST
+  local _WORKDIR_VALID=false
+  for _WORKDIR in "${_WORKDIRS_VALID_LIST[@]}"; do
+    if [ "$_WORKDIR" = "$_CMD" ]; then
+      _WORKDIR_VALID=true
+      break
+    fi
+  done
+
+  if [ "$_WORKDIR_VALID" = false ] && [ "$_CMD" != "any" ] && [ "$_CMD" != "exclude-localnet" ]; then
+    warn_user "wait_for_json_rpc_up unexpected workdir name: $_CMD"
+    return
+  fi
 
   # Block for up to 20 seconds for the JSON-RPC to be confirm up.
   #
-  # Pick one of the workdir that is started by the user and favor first
-  # the WORKDIR_NAME related to the command.
-
+  # The first parameter controls which workdir can be checked.
+  #
   local _WORKDIRS_ORDERED_LIST
-  _WORKDIRS_ORDERED_LIST=("$WORKDIR_NAME" "localnet" "testnet" "devnet" "mainnet")
+  if $_WORKDIR_VALID; then
+    _WORKDIRS_ORDERED_LIST=("$_CMD")
+  else
+    _WORKDIRS_ORDERED_LIST=("$WORKDIR_NAME")
+    # Append the other workdirs in the order of the _WORKDIRS_VALID_LIST
+    for _WORKDIR in "${_WORKDIRS_VALID_LIST[@]}"; do
+      if [ "$_WORKDIR" != "$WORKDIR_NAME" ]; then
+        _WORKDIRS_ORDERED_LIST+=("$_WORKDIR")
+      fi
+    done
+  fi
   local _WORKDIRS_STARTED_LIST=()
 
+  # Remove workdirs that are exluded or not started by the user.
   local _WORKDIR_NAME
   local _WORKDIR_FOUND=false
   for _WORKDIR_NAME in "${_WORKDIRS_ORDERED_LIST[@]}"; do

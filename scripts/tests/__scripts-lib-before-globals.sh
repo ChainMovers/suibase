@@ -15,6 +15,16 @@ export OUT="$HOME/suibase/scripts/tests/result.txt"
 # Initialized by test_setup()
 export FAST_OPTION=false
 export MAIN_BRANCH_OPTION=false
+
+export SCRIPTS_TESTS_OPTION=false
+export SUIBASE_DAEMON_TESTS_OPTION=false
+export RUST_TESTS_OPTION=false
+export RELEASE_TESTS_OPTION=false
+export MAIN_MERGE_CHECK_OPTION=false
+
+export DEV_PUSH_CHECK_OPTION=false
+
+
 export TEST_INIT_CALLED=false
 export USE_GITHUB_TOKEN=""
 
@@ -56,7 +66,7 @@ init_common_template() {
   # As needed, create a common suibase.yaml template file.
   if [ -n "$USE_GITHUB_TOKEN" ]; then
     # Do the following only if github_token is not already in the file.
-    if ! grep -q "github_token:" "$HOME/suibase/scripts/templates/common/suibase.yaml"; then
+    if ! grep -q "github_token:" "$HOME/suibase/scripts/templates/common/suibase.yaml" 2>/dev/null; then
       echo "Creating templates/common/suibase.yaml"
       mkdir -p "$HOME/suibase/scripts/templates/common"
       echo "github_token: $USE_GITHUB_TOKEN" >>"$HOME/suibase/scripts/templates/common/suibase.yaml"
@@ -77,15 +87,36 @@ assert_file_contains() {
   fi
 }
 
+init_tests_set_vars() {
+  # First param should be either true/false
+  SCRIPTS_TESTS_OPTION=$1
+  SUIBASE_DAEMON_TESTS_OPTION=$1
+  RUST_TESTS_OPTION=$1
+  RELEASE_TESTS_OPTION=$1
+}
+
 test_setup_on_sourcing() {
   # Parse command-line
   FAST_OPTION=false
   MAIN_BRANCH_OPTION=false
+  MAIN_MERGE_CHECK_OPTION=false
+  DEV_PUSH_CHECK_OPTION=false
+
+  init_tests_set_vars false
   local _SKIP_INIT=false
+  local _ONE_TEST_SET=false
   while [[ "$#" -gt 0 ]]; do
     case $1 in
     --fast) FAST_OPTION=true ;;
     --main_branch) MAIN_BRANCH_OPTION=true ;;
+
+    --scripts-tests) SCRIPTS_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
+    --suibase-daemon-tests) SUIBASE_DAEMON_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
+    --rust-tests) RUST_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
+    --release-tests) RELEASE_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
+
+    --main-merge-check) MAIN_MERGE_CHECK_OPTION=true ;;
+    --dev-push-check) DEV_PUSH_CHECK_OPTION=true ;;
     --github_token)
       echo "Using GITHUB_TOKEN from command line"
       USE_GITHUB_TOKEN="$2"
@@ -98,6 +129,12 @@ test_setup_on_sourcing() {
     esac
     shift
   done
+
+  # When no test sets is selected, then assume all tests are to be run.
+  if ! $_ONE_TEST_SET; then
+    # Enable them all.
+    init_tests_set_vars true
+  fi
 
   if [ -z "$USE_GITHUB_TOKEN" ] && [ -n "$GITHUB_TOKEN" ]; then
     # echo "Using GITHUB_TOKEN from environment"
@@ -115,7 +152,7 @@ test_setup_on_sourcing() {
     test_init
   else
     # If caller says to skip init, then
-    # jsut assume it was already done.
+    # just assume it was already done.
     TEST_INIT_CALLED=true
   fi
 

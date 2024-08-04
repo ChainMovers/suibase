@@ -37,12 +37,12 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.x"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: "latest"
           run_install: true
 
       - name: Copy pnpm dependency files

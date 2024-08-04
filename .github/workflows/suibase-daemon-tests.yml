@@ -1,6 +1,8 @@
-name: Scripts Tests
-
-# Controls when the workflow will run
+name: Suibase Daemon Tests
+# Test for suibase-daemon
+#
+# These tests **rebuild** the binaries from latest in branch (does not use pre-built)
+#
 on:
   push:
     branches: ["dev"]
@@ -13,15 +15,24 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isChanged: ${{ steps.diff.outputs.isScript == 'true' || steps.diff.outputs.isRust == 'true' }}
+      isChanged: ${{ steps.diff.outputs.isSuibaseDaemon }}
     steps:
       - uses: actions/checkout@v4
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
 
+      - name: Upload Trigger Artifact
+        if: ${{ steps.diff.outputs.isSuibaseDaemon == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cargo.toml
+          path: ./rust/suibase/Cargo.toml
+          if-no-files-found: error
+          retention-days: 1
+
   test:
-    name: Test ${{ matrix.os }}
+    name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
     needs: diff
     if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
 
@@ -53,6 +64,16 @@ jobs:
         with:
           cache: "false" # Control cache in "Rust Caching" step instead.
 
+      - name: Rust suibase-daemon caching
+        uses: Swatinem/rust-cache@v2
+        env:
+          RUST_ADD_CACHE_KEY_COMPONENT: suibase-daemon-${{ matrix.os }}-${{ github.ref_name }}
+        with:
+          workspaces: |
+            rust/suibase
+          cache-provider: buildjet
+          cache-all-crates: true
+
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -69,7 +90,32 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ln -s $GITHUB_WORKSPACE $HOME/suibase
 
-      - name: Run suibase CLI sanity tests only
+      - name: Run suibase rust apps only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --scripts-tests
+        run: $HOME/suibase/scripts/tests/run-all.sh --suibase-daemon-tests
+
+  trig:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create directory for artifact
+        run: mkdir -p ./rust/suibase
+
+      - name: Download Trigger Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Cargo.toml
+          path: ./rust/suibase
+
+      - name: Push Cargo.toml to trigger other repos
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.SUI_BINARIES_TOKEN }}
+        with:
+          source_file: "rust/suibase/Cargo.toml"
+          destination_repo: "chainmovers/sui-binaries"
+          destination_folder: "triggers/suibase-daemon"
+          user_email: "4542410+mario4tier@users.noreply.github.com"
+          user_name: "Mario Fortier"

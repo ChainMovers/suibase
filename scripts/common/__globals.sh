@@ -2811,7 +2811,7 @@ sync_client_yaml() {
     fi
     if [ "$_EXPECTED_ENV" == "${WORKDIR_NAME}_proxy" ]; then
       # Block until verified that the proxy is responding (or timeout).
-      wait_for_json_rpc_up "any"
+      wait_for_json_rpc_up "${WORKDIR_NAME}"
     fi
   fi
 }
@@ -2888,14 +2888,16 @@ update_PRECOMP_REMOTE_var() {
     echo "suibase.yaml: Forcing to use tag '[$_FORCE_TAG_NAME]'"
   fi
 
+  update_USER_GITHUB_TOKEN_var
+
   for _retry_curl in 1 2 3; do
     _DOWNLOAD_URL=""
     _TAG_NAME=""
-    if [ "${CFG_github_token:?}" != "~" ]; then
+    if [ -n "$USER_GITHUB_TOKEN" ]; then
       _OUT=$(curl -s --request GET \
         --url "$_REPO_URL/releases" \
         --header "X-GitHub-Api-Version: 2022-11-28" \
-        --header "Authorization: Bearer ${CFG_github_token:?}")
+        --header "Authorization: Bearer $USER_GITHUB_TOKEN")
     else
       _OUT=$(curl -s --request GET \
         --url "$_REPO_URL/releases" \
@@ -2965,12 +2967,14 @@ update_PRECOMP_REMOTE_var() {
       echo "Github API call result = [$_OUT]"
     fi
 
-    if [[ -n ${CFG_github_token:?} ]] && [[ "$_OUT" == *"Bad credentials"* ]]; then
-      setup_error "The github_token in suibase.yaml seems invalid."
+    if [ -n "${USER_GITHUB_TOKEN}" ] && [[ "$_OUT" == *"Bad credentials"* ]]; then
+      setup_error "The github_token [${USER_GITHUB_TOKEN}] in suibase.yaml seems invalid."
     fi
 
     if [[ "$_OUT" == *"rate limit exceeded"* ]]; then
-      warn_user "Consider adding your github_token in suibase.yaml to increase the rate limit."
+      if [ -z "${USER_GITHUB_TOKEN}" ]; then
+        warn_user "Consider adding your github_token in suibase.yaml to increase rate limit."
+      fi
       setup_error "Github rate limit exceeded. Please try again later."
     fi
 
@@ -3074,6 +3078,7 @@ download_PRECOMP_REMOTE() {
   local _EXTRACTED_TEST_FILEDIR
 
   # TODO validate here the local file is really matching the remote in case of republishing?
+
   # Try twice before giving up.
   for i in 1 2; do
     # Download if not already done.
@@ -3084,11 +3089,12 @@ download_PRECOMP_REMOTE() {
       fi
     else
       echo "Downloading precompiled $_DOWNLOAD_FILENAME"
-      if [ "${CFG_github_token:?}" != "~" ]; then
+      update_USER_GITHUB_TOKEN_var
+      if [ -n "$USER_GITHUB_TOKEN" ]; then
         echo "Using github_token"
         curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL" \
           --header "X-GitHub-Api-Version: 2022-11-28" \
-          --header "Authorization: Bearer ${CFG_github_token:?}"
+          --header "Authorization: Bearer $USER_GITHUB_TOKEN"
       else
         curl -s -L -o "$_DOWNLOAD_FILEPATH" "$PRECOMP_REMOTE_DOWNLOAD_URL" \
           --header "X-GitHub-Api-Version: 2022-11-28"
@@ -3206,6 +3212,19 @@ copy_on_bin_diff() {
   fi
 }
 export -f copy_on_bin_diff
+
+export USER_GITHUB_TOKEN
+update_USER_GITHUB_TOKEN_var() {
+  # Use a GITHUB_TOKEN if set as env or from suibase.yaml
+  if [ -n "$GITHUB_TOKEN" ]; then
+    USER_GITHUB_TOKEN="$GITHUB_TOKEN"
+  elif [ -n "${CFG_github_token:?}" ] && [ "${CFG_github_token:?}" != "~" ]; then
+    USER_GITHUB_TOKEN="${CFG_github_token:?}"
+  else
+    USER_GITHUB_TOKEN=""
+  fi
+}
+export -f update_USER_GITHUB_TOKEN_var
 
 export HOST_PLATFORM="" # "uname -s" like output e.g. "Linux", "Darwin"...
 export HOST_ARCH=""     # "uname -m" like output e.g. x86_64, arm64...
