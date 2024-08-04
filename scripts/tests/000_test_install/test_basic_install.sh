@@ -38,19 +38,33 @@ test_no_workdirs() {
   # Make sure not in a directory that was deleted.
   cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
 
-  echo "localnet create"
-  (localnet create >"$OUT" 2>&1) || fail "create"
-  assert_workdir_ok "localnet"
-
   if $SCRIPTS_TESTS_OPTION; then
     rm -rf ~/suibase/workdirs
     echo "localnet update"
     (localnet update >"$OUT" 2>&1) || fail "update"
     assert_workdir_ok "localnet"
     assert_build_ok "localnet"
-    #TODO A lot more scripts tests
+
+    # Will cleanly stop the processes (if any).
+    echo "localnet delete"
+    (localnet delete >"$OUT" 2>&1) || fail "delete"
+
+    rm -rf ~/suibase/workdirs
+    echo "localnet start"
+    (localnet start >"$OUT" 2>&1) || fail "start"
+    assert_workdir_ok "localnet"
+    assert_build_ok "localnet"
+
+    echo "localnet stop"
+    (localnet stop >"$OUT" 2>&1) || fail "stop"
+    assert_workdir_ok "localnet"
+    assert_build_ok "localnet"
   fi
 
+  rm -rf ~/suibase/workdirs
+  echo "localnet create"
+  (localnet create >"$OUT" 2>&1) || fail "create"
+  assert_workdir_ok "localnet"
 }
 export -f test_no_workdirs
 

@@ -95,6 +95,6 @@ jobs:
 
       - name: Tests with Mysten Labs main branch (cutting edge)
         env:
-          CI_WORKDIR: ${{ matrix.ci_workdir }}
           CI_BRANCH: ${{ matrix.ci_branch }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --main_branch --github_token ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: $HOME/suibase/scripts/tests/run-all.sh --main_branch
