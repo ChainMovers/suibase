@@ -29,10 +29,9 @@ jobs:
           fetch-depth: 0
 
       - name: Load .env file
-        uses: xom9ikk/dotenv@v2.3.0
+        uses: cardinalby/export-env-action
         with:
-          path: .github/lint.env
-          load-mode: strict
+          envFile: ".github/lint.env"
 
       - name: Super-linter
         uses: super-linter/super-linter@v6.8.0 # x-release-please-version
