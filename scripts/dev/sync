@@ -7,7 +7,6 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 
 # Check out the dev branch if not already on it
@@ -15,7 +14,6 @@ if [ "$current_branch" != "dev" ]; then
   echo "Switching to dev branch"
   git checkout dev
 fi
-
 
 # Find the common ancestor of dev and main
 merge_base=$(git merge-base dev main)
@@ -36,12 +34,11 @@ else
       echo "Merged main into dev"
     fi
   else
-    echo "Merge failed due to conflicts."
-    echo "To resolve the conflicts, follow these steps:"
-    echo "1. Identify the conflicted files using 'git status'."
-    echo "2. Resolve the conflicts manually by editing the conflicted files."
-    echo "3. Mark the conflicts as resolved using 'git add <file>'."
-    echo "4. Complete the merge by running 'git commit'."
+    echo "Merge failed due to conflicts. Next steps:"
+    echo "1. Identify conflicts with 'git status'."
+    echo "2. Resolve manually by editing the conflicted files."
+    echo "3. Mark as resolved using 'git add <file>'."
+    echo "4. Complete merge with 'git commit'."
     exit 1
   fi
 fi
