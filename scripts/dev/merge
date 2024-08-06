@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Merge dev into main branch
+#
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+
+# Switch to dev branch if not already on it
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$current_branch" != "dev" ]; then
+  echo "Switching to dev branch"
+  git checkout dev
+fi
+
+# Make sure the dev branch does not have uncommitted changes.
+if ! git diff-index --quiet HEAD --; then
+  echo "Uncommitted changes in the dev branch. Please commit or stash them before merging."
+  exit 1
+fi
+
+# Make sure the dev branch is up-to-date with the remote.
+git fetch origin dev
+if [ "$(git rev-parse dev)" != "$(git rev-parse origin/dev)" ]; then
+  echo "dev branch not up-to-date with remote. Do 'git push'."
+  exit 1
+fi
+
+# Call sync to verify that dev is up-to-date with main.
+# This is to avoid conflicts when merging dev into main.
+
+# shellcheck source=SCRIPTDIR/scripts/dev/sync
+source "$HOME/suibase/scripts/dev/sync"
+
+# Switch to main branch
+echo "Switching to main branch"
+git checkout main
+
+# Make sure locally you have the latest about remote main.
+git fetch origin main
+
+# Proceed to merge dev into main. Detect if there are conflicts, if yes
+# give instruction to resolve them.
+
+# Find the common ancestor of dev and main
+merge_base=$(git merge-base dev main)
+
+# Check if there are any changes from dev that are not in main
+if git diff --quiet "$merge_base" dev; then
+  echo "No changes to merge from dev to main."
+else
+  # Perform the actual merge
+  if git merge --no-commit --no-ff dev; then
+    # Check if there are any changes to commit
+    if git diff-index --quiet HEAD --; then
+      echo "No changes to merge from dev to main."
+      git merge --abort
+    else
+      # Commit the merge if there are changes
+      git commit -m "Merged dev into main"
+      # Todo Add push when confident about how it works: git push origin main
+      echo "Merged dev into main."
+    fi
+  else
+    echo "Merge failed due to conflicts."
+    echo "To resolve the conflicts, follow these steps:"
+    echo "1. Identify conflicted files using 'git status'."
+    echo "2. Resolve manually by editing conflicted files."
+    echo "3. Mark conflicts as resolved using 'git add <file>'."
+    echo "4. Complete merge with 'git commit' and 'push'."
+    exit 1
+  fi
+fi
+

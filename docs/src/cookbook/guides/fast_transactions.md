@@ -21,10 +21,10 @@ May be, the most important to understand is what not to do:
 
 
 ## From Slow To Fast
-TODO Refer to example transforming a slow design into fast ones (think I saw one in the Sui repo?)
+Todo Refer to example transforming a slow design into fast ones (think I saw one in the Sui repo?)
 
 ## Distinct Coins
-TODO Explain how distinct coin management is crucial to parallel processing.
+Todo Explain how distinct coin management is crucial to parallel processing.
 
 ## Faucet
-TODO Explain how the Sui faucet work as a design example.
+Todo Explain how the Sui faucet work as a design example.

@@ -1,0 +1,15 @@
+{
+  "filters": {
+    "comments": true
+  },
+  "rules": {
+    "terminology": {
+      // For list of what can be excluded:
+      //   https://github.com/sapegin/textlint-rule-terminology/blob/master/terms.jsonc
+      "exclude": [
+        "V[ -]?S[ -]?Code",
+        "repo\\b"
+      ]
+    }
+  }
+}

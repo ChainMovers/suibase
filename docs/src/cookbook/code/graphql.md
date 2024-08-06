@@ -10,8 +10,8 @@ editLink: true
 
 - Sui GraphQL RPC is currently in **_beta_**
 - Sui GraphQL RPC beta operates on both testnet and mainnet at this time
-  - testnet: "https://sui-testnet.mystenlabs.com/graphql"
-  - mainnet: "https://sui-mainnet.mystenlabs.com/graphql"
+  - testnet: `https://sui-testnet.mystenlabs.com/graphql`
+  - mainnet: `https://sui-mainnet.mystenlabs.com/graphql`
   - devnet not currently supported
   - streaming not currently supported
 - Sui GraphQL RPC will eventually _replace_ the JSON RPC
@@ -23,7 +23,7 @@ editLink: true
     - Introduces `QueryNodes` that are the equivalent to pysui `Builders`
     - Parity of QueryNodes to Builders is complete
     - Exposes ability for developers to write their own GraphQL queries
-    - SuiConfiguration must point to either Sui's `testnet` or `mainnet` RPC URLs
+    - `SuiConfiguration` must point to either Sui's `testnet` or `mainnet` RPC URLs
     - pysui GraphQL documentation is in the [Docs](https://pysui.readthedocs.io/en/latest/graphql.html)
 :::
 
@@ -58,7 +58,7 @@ NA
 
 ## Query example 1
 
-For pysui there are 3 comon ways to create a query. This demonstrates **_using QueryNodes (predefined queries as part of pysui SDK)_**
+For pysui there are 3 common ways to create a query. This demonstrates **_using QueryNodes (predefined queries as part of pysui SDK)_**
 
 ::: code-tabs
 
@@ -97,9 +97,9 @@ NA at this time
 ```
 :::
 
-## Dryrun example 1
+## DryRun example 1
 
-This demonstrates performing a dryRun of a transaction block
+This demonstrates performing a DryRun of a transaction block
 
 ::: code-tabs
 
@@ -157,9 +157,9 @@ NA at this time
 ```
 :::
 
-## Dryrun example 2
+## DryRun example 2
 
-This demonstrates performing a dryRun of a transactions kind
+This demonstrates performing a DryRun of a transactions kind
 
 ::: code-tabs
 
@@ -220,7 +220,7 @@ NA at this time
 
 ## Execute example
 
-This demonstrates performing a execution of a transactions
+This demonstrates performing a transaction execution.
 
 ::: code-tabs
 
@@ -290,7 +290,7 @@ NA at this time
 
 ## Query example 2
 
-For pysui there are 3 comon ways to create a query. This demonstrates **_using a query string_**
+For pysui there are 3 common ways to create a query. This demonstrates **_using a query string_**
 
 ::: code-tabs
 
@@ -365,7 +365,7 @@ curl -X POST https://graphql-beta.mainnet.sui.io \
 
 ## Query example 3
 
-For pysui there are 3 comon ways to create a query. This demonstrates **_using [gql](https://github.com/graphql-python/gql) the underlying GraphQL library_** to generate a DocumentNode
+For pysui there are 3 common ways to create a query. This demonstrates **_using [gql](https://github.com/graphql-python/gql) the underlying GraphQL library_** to generate a DocumentNode
 
 ::: code-tabs
 

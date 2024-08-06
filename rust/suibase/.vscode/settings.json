@@ -1,0 +1,22 @@
+{
+  "cSpell.words": [
+    "admctrl",
+    "apiserver",
+    "asui",
+    "fullname",
+    "fullnode",
+    "Hasher",
+    "Headerless",
+    "kqueue",
+    "Netmon",
+    "NOPAD",
+    "NOTIF",
+    "SBSD",
+    "schemars",
+    "serde",
+    "suievent",
+    "suix",
+    "thiserror",
+    "twox"
+  ]
+}

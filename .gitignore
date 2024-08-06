@@ -68,9 +68,6 @@ Session.vim
 .favorites.json
 .settings/
 **/.history/
-**/.vscode/ltex.disabledRules.en-US.txt
-**/.vscode/ltex.dictionary.en-US.txt
-**/.vscode/settings.json
 **/.vscode/launch.json
 **/.vscode-test/
 
@@ -93,6 +90,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache
+.mypy_cache/
 
 # Pyenv
 .python-version

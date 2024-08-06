@@ -42,7 +42,7 @@ pnpm --filter explorer playwright test
 
 ### `pnpm --filter explorer test`
 
-This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
+This runs a series of end-to-end browser tests using the site as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `pnpm --filter explorer build`
 
@@ -52,4 +52,4 @@ It bundles React in production mode and optimizes the build for the best perform
 
 ### `pnpm --filter explorer lint`
 
-Run linting check (prettier/eslint).
+Run linting check (prettier/ESLint).

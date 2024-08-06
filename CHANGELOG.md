@@ -3,7 +3,7 @@
 Do '~/suibase/update' to download and update suibase itself to latest.
 Do '<workdir_name> update' when you instead want to update only a local Sui repo to the latest from Mysten Labs. Example: 'localnet update'
 
-Only notable changes are documented here. See github commits for all changes.
+Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -14,7 +14,8 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New VSCode extension https://marketplace.visualstudio.com/items?itemName=suibase.suibase
 
 ### Fixed
-- More robust handling of backend ( suibase-daemon )
+- More robust handling of backend (suibase-daemon)
+- Reduce localnet storage need (delete full_node_db on regen).
 
 ### Changed
 - For better stability, localnet uses Mysten Labs testnet branch (instead of devnet).
@@ -24,7 +25,7 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.1.6] 2023-11-01
 
 ### Added
-- (#68) Precompiled binaries for MacOS, x86_64 Linux and Windows WSL2.
+- (#68) Precompiled binaries for macOS, x86_64 Linux and Windows WSL2.
 
 ### Fixed
 - (#83) Do sui binaries --locked cargo build for consistency.
@@ -65,7 +66,7 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Rust/Python Suibase Helper ( more info: https://suibase.io/helpers )
+- Rust/Python Suibase Helper (more info: https://suibase.io/helpers)
 - Object cookbook
 - MultiSig cookbook entries for Python
 

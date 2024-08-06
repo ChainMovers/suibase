@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Merge main into dev branch
+#
+# NOOP if nothing to merge
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Check out the dev branch if not already on it
+if [ "$current_branch" != "dev" ]; then
+  echo "Switching to dev branch"
+  git checkout dev
+fi
+
+# Find the common ancestor of dev and main
+merge_base=$(git merge-base dev main)
+
+# Check if there are any changes from main that are not in dev
+if git diff --quiet "$merge_base" main; then
+  echo "No changes to merge from main to dev."
+else
+  # Perform the actual merge
+  if git merge --no-commit --no-ff main; then
+    # Check if there are any changes to commit
+    if git diff-index --quiet HEAD --; then
+      echo "No changes to merge from main to dev."
+      git merge --abort
+    else
+      # Commit the merge if there are changes
+      git commit -m "Merged main into dev"
+      echo "Merged main into dev"
+    fi
+  else
+    echo "Merge failed due to conflicts. Next steps:"
+    echo "1. Identify conflicts with 'git status'."
+    echo "2. Resolve manually by editing the conflicted files."
+    echo "3. Mark as resolved using 'git add <file>'."
+    echo "4. Complete merge with 'git commit'."
+    exit 1
+  fi
+fi

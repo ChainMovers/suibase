@@ -1,0 +1,42 @@
+name: Lint
+
+on:
+  push: null
+
+  pull_request: null
+
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: [ubuntu-latest]
+
+    permissions:
+      contents: read
+      packages: read
+      # To report GitHub Actions status checks
+      statuses: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          # super-linter needs the full git history to get the
+          # list of files that changed across commits
+          fetch-depth: 0
+
+      - name: Load environment variables from lint.env
+        run: |
+          set -a
+          source .github/lint.env
+          set +a
+
+      - name: Super-linter
+        uses: super-linter/super-linter@v6.8.0 # x-release-please-version
+        env:
+          # To report GitHub Actions status checks
+          DISABLE_ERRORS: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -11,7 +11,7 @@ Best way to learn about each is probably just to try them... and "--help".
 
 | **Script Name**                                       | **What are they for?**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <h3>lsui<br>dsui<br>tsui<br>msui<br></h3>             | Front-ends to Mysten Lab "sui" binaries, each targeting a specific network (no need to "switch" env):<br><p style="text-align:center"><b>l</b>sui→<b>l</b>ocalnet,&nbsp;<b>d</b>sui→<b>d</b>evnet,&nbsp;<b>t</b>sui→<b>t</b>estnet,&nbsp;<b>m</b>sui→<b>m</b>ainnet</p>Each script always run within the proper workdir (client+keystore container) for the intended network.<br>The scripts are mostly transparent; all arguments are pass unchanged to a single Mysten Labs sui client call.<br><br>Example: `$ lsui client gas`   ← same as `sui client gas` but *always* for localnet |
+| <h3>lsui<br>dsui<br>tsui<br>msui<br></h3>             | Frontends to Mysten Lab "sui" binaries, each targeting a specific network (no need to "switch" env):<br><p style="text-align:center"><b>l</b>sui→<b>l</b>ocalnet,&nbsp;<b>d</b>sui→<b>d</b>evnet,&nbsp;<b>t</b>sui→<b>t</b>estnet,&nbsp;<b>m</b>sui→<b>m</b>ainnet</p>Each script always run within the proper workdir (client+keystore container) for the intended network.<br>The scripts are mostly transparent; all arguments are pass unchanged to a single Mysten Labs sui client call.<br><br>Example: `$ lsui client gas`   ← same as `sui client gas` but *always* for localnet |
 | <h3>localnet<br>devnet<br>testnet<br>mainnet<br></h3> | These are the "workdir scripts" providing suibase specific features.<br><br>Example: `$ localnet faucet all`  ← sends Sui coins to every address on your localnet                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | <h3>asui</h3>                                         | You can designate one workdir as "active". [More Info](scripts.md#what-does-active-mean)<br> This script will call the "active sui" client.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
@@ -35,7 +35,7 @@ Update to latest with the "update" command (e.g. "localnet update").
 <br>
 
 ## Cargo.toml dependencies to local repos
-This is optional, but highly recommended. Instead of git, use "path" to the local repos.
+This is optional, but highly recommended. Instead of Git, use "path" to the local repos.
 
 Example, replace:<br>
 ```toml
@@ -64,7 +64,7 @@ devnet is now active
 The "asui" will conveniently call the correct "sui client" for the active workdir. You will typically want to use "asui" in your own script for operations that are expected to work for *all* network type.
 
 ## Move.toml dependencies to local repos
-This is optional, but highly recommended. Instead of git, use "local" to the local repos.
+This is optional, but highly recommended. Instead of Git, use "local" to the local repos.
 
 Example, replace:<br>
 ```toml

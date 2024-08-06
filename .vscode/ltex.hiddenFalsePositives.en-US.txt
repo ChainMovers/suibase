@@ -1,0 +1,4 @@
+{"rule":"HE_VERB_AGR","sentence":"^\\QSimulate someone updating to latest Suibase version.\\E$"}
+{"rule":"MORFOLOGIK_RULE_EN_US","sentence":"^\\QA subset of tests can be selected with a combination of: --scripts-tests --suibase-daemon-tests --rust-tests --release-tests --main-merge-check --dev-push-check\\E$"}
+{"rule":"UPPERCASE_SENTENCE_START","sentence":"^\\Qactions/diffs detect changes and triggers these workflows:\\E$"}
+{"rule":"ENGLISH_WORD_REPEAT_RULE","sentence":"^\\Q::: danger Danger\\E$"}
