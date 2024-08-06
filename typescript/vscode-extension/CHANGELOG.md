@@ -1,4 +1,4 @@
-# Change Log
+# Changelog
 
 Important:
   Do "~/suibase/update" to get latest Suibase CLI when upgrading the extension.
@@ -21,7 +21,7 @@ Important:
   - Various fix related to installation.
 
 ## 0.1.4
-  - Warn user if some Sui prerequisites are not installed (git and rustc)
+  - Warn user if some Sui prerequisites are not installed (Git and rustc)
   - Start suibase-daemon if not running.
 
 ## 0.1.2

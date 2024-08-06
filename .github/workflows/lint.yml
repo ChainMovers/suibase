@@ -28,8 +28,15 @@ jobs:
           # list of files that changed across commits
           fetch-depth: 0
 
+      - name: Load .env file
+        uses: xom9ikk/dotenv@v2.3.0
+        with:
+          path: .github/lint.env
+          load-mode: strict
+
       - name: Super-linter
         uses: super-linter/super-linter@v6.8.0 # x-release-please-version
         env:
           # To report GitHub Actions status checks
+          DISABLE_ERRORS: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

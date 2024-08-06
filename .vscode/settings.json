@@ -1,0 +1,8 @@
+{
+  "editor.tabSize": 2,
+  "cSpell.words": ["admctrl", "NOTIF", "pathbuf", "suix", "thiserror"],
+  "github-actions.workflows.pinned.workflows": [
+    ".github/workflows/release-tests.yml",
+    ".github/workflows/trig-rust-api-docs.yml"
+  ]
+}

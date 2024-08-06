@@ -6,7 +6,7 @@ This is the Suibase Helper library.
 
 Adds UniFFI bindings to the Rust Suibase Helper.
 
-Allows calling from python, Kotlin, NodeJS...
+Allows calling from python, Kotlin, Node.js...
 
 
 # demo-app

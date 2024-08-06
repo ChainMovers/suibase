@@ -4,34 +4,34 @@ This section provides a quick introduction into how this sample extension is org
 
 The two most important directories to take note of are the following:
 
-- `src`: Contains all of the extension source code
-- `webview-ui`: Contains all of the webview UI source code
+- `src`: Contains all the extension source code
+- `webview-ui`: Contains all the webview UI source code
 
 ## `src` directory
 
-The `src` directory contains all of the extension-related source code and can be thought of as containing the "backend" code/logic for the entire extension. Inside of this directory you'll find the:
+The `src` directory contains all the extension-related source code and can be thought of as containing the "backend" code/logic for the entire extension. Inside this directory you'll find the:
 
 - `panels` directory
 - `utilities` directory
 - `extension.ts` file
 
-The `panels` directory contains all of the webview-related code that will be executed within the extension context. It can be thought of as the place where all of the "backend" code for each webview panel is contained.
+The `panels` directory contains all the webview related code that will be executed within the extension context. It can be thought of as the place where all the "backend" code for each webview panel is contained.
 
 This directory will typically contain individual TypeScript or JavaScript files that contain a class which manages the state and behavior of a given webview panel. Each class is usually in charge of:
 
 - Creating and rendering the webview panel
 - Properly cleaning up and disposing of webview resources when the panel is closed
-- Setting message listeners so data can be passed between the webview and extension
-- Setting the initial HTML markdown of the webview panel
+- Setting message listeners, so data can be passed between the webview and extension
+- Setting the initial HTML Markdown of the webview panel
 - Other custom logic and behavior related to webview panel management
 
-As the name might suggest, the `utilities` directory contains all of the extension utility functions that make setting up and managing an extension easier. In this case, it contains `getUri.ts` which contains a helper function which will get the webview URI of a given file or resource.
+As the name might suggest, the `utilities` directory contains all the extension utility functions that make setting up and managing an extension easier. In this case, it contains `getUri.ts` which contains a helper function which will get the webview URI of a given file or resource.
 
 Finally, `extension.ts` is where all the logic for activating and deactivating the extension usually live. This is also the place where extension commands are registered.
 
 ## `webview-ui` directory
 
-The `webview-ui` directory contains all of the Svelte-based webview source code and can be thought of as containing the "frontend" code/logic for the extension webview.
+The `webview-ui` directory contains all the Svelte-based webview source code and can be thought of as containing the "frontend" code/logic for the extension webview.
 
 This directory is special because it contains a full-blown Svelte application which was created using the TypeScript-based Svelte template. As a result, `webview-ui` contains its own `package.json`, `node_modules`, `tsconfig.json`, and so on––separate from the `hello-world` extension in the root directory.
 

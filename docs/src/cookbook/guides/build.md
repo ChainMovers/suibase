@@ -7,11 +7,11 @@ editLink: true
 
 ## Use a local Sui repo
 
-If you build often, then repeating local file access is obviously faster than remote (and more reliable).
+If you often build, then repeating local file access is obviously faster than remote (and more reliable).
 
-If you use the Rust SDK, replace your "git" dependencies with "path".
+If you use the Rust SDK, replace your Git dependencies with "path".
 
-For Move dependencies replace "git" dependencies with "local".
+For Move dependencies replace Git dependencies with "local".
 
 For suibase users, see [here](./../../how-to/scripts.md#faster-rust-and-move-build) to re-use its local repo already downloaded.
 

@@ -1,17 +1,18 @@
 DO NOT MODIFY the files in this directory
-Do not update these files.
 
 **What are they for?**
 
-They are used by github action for CI deployment.
+They are used by GitHub Action for CI deployment.
 
-Only the maintainer of the website update these.
+Only the site maintainers should modify these.
 
-This is done such that minor difference in 
-installation in someones setup does not clash
-with the intent from the website maintainers.
+This is done such that minor difference in
+installation in someone's setup does not clash
+with the intent from the site maintainers.
 
 **How to update?**
-From root of the docs:
+Site maintainer execute the following at ~/suibase/docs:
+```bash
  cp package.json ci/package.json.ci
  cp pnpm-lock.yaml ci/pnpm-lock.yaml.ci
+```

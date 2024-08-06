@@ -199,7 +199,7 @@ const keypair = Ed25519Keypair.deriveKeypair(mnemonic, "m/44'/784'/0'/0'/0'");
 
 :::
 
-3. From Base64 String
+3. From base64 string
 
 ::: code-tabs
 
