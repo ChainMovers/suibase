@@ -28,10 +28,11 @@ jobs:
           # list of files that changed across commits
           fetch-depth: 0
 
-      - name: Load .env file
-        uses: cardinalby/export-env-action
-        with:
-          envFile: ".github/lint.env"
+      - name: Load environment variables from lint.env
+        run: |
+          set -a
+          source .github/lint.env
+          set +a
 
       - name: Super-linter
         uses: super-linter/super-linter@v6.8.0 # x-release-please-version
