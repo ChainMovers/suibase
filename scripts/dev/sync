@@ -7,13 +7,17 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-current_branch=$(git rev-parse --abbrev-ref HEAD)
+#current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+git fetch origin
+git checkout main
+git pull origin main
 
 # Check out the dev branch if not already on it
-if [ "$current_branch" != "dev" ]; then
-  echo "Switching to dev branch"
-  git checkout dev
-fi
+#if [ "$current_branch" != "dev" ]; then
+#  echo "Switching to dev branch"
+git checkout dev
+#fi
 
 # Find the common ancestor of dev and main
 merge_base=$(git merge-base dev main)
@@ -31,7 +35,7 @@ else
     else
       # Commit the merge if there are changes
       git commit -m "Merged main into dev"
-      echo "Merged main into dev"
+      echo "Merged main into dev."
     fi
   else
     echo "Merge failed due to conflicts. Next steps:"

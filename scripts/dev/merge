@@ -29,7 +29,7 @@ fi
 # Call sync to verify that dev is up-to-date with main.
 # This is to avoid conflicts when merging dev into main.
 
-# shellcheck source=SCRIPTDIR/scripts/dev/sync
+# shellcheck source=./sync
 source "$HOME/suibase/scripts/dev/sync"
 
 # Switch to main branch
@@ -58,8 +58,13 @@ else
     else
       # Commit the merge if there are changes
       git commit -m "Merged dev into main"
-      # Todo Add push when confident about how it works: git push origin main
+      git push origin main
       echo "Merged dev into main."
+
+      # Rebase dev to keep on same last commit (that merge that was just done).
+      git checkout dev
+      git rebase main
+      git push origin dev
     fi
   else
     echo "Merge failed due to conflicts."

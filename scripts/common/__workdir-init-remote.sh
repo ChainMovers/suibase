@@ -1,11 +1,11 @@
-#!/bin/bash
+# shellcheck shell=bash
+
+# Intended to be sourced only in __workdir-exec.sh
 
 # Code that does the client.yaml and sui.keystore initialization for
 # remote networks (devnet/testnet).
 
 # Uses an existing client.yaml and sui.keystore if already installed by the user.
-
-# Intended to be sourced only in __workdir-exec.sh
 
 workdir_init_remote() {
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+# shellcheck shell=bash
 
 # You must source __globals.sh before __dtp-services.sh
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+# shellcheck shell=bash
 
 # You must source __globals.sh before __suibase-daemon.sh
 
@@ -288,6 +288,7 @@ wait_for_json_rpc_up() {
     _WORKDIR_NAME=${_WORKDIRS_STARTED_LIST[$_WORKDIRS_IDX]}
     _WORKDIRS_IDX=$(((_WORKDIRS_IDX + 1) % ${#_WORKDIRS_STARTED_LIST[@]}))
 
+    # shellcheck disable=SC2153
     local _SUI_EXEC="$WORKDIRS/$_WORKDIR_NAME/sui-exec"
 
     # Do a sui "client gas" call, and verify that
@@ -415,6 +416,15 @@ update_SUIBASE_DAEMON_PID_var() {
   # Check if lsof is not installed, then inform the user to install it.
   if ! is_installed lsof; then
     setup_error "The CLI command 'lsof' must be installed to run Suibase"
+  fi
+
+  # If the lock file exists but apparently not working, use ps as a fallback
+  # (in rare scenario where shell have permission issues).
+  local _PID
+  _PID=$(get_process_pid "$SUIBASE_DAEMON_BIN")
+  if [ -n "$_PID" ] && [ "$_PID" != "NULL" ]; then
+    SUIBASE_DAEMON_PID="$_PID"
+    return
   fi
 
   SUIBASE_DAEMON_PID=""
@@ -565,6 +575,7 @@ show_suibase_daemon_get_links() {
   local _JSON_PARAM=$2
 
   local _USER_REQUEST
+  # shellcheck disable=SC2153
   _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
   if [ "$_USER_REQUEST" = "stop" ]; then

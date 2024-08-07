@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Lint the dev branch using super-linter (same as done in GitHub Actions).
+#
+# After completion, 'vi' is called on the result.
+#
+# Output can also be found in ~/suibase/workdirs/common/logs/lint-dev.log
+
+# Switch to dev branch if not already on it
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$current_branch" != "dev" ]; then
+  echo "Switching to dev branch"
+  git checkout dev
+fi
+
+LOG_OUTPUT="$HOME/suibase/workdirs/common/logs/lint-dev.log"
+mkdir -p "$HOME/suibase/workdirs/common/logs/"
+cd "$HOME/suibase" || exit 1
+echo -n "Linting started..."
+docker run -e RUN_LOCAL=true -e DEFAULT_BRANCH="dev" --env-file ".github/lint.env" \
+           -v /home/olet/suibase:/tmp/lint \
+           --rm ghcr.io/super-linter/super-linter:latest > "$LOG_OUTPUT" 2>&1
+echo "completed."
+vi + "$LOG_OUTPUT"

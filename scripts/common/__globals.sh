@@ -1,4 +1,4 @@
-#!/bin/bash
+# shellcheck shell=bash
 
 # Do not call this script directly. It is a "common script" sourced by other suibase scripts.
 #
@@ -1982,10 +1982,17 @@ get_process_pid() {
     # More info: https://github.com/ChainMovers/suibase/issues/79
 
     # shellcheck disable=SC2009
-    _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep -e $SUIBASE_DAEMON_NAME | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
+    _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
   else
+    local _TARGET_CMD
+    if [ -n "$ARGS" ]; then
+      _TARGET_CMD="$_PROC $_ARGS"
+    else
+      _TARGET_CMD="$_PROC"
+    fi
+
     # shellcheck disable=SC2009
-    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "$_PROC $_ARGS" | grep -v grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
+    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "$_TARGET_CMD" | grep -v grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
   fi
 
   if [ -n "$_PID" ]; then

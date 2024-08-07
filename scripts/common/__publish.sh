@@ -1,8 +1,8 @@
-#!/bin/bash
-
-# Code that does publish modules to a Sui network
+# shellcheck shell=bash
 
 # Intended to be sourced only in __workdir-exec.sh
+
+# Code that does publish modules to a Sui network
 
 publish_all() {
 
@@ -14,11 +14,13 @@ publish_all() {
   fi
 
   # Add default --gas-budget if not specified.
+  # shellcheck disable=SC2086
   if ! has_param "" "--gas-budget" $_PASSTHRU_OPTIONS; then
     _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --gas-budget 500000000"
   fi
 
   # Add --json, but only if not already specified by the caller.
+  # shellcheck disable=SC2086
   if ! has_param "" "--json" $_PASSTHRU_OPTIONS; then
     _PASSTHRU_OPTIONS="$_PASSTHRU_OPTIONS --json"
   fi

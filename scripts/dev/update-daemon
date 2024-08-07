@@ -3,18 +3,18 @@
 SUIBASE_DIR="$HOME/suibase"
 WORKDIR="none"
 
-# shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
+# shellcheck source=SCRIPTDIR/../common/__suibase-daemon.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 trap cleanup EXIT
 
-# shellcheck source=SCRIPTDIR/scripts/common/__globals.sh
+# shellcheck source=SCRIPTDIR/../common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
 # Force stop the daemon.
 rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
-PID=$(lsof /tmp/.suibase/suibase-daemon.lock 2>/dev/null | grep "^suibase-d " | while read c1 c2 c3; do echo $c2; done)
-if [ -n "$PID" ]; then
-  kill -s SIGTERM $PID
+update_SUIBASE_DAEMON_PID_var
+if [ -n "$SUIBASE_DAEMON_PID" ]; then
+  kill -s SIGTERM "$SUIBASE_DAEMON_PID"
 fi
 
 update_suibase_daemon_and_start
