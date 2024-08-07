@@ -1,4 +1,4 @@
-#!/bin/bash
+# shellcheck shell=bash
 
 # You must source __globals.sh before __suibase-daemon.sh
 
@@ -288,6 +288,7 @@ wait_for_json_rpc_up() {
     _WORKDIR_NAME=${_WORKDIRS_STARTED_LIST[$_WORKDIRS_IDX]}
     _WORKDIRS_IDX=$(((_WORKDIRS_IDX + 1) % ${#_WORKDIRS_STARTED_LIST[@]}))
 
+    # shellcheck disable=SC2153
     local _SUI_EXEC="$WORKDIRS/$_WORKDIR_NAME/sui-exec"
 
     # Do a sui "client gas" call, and verify that
@@ -565,6 +566,7 @@ show_suibase_daemon_get_links() {
   local _JSON_PARAM=$2
 
   local _USER_REQUEST
+  # shellcheck disable=SC2153
   _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
   if [ "$_USER_REQUEST" = "stop" ]; then

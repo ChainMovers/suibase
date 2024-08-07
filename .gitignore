@@ -1,5 +1,5 @@
 # Ignore suibase outputs
-workdirs/
+workdirs/**
 scripts/tests/result.txt
 scripts/templates/common/
 typescript/vscode-extension/out/

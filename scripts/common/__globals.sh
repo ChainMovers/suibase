@@ -1,4 +1,4 @@
-#!/bin/bash
+# shellcheck shell=bash
 
 # Do not call this script directly. It is a "common script" sourced by other suibase scripts.
 #

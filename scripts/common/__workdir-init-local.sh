@@ -1,11 +1,11 @@
-#!/bin/bash
+# shellcheck shell=bash
+
+# Intended to be sourced only in __workdir-exec.sh
 
 # Code that does the client.yaml and sui.keystore initialization for localnet.
 #
 # Also does only "regen" of the network when an existing client.yaml and sui.keystore
 # already can be preserved (to re-use same client address).
-
-# Intended to be sourced only in __workdir-exec.sh
 
 apply_suibase_yaml_to_config_yaml() {
   local _GENDATA_DIR=$1
