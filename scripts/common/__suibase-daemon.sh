@@ -418,6 +418,15 @@ update_SUIBASE_DAEMON_PID_var() {
     setup_error "The CLI command 'lsof' must be installed to run Suibase"
   fi
 
+  # If the lock file exists but apparently not working, use ps as a fallback
+  # (in rare scenario where shell have permission issues).
+  local _PID
+  _PID=$(get_process_pid "$SUIBASE_DAEMON_BIN")
+  if [ -n "$_PID" ] && [ "$_PID" != "NULL" ]; then
+    SUIBASE_DAEMON_PID="$_PID"
+    return
+  fi
+
   SUIBASE_DAEMON_PID=""
 }
 export -f update_SUIBASE_DAEMON_PID_var
