@@ -40,15 +40,14 @@ NA
 @tab pysui
 
 ```python
-    from pysui.sui.sui_pgql.clients import SuiGQLClient
-    from pysui import SuiConfig
+    from pysui import PysuiConfiguration, SyncGqlClient
 
     def main():
         """Dump Sui GraphQL Schema."""
-        # Initialize synchronous client (must be mainnet or testnet)
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=True)
-
-        print("Schema dumped to: `<NETWORK>_schema-<VERSION>.graqhql`")
+        # Initialize synchronous client
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=True)
+        print(f"Schema dumped to: {client_init.base_schema_version}.graqhql`")
 
     if __name__ == "__main__":
         main()
@@ -71,28 +70,30 @@ NA at this time
 @tab pysui
 
 ```python
-    #
-    """Query using predefined pysui QueryNode."""
+    """Development example."""
 
-    from pysui.sui.sui_pgql.clients import SuiGQLClient
+    from pysui import PysuiConfiguration, handle_result, SyncGqlClient
     import pysui.sui.sui_pgql.pgql_query as qn
-    from pysui import SuiConfig
 
-    def main(client: SuiGQLClient):
+
+    def main(client: SyncGqlClient):
         """Fetch 0x2::sui::SUI (default) for owner."""
         # GetCoins defaults to '0x2::sui::SUI' coin type so great for owners gas listing
-        # Replace <ADDRESS_STRING> with a valid testnet or mainnet address
-        qres = client.execute_query(
-            with_query_node=qn.GetCoins(
-                owner="<ADDRESS_STRING>"
+        qres = client.execute_query_node(
+            with_node=qn.GetCoins(
+                owner="0x00878369f475a454939af7b84cdd981515b1329f159a1aeb9bf0f8899e00083a"
             )
         )
-        # Results are mapped to dataclasses/dataclasses-json
-        print(qres.to_json(indent=2))
+        # 1. QueryNode results are mapped to dataclasses/dataclasses-json
+        print(qres.result_data.to_json(indent=2))
+
+        # 2. Or get the data through handle_result
+        # print(handle_result(qres).to_json(indent=2))
 
     if __name__ == "__main__":
-        # Initialize synchronous client (must be mainnet or testnet)
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        # Initialize synchronous client
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=False)
         main(client_init)
 ```
 :::
@@ -138,21 +139,20 @@ NA at this time
 
     def main(client: SuiGQLClient):
         """Execute a dry run with TransactionData where gas and budget set by txer."""
-        if client.chain_environment == "testnet":
-            txer = SyncTransaction(client=SyncClient(client.config))
-            scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
-            txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+        txer = SuiTransaction(client=client)
+        scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
+        txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
 
-            tx_b64 = base64.b64encode(txer.get_transaction_data().serialize()).decode()
-            handle_result(
-                client.execute_query(
-                    with_query_node=qn.DryRunTransaction(tx_bytestr=tx_b64)
-                )
-            )
+        tx_b64 = base64.b64encode(txer.transaction_data().serialize()).decode()
+        print(tx_b64)
+        handle_result(
+            client.execute_query_node(with_node=qn.DryRunTransaction(tx_bytestr=tx_b64))
+        )
 
     if __name__ == "__main__":
         # Initialize synchronous client (must be mainnet or testnet)
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=False)
         main(client_init)
 ```
 :::
@@ -199,21 +199,19 @@ NA at this time
 
     def main(client: SuiGQLClient):
         """Execute a dry run with TransactionKind where meta data is set by caller."""
-        if client.chain_environment == "testnet":
-            txer = SyncTransaction(client=SyncClient(client.config))
-            scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
-            txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
-            # Serialize the TransactionKind which performs faster
-            tx_b64 = base64.b64encode(txer.raw_kind().serialize()).decode()
-            handle_result(
-                client.execute_query(
-                    with_query_node=qn.DryRunTransactionKind(tx_bytestr=tx_b64)
-                )
-            )
+        txer = SuiTransaction(client=client)
+        scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
+        txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+
+        tx_b64 = base64.b64encode(txer.raw_kind().serialize()).decode()
+        handle_result(
+            client.execute_query_node(with_node=qn.DryRunTransactionKind(tx_bytestr=tx_b64))
+        )
 
     if __name__ == "__main__":
         # Initialize synchronous client (must be mainnet or testnet)
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=False)
         main(client_init)
 ```
 :::
@@ -264,26 +262,16 @@ NA at this time
         The result contains the digest of the transaction which can then be queried
         for details
         """
-        if client.chain_environment == "testnet":
-            rpc_client = SyncClient(client.config)
-            txer = SyncTransaction(client=rpc_client)
-            scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
-            txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
-            tx_b64 = txer.deferred_execution(run_verification=True)
-            sig_array = txer.signer_block.get_signatures(client=rpc_client, tx_bytes=tx_b64)
-            # sig_array is a SuiArray which wraps a list, we want the list only
-            rsig_array = [x.value for x in sig_array.array]
-            handle_result(
-                client.execute_query(
-                    with_query_node=qn.ExecuteTransaction(
-                        tx_bytestr=tx_b64, sig_array=rsig_array
-                    )
-                )
-            )
+        txer: SuiTransaction = SuiTransaction(client=client)
+        scres = txer.split_coin(coin=txer.gas, amounts=[1000000000])
+        txer.transfer_objects(transfers=scres, recipient=client.config.active_address)
+        txdict = txer.build_and_sign()
+        handle_result(client.execute_query_node(with_node=qn.ExecuteTransaction(**txdict)))
 
     if __name__ == "__main__":
         # Initialize synchronous client (must be mainnet or testnet)
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=False)
         main(client_init)
 ```
 :::
@@ -357,7 +345,8 @@ curl -X POST https://graphql-beta.mainnet.sui.io \
         print(qres)
 
     if __name__ == "__main__":
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=False)
         main(client_init)
 
 ```
@@ -392,7 +381,8 @@ NA
 
     if __name__ == "__main__":
         # Initialize synchronous client (must be mainnet or testnet)
-        client_init = SuiGQLClient(config=SuiConfig.default_config(),write_schema=False)
+        cfg = PysuiConfiguration(group_name=PysuiConfiguration.SUI_GQL_RPC_GROUP )
+        client_init = SyncGqlClient(pysui_config=cfg,write_schema=False)
         main(client_init)
 
 ```
