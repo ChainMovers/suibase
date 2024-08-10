@@ -45,7 +45,7 @@ impl ShellWorker {
         let resp: Option<String>;
 
         let is_status_call = if let Some(command) = &msg.command {
-            !command.ends_with("status --daemoncall")
+            command.ends_with("status --daemoncall")
         } else {
             false
         };
@@ -71,7 +71,7 @@ impl ShellWorker {
             let cmd = &msg.command.clone().unwrap();
             let cwd = format!("{}/suibase", self.home_dir.display());
 
-            if is_status_call {
+            if !is_status_call {
                 log::info!(
                     "do_exec() cwd={} cmd={:?} for workdir_idx={:?}",
                     cwd,
@@ -124,7 +124,9 @@ impl ShellWorker {
                                         "Error: do_exec({:?}, {:?}) returned {}",
                                         msg.workdir_idx, cmd, outputs
                                     );
-                                    log::error!("{}", error_msg);
+                                    if !is_status_call {
+                                        log::error!("{}", error_msg);
+                                    }
                                     resp = Some(error_msg);
                                 }
                             }
@@ -133,7 +135,9 @@ impl ShellWorker {
                                     "Error: do_exec({:?}, {:?}) command call failed: {}",
                                     msg.workdir_idx, cmd, e
                                 );
-                                log::error!("{}", error_msg);
+                                if !is_status_call {
+                                    log::error!("{}", error_msg);
+                                }
                                 resp = Some(error_msg);
                             }
                         },

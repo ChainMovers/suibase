@@ -369,7 +369,7 @@ stop_suibase_daemon() {
     end=$((SECONDS + 15))
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
-      update_SUIBASE_DAEMON__PID_var
+      update_SUIBASE_DAEMON_PID_var
       if [ -z "$SUIBASE_DAEMON__PID" ]; then
         break
       else
