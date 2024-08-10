@@ -40,6 +40,8 @@ workdir_init_remote() {
     sed -i.bak -e "s+$SEARCH_STRING+$REPLACE_STRING+g" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" && rm "$CONFIG_DATA_DIR_DEFAULT/client.yaml.bak"
   fi
 
+  start_all_services
+
   # Create client addresses, but only if there is no sui.keystore already (and allowed by suibase.yaml)
   if [ ! -f "$CONFIG_DATA_DIR_DEFAULT/sui.keystore" ]; then
     add_test_addresses "$SUI_BIN_DIR/sui" "$CONFIG_DATA_DIR_DEFAULT/client.yaml" "$CONFIG_DATA_DIR_DEFAULT/recovery.txt"

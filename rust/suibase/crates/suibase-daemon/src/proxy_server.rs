@@ -12,9 +12,8 @@ use crate::network_monitor::{
 };
 use crate::shared_types::{
     GlobalsProxyMT, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_CONFIG_DISABLED,
-    REQUEST_FAILED_NOT_STARTED, REQUEST_FAILED_NO_SERVER_AVAILABLE,
-    REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
-    SEND_FAILED_UNSPECIFIED_ERROR,
+    REQUEST_FAILED_NO_SERVER_AVAILABLE, REQUEST_FAILED_NO_SERVER_RESPONDING,
+    REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX, SEND_FAILED_UNSPECIFIED_ERROR,
 };
 
 use anyhow::{anyhow, Result};
@@ -171,6 +170,7 @@ impl ProxyServer {
                     ))
                     .into());
                 }
+                /*
                 if !input_port.is_user_request_start() {
                     let _perf_report = report
                         .req_fail(retry_count, REQUEST_FAILED_NOT_STARTED)
@@ -180,7 +180,7 @@ impl ProxyServer {
                         input_port.workdir_name()
                     ))
                     .into());
-                }
+                }*/
 
                 if let Some(target_server_idx) = do_force_target_server_idx {
                     if let Some(target_server) = input_port.target_servers.get(target_server_idx) {

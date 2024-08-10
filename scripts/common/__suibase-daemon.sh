@@ -221,7 +221,7 @@ start_suibase_daemon() {
 export -f start_suibase_daemon
 
 wait_for_json_rpc_up() {
-  local _CMD=$1 # a specif workdir, "any" or "exclude-localnet"
+  local _CMD=$1 # a specific workdir, "any" or "exclude-localnet"
 
   # Array of valid workdirs
   local _WORKDIRS_VALID_LIST=("localnet" "testnet" "devnet" "mainnet")
@@ -295,13 +295,20 @@ wait_for_json_rpc_up() {
     # it returns something valid.
 
     _SUI_RESP=$("$_SUI_EXEC" client gas --json 2>&1)
+    # echo "client gas for $_WORKDIR_NAME returns [$_SUI_RESP]"
     if [ -n "$_SUI_RESP" ]; then
-      # Valid if starts with [ and end with ]
-      if [[ "$_SUI_RESP" =~ ^\[.*\]$ ]]; then
+      # Valid if starts with [ and end with ] ... or respond with "no addresses".
+      if [[ "$_SUI_RESP" =~ ^\[.*\]$ ]] || [[ "$_SUI_RESP" =~ "No managed addresses" ]]; then
         _JSON_RPC_UP=true
         break
       fi
     fi
+
+    if [ "$_i" -eq 1 ] || [ "$_i" -eq 4 ] || [ "$_i" -eq 12 ]; then
+      # *Kick* the daemons in case they have not detected yet the "start" state.
+      trig_daemons_refresh
+    fi
+
     # Wait one second before trying again.
     if [ "$_i" -eq 5 ]; then
       echo -n "Verifying JSON-RPC is responding..."
@@ -588,7 +595,7 @@ show_suibase_daemon_get_links() {
 
   if [ $SUIBASE_DAEMON_STARTED = true ]; then
     # Give a moment for the daemon to start.
-    wait_for_json_rpc_up "exclude-localnet"
+    wait_for_json_rpc_up "${WORKDIR_NAME}"
   fi
 
   local _DISP
