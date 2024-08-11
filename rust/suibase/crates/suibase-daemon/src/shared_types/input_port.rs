@@ -177,24 +177,7 @@ impl InputPort {
         self.proxy_server_running = false;
     }
 
-    fn find_best_target_server(&self) -> Option<(TargetServerIdx, String)> {
-        let mut best_score: f64 = f64::MIN;
-        let mut best_uri: String = String::new();
-        let mut best_idx = None;
 
-        // TODO integrate the user priority in this logic when there is no health_score yet!
-
-        for (i, target_server) in self.target_servers.iter() {
-            let score = target_server.health_score();
-            if score > best_score {
-                best_score = score;
-                best_idx = Some(i);
-                best_uri = target_server.rpc();
-            }
-        }
-
-        Some((best_idx?, best_uri))
-    }
 
     pub fn get_best_target_servers(
         &self,
@@ -203,14 +186,7 @@ impl InputPort {
     ) {
         // Just leave target_servers untouch if there is any problem.
 
-        if self.selection_vectors.is_empty() {
-            // NetworkMonitor has not get a chance to run sufficiently yet, but the user
-            // traffic is already coming in... so default to a simpler best server selection
-            // that may rely more on the config user priority.
-            if let Some((best_idx, best_uri)) = self.find_best_target_server() {
-                target_servers.push((best_idx, best_uri));
-            }
-        } else {
+        if !self.selection_vectors.is_empty() {
             // Select up to 'RETRY_COUNT' healthy (when available).
             //
             // Get the first 'RETRY_COUNT' TargetServerIdx stored in self.selection_vectors[x][y] by incrementing x first then y.
@@ -259,20 +235,52 @@ impl InputPort {
                 }
             }
 
-            if self.target_servers.len() == 0 {
-                // Not a single healthy TargetServer so fallback to choose among the
-                // worst selections.
-                // Note: This can normally happen on initialization or hard recovery.
-                for &idx in &self.selection_worst {
-                    if let Some(uri) = self.uri(idx) {
-                        target_servers.push((idx, uri));
-                        count += 1;
-                        if count == RETRY_COUNT {
-                            return; // Done
+            // Not enough healthy TargetServer so fallback to choose among the
+            // worst selections.
+            // Note: This can normally happen on initialization or hard recovery.
+            for &idx in &self.selection_worst {
+                if let Some(uri) = self.uri(idx) {
+                    target_servers.push((idx, uri));
+                    count += 1;
+                    if count == RETRY_COUNT {
+                        return; // Done
+                    }
+                }
+            }
+        }
+        // NetworkMonitor has not get a chance to run sufficiently yet, but the user
+        // traffic is already coming in... so default to a simpler best server selection
+        // that may rely more on the config user priority.
+        if target_servers.is_empty() {
+            for (_, target_server) in self.target_servers.iter() {
+                if target_server.is_selectable() {
+                    if let Some(idx) = target_server.idx() {
+                        if let Some(uri) = self.uri(idx) {
+                            target_servers.push((idx, uri));
                         }
                     }
                 }
             }
+
+            // Sort target_servers by health_score().
+            // TODO Consider using user configured priority.
+            target_servers.sort_by(|a, b| {
+                let a_server = self.target_servers.get(a.0).unwrap();
+                let b_server = self.target_servers.get(b.0).unwrap();
+                let a_score = a_server.health_score();
+                let b_score = b_server.health_score();
+                if a_score == b_score {
+                    a_server.stats.alias().cmp(&b_server.stats.alias())
+                } else {
+                    a_score.partial_cmp(&b_score).unwrap()
+                }
+            });
+
+            log::info!(
+                "{} using default best server selection: {:?}",
+                self.workdir_name,
+                target_servers
+            );
         }
     }
 
@@ -343,11 +351,11 @@ impl InputPort {
                 }
             }
         } else {
-            // This is for when there is not a single best_latency_avg_idx
-            // (happens only briefly on process initialization).
-            // TODO implement using user configuration priority instead to
-            //      make two bins.
-            self.selection_vectors.push(ok_idx_vec);
+            // That should never happen, but just in case the above logic is broken...
+            if !ok_idx_vec.is_empty() {
+                log::warn!("Using unexpectedaly ok_idx_vec");
+                self.selection_vectors.push(ok_idx_vec);
+            }
         }
 
         // Sort every selection_vectors by ascending latency.

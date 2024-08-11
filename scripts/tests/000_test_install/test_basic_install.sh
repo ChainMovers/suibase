@@ -33,14 +33,24 @@ tests() {
   fi
 }
 
+delete_workdirs() {
+  echo "Deleting workdirs"
+  ~/suibase/scripts/dev/stop-daemon
+  rm -rf ~/suibase/workdirs >/dev/null 2>&1
+  # Display the content of workdirs (recursively) if still exists.
+  if [ -d "$HOME/suibase/workdirs" ]; then
+    echo "Workdirs deletion failed. Files remaining:"
+    ls -lR ~/suibase/workdirs
+  fi
+}
+
 test_no_workdirs() {
   rm -rf ~/suibase/workdirs >/dev/null 2>&1
   # Make sure not in a directory that was deleted.
   cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
 
   if $SCRIPTS_TESTS_OPTION; then
-    rm -rf ~/suibase/workdirs
-    echo "localnet update"
+    delete_workdirs
     (localnet update >"$OUT" 2>&1) || fail "update"
     assert_workdir_ok "localnet"
     assert_build_ok "localnet"
@@ -49,7 +59,7 @@ test_no_workdirs() {
     echo "localnet delete"
     (localnet delete >"$OUT" 2>&1) || fail "delete"
 
-    rm -rf ~/suibase/workdirs
+    delete_workdirs
     echo "localnet start"
     (localnet start >"$OUT" 2>&1) || fail "start"
     assert_workdir_ok "localnet"
@@ -61,7 +71,7 @@ test_no_workdirs() {
     assert_build_ok "localnet"
   fi
 
-  rm -rf ~/suibase/workdirs
+  delete_workdirs
   echo "localnet create"
   (localnet create >"$OUT" 2>&1) || fail "create"
   assert_workdir_ok "localnet"

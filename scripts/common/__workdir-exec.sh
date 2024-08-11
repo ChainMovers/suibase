@@ -43,11 +43,11 @@ usage_local() {
   echo
   echo
   echo_low_green "   start"
-  echo "    Start $WORKDIR processes (will run in background)"
+  echo "    Start $WORKDIR services (will run in background)"
   echo_low_green "   stop"
-  echo "     Stop $WORKDIR processes (will all exit)"
+  echo "     Stop $WORKDIR services"
   echo_low_green "   status"
-  echo "   Info about all the suibase related processes"
+  echo "   Info about all suibase services."
   echo
   echo_low_green "   create"
   echo "   Create workdir only. This can be useful for changing"
@@ -116,11 +116,11 @@ usage_remote() {
   echo
   echo
   echo_low_green "   start"
-  echo "    Start $WORKDIR processes (will run in background)"
+  echo "    Start $WORKDIR services (will run in background)"
   echo_low_green "   stop"
-  echo "     Stop $WORKDIR processes (will all exit)"
+  echo "     Stop $WORKDIR services"
   echo_low_green "   status"
-  echo "   Info about all the suibase related processes"
+  echo "   Info about all suibase services."
   echo
   echo_low_green "   create"
   echo "   Create workdir only. This can be useful for changing"
@@ -128,13 +128,11 @@ usage_remote() {
   echo
   echo_low_green "   build"
   echo "    Download/update local repo and build binaries only. You"
-  echo "            may have to do next an update or start to create a wallet."
+  echo "            may have to do next an 'update' or 'start' to create a wallet."
   echo
   echo_low_green "   update"
   echo "   Update local sui repo, build binaries, create a wallet as"
   echo "            needed."
-  echo "            Note: Will not do any git operations if your own"
-  echo "                  repo is configured with set-sui-repo."
   echo
   echo_low_green "   publish"
   echo "  Publish the module specified in the Move.toml found"
@@ -147,12 +145,6 @@ usage_remote() {
   echo
   echo "            Makes $WORKDIR the active context for many"
   echo "            development tools and the 'asui' script."
-  echo
-  echo_low_green "   set-sui-repo"
-  echo
-  echo "            Allows to specify a '--path <path>' to use your own"
-  echo "            local repo instead of the default latest from github."
-  echo "            Just omit '--path' to return to default."
   echo
 }
 
@@ -255,7 +247,7 @@ workdir_exec() {
       esac
       shift
     done
-    ;; # End parsing publish
+    ;; # End parsing set-sui-repo
   publish)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
@@ -367,8 +359,6 @@ workdir_exec() {
     fi
   fi
 
-
-
   # CLI Mutex to prevent concurrent conflicting commands.
   # (only "status" is allowed to run concurrently)
   if [ "$CMD_STATUS_REQ" = false ]; then
@@ -398,7 +388,7 @@ workdir_exec() {
   # Detect commands that should not be done on a remote network.
   if [ "$is_local" = false ]; then
     case "$CMD_REQ" in
-    regen)
+    set-sui-repo|regen)
       echo "Command '$CMD_REQ' not allowed for $WORKDIR"
       exit 1
       ;;
@@ -1150,10 +1140,10 @@ workdir_exec() {
 
   # print sui envs to help debugging (if someone else is using this script).
 
-  CLIENT_YAML_ENVS=$($SUI_EXEC client envs | grep -e "$WORKDIR" -e "─" -e "│ active │")
+  CLIENT_YAML_ENVS=$($SUI_EXEC client envs 2>/dev/null | grep -e "$WORKDIR" -e "─" -e "│ active │")
   echo "$CLIENT_YAML_ENVS"
 
-  $SUI_EXEC client addresses
+  $SUI_EXEC client addresses 2>/dev/null
 
   local _ADV="Try it by typing \"$SUI_SCRIPT client gas\""
 
@@ -1163,7 +1153,7 @@ workdir_exec() {
     echo "There are no addresses in the wallet."
     _ADV="You can create the first wallet address with \"$SUI_SCRIPT client new-address ed25519\""
   else
-    COINS_OWNED=$($SUI_EXEC client gas)
+    COINS_OWNED=$($SUI_EXEC client gas 2>/dev/null)
     # In awk, use $4 field if sui client version >= 1.11.0, otherwise use $3 field.
     update_SUI_VERSION_var
     if version_less_than "$SUI_VERSION" "sui 1.11.0"; then
@@ -1215,194 +1205,6 @@ workdir_exec() {
     fi
   fi
 }
-
-stop_all_services() {
-  #
-  # Exit if fails to get ALL the process stopped.
-  #
-  # The suibase-daemon and dtp-daemon are exception to the rule... they
-  # "self-exit" when no longer needed.
-  #
-  # Returns:
-  #   0: Success (all process needed to be stopped were stopped)
-  #   1: Everything already stopped. Call was NOOP (except for user_request writing)
-
-  # Note: Try hard to keep the dependency here low on $WORKDIR.
-  #       We want to try to stop the processes even if most of
-  #       the workdir content is in a bad state.
-  local _OLD_USER_REQUEST
-  if [ -d "$WORKDIRS/$WORKDIR" ]; then
-    _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
-    # Always write to "touch" the file and possibly cause
-    # downstream resynch/fixing.
-    set_key_value "$WORKDIR" "user_request" "stop"
-    if [ "$_OLD_USER_REQUEST" != "stop" ]; then
-      sync_client_yaml
-    fi
-  fi
-
-  if [ "${CFG_network_type:?}" = "remote" ]; then
-    # Nothing needed to be stop for remote network.
-    if [ "$_OLD_USER_REQUEST" = "stop" ]; then
-      # Was already stopped.
-      return 1
-    fi
-    # Transition to "stop" state successful.
-    notify_suibase_daemon_fs_change
-    notify_dtp_daemon_fs_change
-    notify_suibase_daemon_workdir_change
-    return 0
-  fi
-
-  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
-    return 1
-  fi
-
-  # Stop the processes in reverse order.
-  if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
-    stop_sui_faucet_process
-  fi
-
-  if [ -n "$SUI_PROCESS_PID" ]; then
-    stop_sui_process
-  fi
-
-  # Check if successful.
-  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
-    echo "$WORKDIR now stopped"
-  else
-    setup_error "Failed to stop everything. Try again. Use \"$WORKDIR status\" to see what is still running."
-  fi
-
-  # Success. All process that needed to be stopped were stopped.
-  notify_suibase_daemon_fs_change
-  notify_dtp_daemon_fs_change
-  notify_suibase_daemon_workdir_change
-  return 0
-}
-export -f stop_all_services
-
-start_all_services() {
-  #
-  # Exit if fails to get one of the needed process running.
-  #
-  # Returns:
-  #   0: Success (all process needed to be started were started)
-  #   1: Everything needed particular to this workdir already running
-  #      (Note: suibase-daemon and dtp-daemon are not *particular* to a workdir)
-  local _OLD_USER_REQUEST
-  _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
-  local _CHANGE_ATTEMPTED=false
-
-  set_key_value "$WORKDIR" "user_request" "start"
-
-  # A good time to double-check if some commands from the suibase.yaml need to be applied.
-  copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
-
-  # Also a good time to double-check the daemons are running (when needed).
-  if ! start_suibase_daemon_as_needed; then
-    setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
-  fi
-
-  if ! start_dtp_daemon_as_needed; then
-    setup_error "$DTP_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
-  fi
-
-  if [ "$_OLD_USER_REQUEST" != "start" ]; then
-    _CHANGE_ATTEMPTED=true
-  fi
-
-  # Verify if all other expected process are running.
-
-  if [ "${CFG_network_type:?}" = "remote" ]; then
-    # No other process expected for remote network.
-    sync_client_yaml
-    if [ "$_OLD_USER_REQUEST" = "start" ]; then
-      # Was already started.
-      wait_for_json_rpc_up "exclude-localnet"
-      return 1
-    fi
-    # Transition to "start" state successful.
-    notify_suibase_daemon_fs_change
-    notify_dtp_daemon_fs_change
-    notify_suibase_daemon_workdir_change
-    wait_for_json_rpc_up "exclude-localnet"
-    return 0
-  fi
-
-  # Verify if the faucet is supported for this version.
-  local _SUPPORT_FAUCET
-  if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
-    _SUPPORT_FAUCET=false
-  else
-    _SUPPORT_FAUCET=true
-  fi
-
-  local _ALL_RUNNING=true
-  if [ "$_SUPPORT_FAUCET" = true ] && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-    _ALL_RUNNING=false
-  fi
-
-  if [ -z "$SUI_PROCESS_PID" ]; then
-    _ALL_RUNNING=false
-  fi
-
-  if [ "$_ALL_RUNNING" = true ]; then
-    sync_client_yaml
-    wait_for_json_rpc_up "any"
-    return 1
-  fi
-
-
-  if [ -z "$SUI_PROCESS_PID" ]; then
-    # Note: start_sui_process has to call sync_client_yaml itself to remove the
-    #       use of the proxy. This explains why start_sui_process is called on
-    #       the exit of this function and not before.
-    start_sui_process
-    _CHANGE_ATTEMPTED=true
-  fi
-
-  if [ -z "$SUI_PROCESS_PID" ]; then
-    setup_error "Not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
-  fi
-
-  if $_SUPPORT_FAUCET; then
-    if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-      start_sui_faucet_process
-      _CHANGE_ATTEMPTED=true
-    fi
-
-    if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-      setup_error "Faucet not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
-    fi
-  fi
-
-  if [ "$_CHANGE_ATTEMPTED" = true ]; then
-    notify_suibase_daemon_fs_change
-    notify_dtp_daemon_fs_change
-    notify_suibase_daemon_workdir_change
-  fi
-
-  # Success. All process that needed to be started were started.
-  sync_client_yaml
-  wait_for_json_rpc_up "any"
-  return 0
-}
-
-is_at_least_one_service_running() {
-  # Keep this function cohesive with start/stop
-  #
-  # SUIBASE_DAEMON and DTP_DAEMON are exceptions to the rule... they should always run!
-  update_SUI_FAUCET_PROCESS_PID_var
-  update_SUI_PROCESS_PID_var
-  if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then
-    true
-    return
-  fi
-  false
-  return
-}
-export -f is_at_least_one_service_running
 
 echo_process() {
   local _LABEL=$1

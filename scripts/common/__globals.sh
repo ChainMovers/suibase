@@ -2308,15 +2308,31 @@ update_ACTIVE_ADDRESS_var() {
   ACTIVE_ADDRESS=""
   # Get the active address by querying the client.
   local _ADDR
-  _ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" active-address | grep "0x")
-  if [[ "$_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
-    _ADDR="${BASH_REMATCH[0]}"
-  fi
-  # TODO Better validation that the address is valid!?
-  if [ -n "$_ADDR" ]; then
-    ACTIVE_ADDRESS="$_ADDR"
-  else
-    warn_user "Unable to get active address from [$_CLIENT_FILE]"
+  local _CMD_OUTPUT
+  local _RETRY_COUNT=0
+  local _MAX_RETRIES=2
+
+  while [ $_RETRY_COUNT -lt $_MAX_RETRIES ]; do
+    _CMD_OUTPUT=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" active-address 2>/dev/null)
+    _ADDR=$(echo "$_CMD_OUTPUT" | grep "0x")
+    if [[ "$_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
+      _ADDR="${BASH_REMATCH[0]}"
+    fi
+    # TODO Better validation that the address is valid!?
+    if [ -n "$_ADDR" ]; then
+      ACTIVE_ADDRESS="$_ADDR"
+      break
+    else
+      if [ $_RETRY_COUNT -eq 0 ]; then
+        echo "Getting active address for ${WORKDIR_NAME}"
+      fi
+      wait_for_json_rpc_up "${WORKDIR_NAME}"
+      _RETRY_COUNT=$((_RETRY_COUNT + 1))
+    fi
+  done
+
+  if [ -z "$ACTIVE_ADDRESS" ]; then
+      warn_user "Unable to get active address from [$_CLIENT_FILE]"
   fi
 }
 export -f update_ACTIVE_ADDRESS_var
@@ -2342,27 +2358,27 @@ add_test_addresses() {
   local _CLIENT_FILE=$2
   local _WORDS_FILE=$3
 
+  wait_for_json_rpc_up "${WORKDIR_NAME}"
+
   {
-    for _ in {1..5}; do
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519
-      echo ============================
-      echo
-      echo
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256k1
-      echo ============================
-      echo
-      echo
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256r1
-      echo ============================
-      echo
-      echo
+    echo "["
+    for _i in {1..5}; do
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519 --json 2>/dev/null
+      echo ","
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256k1 --json 2>/dev/null
+      echo ","
+      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256r1 --json 2>/dev/null
+      if [ "$_i" -lt 5 ]; then
+        echo ","
+      fi
     done
+    echo "]"
   } >>"$_WORDS_FILE"
 
   # Set highest address as active. Best-effort... just warn if fails.
   local _HIGH_ADDR
   local _SET_ACTIVE_SUCCESS=false
-  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses | grep -v "activeAddress" | grep "0x" | sort -r | { head -n 1; cat >/dev/null 2>&1; })
+  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses --json | grep -v "activeAddress" | grep "0x" | sort -r | { head -n 1; cat >/dev/null 2>&1; })
   if [[ "$_HIGH_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
     _HIGH_ADDR="${BASH_REMATCH[0]}"
 
@@ -3334,3 +3350,184 @@ exit_if_deps_missing() {
     fi
   fi
 }
+
+trig_daemons_refresh() {
+  if command -v notify_suibase_daemon_fs_change >/dev/null 2>&1; then
+    notify_suibase_daemon_fs_change
+  fi
+
+  if command -v notify_dtp_daemon_fs_change >/dev/null 2>&1; then
+    notify_dtp_daemon_fs_change
+  fi
+
+  if command -v notify_suibase_daemon_workdir_change >/dev/null 2>&1; then
+    notify_suibase_daemon_workdir_change
+  fi
+}
+export -f trig_daemons_refresh
+
+stop_all_services() {
+  #
+  # Exit if fails to get ALL the process stopped.
+  #
+  # The suibase-daemon and dtp-daemon are exception to the rule... they
+  # "self-exit" when no longer needed.
+  #
+  # Returns:
+  #   0: Success (all process needed to be stopped were stopped)
+  #   1: Everything already stopped. Call was NOOP (except for user_request writing)
+
+  # Note: Try hard to keep the dependency here low on $WORKDIR.
+  #       We want to try to stop the processes even if most of
+  #       the workdir content is in a bad state.
+  local _OLD_USER_REQUEST
+  if [ -d "$WORKDIRS/$WORKDIR" ]; then
+    _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
+    # Always write to "touch" the file and possibly cause
+    # downstream resynch/fixing.
+    set_key_value "$WORKDIR" "user_request" "stop"
+    if [ "$_OLD_USER_REQUEST" != "stop" ]; then
+      sync_client_yaml
+    fi
+  fi
+
+  if [ "${CFG_network_type:?}" = "remote" ]; then
+    # Nothing needed to be stop for remote network.
+    if [ "$_OLD_USER_REQUEST" = "stop" ]; then
+      # Was already stopped.
+      return 1
+    fi
+    # Transition to "stop" state successful.
+    return 0
+  fi
+
+  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
+    return 1
+  fi
+
+  # Stop the processes in reverse order.
+  if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
+    stop_sui_faucet_process
+  fi
+
+  if [ -n "$SUI_PROCESS_PID" ]; then
+    stop_sui_process
+  fi
+
+  # Check if successful.
+  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
+    echo "$WORKDIR now stopped"
+  else
+    setup_error "Failed to stop everything. Try again. Use \"$WORKDIR status\" to see what is still running."
+  fi
+
+  # Success. All process that needed to be stopped were stopped.
+  trig_daemons_refresh
+  return 0
+}
+export -f stop_all_services
+
+start_all_services() {
+  #
+  # Exit if fails to get one of the needed process running.
+  #
+  # Returns:
+  #   0: Success (all process needed to be started were started)
+  #   1: Everything needed particular to this workdir already running
+  #      (Note: suibase-daemon and dtp-daemon are not *particular* to a workdir)
+  #
+  local _OLD_USER_REQUEST
+  _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
+
+  set_key_value "$WORKDIR" "user_request" "start"
+
+  # A good time to double-check if some commands from the suibase.yaml need to be applied.
+  copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
+
+  # Also a good time to double-check the daemons are running (when needed).
+  if ! start_suibase_daemon_as_needed; then
+    setup_error "$SUIBASE_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
+  fi
+
+  if ! start_dtp_daemon_as_needed; then
+    setup_error "$DTP_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
+  fi
+
+  # Verify if all other expected process are running.
+
+  if [ "${CFG_network_type:?}" = "remote" ]; then
+    # No other process expected for remote network.
+    # Just check that suibase-daemon is responding.
+    sync_client_yaml
+    trig_daemons_refresh
+    wait_for_json_rpc_up "${WORKDIR_NAME}"
+    return 0
+  fi
+
+  # Verify if the faucet is supported for this version.
+  local _SUPPORT_FAUCET
+  if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
+    _SUPPORT_FAUCET=false
+  else
+    _SUPPORT_FAUCET=true
+  fi
+
+  local _ALL_RUNNING=true
+  if [ "$_SUPPORT_FAUCET" = true ] && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+    _ALL_RUNNING=false
+  fi
+
+  if [ -z "$SUI_PROCESS_PID" ]; then
+    _ALL_RUNNING=false
+  fi
+
+  if [ "$_ALL_RUNNING" = true ]; then
+    sync_client_yaml
+    trig_daemons_refresh
+    wait_for_json_rpc_up "${WORKDIR_NAME}"
+    return 1
+  fi
+
+
+  if [ -z "$SUI_PROCESS_PID" ]; then
+    # Note: start_sui_process has to call sync_client_yaml itself to remove the
+    #       use of the proxy. This explains why start_sui_process is called on
+    #       the exit of this function and not before.
+    start_sui_process
+  fi
+
+  if [ -z "$SUI_PROCESS_PID" ]; then
+    setup_error "Not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
+  fi
+
+  if $_SUPPORT_FAUCET; then
+    if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+      start_sui_faucet_process
+    fi
+
+    if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+      setup_error "Faucet not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
+    fi
+  fi
+
+  # Success. All process that needed to be started were started.
+  sync_client_yaml
+  trig_daemons_refresh
+  wait_for_json_rpc_up "${WORKDIR_NAME}"
+  return 0
+}
+
+is_at_least_one_service_running() {
+  # Keep this function cohesive with start/stop
+  #
+  # SUIBASE_DAEMON and DTP_DAEMON are exceptions to the rule... they should always run!
+  update_SUI_FAUCET_PROCESS_PID_var
+  update_SUI_PROCESS_PID_var
+  if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then
+    true
+    return
+  fi
+  false
+  return
+}
+export -f is_at_least_one_service_running
