@@ -155,16 +155,33 @@ export SUIBASE_CLI_LOCK_ACQUIRED_TESTNET=0
 export SUIBASE_CLI_LOCK_ACQUIRED_MAINNET=0
 export SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=0
 export SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+export SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=0
+export SUIBASE_CLI_LOCK_DISABLED=0
 
+# Disable CLI mutex mechanism.
+#
+# Useful for when a script is called by a script that already acquired the necessary lock.
+# In that case, the child script should not use any of the mutex.
+cli_mutex_disable() {
+  SUIBASE_CLI_LOCK_DISABLED=1
+}
+export -f cli_mutex_disable
+
+# Allow to disable a lock. Used for
 cleanup() {
   # echo "Cleanup called"
   # Clear progress files created by this script.
-  if [ "$SUIBASE_DAEMON_UPGRADING" == "1" ]; then
+  if [ "$SUIBASE_DAEMON_UPGRADING" == "true" ]; then
     rm -f /tmp/.suibase/suibase-daemon-upgrading >/dev/null 2>&1
   fi
 
   # Associative arrays are not working for the trap. bash limitation?
   # Did workaround by painfully defining variables for each workdir.
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE" == "1" ]; then
+    cli_mutex_release "active"
+    SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+  fi
+
   if [ "$SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET" == "1" ]; then
     cli_mutex_release "localnet"
     SUIBASE_CLI_LOCK_ACQUIRED_LOCALNET=0
@@ -190,11 +207,10 @@ cleanup() {
     SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=0
   fi
 
-  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE" == "1" ]; then
-    cli_mutex_release "active"
-    SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON" == "1" ]; then
+    cli_mutex_release "suibase_daemon"
+    SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=0
   fi
-
 }
 
 # Add color
@@ -384,8 +400,7 @@ try_locked_command() {
 export -f try_locked_command
 
 
-cli_mutex_lock()
-{
+cli_mutex_lock() {
   # mutex is re-entrant (only first call to cli_mutex_lock will acquire the lock).
 
   # Design choice:
@@ -403,6 +418,10 @@ cli_mutex_lock()
   #    - other scenario where the trap EXIT is not called?
   #
   # Worst case, because the lock is in /tmp, a stale lock can be workaround with a reboot...
+
+  if [ "$SUIBASE_CLI_LOCK_DISABLED" == "1" ]; then
+    return
+  fi
 
   local _WORKDIR=$1
 
@@ -432,6 +451,9 @@ cli_mutex_lock()
     ;;
   active)
     _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE
+    ;;
+  suibase_daemon)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON
     ;;
   *)
     setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
@@ -467,12 +489,13 @@ cli_mutex_lock()
   active)
     SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=1
     ;;
+  suibase_daemon)
+    SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=1
+    ;;
   *)
     setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
     ;;
   esac
-
-  # echo "Lock acquired for $_WORKDIR"
 }
 export -f cli_mutex_lock
 
@@ -506,8 +529,11 @@ cli_mutex_release()
   active)
     _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE
     ;;
+  suibase_daemon)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON
+    ;;
   *)
-    setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
+    setup_error "Internal error. cli_mutex_release called with an unknown workdir $_WORKDIR"
     ;;
   esac
   if [ "$_IS_ACQUIRED" == "0" ]; then
@@ -536,6 +562,9 @@ cli_mutex_release()
     ;;
   active)
     SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
+    ;;
+  suibase_daemon)
+    SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=0
     ;;
   esac
 
@@ -3327,9 +3356,9 @@ has_param() {
 }
 export -f has_param
 
-export SUIBASE_DAEMON_UPGRADING=0
+export SUIBASE_DAEMON_UPGRADING=false
 progress_suibase_daemon_upgrading() {
-  SUIBASE_DAEMON_UPGRADING=1
+  SUIBASE_DAEMON_UPGRADING=true
   mkdir -p "$SUIBASE_TMP_DIR"
   touch "$SUIBASE_TMP_DIR/suibase-daemon-upgrading"
 }

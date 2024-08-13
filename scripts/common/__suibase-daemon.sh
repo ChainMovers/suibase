@@ -85,16 +85,17 @@ need_suibase_daemon_upgrade() {
 export -f need_suibase_daemon_upgrade
 
 build_suibase_daemon() {
+  # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+  cli_mutex_lock "suibase_daemon"
+
   #
   # (re)build suibase-daemon and install it.
   #
   echo "Building $SUIBASE_DAEMON_NAME"
   rm -f "$SUIBASE_DAEMON_VERSION_FILE" >/dev/null 2>&1
 
-  if [ "${CFG_proxy_enabled:?}" != "dev" ]; then
-    # Clean the build directory.
-    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
-  fi
+  # Clean the build directory.
+  rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
 
   (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
   # Copy the build result from target to $SUIBASE_BIN_DIR
@@ -127,10 +128,9 @@ build_suibase_daemon() {
   # Update the installed version file.
   echo "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" >|"$SUIBASE_DAEMON_VERSION_FILE"
 
-  if [ "${CFG_proxy_enabled:?}" != "dev" ]; then
-    # Clean the build directory.
-    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
-  fi
+
+  # Clean the build directory.
+  rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
 }
 export -f build_suibase_daemon
 
@@ -155,13 +155,16 @@ start_suibase_daemon() {
     return
   fi
 
-  echo "Starting $SUIBASE_DAEMON_NAME"
+  # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+  cli_mutex_lock "suibase_daemon"
 
-  if [ "${CFG_proxy_enabled:?}" = "dev" ]; then
-    # Run it in the foreground and just exit when done.
-    "$HOME"/suibase/scripts/common/run-daemon.sh suibase foreground
-    exit
+  # Check again while holding the lock.
+  if is_suibase_daemon_running; then
+    return
   fi
+
+  echo "Starting $SUIBASE_DAEMON_NAME"
+  mkdir -p "$HOME/suibase/workdirs/common/logs"
 
   # Try until can confirm the suibase-daemon is running healthy, or exit
   # if takes too much time.
@@ -177,7 +180,9 @@ start_suibase_daemon() {
     # All errors will be visible through the suibase-daemon own logs or by observing
     # which PID owns the flock file. So all output of the script (if any) can
     # safely be ignored to /dev/null.
-    nohup "$HOME/suibase/scripts/common/run-daemon.sh" suibase >/dev/null 2>&1 &
+    #
+    # "cli-call" param prevent run-daemon to try locking the CLI mutex.
+    nohup "$HOME/suibase/scripts/common/run-daemon.sh" suibase cli-call >"$HOME/suibase/workdirs/common/logs/run-daemon.log" 2>&1 &
 
     local _NEXT_RETRY=$((SECONDS + 10))
     while [ $SECONDS -lt $end ]; do
@@ -221,7 +226,7 @@ start_suibase_daemon() {
 export -f start_suibase_daemon
 
 wait_for_json_rpc_up() {
-  local _CMD=$1 # a specific workdir, "any" or "exclude-localnet"
+  local _CMD=$1 # a specific workdir, "any", "none" or "exclude-localnet"
 
   # Array of valid workdirs
   local _WORKDIRS_VALID_LIST=("localnet" "testnet" "devnet" "mainnet")
@@ -234,7 +239,7 @@ wait_for_json_rpc_up() {
     fi
   done
 
-  if [ "$_WORKDIR_VALID" = false ] && [ "$_CMD" != "any" ] && [ "$_CMD" != "exclude-localnet" ]; then
+  if [ "$_WORKDIR_VALID" = false ] && [ "$_CMD" != "any" ] && [ "$_CMD" != "none" ] && [ "$_CMD" != "exclude-localnet" ]; then
     warn_user "wait_for_json_rpc_up unexpected workdir name: $_CMD"
     return
   fi
@@ -246,6 +251,9 @@ wait_for_json_rpc_up() {
   local _WORKDIRS_ORDERED_LIST
   if $_WORKDIR_VALID; then
     _WORKDIRS_ORDERED_LIST=("$_CMD")
+  elif [ "$_CMD" == "any" ] || [ "$_CMD" == "none" ]; then
+     # Try one of the remote workdirs (localnet might not be started yet).
+    _WORKDIRS_ORDERED_LIST=("testnet" "devnet" "mainnet")
   else
     _WORKDIRS_ORDERED_LIST=("$WORKDIR_NAME")
     # Append the other workdirs in the order of the _WORKDIRS_VALID_LIST
@@ -331,12 +339,15 @@ wait_for_json_rpc_up() {
 export -f wait_for_json_rpc_up
 
 restart_suibase_daemon() {
+  # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+  cli_mutex_lock "suibase_daemon"
+
   update_SUIBASE_DAEMON_PID_var
   if [ -z "$SUIBASE_DAEMON_PID" ]; then
     start_suibase_daemon
   else
     # This is a clean restart of the daemon (Ctrl-C). Should be fast.
-    kill -s SIGTERM "$SUIBASE_DAEMON_PID"
+    stop_suibase_daemon
     echo -n "Restarting $SUIBASE_DAEMON_NAME"
     local _OLD_PID="$SUIBASE_DAEMON_PID"
     end=$((SECONDS + 30))
@@ -354,13 +365,14 @@ restart_suibase_daemon() {
 export -f restart_suibase_daemon
 
 stop_suibase_daemon() {
-  # TODO currently unused. Revisit if needed versus a self-exit design.
+    # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+  cli_mutex_lock "suibase_daemon"
 
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already stopped.
   update_SUIBASE_DAEMON_PID_var
   if [ -n "$SUIBASE_DAEMON_PID" ]; then
-    echo "Stopping $SUIBASE_DAEMON_NAME (process pid $SUIBASE_DAEMON_PID)"
+    echo "Stopping $SUIBASE_DAEMON_NAME (pid $SUIBASE_DAEMON_PID)"
 
     # TODO This will just restart the daemon... need to actually kill the parents as well!
     kill -s SIGTERM "$SUIBASE_DAEMON_PID"
@@ -438,16 +450,6 @@ update_SUIBASE_DAEMON_PID_var() {
 }
 export -f update_SUIBASE_DAEMON_PID_var
 
-update_suibase_daemon_as_needed() {
-  start_suibase_daemon_as_needed "force-update"
-}
-export -f update_suibase_daemon_as_needed
-
-update_suibase_daemon_and_start() {
-  start_suibase_daemon_as_needed "force-start"
-}
-export -f update_suibase_daemon_and_start
-
 export SUIBASE_DAEMON_STARTED=false
 start_suibase_daemon_as_needed() {
 
@@ -455,109 +457,76 @@ start_suibase_daemon_as_needed() {
   # anywhere within this call.
   SUIBASE_DAEMON_STARTED=false
 
-  # When _UPGRADE_ONLY=true:
-  #  - Always check to upgrade the daemon.
-  #  - Do not start, but restart if *already* running.
-  # else:
-  #  - if 'proxy_enabled' is true, then check to
-  #    upgrade and (re)starts.
-  #
-  local _UPGRADE_ONLY
-  local _SUPPORT_PROXY
-  if [ "$1" = "force-update" ]; then
-    _UPGRADE_ONLY=true
-    _SUPPORT_PROXY=true
-  elif [ "$1" = "force-start" ]; then
-    _UPGRADE_ONLY=false
-    _SUPPORT_PROXY=true
-  else
-    # Verify from suibase.yaml if the suibase daemon should be started.
-    _UPGRADE_ONLY=false
-    if [ "${CFG_proxy_enabled:?}" = "false" ]; then
-      _SUPPORT_PROXY=false
-    else
-      _SUPPORT_PROXY=true
-    fi
-  fi
 
   # Return 0 on success or not needed.
 
-  if [ "$_SUPPORT_PROXY" = true ]; then
-    update_SUIBASE_DAEMON_VERSION_INSTALLED
-    update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-    #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
-    #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
-    local _PERFORM_UPGRADE=false
+  update_SUIBASE_DAEMON_VERSION_INSTALLED
+  update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
+  #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
+  #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
+  local _PERFORM_UPGRADE=false
 
-    if need_suibase_daemon_upgrade; then
-      _PERFORM_UPGRADE=true
+  # Check SUIBASE_DAEMON_UPGRADING to prevent multiple attempts to upgrade
+  # within the same CLI call.
+  if need_suibase_daemon_upgrade && [ "$SUIBASE_DAEMON_UPGRADING" == "false" ]; then
+    _PERFORM_UPGRADE=true
 
-      # To try to minimize race conditions, wait until a concurrent script
-      # is done doing the same. Not perfect... good enough.
-      #
-      # This also hint the VSCode extension to step back from using the
-      # backend while this is on-going.
-      local _CHECK_IF_NEEDED_AGAIN=false
-      local _FIRST_ITERATION=true
-      while [ -f /tmp/.suibase/suibase-daemon-upgrading ]; do
-        if $_FIRST_ITERATION; then
-          echo "Waiting for concurrent script to finish upgrading suibase daemon..."
-          _FIRST_ITERATION=false
-        fi
-        sleep 1
-        _PERFORM_UPGRADE=false
-      done
-
-      if [ "$_PERFORM_UPGRADE" = false ]; then
-        # Was block by another script... check again if the upgrade is still needed.
-        update_SUIBASE_DAEMON_VERSION_INSTALLED
-        update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-        if need_suibase_daemon_upgrade; then
-          _PERFORM_UPGRADE=true
-        fi
+    # To try to minimize race conditions, wait until a concurrent script
+    # is done doing the same. Not perfect... good enough.
+    #
+    # This also hint the VSCode extension to step back from using the
+    # backend while this is on-going.
+    local _CHECK_IF_NEEDED_AGAIN=false
+    local _FIRST_ITERATION=true
+    while [ -f /tmp/.suibase/suibase-daemon-upgrading ]; do
+      if $_FIRST_ITERATION; then
+        echo "Waiting for concurrent script to finish upgrading suibase daemon..."
+        _FIRST_ITERATION=false
       fi
-    fi
+      sleep 1
+      _PERFORM_UPGRADE=false
+    done
 
-    if [ "$_PERFORM_UPGRADE" = true ]; then
-      progress_suibase_daemon_upgrading
-      local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
-      build_suibase_daemon
+    # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+    cli_mutex_lock "suibase_daemon"
+
+    if [ "$_PERFORM_UPGRADE" = false ]; then
+      # Was block by another script... check again if the upgrade is still needed.
       update_SUIBASE_DAEMON_VERSION_INSTALLED
-      local _NEW_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
-      if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
-        if [ -n "$_OLD_VERSION" ]; then
-          echo "$SUIBASE_DAEMON_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
-        fi
-      fi
-      update_SUIBASE_DAEMON_PID_var
-      if [ "$_UPGRADE_ONLY" = true ]; then
-        # Restart only if already running.
-        if [ -n "$SUIBASE_DAEMON_PID" ]; then
-          restart_suibase_daemon
-          SUIBASE_DAEMON_STARTED=true
-        fi
-      else
-        # (re)start
-        if [ -z "$SUIBASE_DAEMON_PID" ]; then
-          start_suibase_daemon
-        else
-          # Needed for the upgrade to take effect.
-          restart_suibase_daemon
-        fi
-        SUIBASE_DAEMON_STARTED=true
-      fi
-    else
-      if [ -z "$SUIBASE_DAEMON_PID" ] && [ "$_UPGRADE_ONLY" = false ]; then
-        # There was no upgrade, but the process need to be started.
-        start_suibase_daemon
-        SUIBASE_DAEMON_STARTED=true
+      update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
+      if need_suibase_daemon_upgrade; then
+        _PERFORM_UPGRADE=true
       fi
     fi
   fi
 
-  # The caller decide what to do if failed.
-  if [ "$_SUPPORT_PROXY" = true ] && [ -z "$SUIBASE_DAEMON_PID" ]; then
-    return 1
+  if [ "$_PERFORM_UPGRADE" = true ]; then
+    progress_suibase_daemon_upgrading
+    local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
+    build_suibase_daemon
+    update_SUIBASE_DAEMON_VERSION_INSTALLED
+    local _NEW_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
+    if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
+      if [ -n "$_OLD_VERSION" ]; then
+        echo "$SUIBASE_DAEMON_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
+      fi
+    fi
+    update_SUIBASE_DAEMON_PID_var
+    # (re)start
+    if [ -z "$SUIBASE_DAEMON_PID" ]; then
+      start_suibase_daemon
+    else
+      # Needed for the upgrade to take effect.
+      restart_suibase_daemon
+    fi
+    SUIBASE_DAEMON_STARTED=true
+  else
+    update_SUIBASE_DAEMON_PID_var
+    if [ -z "$SUIBASE_DAEMON_PID" ]; then
+      # There was no upgrade, but the process need to be started.
+      start_suibase_daemon
+      SUIBASE_DAEMON_STARTED=true
+    fi
   fi
 
   return 0

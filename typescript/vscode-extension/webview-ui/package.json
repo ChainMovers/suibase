@@ -14,6 +14,7 @@
     "@emotion/styled": "latest",
     "@estruyf/vscode": "^1.1.0",
     "@fontsource/roboto": "^5.0.13",
+    "@mui/base": "^5.0.0-beta.40",
     "@mui/icons-material": "^5.15.17",
     "@mui/material": "^5.15.15",
     "@mui/x-tree-view": "^7.3.1",

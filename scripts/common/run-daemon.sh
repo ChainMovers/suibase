@@ -130,6 +130,12 @@ main() {
     echo "Starting $_DAEMON_NAME in background. Check logs at: $_LOG"
     echo "$_CMD_LINE"
 
+    if [ "$PARAM_CMD" == "cli-call" ]; then
+      # Subsequent cli_mutex_ calls are NOOP because the script
+      # was called by a script already holding the proper locks.
+      cli_mutex_disable
+    fi
+
     # Detect scenario where the suibase-daemon is not running and
     # the lockfile is still present.
     #
@@ -144,6 +150,7 @@ main() {
     #
     # The suibase-daemon is responsible to properly re-start the child processes/services.
     if [ "$PARAM_NAME" = "suibase" ]; then
+      cli_mutex_lock "suibase_daemon"
       if [ -f "$_LOCKFILE" ]; then
         for i in 1 2 3; do
           if is_suibase_daemon_running; then
@@ -162,6 +169,8 @@ main() {
           force_stop_all_services
         done
       fi
+      # Must release here, because this process might "never" exit and clean-up from trap.
+      cli_mutex_release "suibase_daemon"
     fi
 
     # shellcheck disable=SC2086,SC2016
