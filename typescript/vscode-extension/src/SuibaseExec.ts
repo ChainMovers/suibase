@@ -37,7 +37,7 @@ const execShellBackground = (cmd: string): Promise<void> =>
   new Promise<void>((resolve) => {
     cp.exec(cmd, (err, stdout, stderr) => {
       if (err) {
-        console.warn(err,`${stdout}${stderr}`);
+        console.warn(err, `${stdout}${stderr}`);
       }
       resolve();
     });
@@ -177,9 +177,10 @@ export class SuibaseExec {
   public async isSuibaseInstalled(): Promise<boolean> {
     // Verify if Suibase itself is installed.
     //
-    // Good enough to just check that the script to start the backend daemon exists.
+    // Good enough to just check that the script to repair exists
+    // (it is used for recovery attempt by the extension).
     try {
-      return await this.fileExists("~/suibase/scripts/common/run-daemon.sh");
+      return await this.fileExists("~/suibase/repair");
     } catch (error) {
       return false;
     }
@@ -263,11 +264,11 @@ export class SuibaseExec {
 
       if (!suibaseRunning) {
         // Start suibase daemon
-        const pathname = this.canonicalPath("~/suibase/scripts/common/run-daemon.sh");
-        void execShellBackground( `${pathname} suibase` );
+        const pathname = this.canonicalPath("~/suibase/repair");
+        void execShellBackground(`${pathname}`);
 
-        // Check for up to ~5 seconds that it is started.
-        let attempts = 10;
+        // Check for up to ~60 seconds that it is started.
+        let attempts = 120;
         while (!suibaseRunning && attempts > 0) {
           // Sleep 500 millisecs to give it a chance to start.
           await new Promise((r) => setTimeout(r, 500));

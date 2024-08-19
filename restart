@@ -7,7 +7,7 @@
 # Source '__globals.sh'.
 SUIBASE_DIR="$HOME/suibase"
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
-WORKDIR="localnet"
+WORKDIR="none"
 
 main() {
   # Detect if suibase is not installed!
@@ -27,16 +27,19 @@ main() {
   exit_if_deps_missing
 
   # Block users from running any concurrent CLI commands.
-  cli_mutex_lock "localnet"
-  cli_mutex_lock "mainnet"
-  cli_mutex_lock "devnet"
-  cli_mutex_lock "testnet"
-  cli_mutex_lock "cargobin"
-  cli_mutex_lock "active"
+  cli_mutex_lock "suibase_daemon"
 
-  restart_suibase_daemon
-  # Check for any JSON-RPC up, except for localnet.
-  wait_for_json_rpc_up "exclude-localnet"
+
+  update_SUIBASE_DAEMON_PID_var
+
+  local _OLD_PID=$SUIBASE_DAEMON_PID
+  start_suibase_daemon_as_needed
+
+  if [ "$_OLD_PID" == "$SUIBASE_DAEMON_PID" ]; then
+    restart_suibase_daemon
+    # Check for any JSON-RPC up, except for localnet.
+    wait_for_json_rpc_up "exclude-localnet"
+  fi
 }
 
 main "$@"

@@ -29,14 +29,14 @@ const CopyToClipboardButton = ({text,message}: CopyToClipboardButtonProps) => {
     const handleClickAway = () => {
       setOpen(false)
     };
-    
+
     // Default message to "{text} copied" if message not specified.
     if (!message) {
       message = `Copied ${text}`
     }
 
     return (
-        <>        
+        <>
         <Box className="icon" onClick={handleClick} sx={{width: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
           <ContentCopyOutlinedIcon sx={{height: '16px'}}/>
         </Box>
@@ -49,15 +49,15 @@ const CopyToClipboardButton = ({text,message}: CopyToClipboardButtonProps) => {
         >
           <ClickAwayListener onClickAway={handleClickAway}>
             <Fade in={open} timeout={500}>
-                <Box role="presentation" sx={{ padding: '2px', 
+                <Box role="presentation" sx={{ padding: '2px',
                     color: theme.palette.secondary.contrastText,
                     backgroundColor: theme.palette.secondary.main,
-                    borderRadius: '2px' 
+                    borderRadius: '2px'
                    }}>
                 {message}
                 </Box>
             </Fade>
-          </ClickAwayListener>      
+          </ClickAwayListener>
         </BasePopup>
         </>
     );

@@ -147,6 +147,8 @@ sui_exec() {
     # does not specify path (and default to current dir).
     local _OPT_DEFAULT_PATH=""
     local _OPT_DEFAULT_INSTALLDIR=""
+    local _OPT_URL_PARAM=""
+
     if [[ $SUI_SUBCOMMAND == "client" ]]; then
       case $1 in
       publish | verify-source | verify-bytecode-meter | upgrade)
@@ -158,6 +160,20 @@ sui_exec() {
           _OPT_DEFAULT_INSTALLDIR="--install-dir $USER_CWD"
         fi
         ;;
+      faucet)
+        if ! has_param "" "--url" "$@"; then
+          if [ "$WORKDIR" = "localnet" ]; then
+            if [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
+              error_exit "suibase faucet not enabled for localnet. Check suibase.yaml config."
+            fi
+            _OPT_URL_PARAM="--url http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/gas"
+          elif [ "$WORKDIR" = "devnet" ] || [ "$WORKDIR" = "testnet" ]; then
+            _OPT_URL_PARAM="--url https://faucet.${WORKDIR}.sui.io/gas"
+          else
+            error_exit "faucet command not applicable to $WORKDIR"
+          fi
+        fi
+        ;;
       *) ;; # Do nothing
       esac
     fi
@@ -166,7 +182,7 @@ sui_exec() {
     update_CANONICAL_ARGS_var "$@"
 
     # shellcheck disable=SC2086,SC2068
-    $SUI_BIN "$SUI_SUBCOMMAND" --client.config "$CLIENT_CONFIG" ${CANONICAL_ARGS[@]} $_OPT_DEFAULT_INSTALLDIR $_OPT_DEFAULT_PATH
+    $SUI_BIN "$SUI_SUBCOMMAND" --client.config "$CLIENT_CONFIG" ${CANONICAL_ARGS[@]} $_OPT_DEFAULT_INSTALLDIR $_OPT_URL_PARAM $_OPT_DEFAULT_PATH
 
     if [ "$WORKDIR" = "localnet" ]; then
       # Print a friendly warning if localnet sui process found not running.

@@ -14,6 +14,7 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New VSCode extension https://marketplace.visualstudio.com/items?itemName=suibase.suibase
 
 ### Fixed
+- "lsui/dsui/tsui client faucet" commands now work.
 - More robust handling of backend (suibase-daemon)
 - Reduce localnet storage need (delete full_node_db on regen).
 
