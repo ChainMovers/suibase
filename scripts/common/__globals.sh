@@ -685,14 +685,17 @@ update_SUIBASE_VERSION_var() {
 export -f update_SUIBASE_VERSION_var
 
 cd_sui_log_dir() {
-  if [ -d "$WORKDIRS/$WORKDIR" ]; then
-    mkdir -p "$SUI_CLIENT_LOG_DIR"
-    cd "$SUI_CLIENT_LOG_DIR" || setup_error "could not access [ $SUI_CLIENT_LOG_DIR ]"
-  fi
+  # Deprecate changing the directory.
+  # This is no longer needed See https://github.com/ChainMovers/suibase/issues/112
+  #if [ -d "$WORKDIRS/$WORKDIR" ]; then
+  #  mkdir -p "$SUI_CLIENT_LOG_DIR"
+  #  cd "$SUI_CLIENT_LOG_DIR" || setup_error "could not access [ $SUI_CLIENT_LOG_DIR ]"
+  #fi
+  :
 }
 export -f cd_sui_log_dir
 
-cd_sui_log_dir
+# cd_sui_log_dir
 
 # SUI_BASE_MOCK is a global boolean always defined.
 update_SUI_BASE_NET_MOCK_var() {
@@ -922,7 +925,7 @@ build_sui_repo_branch() {
       if [ "$_IS_SET_SUI_REPO" = "false" ]; then
         # Precompile was used before, so cleanup first to avoid confusion.
         (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
-        cd_sui_log_dir
+        # Deprecated cd_sui_log_dir
       fi
       del_key_value "$WORKDIR" "precompiled"
       _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
@@ -1181,7 +1184,7 @@ is_sui_binary_ok() {
   fi
 
   # Get the version, but in a way that would not exit on failure.
-  cd_sui_log_dir
+  # Deprecated cd_sui_log_dir
   local _SUI_VERSION_ATTEMPT
   _SUI_VERSION_ATTEMPT=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" --version)
   # TODO test here what would really happen on corrupted binary...
@@ -1943,7 +1946,7 @@ repair_workdir_as_needed() {
   #  cp "$SCRIPTS_DIR/templates//$WORKDIR_PARAM/suibase.yaml" "$WORKDIRS/$WORKDIR_PARAM"
   #fi
 
-  cd_sui_log_dir # Create the sui.log directory as needed and make it the current one.
+  # Deprecated cd_sui_log_dir
 }
 export -f repair_workdir_as_needed
 
@@ -2050,7 +2053,8 @@ update_SUI_VERSION_var() {
   # Take note that $SUI_BIN_DIR here is used to properly consider if the
   # context of the script is localnet, devnet, testnet, mainnet... (they
   # are not the same binaries and versions).
-  cd_sui_log_dir
+
+  # Deprecated cd_sui_log_dir
 
   if $SUI_BASE_NET_MOCK; then
     SUI_VERSION=$SUI_BASE_NET_MOCK_VER
@@ -2107,7 +2111,7 @@ start_sui_process() {
   # noop if the process is already started.
 
   exit_if_sui_binary_not_ok
-  cd_sui_log_dir
+  # Deprecated cd_sui_log_dir
   update_SUI_PROCESS_PID_var
   if [ -z "$SUI_PROCESS_PID" ]; then
     echo "Starting localnet process"
@@ -3214,7 +3218,7 @@ install_PRECOMP_REMOTE() {
   # Detect if a previous build was done, if yes then "cargo clean".
   if [ -d "$SUI_REPO_DIR/target/debug/build" ] || [ -d "$SUI_REPO_DIR/target/release/build" ]; then
     (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
-    cd_sui_log_dir
+    # Deprecated cd_sui_log_dir
   fi
 
   # Create an array of "sui", "sui-tool"

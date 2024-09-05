@@ -206,7 +206,7 @@ faucet_command() {
   fi
 
   if [ $_SHOW_USEAGE = true ]; then
-    cd_sui_log_dir
+    # Deprecated cd_sui_log_dir
     echo "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}"
     update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$WORKDIRS/$WORKDIR/faucet/client.yaml"
     local _FAUCET_ADDR=$ACTIVE_ADDRESS

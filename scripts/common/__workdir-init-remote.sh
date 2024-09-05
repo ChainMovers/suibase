@@ -10,7 +10,7 @@
 workdir_init_remote() {
 
   mkdir -p "$CONFIG_DATA_DIR_DEFAULT"
-  cd_sui_log_dir
+  # Deprecated cd_sui_log_dir
 
   # The config-default/client.yaml should already be here from the templates, but
   # do the following logic to "repair" in case someone setup is mess up (they can
