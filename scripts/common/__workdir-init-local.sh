@@ -122,8 +122,7 @@ workdir_init_local() {
   #
 
   mkdir -p "$CONFIG_DATA_DIR_DEFAULT"
-  cd_sui_log_dir
-
+  # Deprecated cd_sui_log_dir
 
   local _GENDATA_DIR="$GENERATED_GENESIS_DATA_DIR/default"
   rm -rf "$_GENDATA_DIR" >/dev/null 2>&1
