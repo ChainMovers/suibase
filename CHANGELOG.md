@@ -12,12 +12,13 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - New built-in sui explorer (do "localnet status" to see URL). Code from https://github.com/kkomelin/sui-explorer
 - New VSCode extension https://marketplace.visualstudio.com/items?itemName=suibase.suibase
+- (#113) Reduce localnet storage (less checkpoints per secs)
 
 ### Fixed
 - (#112) fix for keytool generate command (.key were created in unexpected location)
 - "lsui/dsui/tsui client faucet" commands now work.
 - More robust handling of backend (suibase-daemon)
-- Reduce localnet storage need (delete full_node_db on regen).
+- Reduce localnet storage on regen (delete full_node_db).
 
 ### Changed
 - For better stability, localnet uses Mysten Labs testnet branch (instead of devnet).
