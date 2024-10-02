@@ -12,6 +12,4 @@ source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
 cli_mutex_lock "suibase_daemon"
 
-# Force stop the daemon by deleting the binary first.
-rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
-stop_suibase_daemon
+start_suibase_daemon
