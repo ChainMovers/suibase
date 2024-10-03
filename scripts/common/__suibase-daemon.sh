@@ -163,6 +163,10 @@ start_suibase_daemon() {
     return
   fi
 
+  if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
+     setup_error "$SUIBASE_DAEMON_NAME binary not found (build failed?)"
+  fi
+
   echo "Starting $SUIBASE_DAEMON_NAME"
   mkdir -p "$HOME/suibase/workdirs/common/logs"
 
@@ -214,11 +218,10 @@ start_suibase_daemon() {
   # Act on success/failure of the process responding.
   if [ "$ALIVE" = false ]; then
     if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
-      echo "$SUIBASE_DAEMON_NAME binary not found (build failed?)"
+      setup_error "$SUIBASE_DAEMON_NAME binary not found (build failed?)"
     else
-      echo "$SUIBASE_DAEMON_NAME not responding. Try again? (may be the host is too slow?)."
+      setup_error "$SUIBASE_DAEMON_NAME not responding. Try again? (may be the host is too slow?)."
     fi
-    exit 1
   fi
 
   echo "$SUIBASE_DAEMON_NAME started (process pid $SUIBASE_DAEMON_PID)"
@@ -347,9 +350,9 @@ restart_suibase_daemon() {
     start_suibase_daemon
   else
     # This is a clean restart of the daemon (Ctrl-C). Should be fast.
+    local _OLD_PID="$SUIBASE_DAEMON_PID"
     stop_suibase_daemon
     echo -n "Restarting $SUIBASE_DAEMON_NAME"
-    local _OLD_PID="$SUIBASE_DAEMON_PID"
     end=$((SECONDS + 30))
     while [ $SECONDS -lt $end ]; do
       sleep 1
@@ -359,30 +362,32 @@ restart_suibase_daemon() {
         return
       fi
     done
-    echo " (failed for pid $SUIBASE_DAEMON_PID)"
+    echo " (failed)"
+    echo "Try again with '~/suibase/restart'"
   fi
 }
 export -f restart_suibase_daemon
 
 stop_suibase_daemon() {
-    # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+  # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
   cli_mutex_lock "suibase_daemon"
 
   # success/failure is reflected by the SUI_PROCESS_PID var.
   # noop if the process is already stopped.
   update_SUIBASE_DAEMON_PID_var
   if [ -n "$SUIBASE_DAEMON_PID" ]; then
-    echo "Stopping $SUIBASE_DAEMON_NAME (pid $SUIBASE_DAEMON_PID)"
+    local _OLD_PID="$SUIBASE_DAEMON_PID"
+    echo "Stopping $SUIBASE_DAEMON_NAME (pid $_OLD_PID)"
 
-    # TODO This will just restart the daemon... need to actually kill the parents as well!
+    # This exit the daemon cleanly... consider that run-daemon.sh may restart it immediately.
     kill -s SIGTERM "$SUIBASE_DAEMON_PID"
 
-    # Make sure it is dead.
+    # Make sure it was killed.
     end=$((SECONDS + 15))
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
       update_SUIBASE_DAEMON_PID_var
-      if [ -z "$SUIBASE_DAEMON__PID" ]; then
+      if [ -z "$SUIBASE_DAEMON__PID" ] || [ "$SUIBASE_DAEMON_PID" != "$_OLD_PID" ]; then
         break
       else
         echo -n "."
