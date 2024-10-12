@@ -413,6 +413,9 @@ workdir_exec() {
 
   update_ACTIVE_WORKDIR_var
 
+  # shellcheck source=SCRIPTDIR/__apps.sh
+  source "$SUIBASE_DIR/scripts/common/__apps.sh"
+
   # shellcheck source=SCRIPTDIR/__suibase-daemon.sh
   source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
   update_SUIBASE_DAEMON_PID_var

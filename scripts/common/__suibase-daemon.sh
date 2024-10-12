@@ -1,138 +1,9 @@
 # shellcheck shell=bash
 
-# You must source __globals.sh before __suibase-daemon.sh
+# You must source __globals.sh and __apps.sh before __suibase-daemon.sh
 
-SUIBASE_DAEMON_VERSION_FILE="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME-version.txt"
-
-export SUIBASE_DAEMON_VERSION_INSTALLED=""
-update_SUIBASE_DAEMON_VERSION_INSTALLED() {
-  # Update the global variable with the version written in the file.
-  if [ -f "$SUIBASE_DAEMON_VERSION_FILE" ]; then
-    local _FILE_CONTENT
-    _FILE_CONTENT=$(cat "$SUIBASE_DAEMON_VERSION_FILE")
-    if [ -n "$_FILE_CONTENT" ]; then
-      SUIBASE_DAEMON_VERSION_INSTALLED="$_FILE_CONTENT"
-      return
-    fi
-  fi
-  SUIBASE_DAEMON_VERSION_INSTALLED=""
-}
-export -f update_SUIBASE_DAEMON_VERSION_INSTALLED
-
-export SUIBASE_DAEMON_VERSION_SOURCE_CODE=""
-update_SUIBASE_DAEMON_VERSION_SOURCE_CODE() {
-  # Update the global variable SUIBASE_DAEMON_VERSION_SOURCE_CODE with the version written in the cargo.toml file.
-  if [ -f "$SUIBASE_DAEMON_BUILD_DIR/Cargo.toml" ]; then
-    local _PARSED_VERSION
-    _PARSED_VERSION=$(grep "^version *= *" "$SUIBASE_DAEMON_BUILD_DIR/Cargo.toml" | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
-    if [ -n "$_PARSED_VERSION" ]; then
-      SUIBASE_DAEMON_VERSION_SOURCE_CODE="$_PARSED_VERSION"
-      return
-    fi
-  fi
-  SUIBASE_DAEMON_VERSION_SOURCE_CODE=""
-}
-export -f update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-
-need_suibase_daemon_upgrade() {
-  # return true if the daemon is not installed, needs to be upgraded
-  # or any problem detected.
-  #
-  # This function assumes that
-  #   update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-  #      and
-  #   update_SUIBASE_DAEMON_VERSION_INSTALLED
-  # have been called before.
-  # shellcheck disable=SC2153
-  if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
-    true
-    return
-  fi
-
-  if [ -z "$SUIBASE_DAEMON_VERSION_INSTALLED" ]; then
-    true
-    return
-  fi
-
-  if [ -z "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" ]; then
-    true
-    return
-  fi
-
-  if [ ! "$SUIBASE_DAEMON_VERSION_INSTALLED" = "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" ]; then
-    true
-    return
-  fi
-
-  if [ "${CFG_proxy_enabled:?}" = "dev" ]; then
-    # fstat the binaries for differences (target/debug is normally not deleted while "dev").
-    local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
-    local _DST="$SUIBASE_DAEMON_BIN"
-    if [ ! -f "$_SRC" ]; then
-      true
-      return
-    fi
-    if ! cmp --silent "$_SRC" "$_DST"; then
-      echo "$SUIBASE_DAEMON_NAME bin difference detected"
-      true
-      return
-    fi
-  fi
-
-  false
-  return
-}
-export -f need_suibase_daemon_upgrade
-
-build_suibase_daemon() {
-  # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
-  cli_mutex_lock "suibase_daemon"
-
-  #
-  # (re)build suibase-daemon and install it.
-  #
-  echo "Building $SUIBASE_DAEMON_NAME"
-  rm -f "$SUIBASE_DAEMON_VERSION_FILE" >/dev/null 2>&1
-
-  # Clean the build directory.
-  rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
-
-  (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
-  # Copy the build result from target to $SUIBASE_BIN_DIR
-  local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
-  if [ ! -f "$_SRC" ]; then
-    setup_error "Fail to build $SUIBASE_DAEMON_NAME"
-  fi
-
-  # Sanity test that the binary is working.
-  local _VERSION
-  _VERSION=$("$_SRC" --version)
-
-  # _VERSION should be a string that starts with $SUIBASE_DAEMON_NAME
-  if [ -z "$_VERSION" ] || [[ ! "$_VERSION" =~ ^$SUIBASE_DAEMON_NAME ]]; then
-    setup_error "Fail to run $SUIBASE_DAEMON_NAME --version"
-  fi
-
-  # end of _VERSION should match the expected $SUIBASE_DAEMON_VERSION_SOURCE_CODE
-
-  # TODO Investigate why this sanity test is failing on MacOS only
-  #
-  #echo VERSION="$_VERSION"
-  #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
-  #if [[ ! "$_VERSION" =~ $SUIBASE_DAEMON_VERSION_SOURCE_CODE$ ]]; then
-  #  setup_error "The $SUIBASE_DAEMON_NAME --version ($_VERSION) does not match the expected version ($SUIBASE_DAEMON_VERSION_SOURCE_CODE)"
-  #fi
-
-  mkdir -p "$SUIBASE_BIN_DIR"
-  \cp -f "$_SRC" "$SUIBASE_DAEMON_BIN"
-  # Update the installed version file.
-  echo "$SUIBASE_DAEMON_VERSION_SOURCE_CODE" >|"$SUIBASE_DAEMON_VERSION_FILE"
-
-
-  # Clean the build directory.
-  rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
-}
-export -f build_suibase_daemon
+# shellcheck disable=SC2034
+declare -A sb_daemon_obj
 
 is_suibase_daemon_running() {
   # Quickly determine if the daemon is running, does not check if responding.
@@ -163,12 +34,13 @@ start_suibase_daemon() {
     return
   fi
 
+  # shellcheck disable=SC2153
   if [ ! -f "$SUIBASE_DAEMON_BIN" ]; then
      setup_error "$SUIBASE_DAEMON_NAME binary not found (build failed?)"
   fi
 
   echo "Starting $SUIBASE_DAEMON_NAME"
-  mkdir -p "$HOME/suibase/workdirs/common/logs"
+  mkdir -p "$SUIBASE_LOGS_DIR"
 
   # Try until can confirm the suibase-daemon is running healthy, or exit
   # if takes too much time.
@@ -186,7 +58,7 @@ start_suibase_daemon() {
     # safely be ignored to /dev/null.
     #
     # "cli-call" param prevent run-daemon to try locking the CLI mutex.
-    nohup "$HOME/suibase/scripts/common/run-daemon.sh" suibase cli-call >"$HOME/suibase/workdirs/common/logs/run-daemon.log" 2>&1 &
+    nohup "$SUIBASE_DIR/scripts/common/run-daemon.sh" suibase cli-call >"$SUIBASE_LOGS_DIR/run-daemon.log" 2>&1 &
 
     local _NEXT_RETRY=$((SECONDS + 10))
     while [ $SECONDS -lt $end ]; do
@@ -408,14 +280,6 @@ stop_suibase_daemon() {
 }
 export -f stop_suibase_daemon
 
-export SUIBASE_DAEMON_VERSION=""
-update_SUIBASE_DAEMON_VERSION_var() {
-  # This will be to get the version from the *running* daemon.
-  # --version not supported yet. Always mock it for now.
-  SUIBASE_DAEMON_VERSION="0.0.0"
-}
-export -f update_SUIBASE_DAEMON_VERSION_var
-
 export SUIBASE_DAEMON_PID=""
 update_SUIBASE_DAEMON_PID_var() {
 
@@ -439,7 +303,7 @@ update_SUIBASE_DAEMON_PID_var() {
 
   # Check if lsof is not installed, then inform the user to install it.
   if ! is_installed lsof; then
-    setup_error "The CLI command 'lsof' must be installed to run Suibase"
+    setup_error "The CLI command 'lsof' must be installed to run Suibase scripts"
   fi
 
   # If the lock file exists but apparently not working, use ps as a fallback
@@ -458,74 +322,88 @@ export -f update_SUIBASE_DAEMON_PID_var
 export SUIBASE_DAEMON_STARTED=false
 start_suibase_daemon_as_needed() {
 
+  # Return 0 on success or not needed.
+
   # Changes to true if the daemon is tentatively started
   # anywhere within this call.
   SUIBASE_DAEMON_STARTED=false
 
+  init_app_obj sb_daemon_obj "suibase_daemon" ""
+  vcall sb_daemon_obj "set_local_vars"
+  # vcall sb_daemon_obj "print"
 
-  # Return 0 on success or not needed.
+  if [ "${sb_daemon_obj["is_installed"]}" != "true" ]; then
 
-  update_SUIBASE_DAEMON_VERSION_INSTALLED
-  update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-  #echo SUIBASE_DAEMON_VERSION_INSTALLED="$SUIBASE_DAEMON_VERSION_INSTALLED"
-  #echo SUIBASE_DAEMON_VERSION_SOURCE_CODE="$SUIBASE_DAEMON_VERSION_SOURCE_CODE"
-  local _PERFORM_UPGRADE=false
+    local _PERFORM_INSTALL=false
 
-  # Check SUIBASE_DAEMON_UPGRADING to prevent multiple attempts to upgrade
-  # within the same CLI call.
-  if need_suibase_daemon_upgrade && [ "$SUIBASE_DAEMON_UPGRADING" == "false" ]; then
-    _PERFORM_UPGRADE=true
+    # Check SUIBASE_DAEMON_UPGRADING to prevent multiple attempts to upgrade
+    # within the same CLI call.
 
-    # To try to minimize race conditions, wait until a concurrent script
-    # is done doing the same. Not perfect... good enough.
-    #
-    # This also hint the VSCode extension to step back from using the
-    # backend while this is on-going.
-    local _CHECK_IF_NEEDED_AGAIN=false
-    local _FIRST_ITERATION=true
-    while [ -f /tmp/.suibase/suibase-daemon-upgrading ]; do
-      if $_FIRST_ITERATION; then
-        echo "Waiting for concurrent script to finish upgrading suibase daemon..."
-        _FIRST_ITERATION=false
+    if [ "$SUIBASE_DAEMON_UPGRADING" = "false" ]; then
+      _PERFORM_INSTALL=true
+
+      # To try to minimize race conditions, wait until a concurrent script
+      # is done doing the same. Not perfect... good enough.
+      #
+      # This also hint the VSCode extension to step back from using the
+      # backend while this is on-going.
+      local _CHECK_IF_NEEDED_AGAIN=false
+      local _FIRST_ITERATION=true
+      while [ -f /tmp/.suibase/suibase-daemon-upgrading ]; do
+        if $_FIRST_ITERATION; then
+          echo "Waiting for concurrent script to finish upgrading suibase daemon..."
+          _FIRST_ITERATION=false
+        fi
+        sleep 1
+        _PERFORM_INSTALL=false
+      done
+
+      # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
+      cli_mutex_lock "suibase_daemon"
+
+      if [ "$_PERFORM_INSTALL" = false ]; then
+        # Was block by another script... check again if the upgrade is still needed.
+        vcall sb_daemon_obj "set_local_vars"
+
+        if [ "${sb_daemon_obj["is_installed"]}" != "true" ]; then
+          _PERFORM_INSTALL=true
+        fi
       fi
-      sleep 1
-      _PERFORM_UPGRADE=false
-    done
+    fi
 
-    # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
-    cli_mutex_lock "suibase_daemon"
+    if [ "$_PERFORM_INSTALL" = true ]; then
+      progress_suibase_daemon_upgrading
+      local _OLD_VERSION="${sb_daemon_obj["local_bin_version"]}"
+      # OLD build_suibase_daemon
+      # OLD update_SUIBASE_DAEMON_VERSION_INSTALLED
+      cli_mutex_lock "suibase_daemon"
+      vcall sb_daemon_obj "install"
+      vcall sb_daemon_obj "set_local_vars"
+      local _NEW_VERSION="${sb_daemon_obj["local_bin_version"]}"
+      if [ "${sb_daemon_obj["is_installed"]}" != "true" ] || [ -z "$_NEW_VERSION" ]; then
+        setup_error "Failed to install ${sb_daemon_obj["assets_name"]}"
+      fi
 
-    if [ "$_PERFORM_UPGRADE" = false ]; then
-      # Was block by another script... check again if the upgrade is still needed.
-      update_SUIBASE_DAEMON_VERSION_INSTALLED
-      update_SUIBASE_DAEMON_VERSION_SOURCE_CODE
-      if need_suibase_daemon_upgrade; then
-        _PERFORM_UPGRADE=true
+      local _WAS_UPGRADED=false
+      if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
+        if [ -n "$_OLD_VERSION" ]; then
+          echo "${sb_daemon_obj["assets_name"]} upgraded from $_OLD_VERSION to $_NEW_VERSION"
+          _WAS_UPGRADED=true
+        else
+          echo "${sb_daemon_obj["assets_name"]} $_NEW_VERSION installed"
+        fi
+      fi
+
+      # Check if restart needed when binary was upgraded.
+      update_SUIBASE_DAEMON_PID_var
+      if [ -n "$SUIBASE_DAEMON_PID" ] && [ "$_WAS_UPGRADED" = true ]; then
+        restart_suibase_daemon
+        SUIBASE_DAEMON_STARTED=true
       fi
     fi
   fi
 
-  if [ "$_PERFORM_UPGRADE" = true ]; then
-    progress_suibase_daemon_upgrading
-    local _OLD_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
-    build_suibase_daemon
-    update_SUIBASE_DAEMON_VERSION_INSTALLED
-    local _NEW_VERSION=$SUIBASE_DAEMON_VERSION_INSTALLED
-    if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
-      if [ -n "$_OLD_VERSION" ]; then
-        echo "$SUIBASE_DAEMON_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
-      fi
-    fi
-    update_SUIBASE_DAEMON_PID_var
-    # (re)start
-    if [ -z "$SUIBASE_DAEMON_PID" ]; then
-      start_suibase_daemon
-    else
-      # Needed for the upgrade to take effect.
-      restart_suibase_daemon
-    fi
-    SUIBASE_DAEMON_STARTED=true
-  else
+  if [ ! "$SUIBASE_DAEMON_STARTED" = "true" ]; then
     update_SUIBASE_DAEMON_PID_var
     if [ -z "$SUIBASE_DAEMON_PID" ]; then
       # There was no upgrade, but the process need to be started.

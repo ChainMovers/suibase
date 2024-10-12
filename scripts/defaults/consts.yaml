@@ -1,0 +1,38 @@
+# Constant always loaded (regardless of workdir)
+#
+# Intended for maintenance and debug purpose (most users
+# will never try to override or modify these).
+#
+# Example:
+#  suibase_daemon_src_type: "suibase_rust"
+#
+# is loaded in a script with ${CFG_suibase_daemon_src_type}
+suibase_daemon_assets_name: "suibase-daemon"
+suibase_daemon_bin_names: "suibase-daemon"
+suibase_daemon_install_type: "user"
+suibase_daemon_src_type: "suibase"
+suibase_daemon_src_path: "rust/suibase"
+suibase_daemon_repo_url: "https://github.com/chainmovers/sui-binaries.git"
+suibase_daemon_repo_branch: "main"
+suibase_daemon_force_tag: ~
+suibase_daemon_build_type: "rust"
+suibase_daemon_run_type: "daemon"
+suibase_daemon_precompiled_bin: true
+suibase_daemon_precompiled_type: "suibase"
+suibase_daemon_precompiled_path: "suibase-daemon"
+
+# Handling of official Mysten Labs binaries does not require
+# much configuration (purposely has a lot of hardcoded logic).
+sui_assets_name: "sui"
+sui_bin_names: "sui,move-analyzer,sui-bridge,sui-bridge-cli,sui-data-ingestion,sui-debug,sui-faucet,sui-graphql-rpc,sui-node,sui-test-validator,sui-tool"
+sui_install_type: "workdir"
+sui_src_type: "mystenlabs"
+sui_src_path: ~
+sui_repo_url: ~
+sui_repo_branch: ~
+sui_force_tag: ~
+sui_build_type: "rust"
+sui_run_type: "cli"
+sui_precompiled_bin: ~
+sui_precompiled_type: "mystenlabs"
+sui_precompiled_path: ~
