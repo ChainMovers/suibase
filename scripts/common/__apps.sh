@@ -18,6 +18,15 @@
 
 # All variable members of the app object.
 
+# Arrays to simulate associative arrays
+# Can't use "declare" -n" with bash 3.2 (MacOS).
+#
+# All object are singleton and are access by name like:
+#
+#  app_call "suibase_daemon" "print"
+#  local _BIN_VERSION=$(app_get "suibase_daemon" "2_local_bin_version")
+#
+
 # Initialized from defaults/consts.yaml
 app_obj_cfg=(
   "assets_name" # Name of the release assets on git.
@@ -37,6 +46,7 @@ app_obj_cfg=(
 
 # Initialized with defaults on init_app(), can be modified.
 app_obj_vars=(
+
   "is_initialized" # true|false. Was init_app called on this object?
   "is_installed" # true|false. Are all binaries being installed locally?
   "cache_path" # Path to the cache directory for precompiled binaries.
@@ -56,7 +66,6 @@ app_obj_vars=(
   "local_bin_latest_branch"
   "local_bin_latest_commit"
   "local_bin_latest_commit_date"
-
   "local_src_version" # The version of, say, rust toml file (to trig a rebuild when changed).
 
   # Information retreived remotely.
@@ -71,7 +80,6 @@ app_obj_vars=(
   "PRECOMP_REMOTE_FILE_NAME_VERSION"
 )
 
-# Initialized with parameters on init_app()
 app_obj_params=(
   "cfg_name"
   "workdir"
@@ -85,10 +93,53 @@ app_obj_funcs=(
   "cleanup_cache"
 )
 
+# Function to set a key-value pair
+set_app_var() {
+  local app_name="$1"
+  local key="$2"
+  local value="$3"
+  local index="${app_name}_${key}"
+  eval "${index}='${value}'"
+}
+
+# Function to get a value by key without creating a subshell
+get_app_var() {
+  local app_name="$1"
+  local key="$2"
+  local index="${app_name}_${key}"
+  # shellcheck disable=SC2034
+  APP_VAR="${!index}"
+}
+
+# Function to call an object's function dynamically
+# (virtual function call)
+#
+# Example:
+#   app_call my_app_obj "update"
+#   app_call my_app_obj "print
+#
+app_call() {
+  # shellcheck disable=SC2178
+  local self=$1
+  local func_name=$2
+  shift 2
+
+  # TODO Optimize by removing that command call after the scripts "stabilize".
+
+  # Check if the function exists
+  get_app_var "$self" "$func_name"
+  local func_to_call="${APP_VAR}"
+  if [ -z "$func_to_call" ]; then
+    setup_error "Error: Function $func_name not found in object $self"
+  fi
+
+  $func_to_call "$self" "$@"
+}
+export -f app_call
+
 init_app_obj() {
-  # $1: app object (will be used by nameref, not copied).
-  # $2: cfg_name. Application name used in suibase.yaml (e.g. suibase_daemon, walrus)
-  # $3: workdir (e.g. "localnet"). Use "" for no workdir.
+  # $1: cfg_name. Application name used in suibase.yaml (e.g. suibase_daemon, walrus)
+  # $2: workdir (e.g. "localnet"). Use "" for no workdir.
 
   # The following are extracted from defaults/consts.yaml
   #
@@ -111,57 +162,57 @@ init_app_obj() {
   #      {cfg_name}_precompiled_path: suibase|url
   #
 
-  # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
+  local _WORKDIR=$2
 
   # Return immediatly if is_initialized exists.
-  if [[ ${self["is_initialized"]+x} ]]; then
+  get_app_var "$self" "is_initialized"
+  if [ -n "$APP_VAR" ]; then
     return
   fi
 
   # Initialized by the user.
-  local _CFG_NAME=$2
-  local _WORKDIR=$3
-  self["cfg_name"]="$_CFG_NAME"
-  self["workdir"]="$_WORKDIR"
+  set_app_var "$self" "cfg_name" "$self"
+  set_app_var "$self" "workdir" "$_WORKDIR"
 
   # Variables initialized by defaults/consts.yaml
   for var in "${app_obj_cfg[@]}"; do
-    local var_name="CFG_${_CFG_NAME}_${var}"
+    local var_name="CFG_${self}_${var}"
     if [[ -z ${!var_name} ]]; then
       setup_error "Missing variable [$var_name] in defaults/consts.yaml"
     fi
-    self["$var"]=${!var_name:?}
+    set_app_var "$self" "$var" "${!var_name:?}"
   done
 
-
   # Some variables often read.
-  local _ASSETS_NAME=${self["assets_name"]:?}
-  local _INSTALL_TYPE=${self["install_type"]:?}
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
+  get_app_var "$self" "install_type"
+  local _INSTALL_TYPE=$APP_VAR
 
   # Initialize all variable members with a default.
   for var in "${app_obj_vars[@]}"; do
     if [[ $var == is_* ]]; then
-      self["$var"]="false" # Initialize differently for likely boolean.
+      # Initialize differently for likely boolean.
+      set_app_var "$self" "$var" "false"
     else
-      self["$var"]="" # All other vars are initialized as empty string.
+      set_app_var "$self" "$var" ""
     fi
   done
 
   # Repo info for the sui binary come from suibase.yaml (instead of consts.yaml).
-  if [[ $2 == "sui" ]]; then
-    self["repo_url"]="${CFG_default_repo_url:?}"
-    self["repo_branch"]="${CFG_default_repo_branch:?}"
-    self["force_tag"]="${CFG_force_tag:?}"
+  if [[ $self == "sui" ]]; then
+    set_app_var "$self" "repo_url" "${CFG_default_repo_url:?}"
+    set_app_var "$self" "repo_branch" "${CFG_default_repo_branch:?}"
+    set_app_var "$self" "force_tag" "${CFG_force_tag:?}"
   fi
 
   # Make sure repo_branch is set to something valid... (because used in some path).
-  local _BRANCH=${self["repo_branch"]}
+  get_app_var "$self" "repo_branch"
+  local _BRANCH=$APP_VAR
   if [[ -z $_BRANCH ]] || [[ $_BRANCH == "~" ]]; then
     _BRANCH="main"
-    self["repo_branch"]=$_BRANCH
+    set_app_var "$self" "repo_branch" $_BRANCH
   fi
 
   # Set path depending if user vs workdir installation.
@@ -172,41 +223,43 @@ init_app_obj() {
     # shellcheck disable=SC2153
     _cache_path="$WORKDIRS/common/.cache/precompiled_downloads/$_ASSETS_NAME/$_BRANCH"
   else
-    _local_bin_path="suibase/workdirs/${self["workdir"]}/bin"
-    _cache_path="$WORKDIRS/${self["workdir"]}/.cache/precompiled_downloads/$_ASSETS_NAME/$_BRANCH"
+    _local_bin_path="suibase/workdirs/$_WORKDIR/bin"
+    _cache_path="$WORKDIRS/$_WORKDIR/.cache/precompiled_downloads/$_ASSETS_NAME/$_BRANCH"
   fi
-  self["local_bin_path"]=$_local_bin_path
-  self["cache_path"]=$_cache_path
+  set_app_var "$self" "local_bin_path" "$_local_bin_path"
+  set_app_var "$self" "cache_path" "$_cache_path"
 
   # Public virtual functions.
-  self["set_local_vars"]="sb_app_set_local_vars"
-  self["print"]="sb_app_print"
-  self["install"]="sb_app_install"
-  self["cleanup_cache"]="sb_app_cleanup_cache_as_needed"
+  set_app_var "$self" "set_local_vars" "sb_app_set_local_vars"
+  set_app_var "$self" "print" "sb_app_print"
+  set_app_var "$self" "install" "sb_app_install"
+  set_app_var "$self" "cleanup_cache" "sb_app_cleanup_cache_as_needed"
 
   # Success.
-  self["is_initialized"]=true
+  set_app_var "$self" "is_initialized" "true"
+
+  # app_call "$self" "print"
 }
 export -f init_app_obj
 
 sb_app_init_PRECOMP_REMOTE_vars() {
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
 
-  self["PRECOMP_REMOTE"]="false"
-  self["PRECOMP_REMOTE_PLATFORM"]=""
-  self["PRECOMP_REMOTE_ARCH"]=""
-  self["PRECOMP_REMOTE_NOT_SUPPORTED"]=""
-  self["PRECOMP_REMOTE_VERSION"]=""
-  self["PRECOMP_REMOTE_TAG_NAME"]=""
-  self["PRECOMP_REMOTE_DOWNLOAD_URL"]=""
-  self["PRECOMP_REMOTE_DOWNLOAD_DIR"]=""
-  self["PRECOMP_REMOTE_FILE_NAME_VERSION"]=""
+  set_app_var "$self" "PRECOMP_REMOTE" "false"
+  set_app_var "$self" "PRECOMP_REMOTE_PLATFORM" ""
+  set_app_var "$self" "PRECOMP_REMOTE_ARCH" ""
+  set_app_var "$self" "PRECOMP_REMOTE_NOT_SUPPORTED" ""
+  set_app_var "$self" "PRECOMP_REMOTE_VERSION" ""
+  set_app_var "$self" "PRECOMP_REMOTE_TAG_NAME" ""
+  set_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_URL" ""
+  set_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_DIR" ""
+  set_app_var "$self" "PRECOMP_REMOTE_FILE_NAME_VERSION" ""
 
-  local _REPO_URL="${self["repo_url"]}"
-  local _BRANCH="${self["repo_branch"]}"
+  get_app_var "$self" "repo_url"
+  local _REPO_URL="$APP_VAR"
+  get_app_var "$self" "repo_branch"
+  local _BRANCH="$APP_VAR"
 
   # Make sure _REPO is github (start with "https://github.com")
   if [[ "$_REPO_URL" != "https://github.com"* ]]; then
@@ -233,22 +286,26 @@ sb_app_init_PRECOMP_REMOTE_vars() {
       _BIN_PLATFORM="macos"
       _BIN_ARCH="$HOST_ARCH"
     else
-      self["PRECOMP_REMOTE_NOT_SUPPORTED"]="true"
+      set_app_var "$self" "PRECOMP_REMOTE_NOT_SUPPORTED" "true"
       return
     fi
   fi
 
-
   local _OUT
   local _TAG_NAME
-  local _FORCE_TAG_NAME
+
   local _FORCE_TAG_SOURCE
   local _DOWNLOAD_URL
   local _DOWNLOAD_SUBSTRING="$_BIN_PLATFORM-$_BIN_ARCH"
 
-  if [[ ${self["force_tag"]} != "~" ]]; then
-    _FORCE_TAG_NAME="${self["force_tag"]}"
-    if [[ ${self["cfg_name"]} == "sui" ]]; then
+  get_app_var "$self" "force_tag"
+  local _FORCE_TAG_NAME=$APP_VAR
+  if [ "$_FORCE_TAG_NAME" = "~" ]; then
+    _FORCE_TAG_NAME=""
+  else
+    get_app_var "$self" "cfg_name"
+    local _CFG_NAME=$APP_VAR
+    if [[ $_CFG_NAME == "sui" ]]; then
       _FORCE_TAG_SOURCE="suibase.yaml"
     else
       _FORCE_TAG_SOURCE="const.yaml"
@@ -274,7 +331,9 @@ sb_app_init_PRECOMP_REMOTE_vars() {
 
     # Extract all tag_name lines from _OUT.
     local _TAG_NAMES
-    if [[ ${self["install_type"]} == "workdir" ]]; then
+    get_app_var "$self" "install_type"
+    local _INSTALL_TYPE=$APP_VAR
+    if [[ $_INSTALL_TYPE == "workdir" ]]; then
       _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -rV)
     else
       _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort -rV)
@@ -379,36 +438,45 @@ sb_app_init_PRECOMP_REMOTE_vars() {
 
 
   # All good. Return success.
-  self["PRECOMP_REMOTE"]="true"
-  self["PRECOMP_REMOTE_PLATFORM"]="$_BIN_PLATFORM"
-  self["PRECOMP_REMOTE_ARCH"]="$_BIN_ARCH"
-  self["PRECOMP_REMOTE_VERSION"]="$_TAG_VERSION"
-  self["PRECOMP_REMOTE_TAG_NAME"]="$_TAG_NAME"
-  self["PRECOMP_REMOTE_DOWNLOAD_URL"]="$_DOWNLOAD_URL"
+  set_app_var "$self" "PRECOMP_REMOTE" "true"
+  set_app_var "$self" "PRECOMP_REMOTE_PLATFORM" "$_BIN_PLATFORM"
+  set_app_var "$self" "PRECOMP_REMOTE_ARCH" "$_BIN_ARCH"
+  set_app_var "$self" "PRECOMP_REMOTE_VERSION" "$_TAG_VERSION"
+  set_app_var "$self" "PRECOMP_REMOTE_TAG_NAME" "$_TAG_NAME"
+  set_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_URL" "$_DOWNLOAD_URL"
 }
 export -f sb_app_init_PRECOMP_REMOTE_vars
 
 sb_app_download_PRECOMP_REMOTE() {
 
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
 
-  local _WORKDIR=${self["workdir"]}
-  self["PRECOMP_REMOTE_DOWNLOAD_DIR"]=""
-  self["PRECOMP_REMOTE_FILE_NAME_VERSION"]=""
+  get_app_var "$self" "workdir"
+  local _WORKDIR=$APP_VAR
+  set_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_DIR" ""
+  set_app_var "$self" "PRECOMP_REMOTE_FILE_NAME_VERSION" ""
 
-  local _PRECOMP_REMOTE_DOWNLOAD_URL=${self["PRECOMP_REMOTE_DOWNLOAD_URL"]}
+  get_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_URL"
+  local _PRECOMP_REMOTE_DOWNLOAD_URL=$APP_VAR
 
   # It is assumed init_PRECOMP_REMOTE_vars was successfully called before
   # and there is indeed something to download and install.
-  if [[ ${self["PRECOMP_REMOTE"]} != true ]]; then
+  get_app_var "$self" "PRECOMP_REMOTE"
+  local _PRECOMP_REMOTE=$APP_VAR
+  if [[ $_PRECOMP_REMOTE != true ]]; then
     return
   fi
 
+  get_app_var "$self" "first_bin_name"
+  local _FIRST_BIN_NAME=$APP_VAR
+
+  get_app_var "$self" "local_bin_path"
+  local _LOCAL_BIN_PATH=$APP_VAR
+
   # Download the $_PRECOMP_REMOTE_DOWNLOAD_URL into the cache
-  local _DOWNLOAD_DIR=${self["cache_path"]:?}
+  get_app_var "$self" "cache_path"
+  local _DOWNLOAD_DIR=$APP_VAR
   mkdir -p "$_DOWNLOAD_DIR"
   local _DOWNLOAD_FILENAME="${_PRECOMP_REMOTE_DOWNLOAD_URL##*/}"
   local _DOWNLOAD_FILENAME_WITHOUT_TGZ="${_DOWNLOAD_FILENAME%.tgz}"
@@ -419,12 +487,12 @@ sb_app_download_PRECOMP_REMOTE() {
 
   # First location attempted to find the extracted binary.
   local _EXTRACTED_DIR_V1="$_EXTRACT_DIR"
-  local _EXTRACTED_TEST_FILENAME_V1=${self["first_bin_name"]}
+  local _EXTRACTED_TEST_FILENAME_V1=$_FIRST_BIN_NAME
   local _EXTRACTED_TEST_FILEDIR_V1="$_EXTRACTED_DIR_V1/$_EXTRACTED_TEST_FILENAME_V1"
 
   # Second location attempted.
-  local _EXTRACTED_DIR_V2="$_EXTRACT_DIR/${self["local_bin_path"]}"
-  local _EXTRACTED_TEST_FILENAME_V2=${self["first_bin_name"]}
+  local _EXTRACTED_DIR_V2="$_EXTRACT_DIR/$_LOCAL_BIN_PATH"
+  local _EXTRACTED_TEST_FILENAME_V2=$_FIRST_BIN_NAME
   local _EXTRACTED_TEST_FILEDIR_V2="$_EXTRACTED_DIR_V2/$_EXTRACTED_TEST_FILENAME_V2"
 
   # These will be initialized with the version detected in the downloaded file.
@@ -435,6 +503,8 @@ sb_app_download_PRECOMP_REMOTE() {
 
   # Try twice before giving up.
   update_USER_GITHUB_TOKEN_var
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
   for i in 1 2; do
     # Download if not already done.
     local _DO_EXTRACTION="false"
@@ -445,7 +515,7 @@ sb_app_download_PRECOMP_REMOTE() {
         _DO_EXTRACTION="true"
       else
         # Check for missing .yaml
-        if [ ! -f "$_EXTRACTED_DIR_V1/${self["assets_name"]}-version.yaml" ] && [ ! -f "$_EXTRACTED_DIR_V2/${self["assets_name"]}-version.yaml" ]; then
+        if [ ! -f "$_EXTRACTED_DIR_V1/${_ASSETS_NAME}-version.yaml" ] && [ ! -f "$_EXTRACTED_DIR_V2/${_ASSETS_NAME}-version.yaml" ]; then
           _DO_EXTRACTION="true"
         fi
       fi
@@ -503,16 +573,20 @@ sb_app_download_PRECOMP_REMOTE() {
       #   commit-date: self["local_bin_commit_date"]
       #
       # Only the fields that are not empty are written.
-      local _VERSION_FILE="$_EXTRACTED_DIR/${self["assets_name"]}-version.yaml"
+      local _VERSION_FILE="$_EXTRACTED_DIR/${_ASSETS_NAME}-version.yaml"
+      get_app_var "$self" "PRECOMP_REMOTE_VERSION"
+      local _PRECOMP_REMOTE_VERSION=$APP_VAR
+      get_app_var "$self" "repo_branch"
+      local _REPO_BRANCH=$APP_VAR
       {
-        echo "version: \"${self["PRECOMP_REMOTE_VERSION"]}\""
-        [ -n "${self["repo_branch"]}" ] && echo "branch: \"${self["repo_branch"]}\""
+        echo "version: \"${_PRECOMP_REMOTE_VERSION}\""
+        [ -n "${_REPO_BRANCH}" ] && echo "branch: \"${_REPO_BRANCH}\""
         #[ -n "${self["local_bin_commit"]}" ] && echo "commit: \"${self["TBD"]}\""
         #[ -n "${self["local_bin_commit_date"]}" ] && echo "commit-date: \"${self["TBD"]}\""
       } >"$_VERSION_FILE"
 
       # Cleanup cache now that we have likely an older version to get rid of.
-      vcall "$self_name" "cleanup_cache"
+      app_call "$self" "cleanup_cache"
       break # Exit the retry loop.
     fi
   done
@@ -523,22 +597,34 @@ sb_app_download_PRECOMP_REMOTE() {
   fi
 
   # Success
-  self["PRECOMP_REMOTE_DOWNLOAD_DIR"]="$_EXTRACTED_DIR"
-  self["PRECOMP_REMOTE_FILE_NAME_VERSION"]="$_USE_VERSION"
+  set_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_DIR" "$_EXTRACTED_DIR"
+  set_app_var "$self" "PRECOMP_REMOTE_FILE_NAME_VERSION" "$_USE_VERSION"
 }
 export -f sb_app_download_PRECOMP_REMOTE
 
 sb_app_install_PRECOMP_REMOTE() {
 
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
 
-  local _WORKDIR=${self["workdir"]}
+  get_app_var "$self" "workdir"
+  local _WORKDIR=$APP_VAR
 
-  local _PRECOMP_REMOTE=${self["PRECOMP_REMOTE"]}
-  local _PRECOMP_REMOTE_DOWNLOAD_DIR=${self["PRECOMP_REMOTE_DOWNLOAD_DIR"]}
+  get_app_var "$self" "PRECOMP_REMOTE"
+  local _PRECOMP_REMOTE=$APP_VAR
+
+  get_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_DIR"
+  local _PRECOMP_REMOTE_DOWNLOAD_DIR=$APP_VAR
+
+  get_app_var "$self" "cfg_name"
+  local _CFG_NAME=$APP_VAR
+
+  get_app_var "$self" "local_bin_path"
+  local _LOCAL_BIN_PATH=$APP_VAR
+
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
+
   local _ALL_INSTALLED=false
 
   # This assume download_PRECOMP_REMOTE() was successfully completed before.
@@ -548,7 +634,7 @@ sb_app_install_PRECOMP_REMOTE() {
     setup_error "Could not install precompiled binary for $_WORKDIR"
   fi
 
-  if [[ ${self["cfg_name"]} == "sui" ]]; then
+  if [[ $_CFG_NAME == "sui" ]]; then
     # List of Mysten Labs binaries to install.
     local _BINARIES=("sui" "sui-tool" "sui-faucet" "sui-node" "sui-test-validator" "sui-indexer")
 
@@ -565,30 +651,32 @@ sb_app_install_PRECOMP_REMOTE() {
     for _BIN_NAME in "${_BINARIES[@]}"; do
       local _DST="$WORKDIRS/$_WORKDIR/sui-repo/target/debug"
       # Copy/install files when difference detected.
-      sb_app_install_on_bin_diff "$self_name" "$_SRC" "$_DST" "$_BIN_NAME"
+      sb_app_install_on_bin_diff "$self" "$_SRC" "$_DST" "$_BIN_NAME"
       _DST="$WORKDIRS/$_WORKDIR/sui-repo/target/release"
-      sb_app_install_on_bin_diff "$self_name" "$_SRC" "$_DST" "$_BIN_NAME"
+      sb_app_install_on_bin_diff "$self" "$_SRC" "$_DST" "$_BIN_NAME"
       # This is the new location for workdir binaries (starting 2024).
       _DST="$WORKDIRS/$_WORKDIR/bin"
-      sb_app_install_on_bin_diff "$self_name" "$_SRC" "$_DST" "$_BIN_NAME"
+      sb_app_install_on_bin_diff "$self" "$_SRC" "$_DST" "$_BIN_NAME"
       _ALL_INSTALLED=true
     done
   else
     # Generic installation for most binaries.
 
     # Build a list of all binaries to be installed.
+    get_app_var "$self" "bin_names"
+    local _BIN_NAMES_STRING=$APP_VAR
     local OLD_IFS="$IFS"
-    IFS=',' read -r -a _BIN_NAMES <<<"${self["bin_names"]}"
+    IFS=',' read -r -a _BIN_NAMES <<<"${_BIN_NAMES_STRING}"
     IFS="$OLD_IFS"
 
     local _SRC="$_PRECOMP_REMOTE_DOWNLOAD_DIR"
-    local _DST="${HOME}/${self["local_bin_path"]:?}"
+    local _DST="${HOME}/$_LOCAL_BIN_PATH"
     for _BIN_NAME in "${_BIN_NAMES[@]}"; do
-      sb_app_install_on_bin_diff "$self_name" "$_SRC" "$_DST" "$_BIN_NAME"
+      sb_app_install_on_bin_diff "$self" "$_SRC" "$_DST" "$_BIN_NAME"
     done
 
     # Install version file.
-    sb_app_install_on_bin_diff "$self_name" "$_SRC" "$_DST" "${self["assets_name"]}-version.yaml"
+    sb_app_install_on_bin_diff "$self" "$_SRC" "$_DST" "${_ASSETS_NAME}-version.yaml"
 
     _ALL_INSTALLED=true
   fi
@@ -598,9 +686,7 @@ export -f sb_app_install_PRECOMP_REMOTE
 sb_app_install_on_bin_diff() {
 
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
 
   local _SRC="$2"
   local _DST="$3"
@@ -630,12 +716,11 @@ export -f sb_app_install_on_bin_diff
 sb_app_cleanup_cache_as_needed() {
 
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
 
   # Do nothing if cache_path is not initialized...
-  local _CACHE_PATH=${self["cache_path"]}
+  get_app_var "$self" "cache_path"
+  local _CACHE_PATH=$APP_VAR
   if [ -z "$_CACHE_PATH" ]; then
     return
   fi
@@ -666,29 +751,35 @@ export -f sb_app_cleanup_cache_as_needed
 
 sb_app_print() {
   # Create the "self" reference.
-  local self_name=$1
   # shellcheck disable=SC2178
-  local -n self=$self_name
-
+  local self=$1
 
   echo "=================="
   echo "$1"
   echo "=================="
   # Display values of all variables in the app object.
   for var in "${app_obj_params[@]}"; do
-    echo "  $var: ${self[$var]}"
+    # shellcheck disable=SC2128
+    get_app_var "$self" "$var"
+    echo "  $var: $APP_VAR"
   done
   echo "----"
   for var in "${app_obj_cfg[@]}"; do
-    echo "  $var: ${self[$var]}"
+    # shellcheck disable=SC2128
+    get_app_var "$self" "$var"
+    echo "  $var: $APP_VAR"
   done
   echo "----"
   for var in "${app_obj_vars[@]}"; do
-    echo "  $var: ${self[$var]}"
+    # shellcheck disable=SC2128
+    get_app_var "$self" "$var"
+    echo "  $var: $APP_VAR"
   done
   echo "----"
   for var in "${app_obj_funcs[@]}"; do
-    echo "  $var: ${self[$var]}"
+    # shellcheck disable=SC2128
+    get_app_var "$self" "$var"
+    echo "  $var: $APP_VAR"
   done
   echo "=================="
 }
@@ -717,34 +808,43 @@ sb_app_set_local_vars() {
   # These are loaded as BASH variables with a _LOCAL_VER prefix.
 
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
 
   local _LOCAL_BIN_LOADED=false
 
   # Verify if all binaries are installed, create dest dir for binaries (as needed).
   local _ALL_INSTALLED=true
   local _AT_LEAST_ONE_INSTALLED=false
-  local _local_bin_path="${HOME}/${self["local_bin_path"]}"
+
+  get_app_var "$self" "local_bin_path"
+  local _LOCAL_BIN_PATH=${HOME}/$APP_VAR
 
   # Iterate the ${self["bin_names"]} string (comma seperated strings) to an array.
+  get_app_var "$self" "bin_names"
+  local _BIN_NAMES_STRING=$APP_VAR
+
+  get_app_var "$self" "cfg_name"
+  local _CFG_NAME=$APP_VAR
+
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
+
   local OLD_IFS="$IFS"
-  IFS=',' read -r -a _BIN_NAMES <<<"${self["bin_names"]}"
+  IFS=',' read -r -a _BIN_NAMES <<<"${_BIN_NAMES_STRING}"
   IFS="$OLD_IFS"
   for _BIN_NAME in "${_BIN_NAMES[@]}"; do
     if [ ! "$_AT_LEAST_ONE_INSTALLED" = "true" ]; then
       _AT_LEAST_ONE_INSTALLED=true
-      self["first_bin_name"]=$_BIN_NAME
+      set_app_var "$self" "first_bin_name" "$_BIN_NAME"
     fi
-    if [[ ! -f $_local_bin_path/$_BIN_NAME ]] || [[ ! -x $_local_bin_path/$_BIN_NAME ]]; then
+    if [[ ! -f $_LOCAL_BIN_PATH/$_BIN_NAME ]] || [[ ! -x $_LOCAL_BIN_PATH/$_BIN_NAME ]]; then
       _ALL_INSTALLED=false
       break
     fi
   done
 
   # Load the version.yaml file.
-  local _VERSION_FILE="$_local_bin_path/${self["assets_name"]}-version.yaml"
+  local _VERSION_FILE="$_LOCAL_BIN_PATH/${_ASSETS_NAME}-version.yaml"
   if [ -f "$_VERSION_FILE" ]; then
     local _LOCAL_VER_version=""
     local _LOCAL_VER_branch=""
@@ -752,10 +852,10 @@ sb_app_set_local_vars() {
     local _LOCAL_VER_commit_date=""
     eval "$(parse_yaml "$_VERSION_FILE" "_LOCAL_VER_")"
     if [[ -n $_LOCAL_VER_version ]]; then
-      self["local_bin_version"]="$_LOCAL_VER_version"
-      self["local_bin_branch"]="$_LOCAL_VER_branch"
-      self["local_bin_commit"]="$_LOCAL_VER_commit"
-      self["local_bin_commit_date"]="$_LOCAL_VER_commit_date"
+      set_app_var "$self" "local_bin_version" "$_LOCAL_VER_version"
+      set_app_var "$self" "local_bin_branch" "$_LOCAL_VER_branch"
+      set_app_var "$self" "local_bin_commit" "$_LOCAL_VER_commit"
+      set_app_var "$self" "local_bin_commit_date" "$_LOCAL_VER_commit_date"
       _LOCAL_BIN_LOADED=true
     fi
     # TODO Handle parsing error.
@@ -765,39 +865,45 @@ sb_app_set_local_vars() {
   fi
 
   if [ "$_ALL_INSTALLED" = "true" ]; then
-    self["is_installed"]=true
+    set_app_var "$self" "is_installed" "true"
   else
-    self["is_installed"]=false
-    mkdir -p "$_local_bin_path" || setup_error "Failed to create $_local_bin_path"
+    set_app_var "$self" "is_installed" "false"
+    mkdir -p "$_LOCAL_BIN_PATH" || setup_error "Failed to create $_LOCAL_BIN_PATH"
   fi
 
-  if [[ ${self["cfg_name"]} == "sui" ]]; then
+  if [[ $_CFG_NAME == "sui" ]]; then
     # Check in case of the deprecated version.txt file.
     local _SUIBASE_DAEMON_VERSION_INSTALLED=""
     SUIBASE_DAEMON_VERSION_FILE="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME-version.txt"
     if [[ $_LOCAL_BIN_LOADED == false ]] && [ -f "$SUIBASE_DAEMON_VERSION_FILE" ]; then
       local _FILE_CONTENT
       _FILE_CONTENT=$(cat "$SUIBASE_DAEMON_VERSION_FILE")
-      self["local_bin_version"]="$_FILE_CONTENT"
-      self["local_bin_branch"]=""
-      self["local_bin_commit"]=""
-      self["local_bin_commit_date"]=""
+      set_app_var "$self" "local_bin_version" "$_FILE_CONTENT"
+      set_app_var "$self" "local_bin_branch" ""
+      set_app_var "$self" "local_bin_commit" ""
+      set_app_var "$self" "local_bin_commit_date" ""
       _LOCAL_BIN_LOADED=true
     fi
 
   else
     # Get the version field from the Cargo.toml
-    if [ "${self["build_type"]}" = "rust" ]; then
+    get_app_var "$self" "build_type"
+    local _BUILD_TYPE=$APP_VAR
+    if [ "$_BUILD_TYPE" = "rust" ]; then
       local _CARGO_DIR=""
-      if [ "${self["src_type"]}" = "suibase" ]; then
-        _CARGO_DIR="$SUIBASE_DIR/${self["src_path"]}"
+      get_app_var "$self" "src_type"
+      local _SRC_TYPE=$APP_VAR
+      if [ "$_SRC_TYPE" = "suibase" ]; then
+        get_app_var "$self" "src_path"
+        local _SRC_PATH=$APP_VAR
+        _CARGO_DIR="$SUIBASE_DIR/$_SRC_PATH"
       fi
       if [ -n "$_CARGO_DIR" ]; then
         if [ -f "$_CARGO_DIR/Cargo.toml" ]; then
           local _PARSED_VERSION
           _PARSED_VERSION=$(grep "^version *= *" $_CARGO_DIR/Cargo.toml | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
           if [ -n "$_PARSED_VERSION" ]; then
-            self["local_src_version"]="$_PARSED_VERSION"
+            set_app_var "$self" "local_src_version" "$_PARSED_VERSION"
           fi
         fi
       fi
@@ -816,7 +922,7 @@ sb_app_set_local_vars() {
   # The version field is mandatory, the rest is optional.
   #
   # These are loaded as BASH variables with a _LOCAL_VER_LATEST prefix.
-  local _VERSION_FILE_LATEST="$_local_bin_path/${self["assets_name"]}-latest.yaml"
+  local _VERSION_FILE_LATEST="$_LOCAL_BIN_PATH/${_ASSETS_NAME}-latest.yaml"
   local _LOCAL_BIN_LATEST_LOADED=false
   if [[ -f $_VERSION_FILE_LATEST ]]; then
     local _LOCAL_VER_LATEST_version=""
@@ -825,10 +931,10 @@ sb_app_set_local_vars() {
     local _LOCAL_VER_LATEST_commit_date=""
     eval "$(parse_yaml "$_VERSION_FILE_LATEST" "_LOCAL_VER_LATEST")"
     if [[ -n $_LOCAL_VER_LATEST_version ]]; then
-      self["local_bin_latest_version"]="$_LOCAL_VER_LATEST_version"
-      self["local_bin_latest_branch"]="$_LOCAL_VER_LATEST_branch"
-      self["local_bin_latest_commit"]="$_LOCAL_VER_LATEST_commit"
-      self["local_bin_latest_commit_date"]="$_LOCAL_VER_LATEST_commit_date"
+      set_app_var "$self" "local_bin_latest_version" "$_LOCAL_VER_LATEST_version"
+      set_app_var "$self" "local_bin_latest_branch" "$_LOCAL_VER_LATEST_branch"
+      set_app_var "$self" "local_bin_latest_commit" "$_LOCAL_VER_LATEST_commit"
+      set_app_var "$self" "local_bin_latest_commit_date" "$_LOCAL_VER_LATEST_commit_date"
       _LOCAL_BIN_LATEST_LOADED=true
     fi
   fi
@@ -837,9 +943,10 @@ sb_app_set_local_vars() {
 export -f sb_app_set_local_vars
 
 sb_app_rust_build_and_install() {
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
+
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
 
   # Rust (re)build.
   echo "Building $SUIBASE_DAEMON_NAME"
@@ -881,10 +988,12 @@ sb_app_rust_build_and_install() {
   \cp -f "$_SRC" "$SUIBASE_DAEMON_BIN"
 
   # Create the version file.
-  local _VERSION_FILE="$SUIBASE_BIN_DIR/${self["assets_name"]}-version.yaml"
+  local _VERSION_FILE="$SUIBASE_BIN_DIR/${_ASSETS_NAME}-version.yaml"
+  get_app_var "$self" "repo_branch"
+  local _REPO_BRANCH=$APP_VAR
   {
     echo "version: \"${_VERSION}\""
-    [ -n "${self["repo_branch"]}" ] && echo "branch: \"${self["repo_branch"]}\""
+    [ -n "${_REPO_BRANCH}" ] && echo "branch: \"${_REPO_BRANCH}\""
     #[ -n "${self["local_bin_commit"]}" ] && echo "commit: \"${self["TBD"]}\""
     #[ -n "${self["local_bin_commit_date"]}" ] && echo "commit-date: \"${self["TBD"]}\""
   } >"$_VERSION_FILE"
@@ -909,13 +1018,15 @@ sb_app_install() {
   # called on self.
 
   # Create the "self" reference.
-  local self_name=$1
-  # shellcheck disable=SC2178
-  local -n self=$self_name
+  local self=$1
+
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
 
   # First check if precompiled binaries is allowed to be done.
-  local _PRECOMP_ALLOWED=${self["precompiled_bin"]}
-  if [ "${self["assets_name"]}" = "sui" ]; then
+  get_app_var "$self" "precompiled_bin"
+  local _PRECOMP_ALLOWED=$APP_VAR
+  if [ "$_ASSETS_NAME" = "sui" ]; then
     _PRECOMP_ALLOWED=${CFG_precompiled_bin:?}
   fi
 
@@ -924,20 +1035,28 @@ sb_app_install() {
   # TODO Implement a trick to force rebuild for dev setup!
   if [ "$_PRECOMP_ALLOWED" = "true" ]; then
     # Do a precompiled remote installation.
-    sb_app_init_PRECOMP_REMOTE_vars "$self_name"
-    if [ "${self["PRECOMP_REMOTE_NOT_SUPPORTED"]}" = "true" ]; then
-      warn_user "Precompiled binaries not supported for ${self["PRECOMP_REMOTE_PLATFORM"]}-${self["PRECOMP_REMOTE_ARCH"]}"
+    sb_app_init_PRECOMP_REMOTE_vars "$self"
+    get_app_var "$self" "PRECOMP_REMOTE_NOT_SUPPORTED"
+    local _PRECOMP_REMOTE_NOT_SUPPORTED=$APP_VAR
+    if [ "$_PRECOMP_REMOTE_NOT_SUPPORTED" = "true" ]; then
+      get_app_var "$self" "PRECOMP_REMOTE_PLATFORM"
+      local _PRECOMP_REMOTE_PLATFORM=$APP_VAR
+      get_app_var "$self" "PRECOMP_REMOTE_ARCH"
+      local _PRECOMP_REMOTE_ARCH=$APP_VAR
+      warn_user "Precompiled binaries not supported for ${_PRECOMP_REMOTE_PLATFORM}-${_PRECOMP_REMOTE_ARCH}"
       _PRECOMP_ALLOWED="false"
     else
-      sb_app_download_PRECOMP_REMOTE "$self_name"
-      sb_app_install_PRECOMP_REMOTE "$self_name"
+      sb_app_download_PRECOMP_REMOTE "$self"
+      sb_app_install_PRECOMP_REMOTE "$self"
     fi
   fi
 
   if [ "$_PRECOMP_ALLOWED" = "false" ]; then
     # No precompiled allowed, running a dev setup or unsuported platform... so build from source code.
-    if [ "${self["build_type"]}" = "rust" ]; then
-      sb_app_rust_build_and_install "$self_name"
+    get_app_var "$self" "build_type"
+    local _BUILD_TYPE=$APP_VAR
+    if [ "$_BUILD_TYPE" = "rust" ]; then
+      sb_app_rust_build_and_install "$self"
     fi
   fi
 

@@ -3576,32 +3576,3 @@ is_at_least_one_service_running() {
   return
 }
 export -f is_at_least_one_service_running
-
-
-# Function to call an object's function dynamically
-# (virtual function call)
-#
-# Example:
-#   vcall my_app_obj "update"
-#   vcall my_app_obj "print
-#
-vcall() {
-  # shellcheck disable=SC2178
-  local obj_name=$1
-  local -n obj_ref=$1
-  local func_name=$2
-  shift 2
-
-  # TODO Optimize by removing that command call after the scripts "stabilize".
-
-  # Check if the function exists
-  if command -v "${obj_ref[$func_name]}" >/dev/null 2>&1; then
-    # Call the function
-    ${obj_ref[$func_name]} "$obj_name" "$@"
-  else
-    # Print debug message if the function does not exist
-    #echo "Error: Function ${obj_ref[$func_name]} not found in object $obj_name" >&2
-    echo "Error: bad call [$func_name] with obj_name: $obj_name and arguments: [$@]"
-  fi
-}
-export -f vcall

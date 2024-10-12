@@ -2,9 +2,6 @@
 
 # You must source __globals.sh and __apps.sh before __suibase-daemon.sh
 
-# shellcheck disable=SC2034
-declare -A sb_daemon_obj
-
 is_suibase_daemon_running() {
   # Quickly determine if the daemon is running, does not check if responding.
   # Has the side effect of updating the SUIBASE_DAEMON_PID variable.
@@ -327,12 +324,17 @@ start_suibase_daemon_as_needed() {
   # Changes to true if the daemon is tentatively started
   # anywhere within this call.
   SUIBASE_DAEMON_STARTED=false
+  local app_obj="suibase_daemon"
+  init_app_obj "$app_obj" ""
+  app_call "$app_obj" "set_local_vars"
 
-  init_app_obj sb_daemon_obj "suibase_daemon" ""
-  vcall sb_daemon_obj "set_local_vars"
-  # vcall sb_daemon_obj "print"
+  get_app_var "$app_obj" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
 
-  if [ "${sb_daemon_obj["is_installed"]}" != "true" ]; then
+  get_app_var "$app_obj" "is_installed"
+  local _IS_INSTALLED=$APP_VAR
+
+  if [ "$_IS_INSTALLED" != "true" ]; then
 
     local _PERFORM_INSTALL=false
 
@@ -359,13 +361,16 @@ start_suibase_daemon_as_needed() {
       done
 
       # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
-      cli_mutex_lock "suibase_daemon"
+      cli_mutex_lock "$app_obj"
 
       if [ "$_PERFORM_INSTALL" = false ]; then
         # Was block by another script... check again if the upgrade is still needed.
-        vcall sb_daemon_obj "set_local_vars"
+        app_call "$app_obj" "set_local_vars"
 
-        if [ "${sb_daemon_obj["is_installed"]}" != "true" ]; then
+        get_app_var "$app_obj" "is_installed"
+        _IS_INSTALLED=$APP_VAR
+
+        if [ "$_IS_INSTALLED" != "true" ]; then
           _PERFORM_INSTALL=true
         fi
       fi
@@ -373,24 +378,30 @@ start_suibase_daemon_as_needed() {
 
     if [ "$_PERFORM_INSTALL" = true ]; then
       progress_suibase_daemon_upgrading
-      local _OLD_VERSION="${sb_daemon_obj["local_bin_version"]}"
+      get_app_var "$app_obj" "local_bin_version"
+      local _OLD_VERSION=$APP_VAR
       # OLD build_suibase_daemon
       # OLD update_SUIBASE_DAEMON_VERSION_INSTALLED
-      cli_mutex_lock "suibase_daemon"
-      vcall sb_daemon_obj "install"
-      vcall sb_daemon_obj "set_local_vars"
-      local _NEW_VERSION="${sb_daemon_obj["local_bin_version"]}"
-      if [ "${sb_daemon_obj["is_installed"]}" != "true" ] || [ -z "$_NEW_VERSION" ]; then
-        setup_error "Failed to install ${sb_daemon_obj["assets_name"]}"
+      cli_mutex_lock "$app_obj"
+      app_call "$app_obj" "install"
+      app_call "$app_obj" "set_local_vars"
+      get_app_var "$app_obj" "is_installed"
+      _IS_INSTALLED=$APP_VAR
+      get_app_var "$app_obj" "local_bin_version"
+      local _NEW_VERSION=$APP_VAR
+      # app_call "$app_obj" "print"
+
+      if [ "$_IS_INSTALLED" != "true" ] || [ -z "$_NEW_VERSION" ]; then
+        setup_error "Failed to install $_ASSETS_NAME"
       fi
 
       local _WAS_UPGRADED=false
       if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
         if [ -n "$_OLD_VERSION" ]; then
-          echo "${sb_daemon_obj["assets_name"]} upgraded from $_OLD_VERSION to $_NEW_VERSION"
+          echo "$_ASSETS_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
           _WAS_UPGRADED=true
         else
-          echo "${sb_daemon_obj["assets_name"]} $_NEW_VERSION installed"
+          echo "$_ASSETS_NAME $_NEW_VERSION installed"
         fi
       fi
 
@@ -412,6 +423,7 @@ start_suibase_daemon_as_needed() {
     fi
   fi
 
+  # app_call "$app_obj" "print"
   return 0
 }
 export -f start_suibase_daemon_as_needed
