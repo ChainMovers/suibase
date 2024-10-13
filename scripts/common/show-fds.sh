@@ -1,3 +1,4 @@
+#!/bin/bash
 for dir in /proc/*/fd;
 do
     echo -n "$dir "; #need a space to get real columns for the sort

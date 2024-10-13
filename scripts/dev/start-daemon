@@ -3,11 +3,14 @@
 SUIBASE_DIR="$HOME/suibase"
 WORKDIR="none"
 
-# shellcheck source=SCRIPTDIR/../common/__suibase-daemon.sh
+# shellcheck source=SCRIPTDIR/../common/__globals.sh
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 trap cleanup EXIT
 
-# shellcheck source=SCRIPTDIR/../common/__globals.sh
+# shellcheck source=SCRIPTDIR/../common/__apps.sh
+source "$SUIBASE_DIR/scripts/common/__apps.sh"
+
+# shellcheck source=SCRIPTDIR/../common/__suibase-daemon.sh
 source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
 cli_mutex_lock "suibase_daemon"

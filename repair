@@ -185,6 +185,9 @@ suibase_repair() {
     trap cleanup EXIT
   fi
 
+  # shellcheck source=SCRIPTDIR/scripts/common/__apps.sh
+  source "$REPAIR_SB_DIR/scripts/common/__apps.sh"
+
   if [ -z "$SUIBASE_DAEMON_VERSION_FILE" ]; then
     # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
     source "$REPAIR_SB_DIR/scripts/common/__suibase-daemon.sh"

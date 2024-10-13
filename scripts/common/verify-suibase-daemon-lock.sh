@@ -20,6 +20,9 @@ fi
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 trap cleanup EXIT
 
+# shellcheck source=SCRIPTDIR/__apps.sh
+source "$SUIBASE_DIR/scripts/common/__apps.sh"
+
 # shellcheck source=SCRIPTDIR/__suibase-daemon.sh
 source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
