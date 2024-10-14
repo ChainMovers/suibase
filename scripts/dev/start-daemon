@@ -13,6 +13,9 @@ source "$SUIBASE_DIR/scripts/common/__apps.sh"
 # shellcheck source=SCRIPTDIR/../common/__suibase-daemon.sh
 source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
 
+exit_if_not_installed
+exit_if_deps_missing
+
 cli_mutex_lock "suibase_daemon"
 
 start_suibase_daemon
