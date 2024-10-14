@@ -341,7 +341,6 @@ start_suibase_daemon_as_needed() {
   fi
 
   if [ "$_IS_INSTALLED" != "true" ]; then
-
     local _PERFORM_INSTALL=false
 
     # Check SUIBASE_DAEMON_UPGRADING to prevent multiple attempts to upgrade
@@ -386,8 +385,6 @@ start_suibase_daemon_as_needed() {
       progress_suibase_daemon_upgrading
       get_app_var "$app_obj" "local_bin_version"
       local _OLD_VERSION=$APP_VAR
-      # OLD build_suibase_daemon
-      # OLD update_SUIBASE_DAEMON_VERSION_INSTALLED
       cli_mutex_lock "$app_obj"
       app_call "$app_obj" "install"
       app_call "$app_obj" "set_local_vars"
@@ -395,7 +392,6 @@ start_suibase_daemon_as_needed() {
       _IS_INSTALLED=$APP_VAR
       get_app_var "$app_obj" "local_bin_version"
       local _NEW_VERSION=$APP_VAR
-      # app_call "$app_obj" "print"
 
       if [ "$_IS_INSTALLED" != "true" ] || [ -z "$_NEW_VERSION" ]; then
         setup_error "Failed to install $_ASSETS_NAME"

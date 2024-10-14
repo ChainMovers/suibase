@@ -808,8 +808,6 @@ sb_app_set_local_vars() {
   # Create the "self" reference.
   local self=$1
 
-  local _LOCAL_BIN_LOADED=false
-
   # Verify if all binaries are installed, create dest dir for binaries (as needed).
   local _ALL_INSTALLED=true
   local _AT_LEAST_ONE_INSTALLED=false
@@ -843,18 +841,17 @@ sb_app_set_local_vars() {
 
   # Load the version.yaml file.
   local _VERSION_FILE="$_LOCAL_BIN_PATH/${_ASSETS_NAME}-version.yaml"
+  local _LOCAL_BIN_version=""
+  local _LOCAL_BIN_branch=""
+  local _LOCAL_BIN_commit=""
+  local _LOCAL_BIN_commit_date=""
   if [ -f "$_VERSION_FILE" ]; then
-    local _LOCAL_VER_version=""
-    local _LOCAL_VER_branch=""
-    local _LOCAL_VER_commit=""
-    local _LOCAL_VER_commit_date=""
-    eval "$(parse_yaml "$_VERSION_FILE" "_LOCAL_VER_")"
-    if [[ -n $_LOCAL_VER_version ]]; then
-      set_app_var "$self" "local_bin_version" "$_LOCAL_VER_version"
-      set_app_var "$self" "local_bin_branch" "$_LOCAL_VER_branch"
-      set_app_var "$self" "local_bin_commit" "$_LOCAL_VER_commit"
-      set_app_var "$self" "local_bin_commit_date" "$_LOCAL_VER_commit_date"
-      _LOCAL_BIN_LOADED=true
+    eval "$(parse_yaml "$_VERSION_FILE" "_LOCAL_BIN_")"
+    if [[ -n $_LOCAL_BIN_version ]]; then
+      set_app_var "$self" "local_bin_version" "$_LOCAL_BIN_version"
+      set_app_var "$self" "local_bin_branch" "$_LOCAL_BIN_branch"
+      set_app_var "$self" "local_bin_commit" "$_LOCAL_BIN_commit"
+      set_app_var "$self" "local_bin_commit_date" "$_LOCAL_BIN_commit_date"
     fi
     # TODO Handle parsing error.
   else
@@ -862,32 +859,27 @@ sb_app_set_local_vars() {
     _ALL_INSTALLED=false
   fi
 
-  if [ "$_ALL_INSTALLED" = "true" ]; then
-    set_app_var "$self" "is_installed" "true"
-  else
-    set_app_var "$self" "is_installed" "false"
-    mkdir -p "$_LOCAL_BIN_PATH" || setup_error "Failed to create $_LOCAL_BIN_PATH"
-  fi
+  # Might get initialized if source code is already available locally.
+  local _LOCAL_SRC_VERSION=""
 
   if [[ $_CFG_NAME == "sui" ]]; then
     # Check in case of the deprecated version.txt file.
     local _SUIBASE_DAEMON_VERSION_INSTALLED=""
     SUIBASE_DAEMON_VERSION_FILE="$SUIBASE_BIN_DIR/$SUIBASE_DAEMON_NAME-version.txt"
-    if [[ $_LOCAL_BIN_LOADED == false ]] && [ -f "$SUIBASE_DAEMON_VERSION_FILE" ]; then
+    if [[ $_LOCAL_BIN_version == "" ]] && [ -f "$SUIBASE_DAEMON_VERSION_FILE" ]; then
       local _FILE_CONTENT
-      _FILE_CONTENT=$(cat "$SUIBASE_DAEMON_VERSION_FILE")
-      set_app_var "$self" "local_bin_version" "$_FILE_CONTENT"
+      _LOCAL_BIN_version=$(cat "$SUIBASE_DAEMON_VERSION_FILE")
+      set_app_var "$self" "local_bin_version" "$_LOCAL_BIN_version"
       set_app_var "$self" "local_bin_branch" ""
       set_app_var "$self" "local_bin_commit" ""
       set_app_var "$self" "local_bin_commit_date" ""
-      _LOCAL_BIN_LOADED=true
     fi
-
   else
-    # Get the version field from the Cargo.toml
+    # When rust, get the version field from the Cargo.toml
     get_app_var "$self" "build_type"
     local _BUILD_TYPE=$APP_VAR
     if [ "$_BUILD_TYPE" = "rust" ]; then
+
       local _CARGO_DIR=""
       get_app_var "$self" "src_type"
       local _SRC_TYPE=$APP_VAR
@@ -898,14 +890,41 @@ sb_app_set_local_vars() {
       fi
       if [ -n "$_CARGO_DIR" ]; then
         if [ -f "$_CARGO_DIR/Cargo.toml" ]; then
-          local _PARSED_VERSION
-          _PARSED_VERSION=$(grep "^version *= *" $_CARGO_DIR/Cargo.toml | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
-          if [ -n "$_PARSED_VERSION" ]; then
-            set_app_var "$self" "local_src_version" "$_PARSED_VERSION"
+          # shellcheck disable=SC2086
+          _LOCAL_SRC_VERSION=$(grep "^version *= *" $_CARGO_DIR/Cargo.toml | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          if [ -n "$_LOCAL_SRC_VERSION" ]; then
+            set_app_var "$self" "local_src_version" "$_LOCAL_SRC_VERSION"
+          fi
+        fi
+      fi
+
+      # Check if the source code is newer than the local binary (this can happen after "~/suibase/update").
+      #
+      # Upgrade only if major.minor in source code is higher (ignore patch and build).
+      #
+      # Only the main branch is considered for upgrade (because the precompiled binary for _LOCAL_SRC_VERSION need
+      # to exists).
+      if [ "$_ALL_INSTALLED" = "true" ] && [ -n "$_LOCAL_SRC_VERSION" ] && [ -n "$_LOCAL_BIN_version" ] && [ "$_SRC_TYPE" = "suibase" ]; then
+        # Get the branch name of the local repo.
+        local _LOCAL_BRANCH
+        _LOCAL_BRANCH=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD)
+        if version_less_than "$_LOCAL_BIN_version" "$_LOCAL_SRC_VERSION"; then
+          if [ "$_LOCAL_BRANCH" = "main" ]; then
+            _ALL_INSTALLED="false"
+            echo "Upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION"
+          else
+            warn_user "Not upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION because not on main branch"
           fi
         fi
       fi
     fi
+  fi
+
+  if [ "$_ALL_INSTALLED" = "true" ]; then
+    set_app_var "$self" "is_installed" "true"
+  else
+    set_app_var "$self" "is_installed" "false"
+    mkdir -p "$_LOCAL_BIN_PATH" || setup_error "Failed to create $_LOCAL_BIN_PATH"
   fi
 
   # Each binary may have a <assets_name>-latest.yaml file in the bin directory.
@@ -919,21 +938,19 @@ sb_app_set_local_vars() {
   #
   # The version field is mandatory, the rest is optional.
   #
-  # These are loaded as BASH variables with a _LOCAL_VER_LATEST prefix.
+  # These are loaded as BASH variables with a _LOCAL_BIN_LATEST prefix.
   local _VERSION_FILE_LATEST="$_LOCAL_BIN_PATH/${_ASSETS_NAME}-latest.yaml"
-  local _LOCAL_BIN_LATEST_LOADED=false
   if [[ -f $_VERSION_FILE_LATEST ]]; then
-    local _LOCAL_VER_LATEST_version=""
-    local _LOCAL_VER_LATEST_branch=""
-    local _LOCAL_VER_LATEST_commit=""
-    local _LOCAL_VER_LATEST_commit_date=""
-    eval "$(parse_yaml "$_VERSION_FILE_LATEST" "_LOCAL_VER_LATEST")"
-    if [[ -n $_LOCAL_VER_LATEST_version ]]; then
-      set_app_var "$self" "local_bin_latest_version" "$_LOCAL_VER_LATEST_version"
-      set_app_var "$self" "local_bin_latest_branch" "$_LOCAL_VER_LATEST_branch"
-      set_app_var "$self" "local_bin_latest_commit" "$_LOCAL_VER_LATEST_commit"
-      set_app_var "$self" "local_bin_latest_commit_date" "$_LOCAL_VER_LATEST_commit_date"
-      _LOCAL_BIN_LATEST_LOADED=true
+    local _LOCAL_BIN_LATEST_version=""
+    local _LOCAL_BIN_LATEST_branch=""
+    local _LOCAL_BIN_LATEST_commit=""
+    local _LOCAL_BIN_LATEST_commit_date=""
+    eval "$(parse_yaml "$_VERSION_FILE_LATEST" "_LOCAL_BIN_LATEST")"
+    if [[ -n $_LOCAL_BIN_LATEST_version ]]; then
+      set_app_var "$self" "local_bin_latest_version" "$_LOCAL_BIN_LATEST_version"
+      set_app_var "$self" "local_bin_latest_branch" "$_LOCAL_BIN_LATEST_branch"
+      set_app_var "$self" "local_bin_latest_commit" "$_LOCAL_BIN_LATEST_commit"
+      set_app_var "$self" "local_bin_latest_commit_date" "$_LOCAL_BIN_LATEST_commit_date"
     fi
   fi
 
