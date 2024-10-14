@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# This script is only intended for developers and continous integration.
+#
+# It forces a Rust rebuild of suibase-daemon and (re)starts it.
+# (precompiled binaries are not used).
+#
+
 SUIBASE_DIR="$HOME/suibase"
 WORKDIR="none"
 
@@ -19,5 +25,5 @@ cli_mutex_lock "suibase_daemon"
 rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
 stop_suibase_daemon
 
-start_suibase_daemon_as_needed
+start_suibase_daemon_as_needed --force-build
 wait_for_json_rpc_up "any"

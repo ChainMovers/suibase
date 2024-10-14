@@ -317,6 +317,7 @@ update_SUIBASE_DAEMON_PID_var() {
 export -f update_SUIBASE_DAEMON_PID_var
 
 export SUIBASE_DAEMON_STARTED=false
+# shellcheck disable=SC2120
 start_suibase_daemon_as_needed() {
 
   # Return 0 on success or not needed.
@@ -333,6 +334,11 @@ start_suibase_daemon_as_needed() {
 
   get_app_var "$app_obj" "is_installed"
   local _IS_INSTALLED=$APP_VAR
+
+  # Can force rebuild (ignore precompiled binary) with first parameter:
+  if [ "$1" = "--force-build" ]; then
+    set_app_var "$app_obj" "precompiled_bin" "false"
+  fi
 
   if [ "$_IS_INSTALLED" != "true" ]; then
 
