@@ -6,7 +6,7 @@ editLink: true
 
 ## Walrus & Walrus Site Builder
 
-Suibase has its own environement configuration for every network (localnet, devnet, testnet, mainnet).
+Suibase has its own environment configuration for every network (localnet, devnet, testnet, mainnet).
 
 To be able to use Walrus or Walrus Site Builder with Suibase, you first need to activate a particular Suibase network environment like this:
 
@@ -14,7 +14,7 @@ To be able to use Walrus or Walrus Site Builder with Suibase, you first need to 
 testnet start
 ```
 
-_Currently Walrus is only avaiable on Testnet, so the examples here a for Testnet only, but feel free to adjust the commands and paths according to your target environment._
+_Currently Walrus is only available on Testnet, so the examples here a for Testnet only, but feel free to adjust the commands and paths according to your target environment._
 
 Next step is to supply Suibase wallet configuration to Walrus or Walrus Site Builder this way:
 
@@ -33,6 +33,6 @@ site-builder --config ./walrus.yaml --wallet ~/suibase/workdirs/testnet/config/c
 ```
 where `walrus.yaml` is a Walrus Site Builder config file.
 
-Normally Suibase creates necessary Gas objects on first environment start, which will be used to perform the required transactions on-chain.
+For localnet, Suibase generate coins for all addresses on ```localnet start```. For testnet/devnet use ```dsui client faucet``` or ```tsui client faucet``` to get coins.
 
 Please refer to the [Walrus documentation](https://docs.walrus.site/) to learn more about its config files and commands.

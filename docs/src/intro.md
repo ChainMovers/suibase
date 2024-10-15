@@ -6,14 +6,15 @@ Suibase makes it easy to create "workdirs", each defining a distinct development
 ![Workdirs](./.vuepress/public/assets/workdirs-intro.png)
 
 Other features like:
-  * Fast install latest binaries and matching repos with a simple "update" command.
+  * Simple "update" commands to keep your binaries and Sui SDKs in-sync with the latest network version.
+  * **$ lsui/dsui/tsui/msui** scripts calls the **proper** sui binary+config combination for localnet, devnet, testnet or mainnet respectively. No "switch env" needed anymore.
+
   * **$ localnet star/stop/status** scripts and faucet.
-  * **$ localnet regen** script to reset the network with consistent tests addresses and alias (all pre-funded with an abundance of Sui).
-  * **$ lsui/dsui/tsui/msui** scripts calls the **proper** sui client binary+config combination for localnet/devnet/testnet/mainnet respectively. No "switch env" needed anymore.
-  
+  * **$ localnet regen** to reset the network with consistent tests addresses and alias (all pre-funded with an abundance of Sui).
+
 
 Easy to [install](how-to/install.md).
 
-Suibase does not conflict with your existing sui installation in ~/.cargo/bin.
+Suibase works independently of any other Mysten Labs default installation and key store (never access ~/.sui, ~/.config/bin etc...). Therefore, it is safe to have Suibase and other [standard installation]( https://docs.sui.io/guides/developer/getting-started/sui-install ) co-exists on the same system.
 
 Community driven. Join us on [Discord](https://discord.com/invite/Erb6SwsVbH)

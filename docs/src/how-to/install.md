@@ -5,21 +5,26 @@ order: 1
 
 ## Requirements
 **Supported operating systems**
-  * Linux (Arch and Ubuntu tested)
-  * macOS
-  * Windows with WSL2
-<br>
+  * Linux >=20.04 (Arch and Ubuntu tested)
+  * macOS Monterey or later (Intel and Apple CPU)
+  * Windows 10/11 with WSL2
 
-**Prerequisites**
 
-Install the [Sui prerequisites](https://docs.sui.io/build/install#prerequisites).
+**Prerequisites (Mandatory)**
+- [cURL](https://curl.se)
+- [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
-Skip installing the Sui binaries (unless you have an application that depends on ~/.sui/sui_config).<br>
 
-::: details How will suibase get the Sui binaries?
-Suibase automatically download the binaries and repos from Mysten Labs that match each network version.<br>
-For consistency your apps can optionally use the same downloaded code (Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
-:::
+**Prerequisites (Optional)**
+Only if you disable precompiled binaries:
+  - [Mysten Labs build prerequisites](https://docs.sui.io/build/install#prerequisites).
+
+Only if you use Typescript related features:
+  - [Node.js](https://nodejs.org/en/download/package-manager) (>=20)
+  - [pnpm](https://pnpm.io/installation) (>=9)
+
+Note: Suibase nicely informs you of missing dependencies as you start to interact with a feature.
+
 
 ## Installation Steps
 ```shell
@@ -28,14 +33,13 @@ $ git clone https://github.com/chainmovers/suibase.git
 $ cd suibase
 $ ./install
 ```
-Suibase is not intrusive on your system. The installation is per user:
+Suibase is not intrusive on your system:
 
-   - All its files and workdirs are kept in ~/suibase
-   - The installation only creates symlinks in ~/.local/bin
+- All its files and workdirs are in ```~/suibase``` and ```~/.local/bin```
+- Requires ```~/.local/bin``` to be in the [PATH](https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path) env variable (you might have to add it manually).
 
-::: details Why suibase need to be cloned in user home (~)?
-Suibase files are an "open standard" and benefit from being easily found by many apps and sdks. The user home is the most convenient solution.
-:::
+
+
 
 ## Update
 ```shell
@@ -46,8 +50,21 @@ To update sui clients and their local repos, use instead the workdir scripts (e.
 <br>
 
 ## Uninstall
+**Important:** Save a copy of all your keys ( See [Where are the keys stored?]( ./devnet-testnet.md#where-are-the-keys-stored))
+
+To completely remove suibase (and all keys) do:
 ```shell
 $ ~/suibase/uninstall
 $ rm -r ~/suibase
 ```
-Will remove suibase completely.
+
+
+## Install FAQ
+::: details Why suibase need to be cloned in user home (~)?
+Suibase files are an "open standard" and benefit from being easily found by many apps and sdks. The user home is the most convenient solution.
+:::
+
+::: details How will suibase get the Sui binaries?
+Suibase automatically install the proper binaries and repos from Mysten Labs matching each network.<br>
+To reduce versioning problems, your apps can easily be build with the same Rust code matching the binaries (e.g. Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
+:::

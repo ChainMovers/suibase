@@ -7,7 +7,7 @@ Makes your JSON-RPC queries more reliable with:
   - Selection of fastest RPC server currently available.
   - Automatic retry on failure (when safe against transaction execution repetition).
   - Load balancing across multiple RPC servers (to minimize rate-limiting).
-  
+
 ## How to use it?
 Have your applications query toward the addresses of the local proxy server:
 |  Network    |      Proxy Link           |
@@ -30,11 +30,11 @@ The workdir ```links``` command (e.g. ```testnet links```) shows status for all 
 
 <img :src="$withBase('/assets/testnet-links.png')" alt="testnet links"><br>
 
-::: details Details on cummulative request stats
-Each **user query** is counted only once in one of the following metric depending of its outcome.<br>
-**Success first attempt**: One healthy RPC node was selected and the request succeeded immediatly.<br>
+::: details Details on cumulative request stats
+Each **user query** is counted only once in one of the following metric depending upon its outcome.<br>
+**Success first attempt**: One healthy RPC node was selected and the request succeeded immediately.<br>
 **Success after retry**: One healthy RPC node was selected but failed, the request eventually succeeded after retries with one or more other servers (when safe to retry). From a user perspective, the request succeeded as if a single RPC node was used.<br>
-**Failure bad request**: It was determine that the request was malformed and would not succeed with any RPC nodes. Therefore the request is not retried and the failure is reported immediatly. Check the response for hint on how to fix the request.<br>
+**Failure bad request**: It was determined that the request was malformed and would not succeed with any RPC nodes. Therefore the request is not retried and the failure is reported immediately. Check the response for hint on how to fix the request.<br>
 **Failure others**: All other scenarios when the response was not a JSON-RPC success. The proxy response will have more information.<br>
 :::
 
@@ -58,7 +58,7 @@ links:
   - alias: "sui.io"
     rpc: "https://fullnode.mainnet.sui.io:443"
     ws: "wss://fullnode.mainnet.sui.io:443"
-    priority: 10  
+    priority: 10
   - alias: "suiscan.xyz"
     rpc: "https://rpc-mainnet.suiscan.xyz:443"
     metrics: "https://rpc-mainnet.suiscan.xyz/metrics"
@@ -66,7 +66,7 @@ links:
     priority: 20
 ```
 - The indentation is important (two spaces before the '-').
-- 'alias' and 'rpc' are mandatory. All others are optional. 
+- 'alias' and 'rpc' are mandatory. All others are optional.
 
 ::: details All Links Parameters
 **alias**
@@ -111,4 +111,4 @@ Do the same for mainnet in ```~/suibase/workdirs/mainnet/suibase.yaml```.
 
 The proxy server automatically detect and apply the changes after you save the .yaml file.
 
-Many other commercial RPC services can be added in same way. 
+Many other commercial RPC services can be added in same way.
