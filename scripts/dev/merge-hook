@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# Do some local repo verification before allowing to merge dev branch into main.
+# The verification are done on the dev branch.
+#
+# Exit 0 if all checks pass
+
+SUIBASE_DIR="$HOME/suibase"
+WORKDIR="none"
+
+# shellcheck source=SCRIPTDIR/../common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
+# shellcheck source=SCRIPTDIR/../common/__apps.sh
+source "$SUIBASE_DIR/scripts/common/__apps.sh"
+
+# shellcheck source=SCRIPTDIR/../common/__suibase-daemon.sh
+source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
+
+# Using __apps.sh verify that:
+#   The "suibase-daemon" version in Cargo.lock is the same as in the Cargo.toml
+#   The Cargo.toml version and the installed version are the same.
+#   The same version is the latest "release" from the sui-binaries remote repo.
+#
+merge_hook() {
+  exit_if_not_installed
+  exit_if_deps_missing
+
+  cli_mutex_lock "suibase_daemon"
+
+  # Switch to dev branch if not already on it
+  current_branch=$(git rev-parse --abbrev-ref HEAD)
+  if [ "$current_branch" != "dev" ]; then
+    echo "Switching to dev branch"
+    git checkout dev
+  fi
+
+  # Check if there are any uncommitted changes
+  #if [ -n "$(git status --porcelain)" ]; then
+  #  setup_error "There are uncommitted changes. Please commit or stash them before merging."
+  #fi
+
+  # Force a precomp installation to verify the latest version.
+  # This is done by deleting the local cache and the installed binary.
+  rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
+  rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon-version.yaml" >/dev/null 2>&1
+  rm -rf "$SUIBASE_DIR/workdirs/common/.cache" >/dev/null 2>&1
+  stop_suibase_daemon
+
+  local app_obj="suibase_daemon"
+  init_app_obj "$app_obj" ""
+  app_call "$app_obj" "set_local_vars"
+
+  get_app_var "$app_obj" "is_installed"
+  local _IS_INSTALLED=$APP_VAR
+
+  if [ "$_IS_INSTALLED" = "true" ]; then
+    setup_error  "$app_obj assets unexpectedly installed. Please fix before merging."
+  fi
+
+  start_suibase_daemon_as_needed
+
+  # Verify installation and the version that was installed.
+  app_call "$app_obj" "set_local_vars"
+  get_app_var "$app_obj" "is_installed"
+  local _IS_INSTALLED=$APP_VAR
+
+  # Verify the binary origin is precompiled
+  get_app_var "$app_obj" "local_bin_origin"
+  local _LOCAL_BIN_ORIGIN=$APP_VAR
+  if [ "$_LOCAL_BIN_ORIGIN" != "precompiled" ]; then
+    setup_error "$app_obj binary origin is not precompiled. Please fix before merging."
+  fi
+
+  get_app_var "$app_obj" "local_bin_version"
+  local _LOCAL_BIN_VERSION=$APP_VAR
+
+  get_app_var "$app_obj" "local_src_version"
+  local _LOCAL_SRC_VERSION=$APP_VAR
+
+  # Local source and binary MUST be the same version.
+  if [ "$_LOCAL_BIN_VERSION" != "$_LOCAL_SRC_VERSION" ]; then
+    echo "Binary version: $_LOCAL_BIN_VERSION"
+    echo "Source version: $_LOCAL_SRC_VERSION"
+    setup_error "$app_obj binary and source versions do not match."
+  fi
+
+  # Verify that the Cargo.log version is the same as $_LOCAL_SRC_VERSION
+  # The Cargo.lock is read and parsed directly here.
+  local _CARGO_LOCK_VERSION
+  _CARGO_LOCK_VERSION=$(grep -A 1 "name = \"suibase-daemon\"" "$SUIBASE_DIR/rust/suibase/Cargo.lock" | grep "version" | cut -d '"' -f 2)
+  if [ "$_CARGO_LOCK_VERSION" != "$_LOCAL_SRC_VERSION" ]; then
+    echo "Cargo.toml version: $_LOCAL_SRC_VERSION"
+    echo "Cargo.lock version: $_CARGO_LOCK_VERSION"
+    setup_error "$app_obj Cargo.lock version does not match the source version."
+  fi
+
+  echo "All checks passed."
+  exit 0
+}
+
+merge_hook
+

@@ -57,6 +57,7 @@ app_obj_vars=(
   "local_bin_branch" # The branch of the installed binary (optional).
   "local_bin_commit" # git commit of the installed binary (optional).
   "local_bin_commit_date" # git commit date of the installed binary  (optional).
+  "local_bin_origin" # "precompiled" or "built"
 
    # Information of latest known release (from <assets name>-latest.yaml).
    # Periodically updated by suibase-daemon.
@@ -579,6 +580,7 @@ sb_app_download_PRECOMP_REMOTE() {
       {
         echo "version: \"${_PRECOMP_REMOTE_VERSION}\""
         [ -n "${_REPO_BRANCH}" ] && echo "branch: \"${_REPO_BRANCH}\""
+        echo "origin: \"precompiled\""
         #[ -n "${self["local_bin_commit"]}" ] && echo "commit: \"${self["TBD"]}\""
         #[ -n "${self["local_bin_commit_date"]}" ] && echo "commit-date: \"${self["TBD"]}\""
       } >"$_VERSION_FILE"
@@ -845,6 +847,7 @@ sb_app_set_local_vars() {
   local _LOCAL_BIN_branch=""
   local _LOCAL_BIN_commit=""
   local _LOCAL_BIN_commit_date=""
+  local _LOCAL_BIN_origin=""
   if [ -f "$_VERSION_FILE" ]; then
     eval "$(parse_yaml "$_VERSION_FILE" "_LOCAL_BIN_")"
     if [[ -n $_LOCAL_BIN_version ]]; then
@@ -852,6 +855,7 @@ sb_app_set_local_vars() {
       set_app_var "$self" "local_bin_branch" "$_LOCAL_BIN_branch"
       set_app_var "$self" "local_bin_commit" "$_LOCAL_BIN_commit"
       set_app_var "$self" "local_bin_commit_date" "$_LOCAL_BIN_commit_date"
+      set_app_var "$self" "local_bin_origin" "$_LOCAL_BIN_origin"
     fi
     # TODO Handle parsing error.
   else
@@ -873,6 +877,7 @@ sb_app_set_local_vars() {
       set_app_var "$self" "local_bin_branch" ""
       set_app_var "$self" "local_bin_commit" ""
       set_app_var "$self" "local_bin_commit_date" ""
+      set_app_var "$self" "local_bin_origin" ""
     fi
   else
     # When rust, get the version field from the Cargo.toml
@@ -1009,6 +1014,7 @@ sb_app_rust_build_and_install() {
   {
     echo "version: \"${_VERSION}\""
     [ -n "${_REPO_BRANCH}" ] && echo "branch: \"${_REPO_BRANCH}\""
+    echo "origin: \"built\""
     #[ -n "${self["local_bin_commit"]}" ] && echo "commit: \"${self["TBD"]}\""
     #[ -n "${self["local_bin_commit_date"]}" ] && echo "commit-date: \"${self["TBD"]}\""
   } >"$_VERSION_FILE"

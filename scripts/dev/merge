@@ -32,6 +32,11 @@ fi
 # shellcheck source=./sync
 source "$HOME/suibase/scripts/dev/sync"
 
+# Run merge hook, exit if status code is not 0.
+if ! "$HOME/suibase/scripts/dev/merge-hook"; then
+  exit 1
+fi
+
 # Switch to main branch
 echo "Switching to main branch"
 git checkout main
@@ -50,22 +55,14 @@ if git diff --quiet "$merge_base" dev; then
   echo "No changes to merge from dev to main."
 else
   # Perform the actual merge
-  if git merge --no-commit --no-ff dev; then
-    # Check if there are any changes to commit
-    if git diff-index --quiet HEAD --; then
-      echo "No changes to merge from dev to main."
-      git merge --abort
-    else
-      # Commit the merge if there are changes
-      git commit -m "Merged dev into main"
-      git push origin main
-      echo "Merged dev into main."
+  if git merge --ff-only dev; then
+    echo "Merged dev into main."
 
-      # Rebase dev to keep on same last commit (that merge that was just done).
-      git checkout dev
-      git rebase main
-      git push origin dev
-    fi
+    # Rebase dev to keep on same last commit (that merge that was just done).
+    git checkout dev
+    git rebase main
+    git push origin dev
+    git push origin main
   else
     echo "Merge failed due to conflicts."
     echo "To resolve the conflicts, follow these steps:"
