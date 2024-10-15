@@ -13,6 +13,7 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New built-in sui explorer (do "localnet status" to see URL). Code from https://github.com/kkomelin/sui-explorer
 - New VSCode extension https://marketplace.visualstudio.com/items?itemName=suibase.suibase
 - (#113) Reduce localnet storage (less checkpoints per secs)
+- (#101) Eliminate rust dependencies (suibase-daemon precompiled for most platforms)
 
 ### Fixed
 - (#112) fix for keytool generate command (.key were created in unexpected location)

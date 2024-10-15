@@ -88,16 +88,11 @@ export default hopeTheme({
       align: true,
       attrs: true,
       chart: true,
-      codetabs: true,
       /*demo: true,*/
       echarts: false,
-      figure: false,
       flowchart: true,
       gfm: true,
-      imgLazyload: true,
-      imgSize: true,
       include: true,
-      katex: true,
       mark: true,
       mermaid: true,
       /*playground: {
@@ -121,10 +116,23 @@ export default hopeTheme({
       ],
       sub: true,
       sup: true,
-      tabs: true,
       vPre: true,
       vuePlayground: false,
     },
+
+    markdownImage: {
+      // options
+      figure: false,
+      lazyload: true,
+      mark: true,
+      size: true,
+    },
+
+    markdownMath: true,
+
+    markdownHint: true,
+
+    markdownTab: true,
 
     // uncomment these if you want a pwa
     // pwa: {
