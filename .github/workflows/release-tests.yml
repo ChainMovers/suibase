@@ -20,7 +20,7 @@ on:
 
 jobs:
   test:
-    name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
+    name: Test ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -42,11 +42,12 @@ jobs:
 
       - name: Prepare environment
         run: |
-          mkdir -p $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          ln -s $GITHUB_WORKSPACE $HOME/suibase
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
       - name: Only sanity tests the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --release-tests
+        run: |
+          "$HOME/suibase/scripts/tests/run-all.sh" --release-tests

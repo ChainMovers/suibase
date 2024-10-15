@@ -63,11 +63,12 @@ jobs:
 
       - name: Prepare environment
         run: |
-          mkdir -p $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          ln -s $GITHUB_WORKSPACE $HOME/suibase
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
       - name: Run suibase CLI sanity tests only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --scripts-tests
+        run: |
+          "$HOME/suibase/scripts/tests/run-all.sh" --scripts-tests

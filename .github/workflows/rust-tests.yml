@@ -95,13 +95,14 @@ jobs:
 
       - name: Prepare environment
         run: |
-          mkdir -p $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          ln -s $GITHUB_WORKSPACE $HOME/suibase
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
       - name: Run rust demo/api tests only
         env:
           CI_WORKDIR: ${{ matrix.ci_workdir }}
           CI_BRANCH: ${{ matrix.ci_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --rust-tests
+        run: |
+          "$HOME/suibase/scripts/tests/run-all.sh" --rust-tests

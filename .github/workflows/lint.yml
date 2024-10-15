@@ -29,7 +29,7 @@ jobs:
           fetch-depth: 0
 
       - name: Load environment variables from lint.env
-        run: grep -v '^#' .github/lint.env >> $GITHUB_ENV
+        run: grep -v '^#' .github/lint.env >> "$GITHUB_ENV"
 
       - name: Super-linter
         uses: super-linter/super-linter@v6.8.0 # x-release-please-version

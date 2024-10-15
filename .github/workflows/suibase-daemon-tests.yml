@@ -30,7 +30,7 @@ jobs:
           retention-days: 1
 
   test:
-    name: Test ${{ matrix.os }} ${{ matrix.ci_workdir }}
+    name: Test ${{ matrix.os }}
     needs: diff
     if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
 
@@ -84,14 +84,15 @@ jobs:
 
       - name: Prepare environment
         run: |
-          mkdir -p $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          ln -s $GITHUB_WORKSPACE $HOME/suibase
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
       - name: Run suibase rust apps only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: $HOME/suibase/scripts/tests/run-all.sh --suibase-daemon-tests
+        run: |
+          "$HOME/suibase/scripts/tests/run-all.sh" --suibase-daemon-tests
 
   trig:
     needs: test

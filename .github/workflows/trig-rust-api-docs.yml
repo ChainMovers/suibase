@@ -18,8 +18,6 @@ jobs:
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
-        with:
-          ref: ${{ github.ref }}
 
       - name: Upload Trigger Artifact
         if: ${{ steps.diff.outputs.isDocHelperAPI == 'true' }}
