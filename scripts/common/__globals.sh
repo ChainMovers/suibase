@@ -365,6 +365,13 @@ is_installed() {
   return
 }
 
+exit_if_rust_build_deps_missing() {
+  # Check if all rust/cargo building dependencies are installed.
+  is_installed cmake || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
+  is_installed rustc || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
+  is_installed cargo || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+}
+export -f exit_if_rust_build_deps_missing
 
 SUIBASE_LOCK_CMD=""
 SUIBASE_LOCK_TRY_PARAMS=""
@@ -791,9 +798,6 @@ build_sui_repo_branch() {
 
   is_installed curl || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
   is_installed git || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
-  is_installed cmake || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
-  is_installed rustc || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
-  is_installed cargo || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
   is_installed lsof || setup_error "Need to install 'lsof'."
 
   # Verify Rust is recent enough.
@@ -925,6 +929,7 @@ build_sui_repo_branch() {
     _DO_FINAL_SUI_SANITY_CHECK=true
   else
     # Build from source.
+    exit_if_rust_build_deps_missing
     local _IS_RELEASE_BUILD=false
     if [[ "${CFG_cargo_release:?}" == "true" ]] || [[ "$PASSTHRU_OPTIONS" == *"--release"* ]]; then
       _IS_RELEASE_BUILD=true

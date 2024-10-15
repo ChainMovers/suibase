@@ -969,7 +969,8 @@ sb_app_rust_build_and_install() {
   local _ASSETS_NAME=$APP_VAR
 
   # Rust (re)build.
-  echo "Building $SUIBASE_DAEMON_NAME"
+  echo "Building $_ASSETS_NAME"
+  exit_if_rust_build_deps_missing
   rm -f "$SUIBASE_DAEMON_VERSION_FILE" >/dev/null 2>&1
 
   # Clean the build directory.
@@ -1052,8 +1053,6 @@ sb_app_install() {
   fi
 
   # Check if the platform/arch are supported.
-
-  # TODO Implement a trick to force rebuild for dev setup!
   if [ "$_PRECOMP_ALLOWED" = "true" ]; then
     # Do a precompiled remote installation.
     sb_app_init_PRECOMP_REMOTE_vars "$self"
