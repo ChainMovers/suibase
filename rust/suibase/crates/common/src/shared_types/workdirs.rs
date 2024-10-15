@@ -263,19 +263,19 @@ impl WorkdirUserConfig {
         //     enabled: false
         //     rpc: "http://localhost:9000"
         //
-        // dtp_package_id: "0x9c0c8b2b487fd0dcc00cb070df45a82b302ba6bc8244edd85c82e1409ad430ca"
+        // dtp_package_id: "0x9c0c8..."
         //
         // dtp_services:
         //   - service_type: "ping"
-        //     client_address: 0xf7ae71f84fabc58662bd4209a8893f462c60f247095bb35b19ff659ad0081462
+        //     client_address: 0xf7ae...
         //
         //   - service_type: "json-rpc"
-        //     client_address: 0xef6e9dd8f30dea802e0474a7996e5c772c581cc1adee45afb660f15a081d1c49
-        //     remote_host: 0x6fff280505c35ab84d067f2c6a34a6182a1c4607cffea7302bcbfb7f735007ad
+        //     client_address: 0xef6e...
+        //     remote_host: 0x6fff2...
         //     local_port: 45000
         //
         //   - service_type: "default"
-        //     client_address: 0xc7294a5cc946db818c4058c83c933ad6c28e73711bee21c7fa85553c90cb7244
+        //     client_address: 0xc729...
         //
         let contents = std::fs::read_to_string(path)?;
         let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;

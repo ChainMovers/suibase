@@ -78,8 +78,8 @@ export default hopeTheme({
     docsearch: {
       // your options
       // appId, apiKey and indexName are required
-      appId: "VN5D5IVTPC",
-      apiKey: "7c6732e9f43a129ee2396d1c459db319",
+      appId: "VN5D5IVTPC", // gitleaks:allow
+      apiKey: "7c6732e9f43a129ee2396d1c459db319", // gitleaks:allow
       indexName: "sui-base",
     },
 
