@@ -5,38 +5,22 @@ order: 1
 
 ## Requirements
 **Supported operating systems**
-  * Linux >=20.04 (Arch and Ubuntu tested)
+  * Linux Ubuntu >=20.04 recommended (works also on Arch Linux)
   * macOS Monterey or later (Intel and Apple CPU)
   * Windows 10/11 with WSL2
 
-
-**Prerequisites (Mandatory)**
+**Prerequisites**
 - [cURL](https://curl.se)
 - [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-
-
-**Prerequisites (Optional)**
-Only if you disable precompiled binaries:
-  - [Mysten Labs build prerequisites](https://docs.sui.io/build/install#prerequisites).
-
-Only if you use Typescript related features:
-  - [Node.js](https://nodejs.org/en/download/package-manager) (>=20)
-  - [pnpm](https://pnpm.io/installation) (>=9)
-
-Note: Suibase nicely informs you of missing dependencies as you start to interact with a feature.
-
 
 ## Installation Steps
 ```shell
 $ cd ~
 $ git clone https://github.com/chainmovers/suibase.git
-$ cd suibase
-$ ./install
+$ ~/suibase/install
 ```
-Suibase is not intrusive on your system:
-
-- All its files and workdirs are in ```~/suibase``` and ```~/.local/bin```
-- Requires ```~/.local/bin``` to be in the [PATH](https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path) env variable (you might have to add it manually).
+- All Suibase files are created in ```~/suibase``` and ```~/.local/bin```
+- ```~/.local/bin``` must be listed in the PATH env variable ( on some setup you may have to [add it manually](https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path) ).
 
 
 
