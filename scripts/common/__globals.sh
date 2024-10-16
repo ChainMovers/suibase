@@ -370,6 +370,9 @@ exit_if_rust_build_deps_missing() {
   is_installed cmake || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
   is_installed rustc || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
   is_installed cargo || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+
+  # Verify Rust is recent enough.
+  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
 }
 export -f exit_if_rust_build_deps_missing
 
@@ -799,9 +802,6 @@ build_sui_repo_branch() {
   is_installed curl || setup_error "Need to install curl. See https://docs.sui.io/build/install#prerequisites"
   is_installed git || setup_error "Need to install git. See https://docs.sui.io/build/install#prerequisites"
   is_installed lsof || setup_error "Need to install 'lsof'."
-
-  # Verify Rust is recent enough.
-  version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
 
   local _IS_SET_SUI_REPO="false"
   if is_sui_repo_dir_override; then
