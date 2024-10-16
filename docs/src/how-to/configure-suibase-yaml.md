@@ -5,17 +5,18 @@ Changing the remote GitHub repo, branch, RPC ports etc... are done using the sui
 We will cover here only a few common use case. See this [suibase.yaml](https://github.com/chainmovers/suibase/blob/main/scripts/defaults/localnet/suibase.yaml) for the complete parameters list.
 
 
-### Increase localnet initial funding
-Add `initial_fund_per_address: 9999999999999999999` to the file then type `localnet regen`.
-
-Set the number to as much as you need (max 64 bits unsigned supported).
-
 ### Change default repo branch
-Add the `default_repo` branch and then type the workdir update command (e.g. `localnet update`). Example:
+Add the `default_repo_branch` to suibase.yaml and type the workdir "update" command (e.g. `localnet update`). Example:
 
 ``` yaml
 default_repo_branch: "main"
 ```
+
+### Force to build locally
+By default, Suibase install official binaries from Mysten Labs or uses open-source automated built ( [Github](https://github.com/ChainMovers/sui-binaries) ).
+
+If you prefer (or need) to build your own binaries, then add ```precompiled_bin: false``` to a suibase.yaml. Suibase will then automatically "cargo build" on a workdir "update" (e.g. ```devnet update```).
+
 
 ### Add your own private keys
 You can have suibase includes in the sui.keystore your own private keys with ```add_private_keys``` YAML array list. Example:
