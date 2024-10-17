@@ -1,30 +1,32 @@
 # Changelog
 
-Do '~/suibase/update' to download and update suibase itself to latest.
-Do '<workdir_name> update' when you instead want to update only a local Sui repo to the latest from Mysten Labs. Example: 'localnet update'
+Do '~/suibase/update' to download and update suibase itself to latest.<br>
+
+Do '<workdir_name> update' to only update to latest sui client from Mysten Labs for a specific network. Example: 'localnet update'
 
 Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unpublished]
 
+## [0.1.7] 2024-10-17
 ### Added
+
 - New built-in sui explorer (do "localnet status" to see URL). Code from https://github.com/kkomelin/sui-explorer
 - New VSCode extension https://marketplace.visualstudio.com/items?itemName=suibase.suibase
 - (#113) Reduce localnet storage (less checkpoints per secs)
 - (#101) Eliminate rust dependencies (suibase-daemon precompiled for most platforms)
 
 ### Fixed
+
 - (#112) fix for keytool generate command (.key were created in unexpected location)
 - "lsui/dsui/tsui client faucet" commands now work.
 - More robust handling of backend (suibase-daemon)
 - Reduce localnet storage on regen (delete full_node_db).
 
 ### Changed
-- For better stability, localnet uses Mysten Labs testnet branch (instead of devnet).
 
-### Removed
+- For better stability, localnet uses Mysten Labs testnet branch (instead of devnet).
 
 ## [0.1.6] 2023-11-01
 
@@ -36,10 +38,6 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - (#65) Fix support for 'sui client publish' and 'sui move' when path and/or install-dir are not specified.
 - (#24) Fix help for faucet.
 - Misc fix to support sui client >1.10.x for CLI new output format (tables).
-
-### Changed
-
-### Removed
 
 
 ## [0.1.5] 2023-08-28
@@ -64,8 +62,6 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Transaction python cookbook entries
 
-### Removed
-
 ## [0.1.4] 2023-05-26
 
 ### Added
@@ -84,8 +80,6 @@ Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Git _organization_ name changed from sui-base to ChainMovers. May affect some URL and local repositories (e.g github.com/_chainmovers_/suibase.git instead of github.com/_sui-base_/suibase.git )
 - Bumped pysui version
 - Prefix each cookbook code subject with Facts section
-
-### Removed
 
 ## [0.1.3] 2023-05-03
 
