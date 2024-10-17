@@ -31,6 +31,14 @@ tests() {
   # apart from the first phase.
   sleep 1
   test_file_newer_than_phase_2
+  test_versions_consistency
+}
+
+test_versions_consistency() {
+  # Check that the hard coded version is mention in the CHANGELOG.md
+  if ! grep -q "$SUIBASE_VERSION" "$SUIBASE_DIR/CHANGELOG.md"; then
+    fail "Seems that $SUIBASE_VERSION version is *not* documented in CHANGELOG.md"
+  fi
 }
 
 test_color() {

@@ -15,7 +15,7 @@ export SUIBASE_VERSION="0.1.7"
 
 # Suibase does not work with version below these.
 export MIN_SUI_VERSION="sui 0.27.0"
-export MIN_RUST_VERSION="rustc 1.65.0"
+export MIN_RUST_VERSION="rustc 1.81.0"
 
 # Mandatory command line:
 #    $1 : Should be the "$0" of the caller script.
