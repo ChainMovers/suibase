@@ -37,7 +37,7 @@ pub async fn display_events_loop() -> Result<(), anyhow::Error> {
 
     let mut subscribe_all = sui
         .event_api()
-        .subscribe_event(EventFilter::Package(package_id))
+        .subscribe_event(EventFilter::All([]))
         .await?;
 
     let ready_message =

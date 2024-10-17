@@ -1503,7 +1503,7 @@ dependencies = [
  "shared-crypto",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk 1.35.0",
+ "sui-sdk 1.35.1",
  "sui-types",
  "suibase",
  "tokio",
@@ -5694,7 +5694,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.35.0"
+version = "1.35.1"
 dependencies = [
  "bcs",
  "schemars",
@@ -5820,7 +5820,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.35.0"
+version = "1.35.1"
 dependencies = [
  "anyhow",
  "async-trait",
