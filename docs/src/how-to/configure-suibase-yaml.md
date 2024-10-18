@@ -13,7 +13,7 @@ default_repo_branch: "main"
 ```
 
 ### Force to build locally
-By default, Suibase install official binaries from Mysten Labs or uses open-source automated built ( [Github](https://github.com/ChainMovers/sui-binaries) ).
+By default, Suibase install official binaries from Mysten Labs or uses open-source continuous integration ( [Github](https://github.com/ChainMovers/sui-binaries) ).
 
 If you prefer (or need) to build your own binaries, then add ```precompiled_bin: false``` to a suibase.yaml. Suibase will then automatically "cargo build" on a workdir "update" (e.g. ```devnet update```).
 

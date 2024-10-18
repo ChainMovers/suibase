@@ -13,7 +13,7 @@ Works similar to localnet, except you are now interacting with a public network:
 ```shell
 $ devnet start
 ```
-The first time may take longer because of Sui binaries installation.
+The first time may take longer because of binaries installation.
 
 You do not call ```sui``` directly anymore, instead call ```dsui```:
 

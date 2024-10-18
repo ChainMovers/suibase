@@ -5,7 +5,7 @@ order: 1
 
 ## Requirements
 **Supported operating systems**
-  * Linux Ubuntu >=20.04 recommended (works also on Arch Linux)
+  * Linux Ubuntu >=20.04 recommended (works also with Arch Linux)
   * macOS Monterey or later (Intel and Apple CPU)
   * Windows 10/11 with WSL2
 
@@ -30,7 +30,7 @@ $ ~/suibase/install
 $ ~/suibase/update
 ```
 Will pull latest from GitHub to only update suibase itself.
-To update sui clients and their local repos, use instead the workdir scripts (e.g. ```mainnet update```)
+To update sui clients, use instead the workdir scripts (e.g. ```mainnet update```)
 <br>
 
 ## Uninstall
