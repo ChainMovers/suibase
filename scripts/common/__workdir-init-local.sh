@@ -116,29 +116,36 @@ create_faucet_keystore() {
 }
 
 workdir_init_local() {
-  # Two type of genesis:
-  #  (1) Using "static" scripts/genesis_data when using sui-repo-default.
-  #  (2) Using generated data after a set-sui-repo.
-  #
-
+  SUI_CLIENT_VERSION=$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" -V)
   mkdir -p "$CONFIG_DATA_DIR_DEFAULT"
-  # Deprecated cd_sui_log_dir
 
   local _GENDATA_DIR="$GENERATED_GENESIS_DATA_DIR/default"
   rm -rf "$_GENDATA_DIR" >/dev/null 2>&1
   mkdir -p "$_GENDATA_DIR"
 
+  # Set committee-size parameter if supported.
+  COMMITTEE_SIZE=()
+  if version_greater_equal "$SUI_CLIENT_VERSION" "sui 1.40"; then
+    if [ "${CFG_committee_size:?}" = "${CFGDEFAULT_committee_size:?}" ]; then
+      local _MSG="Applied default committee size [$CFG_committee_size]"
+    else
+      local _MSG="suibase.yaml: Applied committee size [$CFG_committee_size]"
+    fi
+    echo "$_MSG"
+    COMMITTEE_SIZE=(--committee-size "${CFG_committee_size}")
+  fi
+
   # Generate the templates to be used for building our own config.yaml
   mkdir -p "$_GENDATA_DIR/template"
-  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" >/dev/null 2>&1
-  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR/template" --write-config "$_GENDATA_DIR/template/config.yaml" >/dev/null 2>&1
+  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis "${COMMITTEE_SIZE[@]}" --working-dir "$_GENDATA_DIR/template" >/dev/null 2>&1
+  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis "${COMMITTEE_SIZE[@]}" --working-dir "$_GENDATA_DIR/template" --write-config "$_GENDATA_DIR/template/config.yaml" >/dev/null 2>&1
   # Get everything before the accounts section.
   sed '/accounts:/q' "$_GENDATA_DIR/template/config.yaml" >"$_GENDATA_DIR/config.yaml.template_head"
   # Check in case there is trailing stuff after the accounts section (for now it is empty).
   sed -n '/accounts:/,$p' "$_GENDATA_DIR/template/config.yaml" | sed '/^accounts/d' | sed -n '/^[a-z]/,$p' >"$_GENDATA_DIR/config.yaml.template_tail"
   rm -rf "$_GENDATA_DIR/template" >/dev/null 2>&1
   # Find which static genesis_data version should be used.
-  if version_greater_equal "$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" -V)" "sui 0.31"; then
+  if version_greater_equal "$SUI_CLIENT_VERSION" "sui 0.31"; then
     _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.31"
     # Use the templates to build the config.yaml.
     {
@@ -147,7 +154,7 @@ workdir_init_local() {
       cat "$_GENDATA_DIR/config.yaml.template_tail"
     } >"$_GENDATA_DIR/config.yaml"
   else
-    if version_greater_equal "$($SUI_BIN_ENV "$SUI_BIN_DIR/sui" -V)" "sui 0.28"; then
+    if version_greater_equal "$SUI_CLIENT_VERSION" "sui 0.28"; then
       _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.28"
     else
       _STATIC_SOURCE_DIR="$DEFAULT_GENESIS_DATA_DIR/0.27"
@@ -172,64 +179,6 @@ workdir_init_local() {
   \cp -rf "$_STATIC_SOURCE_DIR/faucet_client.yaml" "$_GENDATA_DIR/faucet/client.yaml"
   \cp -rf "$_STATIC_SOURCE_DIR/faucet_wallet_address.txt" "$_GENDATA_DIR/faucet"
 
-  # Deprecated code for set-sui-repo (kept in case need to re-integrate).
-  # New logic is to do same genesis regardless of set-sui-repo or not.
-    # This is the logic for when set-sui-repo
-    #local _GENDATA_DIR="$GENERATED_GENESIS_DATA_DIR/user-repo"
-    #if [ ! -d "$_GENDATA_DIR" ]; then
-    #  mkdir -p "$_GENDATA_DIR"
-      # Generate the genesis data for the very first time.
-    #  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" >/dev/null 2>&1
-    #  create_empty_keystore_file "$_GENDATA_DIR"
-    #  start_all_services "no-faucet"
-    #  add_test_addresses "$SUI_BIN_DIR/sui" "$_GENDATA_DIR/client.yaml" "$_GENDATA_DIR/recovery.txt"
-    #  create_faucet_keystore "$SUI_BIN_DIR/sui" "$_GENDATA_DIR" "$_GENDATA_DIR/faucet"
-    #  start_all_services
-
-    #  \cp "$_GENDATA_DIR/sui.keystore" "$_GENDATA_DIR/sui.keystore.temp_save"
-
-      # Temporarly "merge" the keystores for generating the config.yaml
-      # (so the faucet address can get prefunded as well)
-    #  load_ACTIVE_KEYSTORE "$_GENDATA_DIR/sui.keystore"
-      # Save a copy of ACTIVE_KEYSTORE into PREV_KEYSTORE
-    #  PREV_KEYSTORE=("${ACTIVE_KEYSTORE[@]}")
-    #  load_ACTIVE_KEYSTORE "$_GENDATA_DIR/faucet/sui.keystore"
-      # Merge the keystores
-    #  ACTIVE_KEYSTORE=("${PREV_KEYSTORE[@]}" "${ACTIVE_KEYSTORE[@]}")
-      # Write the ACTIVE_KEYSTORE array.
-    #  write_ACTIVE_KEYSTORE "$_GENDATA_DIR/sui.keystore"
-
-      # Generate the config.yaml that will allow a deterministic setup.
-      #$SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml" >/dev/null 2>&1
-    #  $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --working-dir "$_GENDATA_DIR" --write-config "$_GENDATA_DIR/config.yaml"
-    #  echo "New client addresses generated (new client.yaml and sui.keystore)"
-
-      # Save this temporary keystore for potentially debugging.
-    #  mv "$_GENDATA_DIR/sui.keystore" "$_GENDATA_DIR/sui.keystore.dbg_genesis"
-
-      # Undo the merge (basically, remove the faucet address).
-    #  mv "$_GENDATA_DIR/sui.keystore.temp_save" "$_GENDATA_DIR/sui.keystore"
-
-      # Save an original of config.yaml for debugging (because it is modified on regen).
-    #  \cp "$_GENDATA_DIR/config.yaml" "$_GENDATA_DIR/config.yaml.dbg_original"
-
-      # Transform the client.yaml into templates (so we can easily replace any path into it later).
-    #  _SEARCH_STRING="File:.*\$"
-    #  _REPLACE_STRING="File: <PUT_CONFIG_DEFAULT_PATH_HERE>/sui.keystore"
-    #  _TEXT_RANGE_START="keystore:"
-    #  _TEXT_RANGE_END="envs:"
-    #  sed -i.bak -e "/$_TEXT_RANGE_START/,/$_TEXT_RANGE_END/ s+$_SEARCH_STRING+$_REPLACE_STRING+g" \
-    #    "$_GENDATA_DIR/client.yaml" &&
-    #    rm "$_GENDATA_DIR/client.yaml.bak"
-
-    #  _REPLACE_STRING="File: <PUT_FAUCET_PATH_HERE>/sui.keystore"
-    #  sed -i.bak -e "/$_TEXT_RANGE_START/,/$_TEXT_RANGE_END/ s+$_SEARCH_STRING+$_REPLACE_STRING+g" \
-    #    "$_GENDATA_DIR/faucet/client.yaml" &&
-    #    rm "$_GENDATA_DIR/faucet/client.yaml.bak"
-
-    #  echo "Genesis performed"
-    #fi
-
   apply_suibase_yaml_to_config_yaml "$_GENDATA_DIR"
 
   # Important NO OTHER files allowed in $_GENDATA_DIR prior to the genesis call, otherwise
@@ -245,9 +194,9 @@ workdir_init_local() {
 
   # "regen" from the genesis config.yaml
   if [ "$DEBUG_PARAM" = true ]; then
-    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT"
+    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis "${COMMITTEE_SIZE[@]}" --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT"
   else
-    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT" >/dev/null 2>&1
+    $SUI_BIN_ENV "$SUI_BIN_DIR/sui" genesis "${COMMITTEE_SIZE[@]}" --from-config "$_GENDATA_DIR/config.yaml" --working-dir "$CONFIG_DATA_DIR_DEFAULT" >/dev/null 2>&1
   fi
 
   # Now is a safe time to add more files to $_GENDATA_DIR
