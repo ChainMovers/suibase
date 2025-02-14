@@ -717,14 +717,217 @@ workdir_exec() {
     exit
   fi
 
-  # Second, take care of the case that just stop/start processes.
+  # A good time to check if the user did mess up with the workdir and fix potentially missing files.
+  local _WORKDIR_WAS_OK
+  if is_workdir_ok; then
+    _WORKDIR_WAS_OK=true
+  else
+    _WORKDIR_WAS_OK=false
+  fi
+
+  repair_workdir_as_needed "$WORKDIR" # Create/repair $WORKDIR
+
+  # Determine how the binary should be produced (build from local repos or downloaded etc...)
+  local _WARN_ON_BUILD_FALLBACK_REASON=""
+
+  # Should not download on a regen or set-sui-repo, but still need to do "cargo build" in case the
+  # binary are not up to data (or done yet).
+  local _ALLOW_REPO_DOWNLOAD="true" # Using string because passing outside as param
+  if [ "$CMD_REGEN_REQ" = true ]; then
+    _ALLOW_REPO_DOWNLOAD="false"
+  fi
+
+  local _IS_SET_SUI_REPO="false"
+  if is_sui_repo_dir_override; then
+    _ALLOW_REPO_DOWNLOAD="false"
+    _IS_SET_SUI_REPO="true"
+  fi
+
+  ALLOW_BINARY="true"
+  if [ "$NOBINARY_PARAM" = true ]; then
+    ALLOW_BINARY="false"
+  fi
+
+  DISABLE_AVX="false"
+  DISABLE_AVX2="false"
+  if [ "$NO_AVX_PARAM" = true ]; then
+    DISABLE_AVX="true"
+    DISABLE_AVX2="true"
+  else
+    if [ "$NO_AVX2_PARAM" = true ]; then
+      DISABLE_AVX2="true"
+    fi
+  fi
+
+  local _USE_PRECOMPILED="false"
+  if [ "$CMD_BUILD_REQ" = true ]; then
+    # Use the --precompiled flag only when 'build' command.
+    if [ "$PRECOMPILED_PARAM" = "true" ]; then
+      _USE_PRECOMPILED="true"
+    fi
+  else
+    # Use the suibase.yaml with all other commands.
+    if [ "${CFG_precompiled_bin:?}" = "true" ]; then
+      _USE_PRECOMPILED="true"
+    fi
+  fi
+
+  # Handle case where precompiled is not compatible.
+  if [ "$_USE_PRECOMPILED" = "true" ]; then
+    if [ "$_IS_SET_SUI_REPO" = "true" ]; then
+      _USE_PRECOMPILED="false"
+    else
+      update_HOST_vars
+      if [ "$HOST_PLATFORM" = "Linux" ]; then
+        # Ignore precompiled request if not an Ubuntu x86_64 machine.
+        if [ "$HOST_ARCH" != "x86_64" ]; then
+          _WARN_ON_BUILD_FALLBACK_REASON="Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
+          _USE_PRECOMPILED="false"
+        fi
+
+        # Disable with WSL/Linux when (AVX or AVX2) not available.
+        #
+        # For other Linux setup, lets assume the user knows better and allow
+        # pre-compiled binaries... (if there is a problem they can work-around this
+        # with "precompiled_bin: false" in suibase.yaml)
+        #
+        # Rational:
+        #  A Linux VM guess may NOT report AVX/AVX2 in /proc/cpuinfo, but the host cpu can support it.
+        #  The app will still work, because the VM just execute the instructions blindly and they
+        #  are not detected as "illegal instructions".
+        #  This might be intended by some Linux super-user... but it is less likely intended for WSL
+        #  users (more likely the physical host is really not supporting AVX). So protect WSL users
+        #  with forcing compilation at the host when no AVX/AVX2 detected.
+        if is_wsl; then
+          if [[ -f /proc/cpuinfo ]]; then
+            local _AVX2_ENABLED
+            if grep -q avx2 /proc/cpuinfo; then
+              _AVX2_ENABLED="true"
+            else
+              _AVX2_ENABLED="false"
+            fi
+            local _AVX_ENABLED
+            if grep -q avx /proc/cpuinfo; then
+              _AVX_ENABLED="true"
+            else
+              _AVX_ENABLED="false"
+            fi
+            if [ "$_AVX2_ENABLED" = "false" ] || [ "$_AVX_ENABLED" = "false" ]; then
+              _WARN_ON_BUILD_FALLBACK_REASON="Precompiled binaries not available for WSL/Linux without AVX. Will build from source instead."
+              _USE_PRECOMPILED="false"
+            fi
+          fi
+        fi
+      else
+        if [ "$HOST_PLATFORM" = "Darwin" ]; then
+          if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "arm64" ]; then
+            _WARN_ON_BUILD_FALLBACK_REASON="Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
+            _USE_PRECOMPILED="false"
+          fi
+        else
+          # Unsupported OS... "windows" presumably...
+          setup_error "Unsupported OS [$HOST_PLATFORM]"
+        fi
+      fi
+    fi
+
+    # Make sure the repo/branch has pre-compiled binary available.
+    if [ "$_USE_PRECOMPILED" = "true" ]; then
+      if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ]; then
+        # default_repo_url was overriden by the user.
+        _WARN_ON_BUILD_FALLBACK_REASON="Precompiled binaries not available for repo '$CFG_default_repo_url'. Will build from source instead."
+        _USE_PRECOMPILED="false"
+      else
+        case "${CFG_default_repo_branch:?}" in
+        "devnet" | "testnet" | "mainnet")
+          # OK
+          ;;
+        *)
+          _WARN_ON_BUILD_FALLBACK_REASON="Precompiled binaries not available for branch '$CFG_default_repo_branch'. Will build from source instead."
+          _USE_PRECOMPILED="false"
+          ;;
+        esac
+      fi
+    fi
+  fi
+
+  # If precompiled is allowed, then let the config decide if downloading can be avoided.
+  if [ "$_USE_PRECOMPILED" = "true" ]; then
+    if [ "${CFG_enable_local_repo:?}" = "false" ]; then
+      _ALLOW_REPO_DOWNLOAD="false"
+    fi
+  fi
+
+  # Detect if there was a change to the config that would invalidate
+  # the currently installed sui binary.
+  #
+  # If changes detected, then a call to build_sui_repo_branch (see far below)
+  # should be done instead of, say, simply starting the process.
+  local _CONFIG_CHANGE_DETECTED
+  _CONFIG_CHANGE_DETECTED=false
+
+  # Check if .state/precompiled key exists BUT precompilation is NOT allowed.
+  if [ -f "$WORKDIRS/$WORKDIR/.state/precompiled" ] && [ "$_USE_PRECOMPILED" = "false" ]; then
+    _CONFIG_CHANGE_DETECTED=true
+    # echo "Info: $WORKDIR config change detected. Precompiled binaries not available."
+    del_key_value "$WORKDIR" "precompiled"
+  fi
+
+  local _REPO_URL_STATE
+  _REPO_URL_STATE=$(get_key_value "$WORKDIR" "repo_url")
+  local _REPO_URL_EXPECTED
+  local _REPO_URL_CHANGE_DETECTED
+  _REPO_URL_CHANGE_DETECTED=false
+  if [ "$_IS_SET_SUI_REPO" = "true" ]; then
+    _REPO_URL_EXPECTED="$RESOLVED_SUI_REPO_DIR"
+  else
+    _REPO_URL_EXPECTED="${CFG_default_repo_url:?}"
+  fi
+  if [ "$_REPO_URL_STATE" != "$_REPO_URL_EXPECTED" ]; then
+    _CONFIG_CHANGE_DETECTED=true
+    _REPO_URL_CHANGE_DETECTED=true
+    if [ "$_REPO_URL_STATE" != "NULL" ]; then
+      if [ "$_IS_SET_SUI_REPO" = "false" ]; then
+        echo "$WORKDIR repo change detected. Repo URL is now [$_REPO_URL_EXPECTED]"
+      else
+        echo "$WORKDIR repo change detected. set-sui-repo is now [$RESOLVED_SUI_REPO_DIR]"
+      fi
+      del_key_value "$WORKDIR" "repo_url"
+    fi
+  fi
+
+  local _REPO_BRANCH_STATE
+  _REPO_BRANCH_STATE=$(get_key_value "$WORKDIR" "repo_branch")
+  local _REPO_BRANCH_EXPECTED
+  if [ "$_IS_SET_SUI_REPO" = "true" ]; then
+    _REPO_BRANCH_EXPECTED="$RESOLVED_SUI_REPO_DIR"
+  else
+    _REPO_BRANCH_EXPECTED="${CFG_default_repo_branch:?}"
+  fi
+  if [ "$_REPO_BRANCH_STATE" != "$_REPO_BRANCH_EXPECTED" ]; then
+    _CONFIG_CHANGE_DETECTED=true
+    if [ "$_REPO_BRANCH_STATE" != "NULL" ]; then
+      if [ "$_IS_SET_SUI_REPO" = "false" ] && [ "$_REPO_URL_CHANGE_DETECTED" = "false" ]; then
+        echo "$WORKDIR config change detected. Branch is [$_REPO_BRANCH_EXPECTED]"
+      fi
+      del_key_value "$WORKDIR" "repo_branch"
+    fi
+  fi
+
+  if [ "$CMD_CREATE_REQ" = true ]; then
+    # No further action when "create" command.
+    if $_WORKDIR_WAS_OK; then
+      # Note: did check for repair earlier even if already created (just in case).
+      info_exit "$WORKDIR already created"
+    else
+      info_exit "$WORKDIR created"
+    fi
+  fi
+
+  # Take care of the case that just stop/start processes.
   if [ "$CMD_START_REQ" = true ]; then
 
-    if is_workdir_ok && is_sui_binary_ok; then
-
-      # A good time to check if the user did mess up with the
-      # workdir and fix potentially missing files.
-      repair_workdir_as_needed "$WORKDIR"
+    if is_workdir_ok && is_sui_binary_ok && [ $_CONFIG_CHANGE_DETECTED = false ]; then
 
       # Note: nobody should have tried to run the sui binary yet.
       # So this is why the update_SUI_VERSION_var need to be done here.
@@ -878,27 +1081,6 @@ workdir_exec() {
     fi
   fi
 
-  local _WORKDIR_WAS_OK
-  if is_workdir_ok; then
-    _WORKDIR_WAS_OK=true
-  else
-    _WORKDIR_WAS_OK=false
-  fi
-
-  # Finally, take care of the more complicated cases that involves
-  # git, workdir/config creation and genesis.
-  repair_workdir_as_needed "$WORKDIR" # Create/repair $WORKDIR
-
-  if [ "$CMD_CREATE_REQ" = true ]; then
-    # No further action when "create" command.
-    if $_WORKDIR_WAS_OK; then
-      # Note: did check for repair even if already created (just in case).
-      info_exit "$WORKDIR already created"
-    else
-      info_exit "$WORKDIR created"
-    fi
-  fi
-
   if $is_local; then
     # The script should not be called from a location that could get deleted.
     # It would work (on Linux) because of reference counting, but it could
@@ -971,128 +1153,12 @@ workdir_exec() {
   fi
 
   # Create and build the sui-repo.
-  # Should not download on a regen or set-sui-repo, but still need to do "cargo build" in case the
-  # binary are not up to data (or done yet).
-  ALLOW_DOWNLOAD="true" # Using string because passing outside as param
-  if [ "$CMD_REGEN_REQ" = true ]; then
-    ALLOW_DOWNLOAD="false"
+
+  if [ -n "$_WARN_ON_BUILD_FALLBACK_REASON" ]; then
+    warn_user "$_WARN_ON_BUILD_FALLBACK_REASON"
   fi
 
-  local _IS_SET_SUI_REPO="false"
-  if is_sui_repo_dir_override; then
-    ALLOW_DOWNLOAD="false"
-    _IS_SET_SUI_REPO="true"
-  fi
-
-  ALLOW_BINARY="true"
-  if [ "$NOBINARY_PARAM" = true ]; then
-    ALLOW_BINARY="false"
-  fi
-
-  DISABLE_AVX="false"
-  DISABLE_AVX2="false"
-  if [ "$NO_AVX_PARAM" = true ]; then
-    DISABLE_AVX="true"
-    DISABLE_AVX2="true"
-  else
-    if [ "$NO_AVX2_PARAM" = true ]; then
-      DISABLE_AVX2="true"
-    fi
-  fi
-
-  local _USE_PRECOMPILED="false"
-  if [ "$CMD_BUILD_REQ" = true ]; then
-    # Use the --precompiled flag only when 'build' command.
-    if [ "$PRECOMPILED_PARAM" = "true" ]; then
-      _USE_PRECOMPILED="true"
-    fi
-  else
-    # Use the suibase.yaml with all other commands.
-    if [ "${CFG_precompiled_bin:?}" = "true" ]; then
-      _USE_PRECOMPILED="true"
-    fi
-  fi
-
-  # Handle case where precompiled is not compatible.
-  if [ "$_USE_PRECOMPILED" = "true" ]; then
-    if [ "$_IS_SET_SUI_REPO" = "true" ]; then
-      _USE_PRECOMPILED="false"
-    else
-      update_HOST_vars
-      if [ "$HOST_PLATFORM" = "Linux" ]; then
-        # Ignore precompiled request if not an Ubuntu x86_64 machine.
-        if [ "$HOST_ARCH" != "x86_64" ]; then
-          warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
-          _USE_PRECOMPILED="false"
-        fi
-
-        # Disable with WSL/Linux when (AVX or AVX2) not available.
-        #
-        # For other Linux setup, lets assume the user knows better and allow
-        # pre-compiled binaries... (if there is a problem they can work-around this
-        # with "precompiled_bin: false" in suibase.yaml)
-        #
-        # Rational:
-        #  A Linux VM guess may NOT report AVX/AVX2 in /proc/cpuinfo, but the host cpu can support it.
-        #  The app will still work, because the VM just execute the instructions blindly and they
-        #  are not detected as "illegal instructions".
-        #  This might be intended by some Linux super-user... but it is less likely intended for WSL
-        #  users (more likely the physical host is really not supporting AVX). So protect WSL users
-        #  with forcing compilation at the host when no AVX/AVX2 detected.
-        if is_wsl; then
-          if [[ -f /proc/cpuinfo ]]; then
-            local _AVX2_ENABLED
-            if grep -q avx2 /proc/cpuinfo; then
-              _AVX2_ENABLED="true"
-            else
-              _AVX2_ENABLED="false"
-            fi
-            local _AVX_ENABLED
-            if grep -q avx /proc/cpuinfo; then
-              _AVX_ENABLED="true"
-            else
-              _AVX_ENABLED="false"
-            fi
-            if [ "$_AVX2_ENABLED" = "false" ] || [ "$_AVX_ENABLED" = "false" ]; then
-              warn_user "Precompiled binaries not available for WSL/Linux without AVX. Will build from source instead."
-              _USE_PRECOMPILED="false"
-            fi
-          fi
-        fi
-      else
-        if [ "$HOST_PLATFORM" = "Darwin" ]; then
-          if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "arm64" ]; then
-            warn_user "Precompiled binaries not available for '$HOST_ARCH'. Will build from source instead."
-            _USE_PRECOMPILED="false"
-          fi
-        else
-          # Unsupported OS... "windows" presumably...
-          setup_error "Unsupported OS [$HOST_PLATFORM]"
-        fi
-      fi
-    fi
-
-    # Make sure the repo/branch has pre-compiled binary available.
-    if [ "$_USE_PRECOMPILED" = "true" ]; then
-      if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ]; then
-        # default_repo_url was overriden by the user.
-        warn_user "Precompiled binaries not available for repo '$CFG_default_repo_url'. Will build from source instead."
-        _USE_PRECOMPILED="false"
-      else
-        case "${CFG_default_repo_branch:?}" in
-        "devnet" | "testnet" | "mainnet")
-          # OK
-          ;;
-        *)
-          warn_user "Precompiled binaries not available for branch '$CFG_default_repo_branch'. Will build from source instead."
-          _USE_PRECOMPILED="false"
-          ;;
-        esac
-      fi
-    fi
-  fi
-
-  build_sui_repo_branch "$ALLOW_DOWNLOAD" "$ALLOW_BINARY" "$DISABLE_AVX" "$DISABLE_AVX2" "$_USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
+  build_sui_repo_branch "$_ALLOW_REPO_DOWNLOAD" "$ALLOW_BINARY" "$DISABLE_AVX" "$DISABLE_AVX2" "$_USE_PRECOMPILED" "$PASSTHRU_OPTIONS"
 
   if [ "$CMD_BUILD_REQ" = true ]; then
     # No further action needed when "build" command.

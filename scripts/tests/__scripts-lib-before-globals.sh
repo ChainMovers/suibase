@@ -46,6 +46,17 @@ fail() {
 }
 export -f fail
 
+delete_workdirs() {
+  echo "Deleting workdirs"
+  ~/suibase/scripts/dev/stop-daemon
+  rm -rf ~/suibase/workdirs >/dev/null 2>&1
+  # Display the content of workdirs (recursively) if still exists.
+  if [ -d "$HOME/suibase/workdirs" ]; then
+    echo "Workdirs deletion failed. Files remaining:"
+    ls -lR ~/suibase/workdirs
+  fi
+}
+
 test_init() {
   if [ "$TEST_INIT_CALLED" = "true" ]; then
     return
@@ -58,7 +69,6 @@ test_init() {
   if [[ "$_USER_CWD" == *"suibase/workdirs"* ]]; then
     fail "Should not call this test from a directory that will get deleted [suibase/workdirs]"
   fi
-
 }
 export -f test_init
 

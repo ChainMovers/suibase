@@ -8,5 +8,7 @@
 
 # Examples
 # ========
-# dtp_enabled: true
-# force_tag: "mainnet-v1.19.0"
+# precompiled_bin: false
+# default_repo_branch: "main"
+# force_tag: "mainnet-v1.18.0"
+# enable_local_repo: true

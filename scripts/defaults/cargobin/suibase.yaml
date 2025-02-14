@@ -24,6 +24,7 @@ force_tag: ~
 github_token: ~
 
 precompiled_bin: false
+enable_local_repo: false
 
 cargo_release: false
 cargo_add_options: ~

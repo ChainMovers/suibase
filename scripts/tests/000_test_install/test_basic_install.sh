@@ -33,19 +33,7 @@ tests() {
   fi
 }
 
-delete_workdirs() {
-  echo "Deleting workdirs"
-  ~/suibase/scripts/dev/stop-daemon
-  rm -rf ~/suibase/workdirs >/dev/null 2>&1
-  # Display the content of workdirs (recursively) if still exists.
-  if [ -d "$HOME/suibase/workdirs" ]; then
-    echo "Workdirs deletion failed. Files remaining:"
-    ls -lR ~/suibase/workdirs
-  fi
-}
-
 test_no_workdirs() {
-  rm -rf ~/suibase/workdirs >/dev/null 2>&1
   # Make sure not in a directory that was deleted.
   cd "$HOME/suibase" || fail "cd $HOME/suibase failed"
 

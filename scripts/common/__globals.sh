@@ -817,6 +817,20 @@ build_sui_repo_branch() {
         echo "the default repo by typing \"$WORKDIR_NAME set-sui-repo\"".
         exit
       fi
+    else
+      # At least one of ALLOW_DOWNLOAD, USE_PRECOMPILED or set-sui-repos must be true,
+      # otherwise there is no way to have sui binaries installed!
+      if [ "$USE_PRECOMPILED" = "false" ]; then
+        setup_error "No way to download or build the binaries allowed. Check your suibase.yaml settings."
+      fi
+      # Make sure sui-repo-default and sui-repo link are properly set. These are needed only for
+      # the "target" directory... the location for binaries installation.
+      if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]; then
+        mkdir -p "$SUI_REPO_DIR_DEFAULT"
+        set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
+      elif [ ! -L "$SUI_REPO_DIR" ]; then
+        set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
+      fi
     fi
   else
     if [ "${CFG_default_repo_url:?}" != "${CFGDEFAULT_default_repo_url:?}" ] ||
@@ -824,14 +838,21 @@ build_sui_repo_branch() {
       echo "suibase.yaml: Using repo [ $CFG_default_repo_url ] branch [ $CFG_default_repo_branch ]"
     fi
 
+    # Delete sui-repo-default when not fully initialized. Either a corruption or can
+    # normally happen when the user switch the config to allow repo download and
+    # previous config created sui-repos-default only for binary download.
+    if [ -d "$SUI_REPO_DIR_DEFAULT" ]; then
+      if [ ! -f "$SUI_REPO_DIR_DEFAULT/Cargo.toml" ] || [ ! -d "$SUI_REPO_DIR_DEFAULT/.git" ]; then
+        rm -rf "$SUI_REPO_DIR_DEFAULT"
+      fi
+    fi
+
     # If not already done, initialize the default repo.
+    # Add back the default sui-repo link in case it was deleted.
     if [ ! -d "$SUI_REPO_DIR_DEFAULT" ]; then
       git clone -b "$CFG_default_repo_branch" "$CFG_default_repo_url" "$SUI_REPO_DIR_DEFAULT" || setup_error "Failed cloning branch [$CFG_default_repo_branch] from [$CFG_default_repo_url]"
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
-    fi
-
-    # Add back the default sui-repo link in case it was deleted.
-    if [ ! -L "$SUI_REPO_DIR" ]; then
+    elif [ ! -L "$SUI_REPO_DIR" ]; then
       set_sui_repo_dir "$SUI_REPO_DIR_DEFAULT"
     fi
 
@@ -872,24 +893,11 @@ build_sui_repo_branch() {
     fi
   fi
 
-  # TODO do an 'integrity/version check' of the repo here...
-  if [ ! -d "$SUI_REPO_DIR" ]; then
-    # Help user doing things out-of-order (like trying to regen something not yet initialized?)
-    echo
-    echo "The Sui repo is not initialized."
-    echo
-    echo " Do one of the following:"
-    echo "    $WORKDIR start (recommended)"
-    echo "    $WORKDIR update"
-    echo
-    exit 1
-  fi
 
   if [ "$ALLOW_BINARY" = false ]; then
     return
   fi
 
-  # repo should now be initialized.
   # Either download precompiled or build from source.
   local _DO_FINAL_SUI_SANITY_CHECK=false
   local _DO_FINAL_SUI_FAUCET_SANITY_CHECK=false
@@ -909,19 +917,21 @@ build_sui_repo_branch() {
     # is initialized/updated.
     download_PRECOMP_REMOTE "$WORKDIR"
 
-    local _DETACHED_INFO
-    _DETACHED_INFO=$(cd "$SUI_REPO_DIR" && git branch | grep detached)
-    # Checkout if _DETACHED_INFO does NOT contain the PRECOMP_REMOTE_TAG_NAME substring.
-    if [[ "$_DETACHED_INFO" != *"$PRECOMP_REMOTE_TAG_NAME"* ]]; then
-
-      # Checkout the tag that match the precompiled binary.
-      echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
-      (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >/dev/null 2>&1)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null 2>&1)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >/dev/null 2>&1)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git merge '@{u}' >/dev/null 2>&1)
-      (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >/dev/null 2>&1)
-      _FEEDBACK_BEFORE_RETURN=false
+    if [ "$ALLOW_DOWNLOAD" = "true" ]; then
+      # Sync local repo... if allowed.
+      local _DETACHED_INFO
+      _DETACHED_INFO=$(cd "$SUI_REPO_DIR" && git branch | grep detached)
+      # Checkout if _DETACHED_INFO does NOT contain the PRECOMP_REMOTE_TAG_NAME substring.
+      if [[ "$_DETACHED_INFO" != *"$PRECOMP_REMOTE_TAG_NAME"* ]]; then
+        # Checkout the tag that match the precompiled binary.
+        echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+        (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >/dev/null 2>&1)
+        (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null 2>&1)
+        (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >/dev/null 2>&1)
+        (cd "$SUI_REPO_DIR_DEFAULT" && git merge '@{u}' >/dev/null 2>&1)
+        (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >/dev/null 2>&1)
+        _FEEDBACK_BEFORE_RETURN=false
+      fi
     fi
 
     # Install the precompiled binary.
@@ -929,6 +939,19 @@ build_sui_repo_branch() {
     _DO_FINAL_SUI_SANITY_CHECK=true
   else
     # Build from source.
+
+    if [ ! -d "$SUI_REPO_DIR" ]; then
+      # Help user doing things out-of-order (like trying to regen something not yet initialized?)
+      echo
+      echo "The Sui repo is not initialized."
+      echo
+      echo " Do one of the following:"
+      echo "    $WORKDIR start (recommended)"
+      echo "    $WORKDIR update"
+      echo
+      exit 1
+    fi
+
     exit_if_rust_build_deps_missing
     local _IS_RELEASE_BUILD=false
     if [[ "${CFG_cargo_release:?}" == "true" ]] || [[ "$PASSTHRU_OPTIONS" == *"--release"* ]]; then
@@ -942,7 +965,6 @@ build_sui_repo_branch() {
       if [ "$_IS_SET_SUI_REPO" = "false" ]; then
         # Precompile was used before, so cleanup first to avoid confusion.
         (if cd "$SUI_REPO_DIR"; then cargo clean; else setup_error "Unexpected missing $SUI_REPO_DIR"; fi)
-        # Deprecated cd_sui_log_dir
       fi
       del_key_value "$WORKDIR" "precompiled"
       _PRECOMP_STATE=$(get_key_value "$WORKDIR" "precompiled")
@@ -952,7 +974,7 @@ build_sui_repo_branch() {
       fi
     fi
 
-    if [ "$_IS_SET_SUI_REPO" = true ]; then
+    if [ "$_IS_SET_SUI_REPO" = "true" ]; then
       echo "Building $WORKDIR $_BUILD_DESC at [$RESOLVED_SUI_REPO_DIR]"
     else
       echo "Building $WORKDIR $_BUILD_DESC from latest repo [$CFG_default_repo_url] branch [$CFG_default_repo_branch]"
@@ -1040,15 +1062,15 @@ build_sui_repo_branch() {
   fi
 
   # Syncronize .state/precompiled with the .cache binary filepath.
-  local _DELETE_PRECOMP_STATE=false
+  local _DELETE_PRECOMP_STATE="false"
   if [ "$USE_PRECOMPILED" = "false" ]; then
     if [ "$_PRECOMP_STATE" != "NULL" ]; then
-      _DELETE_PRECOMP_STATE=true
+      _DELETE_PRECOMP_STATE="true"
     fi
   else
     if [ -z "$PRECOMP_REMOTE_DOWNLOAD_DIR" ]; then
       # That should never happen, but check just in case.
-      _DELETE_PRECOMP_STATE=true
+      _DELETE_PRECOMP_STATE="true"
       warn_user "Can't sync precompiled state with unavailable download info".
     else
       if [ "$_PRECOMP_STATE" != "$PRECOMP_REMOTE_DOWNLOAD_DIR" ]; then
@@ -1064,6 +1086,30 @@ build_sui_repo_branch() {
     if [ "$_PRECOMP_STATE" != "NULL" ]; then
       setup_error "Unexpected precompiled state [$_PRECOMP_STATE] (2)"
     fi
+  fi
+
+  # Use key-value states to remember which configuration was used
+  # to build the binaries.
+  local _REPO_URL_STATE=$(get_key_value "$WORKDIR" "repo_url")
+  local _REPO_URL_EXPECTED
+  if [ "$_IS_SET_SUI_REPO" = "true" ]; then
+    _REPO_URL_EXPECTED="$RESOLVED_SUI_REPO_DIR"
+  else
+    _REPO_URL_EXPECTED="${CFG_default_repo_url:?}"
+  fi
+  if [ "$_REPO_URL_STATE" != "$_REPO_URL_EXPECTED" ]; then
+    set_key_value "$WORKDIR" "repo_url" "$_REPO_URL_EXPECTED"
+  fi
+
+  local _REPO_BRANCH_STATE=$(get_key_value "$WORKDIR" "repo_branch")
+  local _REPO_BRANCH_EXPECTED
+  if [ "$_IS_SET_SUI_REPO" = "true" ]; then
+    _REPO_BRANCH_EXPECTED="$RESOLVED_SUI_REPO_DIR"
+  else
+    _REPO_BRANCH_EXPECTED="${CFG_default_repo_branch:?}"
+  fi
+  if [ "$_REPO_BRANCH_STATE" != "$_REPO_BRANCH_EXPECTED" ]; then
+    set_key_value "$WORKDIR" "repo_branch" "$_REPO_BRANCH_EXPECTED"
   fi
 
   # Help user by reminding the origin of the binaries.

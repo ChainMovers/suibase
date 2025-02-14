@@ -18,6 +18,7 @@ SUIBASE_DIR="$HOME/suibase"
 # shellcheck source=SCRIPTDIR/__scripts-lib-before-globals.sh
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
 test_init
+delete_workdirs
 
 # As needed, create scripts/templates/common/suibase.yaml
 init_common_template

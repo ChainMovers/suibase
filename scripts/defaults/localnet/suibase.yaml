@@ -81,6 +81,13 @@ github_token: ~
 # If false, then the binaries are instead built from the local repo.
 precompiled_bin: true
 
+# If the precompiled_bin are allowed, then most users do NOT need
+# the local sui repos and will typically keep enable_local_repo to false.
+#
+# Some users might still need a local repo for using the Rust SDK matching
+# the binaries. This is made possible by setting enable_local_repo to true.
+enable_local_repo: false
+
 # Control cargo option when building sui binaries.
 #
 # cargo_add_options is appended to the cargo command line for both on-demand (e.g. "localnet build")
