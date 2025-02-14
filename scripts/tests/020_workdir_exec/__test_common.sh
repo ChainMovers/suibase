@@ -53,7 +53,7 @@ source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
 test_suibase_yaml() {
   # Test that suibase.yaml is present and has the expected content.
   assert_file_exists "$WORKDIRS/$WORKDIR/suibase.yaml"
-  clear_suibase_yaml
+  # clear_suibase_yaml
   clear_sui_keystore
   add_to_suibase_yaml "add_private_keys:"
   add_to_suibase_yaml "  - 0x0cdb9491ab9697379802b188cd3566920cbb095dccca3fd91765bb45b461c30f"
@@ -62,6 +62,10 @@ test_suibase_yaml() {
 }
 
 tests() {
+  # Make sure $WORKDIR is stop.
+  # This will allow to apply config changes (if any) on next start.
+  $WORKDIR stop || fail "$WORKDIR stop failed"
+
   # Just run most commands and look for a failure.
   ($WORKDIR start) || fail "$WORKDIR start failed"
   assert_workdir_ok "$WORKDIR"
