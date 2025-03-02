@@ -141,7 +141,7 @@ impl WebserverTask {
         log::info!("{} listening on {}", self.task_name, addr);
 
         // Run the server
-        axum::Server::bind(&addr)
+        axum_server::Server::bind(addr)
             .serve(app.into_make_service())
             .await
             .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;

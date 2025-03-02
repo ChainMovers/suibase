@@ -12,6 +12,7 @@ use axum::async_trait;
 
 use anyhow::Result;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
+use tower::ServiceBuilder;
 
 use crate::shared_types::Globals;
 
@@ -31,7 +32,7 @@ use crate::api::impl_packages_api::PackagesApiImpl;
 
 use jsonrpsee::{core::server::Methods, server::ServerBuilder};
 use std::net::SocketAddr;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::cors::AllowOrigin;
 
 #[derive(Clone)]
 pub struct APIServerParams {
@@ -95,18 +96,17 @@ impl APIServerThread {
     async fn event_loop(self, _subsys: &SubsystemHandle) -> Result<()> {
         // Reference:
         // https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/cors_server.rs
-        let cors = CorsLayer::new()
+        let cors = tower_http::cors::CorsLayer::new()
             // Allow `POST` when accessing the resource
             .allow_methods(hyper::Method::POST)
             // Allow requests from any origin
             .allow_origin(AllowOrigin::any())
             .allow_headers([hyper::header::CONTENT_TYPE]);
-        let middleware = tower::ServiceBuilder::new().layer(cors);
 
-        let builder = ServerBuilder::default().set_http_middleware(middleware);
+        let service = ServiceBuilder::new().layer(cors);
 
-        // TODO Put here the suibase.yaml proxy_port_number.
-        let server = builder
+        let server = ServerBuilder::default()
+            .set_http_middleware(service)
             .build(SocketAddr::from(([127, 0, 0, 1], 44399)))
             .await?;
 

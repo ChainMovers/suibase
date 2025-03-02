@@ -24,6 +24,7 @@ notify = { version = "6.1.0", default-features = false, features = [
 
 axum.workspace = true
 http-body.workspace = true
+http-body-util.workspace = true
 hyper.workspace = true
 mime.workspace = true
 reqwest.workspace = true

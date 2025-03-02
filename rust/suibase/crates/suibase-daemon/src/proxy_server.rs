@@ -18,13 +18,13 @@ use crate::shared_types::{
 
 use anyhow::{anyhow, Result};
 use axum::{
-    body::{Body, HttpBody},
+    body::Body,
     extract::State,
     http::{header, Request, Response},
     routing::get,
     Router,
 };
-
+use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use memchr::memmem;
 use serde::{Deserialize, Serialize};
