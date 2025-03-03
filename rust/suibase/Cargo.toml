@@ -34,10 +34,10 @@ axum-server = { git = "https://github.com/bmwill/axum-server.git", rev = "f44323
     "tls-rustls",
 ] }
 bcs = "0.1.4"
-chrono = { version = "0.4.26", features = ["clock", "serde"] }
-clap = { version = "3.2.22", features = ["derive"] } # No upgrade to v4 until color are back.
+chrono = { version = "0.4.40", features = ["clock", "serde"] }
+clap = { version = "4.5.0", features = ["derive"] }
 colored = "2.0.0"
-data-encoding = "2.4.0"
+data-encoding = "2.8.0"
 futures = "0.3.28"
 http = "1"
 http-body = "1"
@@ -68,14 +68,14 @@ rustls = { version = "0.23", default-features = false, features = [
     "ring",
 ] }
 rusqlite = { version = "0.30.0", features = ["bundled"] }
-schemars = { version = "0.8.10", features = ["either"] }
+schemars = { version = "0.8.22", features = ["either"] }
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_json = { version = "1.0.95", features = [
     "preserve_order",
     "arbitrary_precision",
 ] }
 serde_with = "3.8"
-thiserror = "1.0.40"
+thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = ["full"] }
 tokio-rustls = { version = "0.26", default-features = false, features = [
     "tls12",
@@ -103,5 +103,5 @@ tower-http = { version = "0.5", features = [
     "propagate-header",
 ] }
 tower-layer = "0.3.2"
-uuid = { version = "1.4.1", features = ["v4","v7","fast-rng"] }
-uuid7 = { version= "0.7.0", features = [ "uuid" ] }
+uuid = { version = "1.15.0", features = ["v4","v7","fast-rng"] }
+uuid7 = { version= "1.1.0", features = [ "uuid" ] }
