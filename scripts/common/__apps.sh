@@ -339,7 +339,11 @@ sb_app_init_PRECOMP_REMOTE_vars() {
     fi
 
     if [ -z "$_OUT" ]; then
-      setup_error "Failed to get release information from [$_REPO_URL]"
+      if [ $_retry_curl -lt 3 ]; then
+        continue
+      else
+        setup_error "Failed to get release information from [$_REPO_URL]"
+      fi
     fi
 
     while read -r line; do
