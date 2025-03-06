@@ -1,8 +1,8 @@
-use crate::shared_types::Link;
 use crate::shared_types::TargetServer;
 use common::basic_types::*;
+use common::shared_types::{Link, WorkdirUserConfig};
 
-use super::{ServerStats, WorkdirUserConfig};
+use super::ServerStats;
 
 use std::hash::Hasher;
 use twox_hash::XxHash32;
@@ -176,8 +176,6 @@ impl InputPort {
     pub fn report_proxy_server_not_running(&mut self) {
         self.proxy_server_running = false;
     }
-
-
 
     pub fn get_best_target_servers(
         &self,

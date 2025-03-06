@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::async_trait;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
+use crate::acoins_monitor::{ACoinsMonTx, ACoinsMonitor};
 use crate::network_monitor::{NetMonTx, NetworkMonitor};
 
 use common::basic_types::{self, AdminControllerMsg, AdminControllerTx, AutoThread, Runnable};
@@ -12,13 +13,19 @@ use tokio::time::{interval, Duration};
 #[derive(Clone)]
 pub struct ClockTriggerParams {
     netmon_tx: NetMonTx,
+    acoinsmon_tx: ACoinsMonTx,
     admctrl_tx: AdminControllerTx,
 }
 
 impl ClockTriggerParams {
-    pub fn new(netmon_tx: NetMonTx, admctrl_tx: AdminControllerTx) -> Self {
+    pub fn new(
+        netmon_tx: NetMonTx,
+        acoinsmon_tx: ACoinsMonTx,
+        admctrl_tx: AdminControllerTx,
+    ) -> Self {
         Self {
             netmon_tx,
+            acoinsmon_tx,
             admctrl_tx,
         }
     }
@@ -95,6 +102,16 @@ impl ClockTriggerThread {
                 let result = self.params.admctrl_tx.send(msg).await;
                 if let Err(e) = result {
                     log::error!("admctrl_tx send_event_audit {}", e);
+                    // TODO This is bad if sustain for many seconds. Add watchdog here.
+                }
+            }
+
+            // TODO: Autocoins audit should be done more like once per 31 minutes, first one ~30 seconds after start.
+            if (tick % 10) == 1 {
+                // Every 10 seconds, with first one ~1 second after start.
+                let result = ACoinsMonitor::send_event_audit(&self.params.acoinsmon_tx).await;
+                if let Err(e) = result {
+                    log::error!("send_event_acoins_audit {}", e);
                     // TODO This is bad if sustain for many seconds. Add watchdog here.
                 }
             }

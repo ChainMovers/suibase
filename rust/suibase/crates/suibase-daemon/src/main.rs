@@ -1,6 +1,7 @@
 // TODO WIP Re-enable dead_code warnings after initial development writing completed.
 #![allow(dead_code)]
 
+use acoins_monitor::ACoinsMonitor;
 // main.rs does:
 //  - Validate command line.
 //  - Telemetry setup
@@ -52,6 +53,7 @@ mod admin_controller;
 mod api;
 mod app_error;
 
+mod acoins_monitor;
 mod clock_trigger;
 mod network_monitor;
 mod proxy_server;
@@ -99,8 +101,9 @@ impl Command {
                 let my_pid = std::process::id();
 
                 // Call the bash script "~/suibase/scripts/verify-suibase-daemon-lock $my_pid"
-                let home_dir = home::home_dir().expect("Failed to get home directory");
-                let script_path = home_dir.join("suibase/scripts/common/verify-suibase-daemon-lock.sh");
+
+                let home_suibase = common::shared_types::get_home_suibase_path();
+                let script_path = home_suibase.join("scripts/common/verify-suibase-daemon-lock.sh");
 
                 // Call the bash script "~/suibase/scripts/verify-suibase-daemon-lock $my_pid"
                 // Returns OK when the process is the one running under file lock ~/tmp/.suibase-daemon.lock
@@ -129,6 +132,7 @@ impl Command {
                 //
                 let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
                 let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let (acoinsmon_tx, acoinsmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
                 // Instantiate and connect all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(
@@ -136,15 +140,28 @@ impl Command {
                     admctrl_rx,
                     admctrl_tx.clone(),
                     netmon_tx.clone(),
+                    acoinsmon_tx.clone(),
                 );
 
                 let netmon =
                     NetworkMonitor::new(globals.proxy.clone(), netmon_rx, netmon_tx.clone());
 
+                let acoinsmon = ACoinsMonitor::new(
+                    globals.config_devnet.clone(),
+                    globals.config_testnet.clone(),
+                    globals.status_devnet.clone(),
+                    globals.status_testnet.clone(),
+                    acoinsmon_rx,
+                );
+
                 let apiserver_params = APIServerParams::new(globals.clone(), admctrl_tx.clone());
                 let apiserver = APIServer::new(apiserver_params);
 
-                let clock_params = ClockTriggerParams::new(netmon_tx.clone(), admctrl_tx.clone());
+                let clock_params = ClockTriggerParams::new(
+                    netmon_tx.clone(),
+                    acoinsmon_tx.clone(),
+                    admctrl_tx.clone(),
+                );
                 let clock: ClockTrigger = ClockTrigger::new(clock_params);
 
                 let suiexplorer_params =
@@ -155,6 +172,7 @@ impl Command {
                 let errors = Toplevel::new(|s| async move {
                     s.start(SubsystemBuilder::new("admctrl", |a| admctrl.run(a)));
                     s.start(SubsystemBuilder::new("netmon", |a| netmon.run(a)));
+                    s.start(SubsystemBuilder::new("acoinsmon", |a| acoinsmon.run(a)));
                     s.start(SubsystemBuilder::new("clock", |a| clock.run(a)));
                     s.start(SubsystemBuilder::new("suiexplorer", |a| suiexplorer.run(a)));
                     s.start(SubsystemBuilder::new("apiserver", |a| apiserver.run(a)));

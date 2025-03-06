@@ -100,6 +100,26 @@ enable_local_repo: false
 cargo_release: false # Set to true to build release binaries.
 cargo_add_options: ~
 
+# Autocoins feature.
+#
+# This feature works only for testnet/devnet. Enabling for other networks will
+# have no effect.
+#
+# To disable this feature for all networks, add 'autocoins_enabled: false' to:
+#   ~/suibase/workdirs/common/suibase.yaml
+#
+# To disable for a specific network, add 'autocoins_enabled: false' to either:
+#   ~/suibase/workdirs/devnet/suibase.yaml
+#   ~/suibase/workdirs/testnet/suibase.yaml
+#
+# The configuration can also be modified using the workdir scripts. Example:
+#   testnet autocoins <-- Will display config and status
+#   testnet autocoins enable
+#   devnet autocoins disable
+#
+# The script will edit the respective suibase.yaml file.
+autocoins_enabled: false
+
 # Proxy server related configurations. See https://suibase.io/how-to/proxy
 proxy_enabled: true
 proxy_host_ip: "localhost"

@@ -534,13 +534,10 @@ impl ProxyServer {
                 // {"jsonrpc":"2.0","error":{"code":-32602,
                 //   "message":"Could not find the referenced transaction [TransactionDigest(4UM3m1Kz7p596UVnyr2QNVAMobrfEZV9RYXkMUX8NYxJ)]."},
                 //  "id":2,"data":{"origin":"https://rpc-mainnet.suiscan.xyz:443","retry":3}}
-                match sui_req_method.as_str() {
-                    "sui_getEvents" => {
-                        if message.contains("not find") || message.contains("otExists") {
-                            return Ok(true);
-                        }
+                if sui_req_method.as_str() == "sui_getEvents" {
+                    if message.contains("not find") || message.contains("otExists") {
+                        return Ok(true);
                     }
-                    _ => (),
                 }
             }
         }

@@ -1,15 +1,18 @@
-use common::basic_types::{AdminControllerMsg, AdminControllerTx, AutoSizeVec, MPSC_Q_SIZE};
+use common::basic_types::{
+    AdminControllerMsg, AdminControllerTx, AutoSizeVec, WorkdirIdx, MPSC_Q_SIZE,
+};
 
 use anyhow::Result;
+use common::shared_types::get_workdir_idx_by_path;
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
-
-use crate::shared_types::{GlobalsWorkdirsMT, Workdir};
 
 use notify::RecursiveMode;
 use notify::{PollWatcher, Watcher};
 
+use crate::Globals;
+
 pub struct WorkdirsWatcher {
-    workdirs: GlobalsWorkdirsMT,
+    globals: Globals,
     admctrl_tx: AdminControllerTx,
     tracking: AutoSizeVec<WorkdirTracking>,
 }
@@ -22,9 +25,9 @@ struct WorkdirTracking {
 }
 
 impl WorkdirsWatcher {
-    pub fn new(workdirs: GlobalsWorkdirsMT, admctrl_tx: AdminControllerTx) -> Self {
+    pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
         Self {
-            workdirs,
+            globals,
             admctrl_tx,
             tracking: AutoSizeVec::new(),
         }
@@ -44,33 +47,30 @@ impl WorkdirsWatcher {
     fn update_workdir_watch(
         tracking: &mut AutoSizeVec<WorkdirTracking>,
         poll_watcher: &mut PollWatcher,
-        workdir: &Workdir,
+        workdir_idx: WorkdirIdx,
         target_path: &str,
     ) -> bool {
-        if workdir.idx().is_none() {
-            return false;
-        }
-
         // React only to change for two target_path: the workdir itself and its ".state"
-        let path = workdir.path();
-        let state_path = workdir.state_path();
-        if target_path != path.to_string_lossy() && target_path != state_path.to_string_lossy() {
+        let paths = common::shared_types::get_workdir_paths(workdir_idx);
+        let workdir_path = paths.workdir_root_path();
+        let state_path = paths.state_path();
+        if target_path != workdir_path.to_string_lossy()
+            && target_path != state_path.to_string_lossy()
+        {
             return false;
         }
 
         let mut at_least_one_modif: bool = false;
 
-        let workdir_idx = workdir.idx().unwrap();
-
         // Synchronize the watcher with the states on the filesystem.
         let tracking = tracking.get_mut(workdir_idx);
 
         // Check if the path really exists.
-        if !path.exists() {
+        if !workdir_path.exists() {
             // If the path does not exist, then remove the watch.
             if tracking.is_workdir_watched {
-                log::info!("unwatching {}", workdir.path().display());
-                let _ = poll_watcher.unwatch(path);
+                log::info!("unwatching {}", workdir_path.display());
+                let _ = poll_watcher.unwatch(workdir_path);
                 tracking.is_workdir_watched = false;
                 at_least_one_modif = true;
             }
@@ -78,8 +78,8 @@ impl WorkdirsWatcher {
             // The path exists, so add the watch (if not already done).
             // TODO Enhance this with FD tracking.
             if !tracking.is_workdir_watched {
-                log::info!("watching {}", workdir.path().display());
-                let _ = poll_watcher.watch(path, RecursiveMode::NonRecursive);
+                log::info!("watching {}", workdir_path.display());
+                let _ = poll_watcher.watch(workdir_path, RecursiveMode::NonRecursive);
                 tracking.is_workdir_watched = true;
                 at_least_one_modif = true;
             }
@@ -88,7 +88,7 @@ impl WorkdirsWatcher {
         if !state_path.exists() {
             // If the path does not exist, then remove the watch.
             if tracking.is_state_watched {
-                log::info!("unwatching {}", workdir.state_path().display());
+                log::info!("unwatching {}", state_path.display());
                 let _ = poll_watcher.unwatch(state_path);
                 tracking.is_state_watched = false;
                 at_least_one_modif = true;
@@ -97,7 +97,7 @@ impl WorkdirsWatcher {
             // The path exists, so add the watch (if not already done).
             // TODO Enhance this with FD tracking?
             if !tracking.is_state_watched {
-                log::info!("watching {}", workdir.state_path().display());
+                log::info!("watching {}", state_path.display());
                 let _ = poll_watcher.watch(state_path, RecursiveMode::NonRecursive);
                 tracking.is_state_watched = true;
                 at_least_one_modif = true;
@@ -110,33 +110,31 @@ impl WorkdirsWatcher {
     fn remove_workdir_watch(
         tracking: &mut AutoSizeVec<WorkdirTracking>,
         poll_watcher: &mut PollWatcher,
-        workdir: &Workdir,
+        workdir_idx: WorkdirIdx,
         target_path: &str,
     ) -> bool {
-        if workdir.idx().is_none() {
-            return false;
-        }
-
-        let workdir_idx = workdir.idx().unwrap();
-
         let mut at_least_one_modif: bool = false;
 
         // Synchronize the watcher with the states on the filesystem.
         let tracking = tracking.get_mut(workdir_idx);
 
         // React only to change for two target_path: the workdir itself and its ".state"
-        let path = workdir.path();
-        let state_path = workdir.state_path();
-        if target_path != path.to_string_lossy() && target_path != state_path.to_string_lossy() {
+        let paths = common::shared_types::get_workdir_paths(workdir_idx);
+        let workdir_path = paths.workdir_root_path();
+        let state_path = paths.state_path();
+
+        if target_path != workdir_path.to_string_lossy()
+            && target_path != state_path.to_string_lossy()
+        {
             return false;
         }
 
         // Check if the path really exists.
-        if !path.exists() {
+        if !workdir_path.exists() {
             // If the path does not exist, then remove the watch.
             if tracking.is_workdir_watched {
-                log::info!("unwatching {}", workdir.path().display());
-                let _ = poll_watcher.unwatch(path);
+                log::info!("unwatching {}", workdir_path.display());
+                let _ = poll_watcher.unwatch(workdir_path);
                 tracking.is_workdir_watched = false;
                 at_least_one_modif = true;
             }
@@ -145,7 +143,7 @@ impl WorkdirsWatcher {
         if !state_path.exists() {
             // If the path does not exist, then remove the watch.
             if tracking.is_state_watched {
-                log::info!("unwatching {}", workdir.state_path().display());
+                log::info!("unwatching {}", state_path.display());
                 let _ = poll_watcher.unwatch(state_path);
                 tracking.is_state_watched = false;
                 at_least_one_modif = true;
@@ -194,25 +192,27 @@ impl WorkdirsWatcher {
                         // If creating one of the "suibase" standard workdir, then
                         // start watching it.
                         if create_kind == notify::event::CreateKind::Folder {
-                            let workdirs_guard = self.workdirs.read().await;
-                            let workdirs = &*workdirs_guard;
                             log::info!("CreateKind {:?}", msg);
                             for path in msg.paths {
                                 let path = &path.to_string_lossy();
-                                if let Some((_, workdir)) = workdirs.find_workdir(path) {
-                                    if Self::update_workdir_watch(
-                                        &mut self.tracking,
-                                        &mut poll_watcher,
-                                        workdir,
-                                        path,
-                                    ) {
-                                        // TODO Need to track creation of a few key file from here
-                                        //      to make sure they are notified... for now always
-                                        //      notified once after a delay with assumption the file
-                                        //      were created after 1 second...
-                                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                                        self.send_notif_config_file_change(path.to_string()).await
-                                    }
+                                let workdir_idx = get_workdir_idx_by_path(path);
+                                if workdir_idx.is_none() {
+                                    continue;
+                                }
+                                let workdir_idx = workdir_idx.unwrap();
+
+                                if Self::update_workdir_watch(
+                                    &mut self.tracking,
+                                    &mut poll_watcher,
+                                    workdir_idx,
+                                    path,
+                                ) {
+                                    // TODO Need to track creation of a few key file from here
+                                    //      to make sure they are notified... for now always
+                                    //      notified once after a delay with assumption the file
+                                    //      were created after 1 second...
+                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    self.send_notif_config_file_change(path.to_string()).await
                                 }
                             }
                         }
@@ -220,23 +220,20 @@ impl WorkdirsWatcher {
 
                     notify::event::EventKind::Remove(remove_kind) => {
                         if remove_kind == notify::event::RemoveKind::Folder {
-                            let workdirs_guard = self.workdirs.read().await;
-                            let workdirs = &*workdirs_guard;
                             for path in msg.paths {
-                                if let Some((_, workdir)) =
-                                    workdirs.find_workdir(&path.to_string_lossy())
-                                {
-                                    if Self::remove_workdir_watch(
-                                        &mut self.tracking,
-                                        &mut poll_watcher,
-                                        workdir,
-                                        &path.to_string_lossy(),
-                                    ) {
-                                        self.send_notif_config_file_change(
-                                            path.to_string_lossy().to_string(),
-                                        )
-                                        .await
-                                    }
+                                let path = &path.to_string_lossy();
+                                let workdir_idx = get_workdir_idx_by_path(path);
+                                if workdir_idx.is_none() {
+                                    continue;
+                                }
+                                let workdir_idx = workdir_idx.unwrap();
+                                if Self::remove_workdir_watch(
+                                    &mut self.tracking,
+                                    &mut poll_watcher,
+                                    workdir_idx,
+                                    path,
+                                ) {
+                                    self.send_notif_config_file_change(path.to_string()).await
                                 }
                             }
                         }
@@ -289,34 +286,41 @@ impl WorkdirsWatcher {
             poll_watcher_config.with_poll_interval(std::time::Duration::from_secs(15)),
         )?;
 
-        {
-            let workdirs_guard = self.workdirs.read().await;
-            let workdirs = &*workdirs_guard;
-
-            // Watch directories: ~/suibase then add watches on sub-directories as they are discovered.
+        // Iterate WORKDIRS_KEYS and add watches on the directories.
+        // Also add watches on the ".state" files.
+        let mut add_root_path_done = false;
+        for workdir_idx in 0..common::shared_types::WORKDIRS_KEYS.len() {
+            let workdir_idx = workdir_idx as WorkdirIdx;
+            // Watch directories: ~/suibase/workdirs then add watches on sub-directories as they are discovered.
             // TODO if suibase is deleted... then need to find a solution to recover gracefully (exit?).
-            let path = workdirs.path();
-            if path.exists() {
-                let _ = poll_watcher.watch(workdirs.path(), RecursiveMode::NonRecursive);
-            } else {
-                log::error!("implement watching above ~/suibase/workdirs for bad installation!");
-            }
-
-            for (_workdir_idx, workdir) in workdirs.workdirs.iter() {
-                if Self::update_workdir_watch(
-                    &mut self.tracking,
-                    &mut poll_watcher,
-                    workdir,
-                    &workdir.path().to_string_lossy(),
-                ) {
-                    self.send_notif_config_file_change(
-                        workdir.path().to_string_lossy().to_string(),
-                    )
-                    .await;
+            if !add_root_path_done {
+                // This adds watch on ~/suibase/workdirs
+                add_root_path_done = true;
+                let path = common::shared_types::get_workdirs_path();
+                if path.exists() {
+                    let _ = poll_watcher.watch(path, RecursiveMode::NonRecursive);
+                } else {
+                    log::error!(
+                        "implement watching above ~/suibase/workdirs for bad installation!"
+                    );
                 }
             }
-            log::info!("watcher {:?}", poll_watcher);
-        } // Release workdirs read lock
+
+            // This adds watch on ~/suibase/workdirs/<workdir> and ~/suibase/workdirs/<workdir>/.state
+            let workdir_path = common::shared_types::get_workdir_paths(workdir_idx)
+                .workdir_root_path()
+                .to_string_lossy();
+            if Self::update_workdir_watch(
+                &mut self.tracking,
+                &mut poll_watcher,
+                workdir_idx as WorkdirIdx,
+                &workdir_path,
+            ) {
+                self.send_notif_config_file_change(workdir_path.to_string())
+                    .await;
+            }
+        }
+        log::info!("watcher {:?}", poll_watcher);
 
         match self
             .watch_loop(&subsys, poll_watcher, local_rx)

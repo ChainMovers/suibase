@@ -10,8 +10,10 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::shared_types::{
-    Globals, WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
+use crate::shared_types::Globals;
+
+use common::shared_types::{
+    WORKDIRS_KEYS, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
     WORKDIR_IDX_TESTNET,
 };
 

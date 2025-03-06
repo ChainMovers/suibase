@@ -64,11 +64,10 @@ impl Runnable<WebserverParams> for WebserverTask {
     async fn run(mut self, subsys: SubsystemHandle) -> Result<()> {
         // The websites (static files) are stored under "~/suibase/typescript".
         // websites_root has the ~ resolved (e.g. "/home/user_name/suibase/typescript")
-        self.websites_root = format!("{}/typescript", {
-            let workdirs_guard = self.params.globals.workdirs.read().await;
-            let workdirs = &*workdirs_guard;
-            workdirs.suibase_home().to_string()
-        });
+        self.websites_root = common::shared_types::get_home_suibase_path()
+            .join("typescript")
+            .to_string_lossy()
+            .to_string();
 
         let output = format!("started {}", self.task_name);
         log::info!("{}", output);

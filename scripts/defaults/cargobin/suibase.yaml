@@ -29,6 +29,8 @@ enable_local_repo: false
 cargo_release: false
 cargo_add_options: ~
 
+autocoins_enabled: false
+
 # proxy not applicable to cargobin
 proxy_enabled: false
 proxy_host_ip: "localhost"

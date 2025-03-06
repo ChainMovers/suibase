@@ -1,7 +1,7 @@
-use common::basic_types::*;
-
-use crate::shared_types::Link;
 use crate::shared_types::ServerStats;
+
+use common::basic_types::*;
+use common::shared_types::Link;
 
 #[derive(Debug)]
 pub struct TargetServer {

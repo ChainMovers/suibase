@@ -360,14 +360,8 @@ impl PollingTraitObject {
     }
 
     async fn get_published_data_path(&self, workdir_idx: WorkdirIdx) -> Result<PathBuf> {
-        let workdir_path = {
-            let workdirs_guard = self.params.globals.workdirs.read().await;
-            let workdirs = &*workdirs_guard;
-            let workdir = workdirs
-                .get_workdir(workdir_idx)
-                .ok_or_else(|| anyhow!("Failed to get workdir by index {}", workdir_idx))?;
-            workdir.path_cloned()
-        };
+        let workdir_paths = common::shared_types::get_workdir_paths(workdir_idx);
+        let workdir_path = workdir_paths.workdir_root_path();
 
         // The package_uuid is a string.
         Ok(workdir_path.join("published-data"))

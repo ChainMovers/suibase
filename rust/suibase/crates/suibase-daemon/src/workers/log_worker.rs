@@ -12,7 +12,7 @@
 // The thread is auto-restart in case of panic.
 use std::sync::Arc;
 
-use crate::shared_types::{self, Globals, Workdir};
+use crate::shared_types::Globals;
 
 use common::basic_types::{
     self, AutoThread, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
@@ -102,7 +102,6 @@ struct LogWorkerThread {
     task_name: String,
     params: LogWorkerParams,
     log: Vec<LogManagement>,
-    workdir: Workdir,
 }
 
 #[async_trait]
@@ -112,7 +111,6 @@ impl Runnable<LogWorkerParams> for LogWorkerThread {
             task_name,
             params,
             log: Vec::new(),
-            workdir: Default::default(),
         }
     }
 
@@ -191,7 +189,7 @@ impl LogWorkerThread {
                     self.params.workdir_idx
                 );
             }
-            shared_types::WORKDIRS_KEYS[workdir_idx as usize]
+            common::shared_types::WORKDIRS_KEYS[workdir_idx as usize]
         } else {
             log::error!("Unexpected workdir_idx {:?}", msg);
             return;

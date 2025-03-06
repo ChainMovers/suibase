@@ -1,12 +1,13 @@
 use std::error::Error;
 use std::time::Duration;
 
-use common::shared_types::WORKDIRS_KEYS;
+use common::shared_types::{WorkdirUserConfig, WORKDIRS_KEYS, WORKDIR_IDX_LOCALNET};
 use common::{basic_types::*, log_safe};
 
+use crate::acoins_monitor::ACoinsMonTx;
 use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
-use crate::shared_types::{Globals, InputPort, WorkdirUserConfig, WORKDIR_IDX_LOCALNET};
+use crate::shared_types::{Globals, InputPort};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::{
     CliPoller, CliPollerParams, EventsWriterWorker, EventsWriterWorkerParams, PackagesPoller,
@@ -44,6 +45,7 @@ pub struct AdminController {
     admctrl_rx: AdminControllerRx,
     admctrl_tx: AdminControllerTx,
     netmon_tx: NetMonTx,
+    acoinsmon_tx: ACoinsMonTx,
 
     wd_tracking: AutoSizeVec<WorkdirTracking>,
     port_tracking: AutoSizeVec<InputPortTracking>,
@@ -97,6 +99,7 @@ impl AdminController {
         admctrl_rx: AdminControllerRx,
         admctrl_tx: AdminControllerTx,
         netmon_tx: NetMonTx,
+        acoinsmon_tx: ACoinsMonTx,
     ) -> Self {
         Self {
             idx: None,
@@ -104,6 +107,7 @@ impl AdminController {
             admctrl_rx,
             admctrl_tx,
             netmon_tx,
+            acoinsmon_tx,
             wd_tracking: AutoSizeVec::new(),   // WorkdirTracking
             port_tracking: AutoSizeVec::new(), // InputPortTracking
         }
@@ -399,7 +403,7 @@ impl AdminController {
                 "process_post_publish_msg workdir tracking not found: {:?}",
                 workdir_idx
             );
-            return;
+            // return;
         }
     }
 
@@ -530,47 +534,47 @@ impl AdminController {
             log::error!("EVENT_NOTIF_CONFIG_FILE_CHANGE missing path information");
             return;
         }
-        let path = msg.data_string().unwrap();
+        let msg_path = msg.data_string().unwrap();
+
+        // Identify the workdir_idx using the path.
+        let (workdir_idx, workdir_name) =
+            match common::shared_types::get_workdir_idx_by_path(&msg_path) {
+                Some(workdir_idx) => (
+                    workdir_idx,
+                    common::shared_types::WORKDIRS_KEYS[workdir_idx as usize],
+                ),
+                None => {
+                    log::error!("Unexpected path '{}'", msg_path);
+                    return;
+                }
+            };
+
+        // Get path information from globals config.
+        let workdir_paths = common::shared_types::get_workdir_paths(workdir_idx);
+        let suibase_yaml_default = workdir_paths.suibase_yaml_default().to_string_lossy();
+        let suibase_yaml_common = workdir_paths.suibase_yaml_common().to_string_lossy();
+        let suibase_yaml_user = workdir_paths.suibase_yaml_user().to_string_lossy();
 
         // Load the configuration.
         let mut workdir_config = WorkdirUserConfig::new();
-        let workdir_idx: u8;
-        let workdir_name: String;
-        {
-            let workdirs_guard = self.globals.workdirs.read().await;
-            let workdirs = &*workdirs_guard;
 
-            let workdir_search_result = workdirs.find_workdir(&path);
-            if workdir_search_result.is_none() {
-                log::error!("Workdir not found for path {:?}", &msg.data_string());
-                // Do nothing. Consume the message.
-                return;
-            }
-            let (found_workdir_idx, workdir) = workdir_search_result.unwrap();
-            workdir_idx = found_workdir_idx;
-            workdir_name = workdir.name().to_string();
+        // Load the 3 suibase.yaml files. The default, common and user version in order.
+        let try_load = workdir_config.load_and_merge_from_file(&suibase_yaml_default);
+        if try_load.is_err() {
+            log::error!(
+                "Failed to load default config file {:?}",
+                suibase_yaml_default
+            );
+            // Do nothing. Consume the message.
+            return;
+        }
 
-            // Load the 3 suibase.yaml files. The default, common and user version in order.
-            let try_load = workdir_config
-                .load_and_merge_from_file(&workdir.suibase_yaml_default().to_string_lossy());
-            if try_load.is_err() {
-                log::error!(
-                    "Failed to load default config file {:?}",
-                    workdir.suibase_yaml_default()
-                );
-                // Do nothing. Consume the message.
-                return;
-            }
+        // Optional, so no error if does not exists.
+        let _ = workdir_config.load_and_merge_from_common_file(&suibase_yaml_common);
 
-            // Optional, so no error if does not exists.
-            let _ = workdir_config
-                .load_and_merge_from_common_file(&workdirs.suibase_yaml_common().to_string_lossy());
+        let _ = workdir_config.load_and_merge_from_file(&suibase_yaml_user);
 
-            let _ = workdir_config
-                .load_and_merge_from_file(&workdir.suibase_yaml_user().to_string_lossy());
-
-            let _ = workdir_config.load_state_file(&workdir.suibase_state_file().to_string_lossy());
-        } // Release Workdirs read lock
+        let _ = workdir_config.load_state_files(workdir_paths);
 
         // Check if workdir_config has changed since last_read_config.
         let wd_tracking = self.wd_tracking.get_mut(workdir_idx);
@@ -590,6 +594,15 @@ impl AdminController {
         }
 
         log::info!("cfg notif {}", workdir_name);
+
+        // Save the modified workdir_config in globals.
+        {
+            let globals_config = self.globals.get_config(workdir_idx);
+            let mut globals_guard = globals_config.write().await;
+            let globals = &mut *globals_guard;
+
+            globals.user_config = workdir_config.clone();
+        }
 
         // Apply the configuration to the globals.
         let config_applied: Option<(ManagedVecU8, u16)> = {
@@ -620,7 +633,7 @@ impl AdminController {
 
                 // No InputPort yet for that workdir... so create it.
                 let mut input_port =
-                    InputPort::new(workdir_idx, workdir_name.clone(), &workdir_config);
+                    InputPort::new(workdir_idx, workdir_name.to_string(), &workdir_config);
                 Self::apply_workdir_config(&mut input_port, &workdir_config);
                 let port_number = input_port.port_number();
                 ports
@@ -711,7 +724,7 @@ impl AdminController {
         // send back to this thread on the AdminController channel.
         {
             let admctrl_tx = self.admctrl_tx.clone();
-            let workdirs_watcher = WorkdirsWatcher::new(self.globals.workdirs.clone(), admctrl_tx);
+            let workdirs_watcher = WorkdirsWatcher::new(self.globals.clone(), admctrl_tx);
             subsys.start(SubsystemBuilder::new("workdirs-watcher", move |a| {
                 workdirs_watcher.run(a)
             }));
@@ -723,26 +736,23 @@ impl AdminController {
             let wd_tracking = self.wd_tracking.get_mut(workdir_idx);
 
             // Starts the task handling Sui events for latest published packages.
-            if workdir_idx == WORKDIR_IDX_LOCALNET {
-                if wd_tracking.events_worker_handle.is_none() {
-                    let (events_worker_tx, events_worker_rx) =
-                        tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+            if workdir_idx == WORKDIR_IDX_LOCALNET && wd_tracking.events_worker_handle.is_none() {
+                let (events_worker_tx, events_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
-                    let events_worker_params = EventsWriterWorkerParams::new(
-                        self.globals.clone(),
-                        events_worker_rx,
-                        events_worker_tx.clone(),
-                        workdir_idx,
-                    );
-                    wd_tracking.events_worker_tx = Some(events_worker_tx);
+                let events_worker_params = EventsWriterWorkerParams::new(
+                    self.globals.clone(),
+                    events_worker_rx,
+                    events_worker_tx.clone(),
+                    workdir_idx,
+                );
+                wd_tracking.events_worker_tx = Some(events_worker_tx);
 
-                    let events_worker = EventsWriterWorker::new(events_worker_params);
-                    let nested = subsys.start(SubsystemBuilder::new(
-                        format!("events-worker-{}", workdir_idx),
-                        |a| events_worker.run(a),
-                    ));
-                    wd_tracking.events_worker_handle = Some(nested);
-                }
+                let events_worker = EventsWriterWorker::new(events_worker_params);
+                let nested = subsys.start(SubsystemBuilder::new(
+                    format!("events-worker-{}", workdir_idx),
+                    |a| events_worker.run(a),
+                ));
+                wd_tracking.events_worker_handle = Some(nested);
             }
 
             // Start a CLI poller.
@@ -794,32 +804,17 @@ impl ManagedElement for AdminController {
 }
 
 #[cfg(test)]
-use crate::shared_types::GlobalsWorkdirsST;
-
 #[test]
 fn test_load_config_from_suibase_default() {
     // Note: More of a functional test. Suibase need to be installed.
 
-    // Test a known "standard" localnet suibase.yaml
-    let workdirs = GlobalsWorkdirsST::new();
-    let mut path = std::path::PathBuf::from(workdirs.suibase_home());
-    path.push("scripts");
-    path.push("defaults");
-    path.push("localnet");
-    path.push("suibase.yaml");
-
-    let workdir_search_result = workdirs.find_workdir(&path.to_string_lossy().to_string());
-    assert!(workdir_search_result.is_some());
-    let (_workdir_idx, workdir) = workdir_search_result.unwrap();
+    // Test existence of a known "standard" localnet suibase.yaml
+    let workdir_paths = common::shared_types::get_workdir_paths(WORKDIR_IDX_LOCALNET);
+    let suibase_yaml_default = workdir_paths.suibase_yaml_default();
+    assert!(suibase_yaml_default.exists());
 
     let mut config = WorkdirUserConfig::new();
-    let result = config.load_and_merge_from_file(
-        &workdir
-            .suibase_yaml_default()
-            .to_string_lossy()
-            .to_string()
-            .to_string(),
-    );
+    let result = config.load_and_merge_from_file(&suibase_yaml_default.to_string_lossy());
     assert!(result.is_ok());
     // Expected:
     // - alias: "localnet"

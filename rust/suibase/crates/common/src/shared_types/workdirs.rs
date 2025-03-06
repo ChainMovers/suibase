@@ -9,8 +9,9 @@ use std::collections::{HashMap, LinkedList};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use std::sync::LazyLock;
 
-use crate::basic_types::{ManagedElement, ManagedVec, ManagedVecU8, WorkdirIdx};
+use crate::basic_types::WorkdirIdx;
 
 // workdir_idx are hard coded for performance.
 pub const WORKDIR_IDX_MAINNET: WorkdirIdx = 0;
@@ -18,9 +19,145 @@ pub const WORKDIR_IDX_TESTNET: WorkdirIdx = 1;
 pub const WORKDIR_IDX_DEVNET: WorkdirIdx = 2;
 pub const WORKDIR_IDX_LOCALNET: WorkdirIdx = 3;
 
+// All .state files names are hard coded for consistency.
+// (must remain backward compatible).
+pub const STATE_USER_REQUEST: &str = "user_request";
+pub const STATE_AUTOCOINS_ADDRESS: &str = "autocoins_address";
+pub const STATE_AUTOCOINS_LAST_DEPOSIT: &str = "autocoins_last_deposit";
+pub const STATE_AUTOCOINS_DEPOSITED: &str = "autocoins_deposited";
+
 // List of all possible workdirs planned to be supported.
 // The order is important since the position match the WORKDIR_IDX_* constants.
 pub const WORKDIRS_KEYS: [&str; 4] = ["mainnet", "testnet", "devnet", "localnet"];
+pub const WORKDIRS_COUNT: usize = WORKDIRS_KEYS.len();
+
+// Utility that returns the workdir_idx for one of the WORKDIRS_KEYS
+//
+// This call is relatively costly, use wisely.
+pub fn get_workdir_idx_by_name(workdir_name: &String) -> Option<WorkdirIdx> {
+    for (idx, workdir) in WORKDIRS_KEYS.iter().enumerate() {
+        if workdir_name == workdir {
+            return Some(idx as WorkdirIdx);
+        }
+    }
+    None
+}
+
+pub fn get_workdir_idx_by_path(path: &str) -> Option<WorkdirIdx> {
+    for (idx, workdir) in WORKDIRS_KEYS.iter().enumerate() {
+        if path.contains(workdir) {
+            return Some(idx as WorkdirIdx);
+        }
+    }
+    None
+}
+
+// Utility to get path information.
+pub struct WorkdirPaths {
+    // A workdir path itself (e.g. ~/suibase/workdirs/testnet )
+    workdir_root_path: PathBuf,
+
+    // Subdirectories of workdir_path
+    state_path: PathBuf,
+    suibase_yaml_user: PathBuf,
+    suibase_yaml_default: PathBuf,
+
+    // Path to ~/suibase/workdirs/common/suibase.yaml
+    // Here for convenience even if not workdir_path specific.
+    suibase_yaml_common: PathBuf,
+}
+
+struct SuibasePaths {
+    home_path: PathBuf,
+    home_suibase_path: PathBuf,
+    workdirs_path: PathBuf,
+    workdir_paths: [WorkdirPaths; WORKDIRS_COUNT],
+}
+
+// Cache the workdir paths using LazyLock
+static WORKDIR_PATHS: LazyLock<SuibasePaths> = LazyLock::new(|| {
+    let home_path = home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+    let home_suibase_path = home_path.join("suibase");
+    let workdirs_path = home_suibase_path.join("workdirs");
+
+    let workdir_paths = core::array::from_fn(|idx| {
+        let workdir_name = WORKDIRS_KEYS[idx];
+        let workdir_root_path = workdirs_path.join(workdir_name);
+        let state_path = workdir_root_path.join(".state");
+        let suibase_yaml_user = workdir_root_path.join("suibase.yaml");
+        let suibase_yaml_default = home_suibase_path
+            .join("scripts")
+            .join("defaults")
+            .join(workdir_name)
+            .join("suibase.yaml");
+        let suibase_yaml_common = workdirs_path.join("common").join("suibase.yaml");
+
+        WorkdirPaths {
+            workdir_root_path,
+            state_path,
+            suibase_yaml_user,
+            suibase_yaml_default,
+            suibase_yaml_common,
+        }
+    });
+
+    SuibasePaths {
+        home_path,
+        home_suibase_path,
+        workdirs_path,
+        workdir_paths,
+    }
+});
+
+pub fn get_home_path() -> &'static Path {
+    &WORKDIR_PATHS.home_path
+}
+
+pub fn get_home_suibase_path() -> &'static Path {
+    &WORKDIR_PATHS.home_suibase_path
+}
+
+pub fn get_workdirs_path() -> &'static Path {
+    // e.g. /home/user/suibase/workdirs
+    &WORKDIR_PATHS.workdirs_path
+}
+
+pub fn get_workdir_paths(workdir_idx: WorkdirIdx) -> &'static WorkdirPaths {
+    // Struct conveniently providing all subdir paths for a workdir.
+    // Careful. Will rightfully panic if passing invalid workdir_idx.
+    &WORKDIR_PATHS.workdir_paths[workdir_idx as usize]
+}
+
+pub fn get_workdir_common_path() -> &'static Path {
+    // e.g. /home/user/suibase/workdirs/common
+    &WORKDIR_PATHS.workdir_paths[0].suibase_yaml_common
+}
+
+impl WorkdirPaths {
+    pub fn workdir_root_path(&self) -> &Path {
+        &self.workdir_root_path
+    }
+
+    pub fn state_path(&self) -> &Path {
+        &self.state_path
+    }
+
+    pub fn suibase_yaml_user(&self) -> &Path {
+        &self.suibase_yaml_user
+    }
+
+    pub fn suibase_yaml_default(&self) -> &Path {
+        &self.suibase_yaml_default
+    }
+
+    pub fn suibase_yaml_common(&self) -> &Path {
+        &self.suibase_yaml_common
+    }
+
+    pub fn state_file_path(&self, state_name: &str) -> PathBuf {
+        self.state_path.join(state_name)
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Link {
@@ -132,8 +269,8 @@ impl DTPService {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkdirUserConfig {
-    // Created from parsing/merging suibase.yaml file(s) for a single workdir,
-    // except for 'user_request' which is loaded from '.state/user_request'.
+    // Created from parsing/merging suibase.yaml file(s) for a single workdir.
+    // Also includes .state files variables.
     user_request: Option<String>,
     user_request_start: bool, // true when user_request == "start"
     proxy_enabled: bool,
@@ -143,6 +280,10 @@ pub struct WorkdirUserConfig {
     dtp_package_id: Option<String>, // Package ID of the DTP package for this workdir.
     dtp_services: LinkedList<DTPService>, // Each configured service.
     dtp_default_gas_address: Option<String>, // Pays gas when txn not related to a service.
+    autocoins_enabled: bool,
+    autocoins_address: Option<String>,
+    autocoins_last_deposit: Option<String>,
+    autocoins_deposited: Option<String>,
 }
 
 impl WorkdirUserConfig {
@@ -157,6 +298,10 @@ impl WorkdirUserConfig {
             dtp_package_id: None,
             dtp_services: LinkedList::new(),
             dtp_default_gas_address: None,
+            autocoins_enabled: false,
+            autocoins_address: None,
+            autocoins_last_deposit: None,
+            autocoins_deposited: None,
         }
     }
 
@@ -182,6 +327,22 @@ impl WorkdirUserConfig {
 
     pub fn links(&self) -> &HashMap<String, Link> {
         &self.links
+    }
+
+    pub fn is_autocoins_enabled(&self) -> bool {
+        self.autocoins_enabled
+    }
+
+    pub fn autocoins_address(&self) -> Option<&String> {
+        self.autocoins_address.as_ref()
+    }
+
+    pub fn autocoins_last_deposit(&self) -> Option<&String> {
+        self.autocoins_last_deposit.as_ref()
+    }
+
+    pub fn autocoins_deposited(&self) -> Option<&String> {
+        self.autocoins_deposited.as_ref()
     }
 
     pub fn dtp_services(&self) -> &LinkedList<DTPService> {
@@ -217,8 +378,14 @@ impl WorkdirUserConfig {
         None
     }
 
-    pub fn load_state_file(&mut self, path: &str) -> Result<()> {
-        if let Ok(contents) = std::fs::read_to_string(path) {
+    fn load_state_string(workdir_paths: &WorkdirPaths, state_name: &str) -> Option<String> {
+        let state_file_path = &workdir_paths.state_file_path(state_name);
+        let contents = std::fs::read_to_string(state_file_path).ok()?;
+        Some(contents.trim_end().to_string())
+    }
+
+    pub fn load_state_files(&mut self, workdir_paths: &WorkdirPaths) -> Result<()> {
+        if let Some(contents) = Self::load_state_string(workdir_paths, STATE_USER_REQUEST) {
             // Trim trailing newline.
             let contents = contents.trim_end().to_string();
             self.user_request_start = contents == "start";
@@ -228,6 +395,12 @@ impl WorkdirUserConfig {
             self.user_request = None;
             self.user_request_start = false;
         }
+
+        self.autocoins_address = Self::load_state_string(workdir_paths, STATE_AUTOCOINS_ADDRESS);
+        self.autocoins_last_deposit =
+            Self::load_state_string(workdir_paths, STATE_AUTOCOINS_LAST_DEPOSIT);
+        self.autocoins_deposited =
+            Self::load_state_string(workdir_paths, STATE_AUTOCOINS_DEPOSITED);
         Ok(())
     }
 
@@ -286,9 +459,32 @@ impl WorkdirUserConfig {
         //
         // "dev" is similar to "true" but allows for foreground execution
         // of the suibase-daemon... only the bash scripts care for this.
+        if let Some(proxy_enabled) = yaml["proxy_enabled"].as_bool() {
+            self.proxy_enabled = proxy_enabled;
+        } else if let Some(proxy_enabled) = yaml["proxy_enabled"].as_str() {
+            self.proxy_enabled = proxy_enabled != "false";
+        }
 
-        // TODO Implement dtp_enabled and remove this force to false.
-        self.proxy_enabled = false;
+        // autocoins_enabled can be "true" or "false".
+        if let Some(autocoins_enabled) = yaml["autocoins_enabled"].as_bool() {
+            self.autocoins_enabled = autocoins_enabled;
+        } else if let Some(autocoins_enabled) = yaml["autocoins_enabled"].as_str() {
+            self.autocoins_enabled = autocoins_enabled != "false";
+        }
+
+        let mut clear_links = false;
+        if let Some(links_overrides) = yaml["links_overrides"].as_bool() {
+            clear_links = true;
+            self.links_overrides = links_overrides;
+        } else if let Some(links_overrides) = yaml["links_overrides"].as_str() {
+            clear_links = true;
+            self.links_overrides = links_overrides != "false";
+        }
+
+        if clear_links {
+            // Clear all the previous links.
+            self.links.clear();
+        }
 
         /* For dtp-daemon... proxy is always disabled for now
         if let Some(proxy_enabled) = yaml["proxy_enabled"].as_bool() {
@@ -425,64 +621,10 @@ impl Default for WorkdirUserConfig {
     }
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct Workdir {
-    idx: Option<ManagedVecU8>,
-    name: String,
-    path: PathBuf,
-    state_path: PathBuf,
-    suibase_state_file: PathBuf,
-    suibase_yaml_user: PathBuf,
-    suibase_yaml_default: PathBuf,
-}
-
-impl Workdir {
-    pub fn idx(&self) -> Option<ManagedVecU8> {
-        self.idx
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    pub fn state_path(&self) -> &Path {
-        &self.state_path
-    }
-
-    pub fn is_user_request_start(&self) -> bool {
-        // Return true if suibase_state_file() exists, and if so, check if its text
-        // content is "start".
-        //
-        // If there is any error, return false.
-        //
-        if let Ok(contents) = std::fs::read_to_string(self.suibase_state_file()) {
-            if contents.starts_with("start") {
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn suibase_state_file(&self) -> &Path {
-        &self.suibase_state_file
-    }
-
-    pub fn suibase_yaml_user(&self) -> &Path {
-        &self.suibase_yaml_user
-    }
-
-    pub fn suibase_yaml_default(&self) -> &Path {
-        &self.suibase_yaml_default
-    }
-}
-
+/*
 #[derive(Debug)]
 pub struct GlobalsWorkdirsST {
-    pub workdirs: ManagedVec<Workdir>,
+    //pub workdirs: ManagedVec<Workdir>,
     suibase_home: String,
     path: PathBuf,
     suibase_yaml_common: PathBuf,
@@ -523,23 +665,28 @@ impl GlobalsWorkdirsST {
             let state_path = path.join(".state");
 
             // Files
-            let state = state_path.join("user_request");
+            let suibase_yaml_user = path.join("suibase.yaml");
+            let state_user_request = state_path.join("user_request");
+            let state_autocoins_address = state_path.join("autocoins_address");
+            let state_autocoins_last_deposit = state_path.join("autocoins_last_deposit");
+            let state_autocoins_deposited = state_path.join("autocoins_deposited");
 
-            let user_yaml = path.join("suibase.yaml");
-
-            let mut default_yaml = suibase_home.join("scripts");
-            default_yaml.push("defaults");
-            default_yaml.push(workdir);
-            default_yaml.push("suibase.yaml");
+            let mut suibase_yaml_default = suibase_home.join("scripts");
+            suibase_yaml_default.push("defaults");
+            suibase_yaml_default.push(workdir);
+            suibase_yaml_default.push("suibase.yaml");
 
             workdirs.push(Workdir {
                 idx: None,
                 name: workdir.to_string(),
                 path,
                 state_path,
-                suibase_state_file: state,
-                suibase_yaml_user: user_yaml,
-                suibase_yaml_default: default_yaml,
+                state_user_request,
+                state_autocoins_address,
+                state_autocoins_last_deposit,
+                state_autocoins_deposited,
+                suibase_yaml_user,
+                suibase_yaml_default,
             });
         }
 
@@ -547,7 +694,6 @@ impl GlobalsWorkdirsST {
 
         Self {
             suibase_home: suibase_home.to_string_lossy().to_string(),
-            workdirs,
             path: workdirs_path,
             suibase_yaml_common,
 
@@ -599,12 +745,49 @@ impl GlobalsWorkdirsST {
     }
 
     // Write access to a Workdir stored in globals.
+
     pub fn get_workdir_mut(&mut self, workdir_idx: WorkdirIdx) -> Option<&mut Workdir> {
         self.workdirs.get_mut(workdir_idx)
     }
 
     pub fn get_workdir(&self, workdir_idx: WorkdirIdx) -> Option<&Workdir> {
         self.workdirs.get(workdir_idx)
+    }
+
+
+    // Utility that returns the workdir_idx from the globals
+    // using an exact workdir_name.
+    //
+    // This is a multi-thread safe call (will get the proper
+    // lock on the globals).
+    //
+    // This is a relatively costly call, use wisely.
+    pub async fn get_workdir_idx_by_name(
+        globals: &Globals,
+        workdir_name: &String,
+    ) -> Option<WorkdirIdx> {
+        let workdirs_guard = globals.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        for (workdir_idx, workdir) in workdirs_vec.iter() {
+            if workdir.name() == workdir_name {
+                return Some(workdir_idx);
+            }
+        }
+        None
+    }
+
+    // Utility that return a clone of the global Workdir for a given workdir_idx.
+    // Multi-thread safe.
+    // This is a relatively costly call, use wisely.
+    pub async fn get_workdir_by_idx(globals: &Globals, workdir_idx: WorkdirIdx) -> Option<Workdir> {
+        let workdirs_guard = globals.workdirs.read().await;
+        let workdirs = &*workdirs_guard;
+        let workdirs_vec = &workdirs.workdirs;
+        if let Some(workdir) = workdirs_vec.get(workdir_idx) {
+            return Some(workdir.clone());
+        }
+        None
     }
 }
 
@@ -623,29 +806,58 @@ impl ManagedElement for Workdir {
         self.idx = index;
     }
 }
-
-// TODO Merge Workdir into GlobalsWorkdirConfigST
+*/
 
 // User configuration for every workdir (mostly from suibase.yaml).
 #[derive(Debug)]
 pub struct GlobalsWorkdirConfigST {
+    pub workdir_idx: WorkdirIdx,
+
     pub user_config: WorkdirUserConfig,
+
+    // Variables that rarely changes and can be controlled only by
+    // the common suibase.yaml (not the workdir specific suibase.yaml)
+    pub suibase_web_ip: String,
+    pub suibase_web_port: u16,
+
+    pub suibase_api_ip: String,
+    pub suibase_api_port: u16,
+
+    pub dtp_api_ip: String,
+    pub dtp_api_port: u16,
 }
 
 impl GlobalsWorkdirConfigST {
-    pub fn new() -> Self {
+    pub fn new(workdir_idx: WorkdirIdx) -> Self {
         Self {
+            workdir_idx,
+
             user_config: WorkdirUserConfig::new(),
+            // TODO Get these really from the common suibase.yaml. Hard coded for now.
+            // Consider to move these to a structure not specific to a workdir.
+            suibase_web_ip: "localhost".to_string(),
+            suibase_web_port: 44380,
+
+            suibase_api_ip: "localhost".to_string(),
+            suibase_api_port: 44399,
+
+            dtp_api_ip: "localhost".to_string(),
+            dtp_api_port: 44398,
         }
     }
 
-    pub fn from(user_config: WorkdirUserConfig) -> Self {
-        Self { user_config }
-    }
-}
-
-impl Default for GlobalsWorkdirConfigST {
-    fn default() -> Self {
-        Self::new()
-    }
+    /*
+    pub fn is_user_request_start(&self) -> bool {
+        // Return true if suibase_state_file() exists, and if so, check if its text
+        // content is "start".
+        //
+        // If there is any error, return false.
+        //
+        if let Ok(contents) = std::fs::read_to_string(&self.state_user_request_path) {
+            if contents.starts_with("start") {
+                return true;
+            }
+        }
+        false
+    }*/
 }

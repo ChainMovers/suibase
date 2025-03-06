@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use crate::shared_types::{self, Globals, GlobalsWorkdirsST, Workdir};
+use crate::shared_types::Globals;
 
 use common::basic_types::{
     self, AutoThread, DBTable, GenericChannelMsg, GenericRx, GenericTx, Runnable, WorkdirIdx,
@@ -536,7 +536,6 @@ struct DBWorkerThread {
     task_name: String,
     params: DBWorkerParams,
     db: DBManagement,
-    workdir: Workdir,
 }
 
 #[async_trait]
@@ -546,7 +545,6 @@ impl Runnable<DBWorkerParams> for DBWorkerThread {
             task_name,
             params,
             db: DBManagement::new(),
-            workdir: Default::default(),
         }
     }
 
@@ -628,7 +626,7 @@ impl DBWorkerThread {
                     self.params.workdir_idx
                 );
             }
-            shared_types::WORKDIRS_KEYS[workdir_idx as usize]
+            common::shared_types::WORKDIRS_KEYS[workdir_idx as usize].to_string()
         } else {
             log::error!("Unexpected workdir_idx {:?}", msg);
             return;
@@ -838,22 +836,11 @@ impl DBWorkerThread {
     }
 
     async fn open_db(&mut self) -> bool {
-        // Get copy of latest workdir info from globals.
-        let workdir =
-            GlobalsWorkdirsST::get_workdir_by_idx(&self.params.globals, self.params.workdir_idx)
-                .await;
-        if workdir.is_none() {
-            log::error!(
-                "Failed to get workdir info for workdir_idx {:?}",
-                self.params.workdir_idx
-            );
-            return false;
-        }
-        self.workdir = workdir.unwrap();
+        let workdir_path =
+            common::shared_types::get_workdir_paths(self.params.workdir_idx).workdir_root_path();
 
         // Open a DB connection to the sqlite.db file. Will create it if does not exists.
-        let path = self.workdir.path();
-        let path = path.join("indexer");
+        let path = workdir_path.join("indexer");
         if std::fs::create_dir_all(&path).is_err() {
             log::error!("Failed to create indexer directory: {:?}", path);
             return false;
@@ -882,7 +869,7 @@ impl DBWorkerThread {
         }
 
         // Create tables that exists for each workdir.
-        for workdir_name in shared_types::WORKDIRS_KEYS.iter() {
+        for workdir_name in common::shared_types::WORKDIRS_KEYS.iter() {
             if let Err(e) =
                 DBSuibaseConfig::create_table(&conn, workdir_name.to_string(), None, None)
             {

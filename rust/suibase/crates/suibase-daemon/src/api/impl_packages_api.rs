@@ -14,7 +14,7 @@ use chrono::Utc;
 use crate::admin_controller::AdminController;
 
 use crate::api::RpcSuibaseError;
-use crate::shared_types::{Globals, GlobalsWorkdirsST};
+use crate::shared_types::Globals;
 
 use super::{
     PackagesApiServer, RpcInputError, SuccessResponse, WorkdirPackagesResponse,
@@ -60,9 +60,7 @@ impl PackagesApiServer for PackagesApiImpl {
         //
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let _workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let _workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -163,9 +161,7 @@ impl PackagesApiServer for PackagesApiImpl {
         data_uuid: Option<String>,
     ) -> RpcResult<WorkdirPackagesResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -213,9 +209,7 @@ impl PackagesApiImpl {
         package_name: &String,
     ) -> Result<(u8, String), RpcError> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(workdir) {
             Some(workdir_idx) => workdir_idx,
             None => {
                 return Err(

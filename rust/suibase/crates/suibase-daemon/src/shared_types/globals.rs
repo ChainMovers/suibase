@@ -14,8 +14,12 @@ use std::sync::Arc;
 use crate::api::{Versioned, VersionsResponse, WorkdirPackagesResponse, WorkdirStatusResponse};
 use crate::shared_types::InputPort;
 use common::basic_types::{ManagedVec, WorkdirIdx};
+use common::shared_types::{
+    GlobalsWorkdirConfigST, WORKDIR_IDX_DEVNET, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_MAINNET,
+    WORKDIR_IDX_TESTNET,
+};
 
-use super::{workdirs, GlobalsEventsDataST, GlobalsWorkdirsST};
+use super::GlobalsEventsDataST;
 
 #[derive(Debug)]
 pub struct GlobalsProxyST {
@@ -64,14 +68,6 @@ impl std::default::Default for GlobalsWorkdirStatusST {
     fn default() -> Self {
         Self::new()
     }
-}
-
-#[derive(Debug, Default)]
-pub struct GlobalsWorkdirConfigST {
-    // These are variables that rarely changes and
-    // are controlled by the user (suibase.yaml
-    // files, workdir CLI operations).
-    pub precompiled_bin: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -162,11 +158,11 @@ impl Default for GlobalsConfigST {
 //  - Release write lock even faster...
 
 pub type GlobalsProxyMT = Arc<tokio::sync::RwLock<GlobalsProxyST>>;
-pub type GlobalsWorkdirStatusMT = Arc<tokio::sync::RwLock<GlobalsWorkdirStatusST>>;
 pub type GlobalsConfigMT = Arc<tokio::sync::RwLock<GlobalsConfigST>>;
+pub type GlobalsWorkdirConfigMT = Arc<tokio::sync::RwLock<GlobalsWorkdirConfigST>>;
+pub type GlobalsWorkdirStatusMT = Arc<tokio::sync::RwLock<GlobalsWorkdirStatusST>>;
 pub type GlobalsWorkdirPackagesMT = Arc<tokio::sync::RwLock<GlobalsWorkdirPackagesST>>;
 pub type GlobalsEventsDataMT = Arc<tokio::sync::RwLock<GlobalsEventsDataST>>;
-pub type GlobalsWorkdirsMT = Arc<tokio::sync::RwLock<GlobalsWorkdirsST>>;
 pub type GlobalsAPIMutexMT = Arc<tokio::sync::Mutex<GlobalsAPIMutexST>>;
 
 // A convenient way to refer to all globals at once.
@@ -189,8 +185,13 @@ pub struct Globals {
     // Configuration that rarely changes driven by suibase.yaml files (e.g. port of this daemon).
     pub config: GlobalsConfigMT,
 
-    // All workdirs path locations and user controlled state (e.g. is localnet started by the user?).
-    pub workdirs: GlobalsWorkdirsMT,
+    // TODO: Refactor into an array with WorkdirIdx as index.
+
+    // All workdirs configuration. Mostly reflects the suibase.yaml files and .state files.
+    pub config_localnet: GlobalsWorkdirConfigMT,
+    pub config_devnet: GlobalsWorkdirConfigMT,
+    pub config_testnet: GlobalsWorkdirConfigMT,
+    pub config_mainnet: GlobalsWorkdirConfigMT,
 
     // All workdirs status as presented on the UI (e.g. which process are running, is the localnet down?)
     pub status_localnet: GlobalsWorkdirStatusMT,
@@ -198,7 +199,7 @@ pub struct Globals {
     pub status_testnet: GlobalsWorkdirStatusMT,
     pub status_mainnet: GlobalsWorkdirStatusMT,
 
-    // Configuration related to Sui Move modules, particularly for monitoring management.
+    // Configuration related to Sui Move modules, particularly for package monitoring.
     pub packages_localnet: GlobalsWorkdirPackagesMT,
     pub packages_devnet: GlobalsWorkdirPackagesMT,
     pub packages_testnet: GlobalsWorkdirPackagesMT,
@@ -224,7 +225,18 @@ impl Globals {
         Self {
             proxy: Arc::new(tokio::sync::RwLock::new(GlobalsProxyST::new())),
             config: Arc::new(tokio::sync::RwLock::new(GlobalsConfigST::new())),
-            workdirs: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirsST::new())),
+            config_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new(
+                WORKDIR_IDX_LOCALNET,
+            ))),
+            config_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new(
+                WORKDIR_IDX_DEVNET,
+            ))),
+            config_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new(
+                WORKDIR_IDX_TESTNET,
+            ))),
+            config_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirConfigST::new(
+                WORKDIR_IDX_MAINNET,
+            ))),
             status_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
@@ -245,32 +257,42 @@ impl Globals {
         }
     }
 
+    pub fn get_config(&self, workdir_idx: WorkdirIdx) -> &GlobalsWorkdirConfigMT {
+        match workdir_idx {
+            WORKDIR_IDX_LOCALNET => &self.config_localnet,
+            WORKDIR_IDX_DEVNET => &self.config_devnet,
+            WORKDIR_IDX_TESTNET => &self.config_testnet,
+            WORKDIR_IDX_MAINNET => &self.config_mainnet,
+            _ => panic!("Invalid workdir_idx {}", workdir_idx),
+        }
+    }
+
     pub fn get_status(&self, workdir_idx: WorkdirIdx) -> &GlobalsWorkdirStatusMT {
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => &self.status_localnet,
-            workdirs::WORKDIR_IDX_DEVNET => &self.status_devnet,
-            workdirs::WORKDIR_IDX_TESTNET => &self.status_testnet,
-            workdirs::WORKDIR_IDX_MAINNET => &self.status_mainnet,
+            WORKDIR_IDX_LOCALNET => &self.status_localnet,
+            WORKDIR_IDX_DEVNET => &self.status_devnet,
+            WORKDIR_IDX_TESTNET => &self.status_testnet,
+            WORKDIR_IDX_MAINNET => &self.status_mainnet,
             _ => panic!("Invalid workdir_idx {}", workdir_idx),
         }
     }
 
     pub fn get_packages(&self, workdir_idx: WorkdirIdx) -> &GlobalsWorkdirPackagesMT {
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => &self.packages_localnet,
-            workdirs::WORKDIR_IDX_DEVNET => &self.packages_devnet,
-            workdirs::WORKDIR_IDX_TESTNET => &self.packages_testnet,
-            workdirs::WORKDIR_IDX_MAINNET => &self.packages_mainnet,
+            WORKDIR_IDX_LOCALNET => &self.packages_localnet,
+            WORKDIR_IDX_DEVNET => &self.packages_devnet,
+            WORKDIR_IDX_TESTNET => &self.packages_testnet,
+            WORKDIR_IDX_MAINNET => &self.packages_mainnet,
             _ => panic!("Invalid workdir_idx {}", workdir_idx),
         }
     }
 
     pub fn get_api_mutex(&self, workdir_idx: WorkdirIdx) -> &GlobalsAPIMutexMT {
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => &self.api_mutex_localnet,
-            workdirs::WORKDIR_IDX_DEVNET => &self.api_mutex_devnet,
-            workdirs::WORKDIR_IDX_TESTNET => &self.api_mutex_testnet,
-            workdirs::WORKDIR_IDX_MAINNET => &self.api_mutex_mainnet,
+            WORKDIR_IDX_LOCALNET => &self.api_mutex_localnet,
+            WORKDIR_IDX_DEVNET => &self.api_mutex_devnet,
+            WORKDIR_IDX_TESTNET => &self.api_mutex_testnet,
+            WORKDIR_IDX_MAINNET => &self.api_mutex_mainnet,
             _ => {
                 panic!("Invalid workdir_idx {}", workdir_idx)
             }
@@ -279,10 +301,10 @@ impl Globals {
 
     pub fn events_data(&self, workdir_idx: WorkdirIdx) -> Option<&GlobalsEventsDataMT> {
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&self.events_data_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&self.events_data_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&self.events_data_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&self.events_data_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&self.events_data_localnet),
+            WORKDIR_IDX_DEVNET => Some(&self.events_data_devnet),
+            WORKDIR_IDX_TESTNET => Some(&self.events_data_testnet),
+            WORKDIR_IDX_MAINNET => Some(&self.events_data_mainnet),
             _ => None,
         }
     }
@@ -291,10 +313,10 @@ impl Globals {
         workdir_idx: WorkdirIdx,
     ) -> Option<&mut GlobalsEventsDataMT> {
         match workdir_idx {
-            workdirs::WORKDIR_IDX_LOCALNET => Some(&mut self.events_data_localnet),
-            workdirs::WORKDIR_IDX_DEVNET => Some(&mut self.events_data_devnet),
-            workdirs::WORKDIR_IDX_TESTNET => Some(&mut self.events_data_testnet),
-            workdirs::WORKDIR_IDX_MAINNET => Some(&mut self.events_data_mainnet),
+            WORKDIR_IDX_LOCALNET => Some(&mut self.events_data_localnet),
+            WORKDIR_IDX_DEVNET => Some(&mut self.events_data_devnet),
+            WORKDIR_IDX_TESTNET => Some(&mut self.events_data_testnet),
+            WORKDIR_IDX_MAINNET => Some(&mut self.events_data_mainnet),
             _ => None,
         }
     }

@@ -4,7 +4,7 @@ use common::basic_types::AdminControllerTx;
 use jsonrpsee::core::RpcResult;
 
 use crate::admin_controller::AdminController;
-use crate::shared_types::{Globals, GlobalsWorkdirsST};
+use crate::shared_types::Globals;
 
 use super::{
     GeneralApiServer, Header, RpcInputError, RpcSuibaseError, SuccessResponse, VersionsResponse,
@@ -106,9 +106,7 @@ impl GeneralApiServer for GeneralApiImpl {
         command: String,
     ) -> RpcResult<SuccessResponse> {
         // Prevent shell injection by validating the workdir (and forcing to use it as first CLI arg).
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -166,9 +164,7 @@ impl GeneralApiServer for GeneralApiImpl {
         let workdir = workdir.unwrap();
 
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -243,9 +239,7 @@ impl GeneralApiServer for GeneralApiImpl {
         data_uuid: Option<String>,
     ) -> RpcResult<WorkdirStatusResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -286,9 +280,7 @@ impl GeneralApiServer for GeneralApiImpl {
 
     async fn set_asui_selection(&self, workdir: String) -> RpcResult<SuccessResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
@@ -333,9 +325,7 @@ impl GeneralApiServer for GeneralApiImpl {
 
     async fn workdir_refresh(&self, workdir: String) -> RpcResult<SuccessResponse> {
         // Verify workdir param is OK and get its corresponding workdir_idx.
-        let workdir_idx = match GlobalsWorkdirsST::get_workdir_idx_by_name(&self.globals, &workdir)
-            .await
-        {
+        let workdir_idx = match common::shared_types::get_workdir_idx_by_name(&workdir) {
             Some(workdir_idx) => workdir_idx,
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
