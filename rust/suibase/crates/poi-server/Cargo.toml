@@ -1,0 +1,9 @@
+[package]
+name = "poi-server"
+version = "0.1.0"
+edition = "2021"
+description = "POI server placeholder"
+authors = ["Suibase contributors"]
+license = "Apache-2.0"
+
+[lib]

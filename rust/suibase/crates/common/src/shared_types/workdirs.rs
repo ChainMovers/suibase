@@ -71,6 +71,7 @@ struct SuibasePaths {
     home_path: PathBuf,
     home_suibase_path: PathBuf,
     workdirs_path: PathBuf,
+    workdir_common_path: PathBuf,
     workdir_paths: [WorkdirPaths; WORKDIRS_COUNT],
 }
 
@@ -79,6 +80,7 @@ static WORKDIR_PATHS: LazyLock<SuibasePaths> = LazyLock::new(|| {
     let home_path = home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
     let home_suibase_path = home_path.join("suibase");
     let workdirs_path = home_suibase_path.join("workdirs");
+    let workdirs_common_path = workdirs_path.join("common");
 
     let workdir_paths = core::array::from_fn(|idx| {
         let workdir_name = WORKDIRS_KEYS[idx];
@@ -105,6 +107,7 @@ static WORKDIR_PATHS: LazyLock<SuibasePaths> = LazyLock::new(|| {
         home_path,
         home_suibase_path,
         workdirs_path,
+        workdir_common_path: workdirs_common_path,
         workdir_paths,
     }
 });
@@ -130,7 +133,7 @@ pub fn get_workdir_paths(workdir_idx: WorkdirIdx) -> &'static WorkdirPaths {
 
 pub fn get_workdir_common_path() -> &'static Path {
     // e.g. /home/user/suibase/workdirs/common
-    &WORKDIR_PATHS.workdir_paths[0].suibase_yaml_common
+    &WORKDIR_PATHS.workdir_common_path
 }
 
 impl WorkdirPaths {

@@ -216,9 +216,10 @@ impl ACoinsMonitor {
         let mut user_keypair: Option<Ed25519KeyPair> = None;
 
         // Atempt, up to 3 times, to get a user.keypair file verified and loaded.
-        let attempts = 0;
+        let mut attempts = 0;
         let mut verified_invalid = false;
         while attempts < 3 && user_keypair.is_none() {
+            attempts += 1;
             // Delete a user.keypair file it it was verified invalid (in a previous iteration).
             if verified_invalid {
                 if user_keypair_file.exists() {
