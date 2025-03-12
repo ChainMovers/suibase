@@ -19,6 +19,7 @@ edition = "2021"
 [workspace.dependencies]
 aes-gcm-siv = "0.11.1"
 anyhow = { version = "1.0.71", features = ["backtrace"] }
+arrayref = "0.3.9"
 axum = { version = "0.7", default-features = false, features = [
     "macros",
     "tokio",
@@ -74,6 +75,7 @@ rustls = { version = "0.23", default-features = false, features = [
 ] }
 rusqlite = { version = "0.30.0", features = ["bundled"] }
 schemars = { version = "0.8.22", features = ["either"] }
+secrecy = "0.10.0"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_json = { version = "1.0.95", features = [
     "preserve_order",
@@ -112,3 +114,4 @@ tower-http = { version = "0.5", features = [
 tower-layer = "0.3.2"
 uuid = { version = "1.15.0", features = ["v4","v7","fast-rng"] }
 uuid7 = { version= "1.1.0", features = [ "uuid" ] }
+zeroize = "1.8.1"

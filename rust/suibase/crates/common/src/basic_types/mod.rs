@@ -1,6 +1,8 @@
 // This is a submodule specific to suibase-daemon.
 //
 // flatten everything under "common::basic_types" module.
+pub use self::acoins::*;
+pub use self::acoins_verify::*;
 pub use self::auto_thread::*;
 pub use self::autosize_vec::*;
 pub use self::autosize_vec_map_vec::*;
@@ -14,6 +16,8 @@ pub use self::safe_uuid::*;
 pub use self::suibase_basic_types::*;
 pub use self::tokio_helpers::*;
 
+mod acoins;
+mod acoins_verify;
 mod auto_thread;
 mod autosize_vec;
 mod autosize_vec_map_vec;

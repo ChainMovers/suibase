@@ -10,6 +10,9 @@ use fastcrypto::{
     traits::{KeyPair, ToFromBytes},
 };
 
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+
 use crate::shared_types::{GlobalsWorkdirConfigMT, GlobalsWorkdirStatusMT};
 
 use anyhow::{anyhow, Context, Result};
@@ -246,7 +249,7 @@ impl ACoinsMonitor {
                 }
 
                 if !user_keypair_file.exists() {
-                    let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
+                    let keypair = Ed25519KeyPair::generate(&mut StdRng::from_entropy());
                     let keypair_bytes = keypair.as_bytes();
                     let keypair_base58 = Base58::encode(keypair_bytes);
                     if let Err(error) = tokio::fs::write(&user_keypair_file, &keypair_base58).await

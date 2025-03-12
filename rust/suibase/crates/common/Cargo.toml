@@ -4,39 +4,41 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-log = "0.4.0"
+bitflags = "2.3"
 env_logger = "0.10"
 home = "0.5.5"
+log = "0.4.0"
+memchr = "2.5.0"
+serde_yaml = "0.9"
+toml_edit = { version = "0.20.0" }
 twox-hash = "1.6.1"
 
-serde_yaml = "0.9"
-bitflags = "2.3"
-axum.workspace = true
-http-body.workspace = true
-hyper.workspace = true
-mime.workspace = true
-reqwest.workspace = true
-
-memchr = "2.5.0"
-
-toml_edit = { version = "0.20.0" }
-
-
 anyhow.workspace = true
+arrayref.workspace = true
+axum.workspace = true
+base64ct.workspace = true
 chrono.workspace = true
 clap.workspace = true
 colored.workspace = true
 data-encoding.workspace = true
+fastcrypto.workspace = true
 futures.workspace = true
+http-body.workspace = true
+hyper.workspace = true
 jsonrpsee.workspace = true
 jsonrpsee-proc-macros.workspace = true
+mime.workspace = true
 md5.workspace = true
 once_cell.workspace = true
+rand.workspace = true
 rusqlite.workspace = true
+reqwest.workspace = true
+secrecy.workspace = true
 schemars.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 serde_with.workspace = true
+static_assertions.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true
@@ -45,6 +47,7 @@ tower.workspace = true
 tower-http.workspace = true
 uuid.workspace = true
 uuid7.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 env_logger = "0.10"

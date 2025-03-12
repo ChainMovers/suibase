@@ -47,6 +47,7 @@ schemars.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 serde_with.workspace = true
+static_assertions.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true

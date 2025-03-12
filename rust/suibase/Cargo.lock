@@ -702,6 +702,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64ct",
  "bitflags 2.9.0",
  "chrono",
  "clap",
