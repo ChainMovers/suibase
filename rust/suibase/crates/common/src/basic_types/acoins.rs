@@ -8,9 +8,9 @@ use serde_with::serde_as;
 use base64ct::{Base64UrlUnpadded, Encoding as Base64Encoding};
 
 use fastcrypto::{
-    ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature},
+    ed25519::Ed25519KeyPair,
     encoding::{Base58, Encoding as FastCryptoEncoding},
-    traits::{KeyPair, Signer, ToFromBytes, VerifyingKey},
+    traits::{KeyPair, Signer, ToFromBytes},
 };
 
 use rand::rngs::StdRng;
@@ -21,6 +21,10 @@ pub const fn base64_len(byte_length: usize) -> usize {
     // Formula: ceiling(byte_length * 8 / 6) or ceiling(byte_length * 4 / 3)
     (byte_length * 4 + 2) / 3
 }
+
+// Protocol constants that must be same on both client/server.
+pub const STORAGE_NB_FILES: u8 = 25;
+pub const STORAGE_FILE_SIZE: usize = 20 * 1024 * 1024;
 
 pub const ACOINS_CHALLENGE_BYTES_LENGTH: usize = 12;
 pub const ACOINS_CHALLENGE_STRING_LENGTH: usize = base64_len(ACOINS_CHALLENGE_BYTES_LENGTH);
@@ -41,7 +45,7 @@ pub const ACOINS_SIGNATURE_STRING_LENGTH: usize = base64_len(ACOINS_SIGNATURE_BY
 pub struct ACoinsChallenge {
     day_offset: u32,
     file_offset: u32,
-    file_number: u8,
+    file_number: u8, // one-based
     length: u8,
     flag0: u8,
     flag1: u8,
@@ -155,7 +159,6 @@ impl ACoinsChallenge {
     pub fn file_number_from_bytes(bytes: &[u8; ACOINS_CHALLENGE_BYTES_LENGTH]) -> u8 {
         bytes[8]
     }
-    
 }
 
 // This wrapper implement Zeroize for Ed25519KeyPair
