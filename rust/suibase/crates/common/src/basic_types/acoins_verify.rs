@@ -3,7 +3,8 @@ use super::{
     UserKeypair, ACOINS_CHALLENGE_BYTES_LENGTH, ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH,
     ACOINS_CHALLENGE_RESPONSE_STRING_LENGTH, ACOINS_CHALLENGE_STRING_LENGTH,
     ACOINS_PK_BYTES_LENGTH, ACOINS_PK_STRING_LENGTH, ACOINS_SIGNATURE_BYTES_LENGTH,
-    ACOINS_SIGNATURE_STRING_LENGTH,
+    ACOINS_SIGNATURE_STRING_LENGTH, ACOINS_SUI_ADDRESS_BYTES_LENGTH,
+    ACOINS_SUI_ADDRESS_STRING_LENGTH,
 };
 use arrayref::{array_mut_ref, array_ref};
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -18,6 +19,7 @@ use fastcrypto::{
 pub struct ACoinsVerifyBuffer {
     buffer: [u8; ACOINS_CHALLENGE_BYTES_LENGTH
         + ACOINS_PK_BYTES_LENGTH
+        + ACOINS_SUI_ADDRESS_BYTES_LENGTH
         + ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH],
 }
 
@@ -26,6 +28,7 @@ impl ACoinsVerifyBuffer {
         Self {
             buffer: [0u8; ACOINS_CHALLENGE_BYTES_LENGTH
                 + ACOINS_PK_BYTES_LENGTH
+                + ACOINS_SUI_ADDRESS_BYTES_LENGTH
                 + ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH],
         }
     }
@@ -43,10 +46,20 @@ impl ACoinsVerifyBuffer {
         )
     }
 
-    pub fn data_mut(&mut self) -> &mut [u8; ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH] {
+    pub fn deposit_address_mut(&mut self) -> &mut [u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH] {
         array_mut_ref!(
             self.buffer,
             ACOINS_CHALLENGE_BYTES_LENGTH + ACOINS_PK_BYTES_LENGTH,
+            ACOINS_SUI_ADDRESS_BYTES_LENGTH
+        )
+    }
+
+    pub fn challenge_response_mut(&mut self) -> &mut [u8; ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH] {
+        array_mut_ref!(
+            self.buffer,
+            ACOINS_CHALLENGE_BYTES_LENGTH
+                + ACOINS_PK_BYTES_LENGTH
+                + ACOINS_SUI_ADDRESS_BYTES_LENGTH,
             ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH
         )
     }
@@ -64,10 +77,20 @@ impl ACoinsVerifyBuffer {
         )
     }
 
-    pub fn data(&self) -> &[u8; ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH] {
+    pub fn deposit_address(&self) -> &[u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH] {
         array_ref!(
             self.buffer,
             ACOINS_CHALLENGE_BYTES_LENGTH + ACOINS_PK_BYTES_LENGTH,
+            ACOINS_SUI_ADDRESS_BYTES_LENGTH
+        )
+    }
+
+    pub fn challenge_response(&self) -> &[u8; ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH] {
+        array_ref!(
+            self.buffer,
+            ACOINS_CHALLENGE_BYTES_LENGTH
+                + ACOINS_PK_BYTES_LENGTH
+                + ACOINS_SUI_ADDRESS_BYTES_LENGTH,
             ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH
         )
     }
@@ -93,14 +116,32 @@ impl ACoinsVerifyBuffer {
         Ok(())
     }
 
+    /// Initialize the deposit address part from a base64 string
+    pub fn set_deposit_address_from_base64(
+        &mut self,
+        deposit_address: &str,
+    ) -> Result<(), &'static str> {
+        if deposit_address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
+            return Err("Invalid deposit address length");
+        }
+
+        Base64UrlUnpadded::decode(deposit_address, self.deposit_address_mut())
+            .map_err(|_| "Error decoding deposit address")?;
+        Ok(())
+    }
+
     /// Initialize the data/response part from a base64 string if provided
-    pub fn set_data_from_base64(&mut self, data: Option<&str>) -> Result<(), &'static str> {
+    pub fn set_challenge_response_from_base64(
+        &mut self,
+        data: Option<&str>,
+    ) -> Result<(), &'static str> {
         if let Some(data) = data {
             if data.len() != ACOINS_CHALLENGE_RESPONSE_STRING_LENGTH {
                 return Err("Invalid data length");
             }
 
-            Base64UrlUnpadded::decode(data, self.data_mut()).map_err(|_| "Error decoding data")?;
+            Base64UrlUnpadded::decode(data, self.challenge_response_mut())
+                .map_err(|_| "Error decoding data")?;
         }
         // If None, the data buffer remains zeroed
         Ok(())

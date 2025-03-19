@@ -9,12 +9,14 @@ use base64ct::{Base64UrlUnpadded, Encoding as Base64Encoding};
 
 use fastcrypto::{
     ed25519::Ed25519KeyPair,
-    encoding::{Base58, Encoding as FastCryptoEncoding},
+    encoding::{Base58, Encoding as FastCryptoEncoding, Hex},
     traits::{KeyPair, Signer, ToFromBytes},
 };
 
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+
+use anyhow::Result;
 
 /// Returns the number of chars in Base64 unpadded to represent `byte_length` bytes.
 pub const fn base64_len(byte_length: usize) -> usize {
@@ -41,6 +43,22 @@ pub const ACOINS_CHALLENGE_RESPONSE_STRING_LENGTH: usize =
 
 pub const ACOINS_SIGNATURE_BYTES_LENGTH: usize = 64;
 pub const ACOINS_SIGNATURE_STRING_LENGTH: usize = base64_len(ACOINS_SIGNATURE_BYTES_LENGTH); // = 86
+
+pub const ACOINS_SUI_ADDRESS_BYTES_LENGTH: usize = 32;
+pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = base64_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
+
+// Utility to convert a Sui address ("0x"+64 hex chars) to a base64 unpadded string.
+pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {
+    if sui_address.len() != 66 && sui_address.len() != 64 {
+        return Err(anyhow::anyhow!("Invalid SUI address length"));
+    }
+    let bytes = Hex::decode(sui_address)?;
+
+    let mut buffer = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
+    buffer.copy_from_slice(&bytes);
+
+    Ok(Base64UrlUnpadded::encode_string(&buffer))
+}
 
 pub struct ACoinsChallenge {
     day_offset: u32,
@@ -264,6 +282,8 @@ impl LoginResponse {
 pub struct VerifyResponse {
     pub pass: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_fn: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub download_id: Option<String>,
 }
 
@@ -271,6 +291,7 @@ impl VerifyResponse {
     pub fn new() -> Self {
         Self {
             pass: false,
+            download_fn: None,
             download_id: None,
         }
     }
