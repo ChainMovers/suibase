@@ -88,6 +88,13 @@ tests() {
   # This will allow to apply config changes (if any) on next start.
   $WORKDIR stop || fail "$WORKDIR stop failed"
 
+  if [ -d "$WORKDIRS/$WORKDIR" ] && [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+    # This was broken at some point in the past, so check for a fix
+    # in repair_workdir_as_needed()
+    echo "Workdir $WORKDIR already exists, but suibase.yaml missing."
+    exit 1
+  fi
+
   # Just run most commands and look for a failure.
   ($WORKDIR start) || fail "$WORKDIR start failed"
   assert_workdir_ok "$WORKDIR"

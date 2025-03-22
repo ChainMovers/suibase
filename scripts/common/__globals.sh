@@ -1974,15 +1974,17 @@ repair_workdir_as_needed() {
     # ... keep going to repair if pointing to a valid directory.
     WORKDIR_PARAM="$ACTIVE_WORKDIR"
   else
-    if [ ! -d "$WORKDIRS/$WORKDIR_PARAM" ] &&
-      [ -d "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" ]; then
-      # "Create" using the template.
-      cp -r "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" "$WORKDIRS"
+    if [ -d "$SCRIPTS_DIR/templates/$WORKDIR_PARAM" ]; then
+      # Copy/fix recursively without overwriting existing files (-n)
+      mkdir -p "$WORKDIRS/$WORKDIR_PARAM"
+      cp -rn "$SCRIPTS_DIR/templates/$WORKDIR_PARAM"/* "$WORKDIRS/$WORKDIR_PARAM/" 2>/dev/null
+
       # As needed, initialize common suibase.yaml from template as well.
       # This is useful for when tests/run-all.sh adds variables
       # to the common/suibase.yaml (e.g. github_token).
       if [ ! -f "$WORKDIRS/common/suibase.yaml" ] && [ -f "$SCRIPTS_DIR/templates/common/suibase.yaml" ]; then
-        mkdir -p "$SCRIPTS_DIR/templates/common/"
+        #mkdir -p "$SCRIPTS_DIR/templates/common/"
+        mkdir -p "$WORKDIRS/common"
         cp "$SCRIPTS_DIR/templates/common/suibase.yaml" "$WORKDIRS/common/suibase.yaml"
       fi
     fi
