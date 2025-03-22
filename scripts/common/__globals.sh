@@ -2557,6 +2557,28 @@ check_is_valid_base16_keypair() {
 }
 export -f check_is_valid_base64_keypair
 
+check_is_valid_hex_pk() {
+  # Return true if the parameter is a valid hexadecimal public key.
+  # Length must be 64 characters (without 0x).
+  # If 0x is specified, just ignore it.
+  # Verify that the string is a valid hexadecimal string.
+  local _PK="$1"
+  if [ -z "$_PK" ]; then
+    false
+    return
+  fi
+  if [[ "$_PK" == 0x* ]]; then
+    _PK="${_PK#0x}"
+  fi
+  if [ ${#_PK} -eq 64 ] && is_base16 "$_PK"; then
+    true
+    return
+  fi
+  false
+  return
+}
+export -f check_is_valid_hex_pk
+
 export ACTIVE_KEYSTORE=()
 load_ACTIVE_KEYSTORE() {
   # Set second parameter to true to enforce additional validation (slower).

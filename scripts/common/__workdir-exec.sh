@@ -5,6 +5,7 @@
 # workdir_exec() is the key "public" function of this file.
 
 # One command always expected from the user.
+CMD_AUTOCOINS_REQ=false
 CMD_BUILD_REQ=false
 CMD_CREATE_REQ=false
 CMD_DELETE_REQ=false
@@ -116,35 +117,41 @@ usage_remote() {
   echo
   echo
   echo_low_green "   start"
-  echo "    Start $WORKDIR services (will run in background)"
+  echo "     Start $WORKDIR services (will run in background)"
   echo_low_green "   stop"
-  echo "     Stop $WORKDIR services"
+  echo "      Stop $WORKDIR services"
   echo_low_green "   status"
-  echo "   Info about all suibase services."
+  echo "    Info about all suibase services."
   echo
+  if [ "$WORKDIR" = "testnet" ]; then
+  echo_low_green "   autocoins"
+  echo " Manage service to deposit testnet coins to your"
+  echo "             account once per day, in exchange for disk space."
+  echo
+  fi
   echo_low_green "   create"
-  echo "   Create workdir only. This can be useful for changing"
-  echo "            the configuration before doing the first build/start."
+  echo "    Create workdir only. This can be useful for changing"
+  echo "             the configuration before doing the first build/start."
   echo
   echo_low_green "   build"
-  echo "    Download/update local repo and build binaries only. You"
-  echo "            may have to do next an 'update' or 'start' to create a wallet."
+  echo "     Download/update local repo and build binaries only. You"
+  echo "             may have to do next an 'update' or 'start' to create a wallet."
   echo
   echo_low_green "   update"
-  echo "   Update local sui repo, build binaries, create a wallet as"
-  echo "            needed."
+  echo "    Update local sui repo, build binaries, create a wallet as"
+  echo "             needed."
   echo
   echo_low_green "   publish"
-  echo "  Publish the module specified in the Move.toml found"
-  echo "            in current directory or optional '--path <path>'"
+  echo "   Publish the module specified in the Move.toml found"
+  echo "             in current directory or optional '--path <path>'"
   echo
   echo_low_green "   links"
-  echo "    Get RPC server statistics."
+  echo "     Get RPC server statistics."
   echo
   echo_low_green "   set-active"
   echo
-  echo "            Makes $WORKDIR the active context for many"
-  echo "            development tools and the 'asui' script."
+  echo "             Makes $WORKDIR the active context for many"
+  echo "             development tools and the 'asui' script."
   echo
 }
 
@@ -187,6 +194,7 @@ workdir_exec() {
   set-active) CMD_SET_ACTIVE_REQ=true ;;
   set-sui-repo) CMD_SET_SUI_REPO_REQ=true ;;
   faucet) CMD_FAUCET_REQ=true ;;
+  autocoins) CMD_AUTOCOINS_REQ=true ;;
   *) usage ;;
   esac
 
@@ -199,6 +207,7 @@ workdir_exec() {
   NO_AVX2_PARAM=false
   NO_AVX_PARAM=false
   IS_DAEMON_CALL=false
+  SHOW_HELP=false
 
   # This is for the --json parameter
   JSON_PARAM=false
@@ -207,7 +216,36 @@ workdir_exec() {
   #   -t|--target) target="$2"; shift ;; That's an example with a parameter
   #   -f|--flag) flag=1 ;; That's an example flag
 
+  local AUTOCOINS_SUBCOMMAND=""
+  local AUTOCOINS_ADDRESS=""
+
   case "$CMD_REQ" in
+  autocoins)
+    while [[ "$#" -gt 0 ]]; do
+      case $1 in
+      --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
+      --help) SHOW_HELP=true ;;
+      --precompiled | --nobinary)
+        error_exit "Option '$1' not compatible with '$CMD_REQ' command"
+        ;;
+      status|enable|disable|set|purge-data)
+        if [ -n "$AUTOCOINS_SUBCOMMAND" ]; then
+          error_exit "Only one of 'status', 'enable', 'disable', 'set', or 'purge-data' allowed."
+        fi
+        AUTOCOINS_SUBCOMMAND="$1"
+        if [ "$1" = "set" ] && [ -n "$2" ]; then
+          AUTOCOINS_ADDRESS="$2"
+          shift  # Consume the address parameter
+        fi
+        ;;
+      *)
+        error_exit "Unknown parameter passed: $1"
+        ;;
+      esac
+      shift
+    done
+    ;; # End parsing autocoins
   faucet)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
@@ -351,6 +389,80 @@ workdir_exec() {
     fi
   fi
 
+  # Validate further the autocoins subcommands.
+  if [ "$CMD_AUTOCOINS_REQ" = true ]; then
+    if [ "$WORKDIR" != "testnet" ]; then
+      setup_error "Command '$CMD_REQ' not supported for $WORKDIR"
+    fi
+    case "$AUTOCOINS_SUBCOMMAND" in
+    status|enable|disable|purge-data)
+      ;;
+    set)
+      if [ -z "$AUTOCOINS_ADDRESS" ]; then
+        setup_error "Sui account address missing after 'set' subcommand"
+      fi
+      if ! check_is_valid_hex_pk "$AUTOCOINS_ADDRESS"; then
+        setup_error "Invalid Sui account address '$AUTOCOINS_ADDRESS'"
+      fi
+      ;;
+    *)
+      SHOW_HELP=true
+      ;;
+    esac
+  fi
+
+  # Show subcommand help if requested
+  if [ "$SHOW_HELP" = true ]; then
+    if [ "$CMD_AUTOCOINS_REQ" = true ]; then
+      DISK_SPACE="500MB"
+      echo_low_yellow "USAGE: "
+      echo
+      echo "      $WORKDIR autocoins <SUBCOMMAND>"
+      echo
+      echo " This service automatically deposit testnet Sui coins daily to"
+      echo " your designated address."
+      echo
+      echo " By default, it 'just works' and you can expect a first deposit"
+      echo " within 14 days. Regular daily deposit happens after ~25 days."
+      echo
+      echo " To keep working normally, a proof-of-installation protocol"
+      echo " runs in background and requires:"
+      echo "   - the autocoins service to be enabled."
+      echo "   - the testnet services to be running (e.g. 'testnet start')"
+      echo "   - up to $DISK_SPACE of disk space (you can purge it any time)"
+      echo "   - occasional internet access to download+verify disk space."
+      echo
+      echo " autocoins is design to be hardly noticeable (low CPU and network)"
+      echo " except for its disk space requirement to prevent bots abuse."
+      echo
+      echo_low_yellow "SUBCOMMANDS:"
+      echo
+      echo_low_green "  status"
+      echo "  Shows recent deposit, address etc."
+      echo
+      echo_low_green "  enable"
+      echo "  Enable the autocoins service."
+      echo
+      echo_low_green "  disable"
+      echo " Disable the autocoins service. If re-enabling later it"
+      echo "          may take up to 48 hours for deposit to resume. Does not"
+      echo "          delete proof-of-installation data (see purge-data)."
+      echo
+      echo_low_green "  set <address>"
+      echo
+      echo "        Change deposit address. May take up to 48h to take effect."
+      echo
+      echo_low_green "  purge-data"
+      echo
+      echo "        Delete proof-of-installation data (~$DISK_SPACE). If the service"
+      echo "        is enabled, then it may take up to 25 days to re-download"
+      echo "        this data and having daily deposit normally resume."
+      echo
+      echo "        Data location:  ~/suibase/workdirs/testnet/autocoins/data"
+      exit 0
+    fi
+  fi
+
   # Validate if the path exists.
   if [ -n "$OPTIONAL_PATH" ]; then
     if [ ! -d "$OPTIONAL_PATH" ]; then
@@ -424,7 +536,12 @@ workdir_exec() {
   source "$SUIBASE_DIR/scripts/common/__dtp-daemon.sh"
   update_DTP_DAEMON_PID_var
 
-  # First, take care of the easier "status" and "links" that are "read only" commands.
+  if [ "$CMD_AUTOCOINS_REQ" = true ] || [ "$CMD_STATUS_REQ" = true ]; then
+    # shellcheck source=SCRIPTDIR/__autocoins.sh
+    source "$SUIBASE_DIR/scripts/common/__autocoins.sh"
+  fi
+
+  # First, take care of easier read-only commands: "status", "links"
 
   if [ "$CMD_STATUS_REQ" = true ]; then
     exit_if_workdir_not_ok
@@ -473,6 +590,24 @@ workdir_exec() {
           _MLINK_INFO="$JSON_VALUE"
         fi
       fi
+    fi
+
+    local _SUPPORT_ACOINS
+    local _SHOW_ACOINS
+    local _ACOINS_STATUS
+    local _ACOINS_INFO
+    if [ "$WORKDIR" != "testnet" ]; then
+      _SUPPORT_ACOINS=false
+      _SHOW_ACOINS=false
+    elif [ "${CFG_autocoins_enabled:?}" == "false" ]; then
+      _SUPPORT_ACOINS=false
+      _SHOW_ACOINS=true
+    else
+      _SUPPORT_ACOINS=true
+      _SHOW_ACOINS=true
+      autocoins_status "quiet" "$SUIBASE_DAEMON_PID" "$_USER_REQUEST"
+      _ACOINS_STATUS=$AUTOCOINS_STATUS
+      _ACOINS_INFO=$AUTOCOINS_INFO
     fi
 
     # Verify from suibase.yaml if sui explorer services are expected.
@@ -643,6 +778,20 @@ workdir_exec() {
           echo
         fi
       fi
+
+      if [ "$_SHOW_ACOINS" = true ]; then
+        echo -n "Autocoins        : "
+        if [ "$_SUPPORT_ACOINS" = true ]; then
+          autocoins_echo_status_color "$_ACOINS_STATUS"
+          if [ -n "$_ACOINS_INFO" ]; then
+            echo " $_ACOINS_INFO"
+          else
+            echo
+          fi
+        else
+          echo "DISABLED"
+        fi
+      fi
     fi
 
     echo "---"
@@ -726,6 +875,30 @@ workdir_exec() {
   fi
 
   repair_workdir_as_needed "$WORKDIR" # Create/repair $WORKDIR
+
+  if [ "$CMD_AUTOCOINS_REQ" = true ]; then
+    exit_if_workdir_not_ok
+
+    if [ "$WORKDIR" != "testnet" ]; then
+      setup_error "Autocoins is only supported for testnet"
+    fi
+
+    if [ "$AUTOCOINS_SUBCOMMAND" = "status" ]; then
+      local _USER_REQUEST
+      _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
+      autocoins_status "verbose" "$SUIBASE_DAEMON_PID" "$_USER_REQUEST"
+    elif [ "$AUTOCOINS_SUBCOMMAND" = "enable" ]; then
+      autocoins_enable "verbose"
+    elif [ "$AUTOCOINS_SUBCOMMAND" = "disable" ]; then
+      autocoins_disable "verbose"
+    elif [ "$AUTOCOINS_SUBCOMMAND" = "set" ]; then
+      autocoins_set_address "verbose" "$AUTOCOINS_ADDRESS"
+    elif [ "$AUTOCOINS_SUBCOMMAND" = "purge-data" ]; then
+      autocoins_purge_data "verbose"
+    fi
+
+    exit
+  fi
 
   # Determine how the binary should be produced (build from local repos or downloaded etc...)
   local _WARN_ON_BUILD_FALLBACK_REASON=""

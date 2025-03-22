@@ -61,6 +61,28 @@ test_suibase_yaml() {
   assert_file_contains "$WORKDIRS/$WORKDIR/config/sui.keystore" "AAzblJGrlpc3mAKxiM01ZpIMuwldzMo/2Rdlu0W0YcMP"
 }
 
+test_autocoins_commands_gating() {
+  # Verify that only testnet return success when $WORKDIR = "testnet":
+  #  $WORKDIR autocoins enable / disable / purge-data / set / status
+  #
+  # For all other $WORKDIR, must return failure status code.
+  if [ "$WORKDIR" = "testnet" ]; then
+    $WORKDIR autocoins || fail "$WORKDIR autocoins failed"
+    $WORKDIR autocoins enable || fail "$WORKDIR autocoins enable failed"
+    $WORKDIR autocoins disable || fail "$WORKDIR autocoins disable failed"
+    $WORKDIR autocoins purge-data || fail "$WORKDIR autocoins purge-data failed"
+    $WORKDIR autocoins set "0xec2d64579ec698231bec97dabc1c18b0515ac4b1af17e99feab3242248596ae5" || fail "$WORKDIR autocoins set <address> failed"
+    $WORKDIR autocoins status || fail "$WORKDIR autocoins status failed"
+  else
+    $WORKDIR autocoins && fail "$WORKDIR autocoins should have failed"
+    $WORKDIR autocoins enable && fail "$WORKDIR autocoins enable should have failed"
+    $WORKDIR autocoins disable && fail "$WORKDIR autocoins disable should have failed"
+    $WORKDIR autocoins purge-data && fail "$WORKDIR autocoins purge-data should have failed"
+    $WORKDIR autocoins set "0xec2d64579ec698231bec97dabc1c18b0515ac4b1af17e99feab3242248596ae5" && fail "$WORKDIR autocoins set <address> should have failed"
+    $WORKDIR autocoins status && fail "$WORKDIR autocoins status should have failed"
+  fi
+}
+
 tests() {
   # Make sure $WORKDIR is stop.
   # This will allow to apply config changes (if any) on next start.
@@ -78,6 +100,8 @@ tests() {
   assert_workdir_ok "$WORKDIR"
 
   test_suibase_yaml
+
+  test_autocoins_commands_gating
 
   # Clean-up to make disk space... except for localnet.
   # if [ "$WORKDIR" != "localnet" ]; then

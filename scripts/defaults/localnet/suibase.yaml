@@ -113,7 +113,7 @@ cargo_add_options: ~
 #   ~/suibase/workdirs/testnet/suibase.yaml
 #
 # The configuration can also be modified using the workdir scripts. Example:
-#   testnet autocoins <-- Will display config and status
+#   testnet autocoins status <-- Will display config and status
 #   testnet autocoins enable
 #   devnet autocoins disable
 #
