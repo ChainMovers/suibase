@@ -20,7 +20,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 // Design
 //
-// Up to 25x20MB files are stored in ~/suibase/workdirs/common/autocoins/storage
+// Up to 25x20MB files are stored in ~/suibase/workdirs/common/autocoins/data
 // Each file is downloaded from the POI server.
 //
 // Periodically (once a day) the ACoinsMon will run the proof-of-installation(POI) protocol
@@ -57,7 +57,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 //   }
 //
 // signature is calculated as follow:
-//    - Open for read the file ~/suibase/workdirs/common/autocoins/storage/{user.keypair public key in base58}/{file_nb}.data
+//    - Open for read the file ~/suibase/workdirs/common/autocoins/data/{user.keypair public key in base58}/{file_nb}.data
 //    - Read the bytes at offset and length in a buffer and calculate its signature with user.keypair public key.
 //
 //    Signature are done with the ed25519 algorithm from the fastcrypto library.

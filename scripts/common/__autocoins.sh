@@ -2,10 +2,13 @@
 
 # You must source __globals.sh before __autocoins.sh
 
-# A single file provides the status data:
-#   ~/suibase/workdirs/testnet/autocoins/status.yaml
+# One file provides the status data:
+#   ~/suibase/workdirs/common/autocoins/status.yaml
 #
-# status.yaml format is:
+# Note: Even if in common, it is assumed that most fields are for testnet. More fields for, say, devnet
+#       could be added later (e.g. devnet_status, devnet_deposit_total, etc).
+#
+# testnet status.yaml format is:
 #   status: "DISABLED", "INITIALIZING", "OK", "RECOVERING", "DOWN"
 #   last_error: "error message"
 #   last_warning: "warning message"
@@ -20,6 +23,7 @@
 # The status.yaml is loaded here when __autocoins.sh is sourced, in same way suibase.yaml is loaded
 # when __globals.sh is sourced. The file is read-only and written by the suibase-daemon only.
 #
+
 # Supported functions:
 #      - autocoins_status display info base on the status.yaml file.
 #          NOT RUNNING is displayed when suibase-daemon is detected not running and
@@ -38,32 +42,14 @@
 #          adding or updating 'autocoins_address: $AUTOCOINS_ADDRESS'.
 #
 #      - autocoins_purge_data
-#          Delete all the contents of the ~/suibase/workdirs/testnet/autocoins/data directory.
+#          Delete all the contents of the ~/suibase/workdirs/common/autocoins/data directory.
 
-AUTOCOINS_DIR="$WORKDIRS/$WORKDIR/autocoins"
+AUTOCOINS_DIR="$WORKDIRS/common/autocoins"
 AUTOCOINS_STATUS_FILE="$AUTOCOINS_DIR/status.yaml"
 AUTOCOINS_DATA_DIR="$AUTOCOINS_DIR/data"
+AUTOCOINS_SUIBASE_YAML="$WORKDIRS/$WORKDIR/suibase.yaml"
 
 update_autocoins_status_yaml() {
-  # Create directory structure if it doesn't exist
-  mkdir -p "$AUTOCOINS_DIR"
-  mkdir -p "$AUTOCOINS_DATA_DIR"
-
-  # If status file doesn't exist, create a default one
-  #if [ ! -f "$AUTOCOINS_STATUS_FILE" ]; then
-  #  {
-  #    echo "status: INITIALIZING"
-  #    echo "deposit_address: \"${CFG_autocoins_address:-}\""
-  #    echo "deposit_total: 0"
-  #    echo "percent_downloaded: 0"
-  #    echo "last_verification_attempt: 0"
-  #    echo "last_verification_ok: 0"
-  #    echo "last_verification_failed: 0"
-  #    echo "last_error: \"\""
-  #    echo "last_warning: \"\""
-  #    echo "day_offset: 0"
-  #  } > "$AUTOCOINS_STATUS_FILE"
-  #fi
 
   # Parse the status.yaml file
   if [ -f "$AUTOCOINS_STATUS_FILE" ]; then
@@ -137,18 +123,17 @@ format_human_readable_size() {
 }
 
 set_deposit_address_as_needed() {
-  local _verbosity=$1 # Can be either "verbose" or "quiet"
+  local verbosity=$1 # Can be either "verbose" or "quiet"
 
-  local suibase_yaml="$WORKDIRS/$WORKDIR/suibase.yaml"
-  if ! grep -q "^autocoins_address:" "$suibase_yaml" || [[ "$(grep "^autocoins_address:" "$suibase_yaml" | awk '{print $2}')" == "\"\"" ]]; then
+  if ! grep -q "^autocoins_address:" "$AUTOCOINS_SUIBASE_YAML" || [[ "$(grep "^autocoins_address:" "$AUTOCOINS_SUIBASE_YAML" | awk '{print $2}')" == "\"\"" ]]; then
     # Try to get active address from client.yaml
     local active_address
     update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$CLIENT_CONFIG"
     active_address="$ACTIVE_ADDRESS"
 
     if [ -n "$active_address" ]; then
-      autocoins_set_address "$active_address"
-    elif [ "$_verbosity" = "verbose" ]; then
+      autocoins_set_address "$verbosity" "$active_address"
+    elif [ "$verbosity" = "verbose" ]; then
       warn_user "No active address found in client.yaml"
       echo "Please set an address with 'testnet autocoins set <ADDRESS>'"
     fi
@@ -197,14 +182,14 @@ autocoins_status() {
   # When "quiet" the AUTOCOINS_STATUS and AUTOCOINS_INFO variables are still updated
   # but there is no stdout output.
   #
-  local _verbosity=$1
-  local _suibase_daemon_pid=$2
-  local _user_request=$3
+  local verbosity=$1
+  local suibase_daemon_pid=$2
+  local user_request=$3
 
   if [ "$WORKDIR" != "testnet" ]; then
     AUTOCOINS_STATUS="DOWN"
     AUTOCOINS_INFO=""
-    if [ "$_verbosity" = "verbose" ]; then
+    if [ "$verbosity" = "verbose" ]; then
       setup_error "Autocoins is only supported for testnet"
     fi
   fi
@@ -213,7 +198,7 @@ autocoins_status() {
   if [ "${CFG_autocoins_enabled:?}" != "true" ]; then
     AUTOCOINS_STATUS="DISABLED"
     AUTOCOINS_INFO=""
-    if [ "$_verbosity" = "verbose" ]; then
+    if [ "$verbosity" = "verbose" ]; then
       echo "Autocoins : $AUTOCOINS_STATUS $AUTOCOINS_INFO"
       echo "To enable do 'testnet autocoins enable'"
     fi
@@ -232,21 +217,21 @@ autocoins_status() {
   # Get the info from the status.yaml file
   AUTOCOINS_INFO="$(format_address "${ACOINS_deposit_address:-}") $(format_deposit_count "${ACOINS_deposit_total:-0}") ${ACOINS_percent_downloaded:-0}% downloaded"
 
-  if [ "$_user_request" = "stop" ]; then
+  if [ "$user_request" = "stop" ]; then
     AUTOCOINS_STATUS="STOPPED"
-  elif [ -z "$_suibase_daemon_pid" ]; then
+  elif [ -z "$suibase_daemon_pid" ]; then
     AUTOCOINS_STATUS="NOT RUNNING"
   else
     AUTOCOINS_STATUS="$ACOINS_status"
   fi
 
-  if [ "$_verbosity" = "verbose" ]; then
+  if [ "$verbosity" = "verbose" ]; then
     echo -n "Autocoins: "
     autocoins_echo_status_color "$AUTOCOINS_STATUS"
     echo "$AUTOCOINS_INFO"
 
     # Help the user...
-    if [ -z "$_suibase_daemon_pid" ]; then
+    if [ -z "$suibase_daemon_pid" ]; then
       echo
       echo "To run services do 'testnet start'"
       echo
@@ -267,21 +252,17 @@ export -f autocoins_status
 
 autocoins_enable() {
 
-  local _verbosity=$1
+  local verbosity=$1
 
   if [ "$WORKDIR" != "testnet" ]; then
     setup_error "Autocoins is only supported for testnet"
   fi
 
-  local suibase_yaml="$WORKDIRS/$WORKDIR/suibase.yaml"
-
   # Check if suibase.yaml exists
-  if [ ! -f "$suibase_yaml" ]; then
-    setup_error "Cannot find suibase.yaml at [$suibase_yaml]"
+  if [ ! -f "$AUTOCOINS_SUIBASE_YAML" ]; then
+    setup_error "Cannot find suibase.yaml at [$AUTOCOINS_SUIBASE_YAML]"
   fi
 
-  # Create autocoins directory structure if it doesn't exist
-  mkdir -p "$AUTOCOINS_DATA_DIR"
 
   set_deposit_address_as_needed "verbose"
 
@@ -291,19 +272,22 @@ autocoins_enable() {
     already_enabled=true
   else
     # Update suibase.yaml
-    if grep -q "^autocoins_enabled:" "$suibase_yaml"; then
+    if grep -q "^autocoins_enabled:" "$AUTOCOINS_SUIBASE_YAML"; then
       # Replace existing line
-      sed -i "s/^autocoins_enabled:.*/autocoins_enabled: true/" "$suibase_yaml"
+      sed -i "s/^autocoins_enabled:.*/autocoins_enabled: true/" "$AUTOCOINS_SUIBASE_YAML"
     else
       # Add new line
-      echo "autocoins_enabled: true" >> "$suibase_yaml"
+      echo "autocoins_enabled: true" >> "$AUTOCOINS_SUIBASE_YAML"
     fi
+    # Re-load the modified config into this shell process.
+    update_autocoins_status_yaml
     # Check if suibase daemon is running
     exit_if_sui_binary_not_ok
     if ! start_suibase_daemon_as_needed; then
       echo "suibase services are not running. Do '$WORKDIR start'."
     fi
   fi
+
 
   # Display appropriate message
   if [ "$already_enabled" = true ]; then
@@ -316,17 +300,15 @@ export -f autocoins_enable
 
 autocoins_disable() {
 
-  local _verbosity=$1
+  local verbosity=$1
 
   if [ "$WORKDIR" != "testnet" ]; then
     setup_error "Autocoins is only supported for testnet"
   fi
 
-  local suibase_yaml="$WORKDIRS/$WORKDIR/suibase.yaml"
-
   # Check if suibase.yaml exists
-  if [ ! -f "$suibase_yaml" ]; then
-    setup_error "Cannot find suibase.yaml at $suibase_yaml"
+  if [ ! -f "$AUTOCOINS_SUIBASE_YAML" ]; then
+    setup_error "Cannot find suibase.yaml at $AUTOCOINS_SUIBASE_YAML"
   fi
 
   local already_disabled=false
@@ -334,16 +316,18 @@ autocoins_disable() {
     already_disabled=true
   else
     # Update suibase.yaml only if not already disabled
-    if grep -q "^autocoins_enabled:" "$suibase_yaml"; then
+    if grep -q "^autocoins_enabled:" "$AUTOCOINS_SUIBASE_YAML"; then
       # Replace existing line
-      sed -i "s/^autocoins_enabled:.*/autocoins_enabled: false/" "$suibase_yaml"
+      sed -i "s/^autocoins_enabled:.*/autocoins_enabled: false/" "$AUTOCOINS_SUIBASE_YAML"
     else
       # Add new line
-      echo "autocoins_enabled: false" >> "$suibase_yaml"
+      echo "autocoins_enabled: false" >> "$AUTOCOINS_SUIBASE_YAML"
     fi
+    # Re-load the modified config into this shell process.
+    update_autocoins_status_yaml
   fi
 
-  if [ "$_verbosity" = "verbose" ]; then
+  if [ "$verbosity" = "verbose" ]; then
     if [ "$already_disabled" = true ]; then
       echo "Autocoins already disabled"
     else
@@ -354,7 +338,7 @@ autocoins_disable() {
 export -f autocoins_disable
 
 autocoins_set_address() {
-  local _verbosity=$1
+  local verbosity=$1
   local address=$2
 
   if [ "$WORKDIR" != "testnet" ]; then
@@ -362,32 +346,29 @@ autocoins_set_address() {
   fi
 
   # Check if suibase.yaml exists
-  if [ ! -f "$suibase_yaml" ]; then
-    setup_error "Cannot find suibase.yaml at $suibase_yaml"
+  if [ ! -f "$AUTOCOINS_SUIBASE_YAML" ]; then
+    setup_error "Cannot find suibase.yaml at $AUTOCOINS_SUIBASE_YAML"
   fi
 
-  # Validate the address, if not valid, default to active.
+  # Check if address is valid
   if ! check_is_valid_hex_pk "$address"; then
-    set_deposit_address_as_needed "quiet"
     setup_error "Invalid Sui account address: $address"
   fi
 
-  local suibase_yaml="$WORKDIRS/$WORKDIR/suibase.yaml"
-
   # Update suibase.yaml
-  if grep -q "^autocoins_address:" "$suibase_yaml"; then
+  if grep -q "^autocoins_address:" "$AUTOCOINS_SUIBASE_YAML"; then
     # Replace existing line
-    sed -i "s|^autocoins_address:.*|autocoins_address: \"$address\"|" "$suibase_yaml"
+    sed -i "s|^autocoins_address:.*|autocoins_address: \"$address\"|" "$AUTOCOINS_SUIBASE_YAML"
   else
     # Add new line
-    echo "autocoins_address: \"$address\"" >> "$suibase_yaml"
+    echo "autocoins_address: \"$address\"" >> "$AUTOCOINS_SUIBASE_YAML"
   fi
 }
 export -f autocoins_set_address
 
 autocoins_purge_data() {
 
-  local _verbosity=$1
+  local verbosity=$1
 
   if [ "$WORKDIR" != "testnet" ]; then
     setup_error "Autocoins is only supported for testnet"
@@ -395,7 +376,7 @@ autocoins_purge_data() {
 
   # Check if data dir exists
   if [ ! -d "$AUTOCOINS_DATA_DIR" ]; then
-    if [ "$_verbosity" = "verbose" ]; then
+    if [ "$verbosity" = "verbose" ]; then
       echo "No autocoins data directory found. Nothing to purge."
     fi
     return
@@ -403,7 +384,7 @@ autocoins_purge_data() {
 
   # Check if data dir is empty.
   if [ -z "$(ls -A "$AUTOCOINS_DATA_DIR")" ]; then
-    if [ "$_verbosity" = "verbose" ]; then
+    if [ "$verbosity" = "verbose" ]; then
       echo "No autocoins data found. Nothing to purge."
     fi
     return
@@ -415,7 +396,7 @@ autocoins_purge_data() {
   human_readable_size=$(format_human_readable_size "$size_bytes")
 
   # Confirm purge
-  if [ "$_verbosity" = "verbose" ]; then
+  if [ "$verbosity" = "verbose" ]; then
     echo "Autocoins service will be disabled and all related disk space will be freed."
     echo "If you choose to re-enable later, then data will need to be re-downloaded"
     echo "and it will take at least 25 days for deposit to resume normally."
@@ -425,9 +406,9 @@ autocoins_purge_data() {
     fi
     echo
     echo -n "Are you sure? [y/N] "
-    read -r confirm
+    read -r _confirm
 
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    if [[ ! "$_confirm" =~ ^[Yy]$ ]]; then
       echo
       echo "Purge cancelled."
       return
@@ -439,10 +420,7 @@ autocoins_purge_data() {
   # Delete data
   rm -rf "${AUTOCOINS_DATA_DIR:?}"/*
 
-  # Recreate empty directory
-  mkdir -p "$AUTOCOINS_DATA_DIR"
-
-  if [ "$_verbosity" = "verbose" ]; then
+  if [ "$verbosity" = "verbose" ]; then
     echo
     echo "Autocoins data purge completed."
   fi
