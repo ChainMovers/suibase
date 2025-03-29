@@ -3,15 +3,12 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use chrono::Local;
 use common::{basic_types::*, log_safe};
 use fastcrypto::{
-    ed25519::Ed25519KeyPair,
     encoding::{Base58, Encoding},
     traits::{KeyPair, ToFromBytes},
 };
-
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 
 use crate::shared_types::{GlobalsWorkdirConfigMT, GlobalsWorkdirStatusMT};
 
@@ -112,21 +109,10 @@ pub struct ACoinsMonitor {
     globals_devnet_status: GlobalsWorkdirStatusMT,
     globals_testnet_status: GlobalsWorkdirStatusMT,
     acoinsmon_rx: ACoinsMonRx,
-    init_time: SystemTime,
-    last_audit_time: SystemTime,
+    user_keypair: Option<LocalUserKeyPair>,
+    acoins_client: Option<ACoinsClient>,
 }
 
-struct ACoinsMonAuditVar {
-    // Variables that exists only for the time that the ACoinsMonitor is
-    // running an audit.
-    user_keypair: Ed25519KeyPair,
-    user_pk_bytes: Vec<u8>,
-    user_pk_base58: String,
-    last_verification_success_time: SystemTime,
-    last_verification_fail_time: SystemTime,
-}
-
-// This is how the ProxyHandler communicate with the NetworkMonitor.
 impl ACoinsMonitor {
     pub fn new(
         globals_devnet_config: GlobalsWorkdirConfigMT,
@@ -141,8 +127,8 @@ impl ACoinsMonitor {
             globals_devnet_status,
             globals_testnet_status,
             acoinsmon_rx,
-            init_time: SystemTime::now(),
-            last_audit_time: SystemTime::UNIX_EPOCH,
+            user_keypair: None,
+            acoins_client: None,
         }
     }
 
@@ -181,262 +167,89 @@ impl ACoinsMonitor {
         Ok(())
     }
 
-    async fn read_timestamp_from_file(path: &Path) -> Result<SystemTime> {
-        let timestamp_str = tokio::fs::read_to_string(path).await.context(format!(
-            "failed to read timestamp from file {}",
-            path.display()
-        ))?;
-        let timestamp = timestamp_str
-            .parse::<u64>()
-            .context("failed to parse timestamp from string")?;
-        Ok(UNIX_EPOCH + Duration::from_secs(timestamp))
-    }
+    async fn audit(&mut self) {
+        // If autocoins is NOT enabled AND there is no autocoins directory, then just do nothing.
+        let (tstarted, tenabled, tsui_address) = {
+            let globals_read_guard = self.globals_testnet_config.read().await;
+            let globals = &*globals_read_guard;
+            let user_config = &globals.user_config;
+            (
+                user_config.is_user_request_start(),
+                user_config.is_autocoins_enabled(),
+                user_config.autocoins_address(),
+            )
+        };
 
-    async fn write_timestamp_to_file(path: &Path) -> Result<()> {
-        let now = SystemTime::now();
-        let duration_since_epoch = now
-            .duration_since(UNIX_EPOCH)
-            .context("Time went backwards")?
-            .as_secs();
-        let timestamp_str = duration_since_epoch.to_string();
-        tokio::fs::write(path, timestamp_str).await.context(format!(
-            "failed to write timestamp to file {}",
-            path.display()
-        ))
-    }
+        let (dstarted, denabled, dsui_address) = {
+            let globals_read_guard = self.globals_devnet_config.read().await;
+            let globals = &*globals_read_guard;
+            let user_config = &globals.user_config;
+            (
+                user_config.is_user_request_start(),
+                user_config.is_autocoins_enabled(),
+                user_config.autocoins_address(),
+            )
+        };
 
-    async fn audit_init(&mut self) -> Result<ACoinsMonAuditVar> {
-        // Each installation have a user.keypair file created in ~/suibase/workdirs/common/autocoins
-        //
-        // It is an ed25519 keypair created with fastcrypto from Mysten Labs and used later to
-        // sign/authenticate when connecting to the POI server.
-        //
-        // If the user change or delete that keypair, then the storage becomes useless (will need to
-        // recover/redownload from the POI server).
-        //
         let path = common::shared_types::get_workdir_common_path().join("autocoins");
+        if !path.exists() {
+            if (tstarted == false && tenabled == false) && (dstarted == false && denabled == false)
+            {
+                return; // Don't even touch the FS if the user never enabled autocoins.
+            }
+            if let Err(error) = tokio::fs::create_dir_all(&path).await {
+                let err_msg = format!("failed to create directory {}: {}", path.display(), error);
+                log_safe!(err_msg);
+                return;
+            }
+        }
+
+        // Each installation has a user.keypair file created in ~/suibase/workdirs/common/autocoins
+        //
+        // Make sure a user.keypair file already exists or is created. If not successful, then just
+        // do not bother to run the protocol because the FS is somehow not readable/accessible.
         let user_keypair_file = path.join("user.keypair");
-        let mut user_keypair: Option<Ed25519KeyPair> = None;
-
-        // Atempt, up to 3 times, to get a user.keypair file verified and loaded.
-        let mut attempts = 0;
-        let mut verified_invalid = false;
-        while attempts < 3 && user_keypair.is_none() {
-            attempts += 1;
-            // Delete a user.keypair file it it was verified invalid (in a previous iteration).
-            if verified_invalid {
-                if user_keypair_file.exists() {
-                    if let Err(error) = tokio::fs::remove_file(&user_keypair_file).await {
-                        let err_msg = format!(
-                            "failed to delete file {}: {}",
-                            user_keypair_file.display(),
-                            error
-                        );
-                        log_safe!(err_msg);
-                        continue;
-                    }
-                }
-                verified_invalid = false;
-            }
-
-            if !user_keypair_file.exists() {
-                // Create a new user.keypair file.
-                if let Err(error) = tokio::fs::create_dir_all(&path).await {
-                    let err_msg =
-                        format!("failed to create directory {}: {}", path.display(), error);
-                    log_safe!(err_msg);
-                    continue;
-                }
-
-                if !user_keypair_file.exists() {
-                    let keypair = Ed25519KeyPair::generate(&mut StdRng::from_entropy());
-                    let keypair_bytes = keypair.as_bytes();
-                    let keypair_base58 = Base58::encode(keypair_bytes);
-                    if let Err(error) = tokio::fs::write(&user_keypair_file, &keypair_base58).await
-                    {
-                        let err_msg = format!(
-                            "failed to write keypair to file {}: {}",
-                            user_keypair_file.display(),
-                            error
-                        );
-                        log_safe!(err_msg);
-                        continue;
-                    }
-                }
-            }
-
-            // Read and validate the user.keypair file
-            let user_keypair_base58 = match tokio::fs::read_to_string(&user_keypair_file).await {
-                Ok(user_keypair_base58) => user_keypair_base58,
-                Err(error) => {
-                    let err_msg = format!(
-                        "failed to read keypair from file {}: {}",
-                        user_keypair_file.display(),
-                        error
-                    );
-                    log_safe!(err_msg);
-                    verified_invalid = true;
-                    continue;
-                }
-            };
-
-            let decode_results = Base58::decode(&user_keypair_base58);
-            if let Err(error) = decode_results {
-                let err_msg = format!(
-                    "failed to decode keypair (1) from file {}: {}",
-                    user_keypair_file.display(),
-                    error
-                );
+        let user_keypair = match LocalUserKeyPair::from_file(user_keypair_file).await {
+            Ok(user_keypair) => user_keypair,
+            Err(error) => {
+                let err_msg = format!("{}", error);
                 log_safe!(err_msg);
-                verified_invalid = true;
-                continue;
+                return;
             }
+        };
 
-            if let Ok(user_keypair_bytes) = &decode_results {
-                user_keypair = match Ed25519KeyPair::from_bytes(user_keypair_bytes) {
-                    Ok(user_keypair) => Some(user_keypair),
-                    Err(error) => {
-                        let err_msg = format!(
-                            "failed to decode keypair (2) from file {}: {}",
-                            user_keypair_file.display(),
-                            error
-                        );
-                        log_safe!(err_msg);
-                        verified_invalid = true;
-                        continue;
-                    }
-                };
-            }
+        // Run the client side of the POI protocol.
+        if self.acoins_client.is_none() {
+            let acoins_client = ACoinsClient::new();
+            self.acoins_client = Some(acoins_client);
         }
-
-        if user_keypair.is_none() {
-            let err_msg = "failed to load user keypair";
-            log_safe!(err_msg);
-            return Err(anyhow!(err_msg));
+        if let Some(acoins_client) = &mut self.acoins_client {
+            let _ = acoins_client
+                .run_poi(
+                    path,
+                    user_keypair.get_kp(),
+                    tstarted,
+                    tenabled,
+                    tsui_address,
+                    dstarted,
+                    denabled,
+                    dsui_address,
+                )
+                .await;
         }
-
-        let user_keypair = user_keypair.unwrap();
-        let user_pk_bytes = user_keypair.public().as_bytes();
-        let user_pk_base58 = Base58::encode(user_pk_bytes);
-        let user_pk_bytes = user_pk_bytes.to_vec();
-
-        // Create data subdirectory and clean-it up base on what is stored in user.keypair.
-        let path_data = path.join("data");
-        if !path_data.exists() {
-            // Create path if does not exists.
-            if let Err(error) = tokio::fs::create_dir_all(&path_data).await {
-                let err_msg = format!(
-                    "failed to create directory {}: {}",
-                    path_data.display(),
-                    error
-                );
-                log_safe!(err_msg);
-                return Err(anyhow!(err_msg));
-            }
-        } else {
-            // Delete all files in the data directory that are not prefixed by the user keypair public key.
-            let prefixes: Vec<&str> = vec![&user_pk_base58];
-            if let Err(error) = Self::delete_old_files_except_prefixes(&path_data, prefixes).await {
-                let err_msg = format!(
-                    "failed to delete old files in directory {}: {}",
-                    path_data.display(),
-                    error
-                );
-                log_safe!(err_msg);
-                return Err(anyhow!(err_msg));
-            }
-        }
-
-        // Read EpochTimestamps from files (when existing).
-        let path_last_verification_success_time = path.join("last_verification_success_time");
-        let last_verification_success_time =
-            match Self::read_timestamp_from_file(&path_last_verification_success_time).await {
-                Ok(last_verification_success_time) => last_verification_success_time,
-                Err(error) => {
-                    let err_msg = format!(
-                        "failed to read last_verification_success_time from file {}: {}",
-                        path_last_verification_success_time.display(),
-                        error
-                    );
-                    log_safe!(err_msg);
-                    SystemTime::UNIX_EPOCH
-                }
-            };
-
-        let path_last_verification_fail_time = path.join("last_verification_fail_time");
-        let last_verification_fail_time =
-            match Self::read_timestamp_from_file(&path_last_verification_fail_time).await {
-                Ok(last_verification_fail_time) => last_verification_fail_time,
-                Err(error) => {
-                    let err_msg = format!(
-                        "failed to read last_verification_fail_time from file {}: {}",
-                        path_last_verification_fail_time.display(),
-                        error
-                    );
-                    log_safe!(err_msg);
-                    SystemTime::UNIX_EPOCH
-                }
-            };
-
-        Ok(ACoinsMonAuditVar {
-            user_keypair,
-            user_pk_bytes,
-            user_pk_base58,
-            last_verification_success_time,
-            last_verification_fail_time,
-        })
     }
 
     async fn process_msg(&mut self, msg: ACoinsMonMsg) {
-        let mut audit_var: Option<ACoinsMonAuditVar> = None;
-
         {
-            //let globals_read_guard = self.globals_testnet_status.read().await;
-            //let globals = &*globals_read_guard;
             match msg.event_id {
                 EVENT_AUDIT => {
-                    // Use last_audit_time to make sure never audit more than once per hour.
-                    // TODO Switch this to 3600 for 1 hour. For now, just 1 second while developing.
-                    let now = SystemTime::now();
-                    if now.duration_since(self.last_audit_time).unwrap() < Duration::from_secs(1) {
-                        return;
-                    }
-                    self.last_audit_time = now;
-                    if let Ok(vars) = self.audit_init().await {
-                        audit_var = Some(vars);
-                    }
+                    self.audit().await;
                 }
                 _ => {
                     log::debug!("process_msg unexpected event id {}", msg.event_id);
                     return;
                 }
             }
-        }
-
-        if audit_var.is_none() {
-            return;
-        }
-        let audit_var = audit_var.unwrap();
-
-        // Skip further operation if verfification:
-        //   - was already done successfully in last 23 hours.
-        //   - was already done unsuccessfully in last 12 hours.
-        let now = SystemTime::now();
-        if now
-            .duration_since(audit_var.last_verification_success_time)
-            .unwrap()
-            < Duration::from_secs(1)
-        // TODO Switch this to 24 * 60 * 60
-        {
-            return;
-        }
-        if now
-            .duration_since(audit_var.last_verification_fail_time)
-            .unwrap()
-            < Duration::from_secs(1)
-        // TODO Switch this to 12 * 60 * 60
-        {
-            return;
         }
     }
 
@@ -468,210 +281,3 @@ impl ACoinsMonitor {
         }
     }
 }
-
-/*
-    async fn process_mut_globals(&mut self, msg: NetmonMsg) -> Option<NetmonMsg> {
-        // Process messages that requires WRITE access to the globals.
-        //
-        // All the NetmonMsg are process single threaded (by the netmon thread).
-        //
-        if !msg.flags.intersects(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX) {
-            // Do not consume the message.
-            return Some(msg);
-        }
-
-        {
-            let mut globals_write_guard = self.globals.write().await;
-            let globals = &mut *globals_write_guard;
-            let input_ports = &mut globals.input_ports;
-
-            let mut cur_msg = msg;
-            loop {
-                match cur_msg.event_id {
-                    EVENT_REPORT_TGT_REQ_RESP_OK => {
-                        // Update the stats. Consume the message.
-                        if cur_msg
-                            .flags
-                            .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
-                        {
-                            // This is for the "controlled" latency test.
-                            if let Some(target_server) =
-                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
-                            {
-                                target_server
-                                    .stats
-                                    .handle_latency_report(cur_msg.timestamp, cur_msg.para32[1]);
-
-                                // Always update the selection_vectors on a good latency_report. This is
-                                // the periodic "audit" opportunity to refresh things up.
-                                Self::update_selection_vectors(input_ports, &cur_msg);
-                            }
-                        } else {
-                            // This is for the user traffic.
-                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
-                                input_ports,
-                                &cur_msg,
-                            ) {
-                                stats.handle_resp_ok(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[0],
-                                    cur_msg.para32[0],
-                                    cur_msg.para32[1],
-                                );
-                            }
-
-                            if let Some(target_server) =
-                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
-                            {
-                                target_server.stats.handle_resp_ok(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[0],
-                                    cur_msg.para32[0],
-                                    cur_msg.para32[1],
-                                );
-                            }
-                        }
-                    }
-                    EVENT_REPORT_TGT_REQ_RESP_ERR => {
-                        // Update the stats.
-                        if cur_msg
-                            .flags
-                            .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
-                        {
-                            if let Some(target_server) =
-                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
-                            {
-                                let was_healthy = target_server.stats.is_healthy();
-
-                                // This is for the "controlled" latency test.
-                                // We do not want that failure to mix with the user
-                                // traffic stats so call report_req_failed_internal
-                                // instead.
-                                target_server.stats.handle_req_failed_internal(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[1],
-                                );
-
-                                // A bad latency report on a healthy target_server could affect
-                                // the selection of the target server.
-                                if was_healthy {
-                                    Self::update_selection_vectors(input_ports, &cur_msg);
-                                }
-                            }
-                        } else {
-                            // An error in the response for the user traffic.
-                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
-                                input_ports,
-                                &cur_msg,
-                            ) {
-                                stats.handle_resp_err(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[0],
-                                    cur_msg.para32[0],
-                                    cur_msg.para32[1],
-                                    cur_msg.para8[1],
-                                );
-                            }
-
-                            if let Some(target_server) =
-                                NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
-                            {
-                                target_server.stats.handle_resp_err(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[0],
-                                    cur_msg.para32[0],
-                                    cur_msg.para32[1],
-                                    cur_msg.para8[1],
-                                );
-                                // User traffic should not select that target again.
-                                // So always refresh the selection_vectors on every user
-                                // traffic error.
-                                Self::update_selection_vectors(input_ports, &cur_msg);
-                            }
-                        }
-                    }
-                    EVENT_REPORT_TGT_SEND_FAILED => {
-                        // An error just sending a request.
-                        if let Some(target_server) =
-                            NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
-                        {
-                            let was_healthy = target_server.stats.is_healthy();
-
-                            target_server.stats.handle_send_failed(
-                                cur_msg.timestamp,
-                                cur_msg.para8[1],
-                                cur_msg.para16[0],
-                            );
-
-                            let update_selection_vectors = if cur_msg
-                                .flags
-                                .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
-                            {
-                                was_healthy
-                            } else {
-                                true
-                            };
-
-                            if update_selection_vectors {
-                                Self::update_selection_vectors(input_ports, &cur_msg);
-                            }
-                        }
-                    }
-                    EVENT_REPORT_REQ_FAILED => {
-                        // Having no server available on startup is "normal". Ignore these for
-                        // first 15 seconds uptime of this task.
-                        if !(cur_msg.para8[1] == REQUEST_FAILED_NO_SERVER_AVAILABLE
-                            && self.init_time.elapsed() < Duration::from_secs(15))
-                        {
-                            // Update the stats. Not related to a specific target server
-                            // so update only the all_servers stats.
-                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
-                                input_ports,
-                                &cur_msg,
-                            ) {
-                                if cur_msg
-                                    .flags
-                                    .intersects(NetmonFlags::HEADER_SBSD_SERVER_HC_SET)
-                                {
-                                    stats.handle_req_failed_internal(
-                                        cur_msg.timestamp,
-                                        cur_msg.para8[1],
-                                    );
-                                } else {
-                                    stats.handle_req_failed(cur_msg.timestamp, cur_msg.para8[1]);
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        log::error!(
-                            "process_mut_globals unexpected event id {}",
-                            cur_msg.event_id
-                        );
-                        // Do nothing. Consume the bad message.
-                    }
-                }
-
-                // Check if more messages are available.
-                match self.netmon_rx.try_recv() {
-                    Ok(next_msg) => {
-                        cur_msg = next_msg;
-                    }
-                    Err(_e) => {
-                        // No more messages.
-                        return None;
-                    }
-                }
-
-                if !cur_msg
-                    .flags
-                    .intersects(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX)
-                {
-                    // Does not requires a global mutex.
-                    // Do not consume that message here.
-                    return Some(cur_msg);
-                }
-            }
-        }
-    }
-*/

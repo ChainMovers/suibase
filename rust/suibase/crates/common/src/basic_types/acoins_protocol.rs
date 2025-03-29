@@ -1,20 +1,10 @@
-use secrecy::{ExposeSecret, SecretBox};
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use base64ct::{Base64UrlUnpadded, Encoding as Base64Encoding};
 
-use fastcrypto::{
-    ed25519::Ed25519KeyPair,
-    encoding::{Base58, Encoding as FastCryptoEncoding, Hex},
-    traits::{KeyPair, Signer, ToFromBytes},
-};
-
-use rand::rngs::StdRng;
-use rand::SeedableRng;
+use fastcrypto::encoding::{Encoding as FastCryptoEncoding, Hex};
 
 use anyhow::Result;
 
@@ -25,8 +15,11 @@ pub const fn base64_len(byte_length: usize) -> usize {
 }
 
 // Protocol constants that must be same on both client/server.
-pub const STORAGE_NB_FILES: u8 = 25;
-pub const STORAGE_FILE_SIZE: usize = 20 * 1024 * 1024;
+pub const ACOINS_PROTOCOL_V1: u8 = 1;
+pub const ACOINS_PROTOCOL_VERSION_LATEST: u8 = ACOINS_PROTOCOL_V1;
+
+pub const ACOINS_STORAGE_NB_FILES: u8 = 25;
+pub const ACOINS_STORAGE_FILE_SIZE: usize = 20 * 1024 * 1024;
 
 pub const ACOINS_CHALLENGE_BYTES_LENGTH: usize = 12;
 pub const ACOINS_CHALLENGE_STRING_LENGTH: usize = base64_len(ACOINS_CHALLENGE_BYTES_LENGTH);
@@ -179,82 +172,6 @@ impl ACoinsChallenge {
     }
 }
 
-// This wrapper implement Zeroize for Ed25519KeyPair
-#[derive(ZeroizeOnDrop)]
-pub struct ZeroizableKeypair {
-    keypair_bytes: Vec<u8>,
-}
-
-impl ZeroizableKeypair {
-    pub fn new(kp: Ed25519KeyPair) -> Self {
-        Self {
-            keypair_bytes: kp.as_bytes().to_vec(),
-        }
-    }
-
-    fn as_ed25519_keypair(&self) -> Ed25519KeyPair {
-        Ed25519KeyPair::from_bytes(&self.keypair_bytes).unwrap()
-    }
-
-    pub fn pk_to_string(&self) -> String {
-        // TODO Security: keypair still exposed on the stack.
-        let pk_bytes = self.as_ed25519_keypair().public().as_bytes().to_vec();
-        Base64UrlUnpadded::encode_string(&pk_bytes)
-    }
-
-    // The signature is base64 encoded.
-    pub fn sign(&self, data: &[u8]) -> String {
-        let sign_obj = self.as_ed25519_keypair().sign(data);
-        Base64UrlUnpadded::encode_string(sign_obj.as_ref())
-    }
-}
-
-impl Zeroize for ZeroizableKeypair {
-    fn zeroize(&mut self) {
-        self.keypair_bytes.zeroize();
-    }
-}
-
-#[derive(ZeroizeOnDrop)]
-pub struct UserKeypair {
-    kp: SecretBox<ZeroizableKeypair>,
-}
-
-impl UserKeypair {
-    pub fn new() -> Self {
-        let kp = Ed25519KeyPair::generate(&mut StdRng::from_entropy());
-        let zeroizable_kp = ZeroizableKeypair::new(kp);
-        Self {
-            kp: SecretBox::new(Box::new(zeroizable_kp)),
-        }
-    }
-
-    // TODO Security: Should implement from/to file to avoid further exposing private key.
-    pub fn from_string(keypair_str: &str) -> Self {
-        let keypair_bytes = Base58::decode(keypair_str).unwrap();
-        let kp = Ed25519KeyPair::from_bytes(&keypair_bytes).unwrap();
-        let zeroizable_kp = ZeroizableKeypair::new(kp);
-        Self {
-            kp: SecretBox::new(Box::new(zeroizable_kp)),
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        let binding = self.kp.expose_secret().as_ed25519_keypair();
-        let keypair_bytes = binding.as_bytes();
-        Base58::encode(keypair_bytes)
-    }
-
-    pub fn pk_to_string(&self) -> String {
-        self.kp.expose_secret().pk_to_string()
-    }
-
-    pub fn sign(&self, data: &[u8]) -> String {
-        let binding = self.kp.expose_secret().as_ed25519_keypair();
-        Base64UrlUnpadded::encode_string(binding.sign(data).as_ref())
-    }
-}
-
 // Protocol responses from Proof-of-installation(POI) server.
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
@@ -263,9 +180,10 @@ pub struct LoginResponse {
     // Base 64 encoding of the location and length to retreive
     // from storage.
     //
-    // The challenge for a given user changes every 12h.
+    // The challenge for a given user changes every 24h.
     //
-    // On any failure, must wait 12h before retrying.
+    // On any failure, the client protocol waits 24h before retrying
+    // to avoid being banned by the server.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub challenge: Option<String>,
 }
@@ -277,22 +195,35 @@ impl LoginResponse {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyResponse {
     pub pass: bool,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub download_fn: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub download_id: Option<String>,
+
+    // Status info on POI actions.
+    // Provided to client only when pass succeeded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tsui_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tsui_deposit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub twal_deposit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dsui_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dsui_deposit: Option<String>,
 }
 
 impl VerifyResponse {
     pub fn new() -> Self {
         Self {
             pass: false,
-            download_fn: None,
-            download_id: None,
+            ..Default::default()
         }
     }
 }

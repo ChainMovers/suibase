@@ -1,8 +1,8 @@
 // This is for shared variables (used by more than one thread).
 //
-// This is a submodule specific to suibase-daemon.
+// Type defined here are expected to be made MT safe with Arc::Mutex.
 //
-// flatten everything under "common::shared_type" module.
+// Flattens everything under "common::shared_type" module.
 pub use self::workdirs::*;
 
 mod workdirs;

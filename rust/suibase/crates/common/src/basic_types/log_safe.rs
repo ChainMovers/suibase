@@ -4,7 +4,7 @@
 // are counted instead of being log.
 //
 use chrono::{Duration, Utc};
-use log::info;
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::Path;
@@ -27,14 +27,14 @@ impl LogSafe {
         }
     }
 
-    pub async fn info(&self, msg: &str, file: &str, line: u32) {
+    async fn log_message(&self, level: &str, msg: &str, file: &str, line: u32) {
         // Remove the path portion in 'file'
         // Uses OsStr to make sure this never panic.
         let file = Path::new(file)
             .file_name()
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("unknown");
-        let caller = format!("{}:{}", file, line);
+        let caller = format!("{}:{}:{}", level, file, line);
         let state = {
             let mut logger_states = self.logger_states.lock().await;
             logger_states
@@ -59,15 +59,26 @@ impl LogSafe {
             _ => {
                 // If it's been more than a minute since the last log or if this is the first log,
                 // log the counter (if this isn't the first log), reset the counter and update the last log time
-                if state.counter > 0 {
-                    info!("(repeat {}) {} [{}]", state.counter, caller, msg);
-                } else {
-                    info!("{} [{}]", caller, msg);
+                match level {
+                    "ERROR" => error!("(repeat {}) {} [{}]", state.counter, file, msg),
+                    "WARN" => warn!("(repeat {}) {} [{}]", state.counter, file, msg),
+                    _ => info!("(repeat {}) {} [{}]", state.counter, file, msg),
                 }
                 state.counter = 0;
                 state.last_log_time = Some(now);
             }
         }
+    }
+    pub async fn info(&self, msg: &str, file: &str, line: u32) {
+        self.log_message("INFO", msg, file, line).await;
+    }
+
+    pub async fn warn(&self, msg: &str, file: &str, line: u32) {
+        self.log_message("WARN", msg, file, line).await;
+    }
+
+    pub async fn error(&self, msg: &str, file: &str, line: u32) {
+        self.log_message("ERROR", msg, file, line).await;
     }
 }
 
@@ -78,6 +89,24 @@ macro_rules! log_safe {
     ($msg:expr) => {
         $crate::basic_types::LOG_SAFE
             .info(&format!("{}", $msg), file!(), line!())
+            .await;
+    };
+}
+
+#[macro_export]
+macro_rules! log_safe_warn {
+    ($msg:expr) => {
+        $crate::basic_types::LOG_SAFE
+            .warn(&format!("{}", $msg), file!(), line!())
+            .await;
+    };
+}
+
+#[macro_export]
+macro_rules! log_safe_err {
+    ($msg:expr) => {
+        $crate::basic_types::LOG_SAFE
+            .error(&format!("{}", $msg), file!(), line!())
             .await;
     };
 }

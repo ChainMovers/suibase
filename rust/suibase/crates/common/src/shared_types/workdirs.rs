@@ -22,9 +22,6 @@ pub const WORKDIR_IDX_LOCALNET: WorkdirIdx = 3;
 // All .state files names are hard coded for consistency.
 // (must remain backward compatible).
 pub const STATE_USER_REQUEST: &str = "user_request";
-pub const STATE_AUTOCOINS_ADDRESS: &str = "autocoins_address";
-pub const STATE_AUTOCOINS_LAST_DEPOSIT: &str = "autocoins_last_deposit";
-pub const STATE_AUTOCOINS_DEPOSITED: &str = "autocoins_deposited";
 
 // List of all possible workdirs planned to be supported.
 // The order is important since the position match the WORKDIR_IDX_* constants.
@@ -285,8 +282,6 @@ pub struct WorkdirUserConfig {
     dtp_default_gas_address: Option<String>, // Pays gas when txn not related to a service.
     autocoins_enabled: bool,
     autocoins_address: Option<String>,
-    autocoins_last_deposit: Option<String>,
-    autocoins_deposited: Option<String>,
 }
 
 impl WorkdirUserConfig {
@@ -303,8 +298,6 @@ impl WorkdirUserConfig {
             dtp_default_gas_address: None,
             autocoins_enabled: false,
             autocoins_address: None,
-            autocoins_last_deposit: None,
-            autocoins_deposited: None,
         }
     }
 
@@ -336,16 +329,8 @@ impl WorkdirUserConfig {
         self.autocoins_enabled
     }
 
-    pub fn autocoins_address(&self) -> Option<&String> {
-        self.autocoins_address.as_ref()
-    }
-
-    pub fn autocoins_last_deposit(&self) -> Option<&String> {
-        self.autocoins_last_deposit.as_ref()
-    }
-
-    pub fn autocoins_deposited(&self) -> Option<&String> {
-        self.autocoins_deposited.as_ref()
+    pub fn autocoins_address(&self) -> Option<String> {
+        self.autocoins_address.clone()
     }
 
     pub fn dtp_services(&self) -> &LinkedList<DTPService> {
@@ -399,11 +384,6 @@ impl WorkdirUserConfig {
             self.user_request_start = false;
         }
 
-        self.autocoins_address = Self::load_state_string(workdir_paths, STATE_AUTOCOINS_ADDRESS);
-        self.autocoins_last_deposit =
-            Self::load_state_string(workdir_paths, STATE_AUTOCOINS_LAST_DEPOSIT);
-        self.autocoins_deposited =
-            Self::load_state_string(workdir_paths, STATE_AUTOCOINS_DEPOSITED);
         Ok(())
     }
 
@@ -473,6 +453,34 @@ impl WorkdirUserConfig {
             self.autocoins_enabled = autocoins_enabled;
         } else if let Some(autocoins_enabled) = yaml["autocoins_enabled"].as_str() {
             self.autocoins_enabled = autocoins_enabled != "false";
+        }
+
+        // autocoins_address is a hex string, e.g. "0x1234..." with 64 hex digits. The
+        // 0x is optional. autocoins_address remains None if not present in the file
+        // or can't be parsed.
+        let mut address_is_valid = false;
+        if let Some(autocoins_address) = yaml["autocoins_address"].as_str() {
+            let normalized_address = if autocoins_address.starts_with("0x") {
+                &autocoins_address[2..]
+            } else {
+                autocoins_address
+            };
+            if normalized_address.len() == 64 {
+                // Verify it's valid hex
+                let is_valid_hex = normalized_address.chars().all(|c| {
+                    c.is_ascii_digit() || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
+                });
+
+                if is_valid_hex {
+                    // Ensure consistent format with 0x prefix
+                    let formatted_address = format!("0x{}", normalized_address.to_lowercase());
+                    self.autocoins_address = Some(formatted_address);
+                    address_is_valid = true;
+                }
+            }
+        }
+        if !address_is_valid {
+            self.autocoins_address = None;
         }
 
         let mut clear_links = false;

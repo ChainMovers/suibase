@@ -123,7 +123,7 @@ usage_remote() {
   echo_low_green "   status"
   echo "    Info about all suibase services."
   echo
-  if [ "$WORKDIR" = "testnet" ]; then
+  if [ "$WORKDIR" = "testnet" ] && [ "${CFG_autocoins_enabled:?}" = "true" ]; then
   echo_low_green "   autocoins"
   echo " Manage service to deposit testnet coins to your"
   echo "             account once per day, in exchange for disk space."
@@ -601,7 +601,8 @@ workdir_exec() {
       _SHOW_ACOINS=false
     elif [ "${CFG_autocoins_enabled:?}" == "false" ]; then
       _SUPPORT_ACOINS=false
-      _SHOW_ACOINS=true
+      # TODO Switch this to true once autocoins feature is complete.
+      _SHOW_ACOINS=false
     else
       _SUPPORT_ACOINS=true
       _SHOW_ACOINS=true

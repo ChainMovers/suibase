@@ -2,3 +2,6 @@
 rustflags = ["--cfg", "uuid_unstable"]
 # Use the following if enabling tokio-console for instrumentation.
 # rustflags = ["--cfg", "uuid_unstable", "--cfg", "tokio_unstable" ]
+
+[alias]
+test-poi = "test -p poi-server --features integration-tests"
