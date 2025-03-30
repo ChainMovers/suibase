@@ -52,23 +52,27 @@ usage_local() {
   echo
   echo_low_green "   create"
   echo "   Create workdir only. This can be useful for changing"
-  echo "            the configuration before doing the first build/start."
+  echo "            the configuration before doing the first start."
   echo
-  echo_low_green "   build"
-  echo "    Download/update local repo and build binaries only. You may"
-  echo "            have to do next an update, start or regen to create a wallet."
-  echo
+  # 'build' still supported, but suspecting that it is not used
+  # by majority of users. So commented out in help for now.
+  #echo_low_green "   build"
+  #echo "    Download/update local repo and build binaries only. You may"
+  #echo "            have to do next an update, start or regen to create a wallet."
+  #echo
   echo_low_green "   delete"
   echo "   Delete workdir completely. Can free up a lot of"
   echo "            disk space for when the localnet is not needed."
   echo
   echo_low_green "   update"
-  echo "   Update local sui repo and perform a regen."
+  echo "    Update sui/walrus binaries with latest from Mysten Labs"
+  echo "             and perform a regen."
+  echo
   echo "            Note: When set-sui-repo is configured, there is no git"
   echo "                  operations and this does regen only."
   echo
   echo_low_green "   regen"
-  echo "    Build binaries, create a wallet as needed and rebuild the"
+  echo "    Build or download binaries, create a wallet as needed and rebuild the"
   echo "            network. Useful for gas refueling or to wipe-out the network"
   echo "            'database' on binaries update or when suspecting problems."
   echo
@@ -131,15 +135,15 @@ usage_remote() {
   fi
   echo_low_green "   create"
   echo "    Create workdir only. This can be useful for changing"
-  echo "             the configuration before doing the first build/start."
+  echo "             the configuration before doing the first 'start'."
   echo
-  echo_low_green "   build"
-  echo "     Download/update local repo and build binaries only. You"
-  echo "             may have to do next an 'update' or 'start' to create a wallet."
-  echo
+  #echo_low_green "   build"
+  #echo "     Download/update local repo and build binaries only. You"
+  #echo "             may have to do next an 'update' or 'start' to create a wallet."
+  #echo
   echo_low_green "   update"
-  echo "    Update local sui repo, build binaries, create a wallet as"
-  echo "             needed."
+  echo "    Update sui/walrus binaries with latest from Mysten Labs"
+  echo "             and create a wallet as needed."
   echo
   echo_low_green "   publish"
   echo "   Publish the module specified in the Move.toml found"
@@ -535,6 +539,9 @@ workdir_exec() {
   # shellcheck source=SCRIPTDIR/__dtp-daemon.sh
   source "$SUIBASE_DIR/scripts/common/__dtp-daemon.sh"
   update_DTP_DAEMON_PID_var
+
+  # shellcheck source=SCRIPTDIR/__walrus-binaries.sh
+  source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
 
   if [ "$CMD_AUTOCOINS_REQ" = true ] || [ "$CMD_STATUS_REQ" = true ]; then
     # shellcheck source=SCRIPTDIR/__autocoins.sh
@@ -1101,7 +1108,7 @@ workdir_exec() {
   # Take care of the case that just stop/start processes.
   if [ "$CMD_START_REQ" = true ]; then
 
-    if is_workdir_ok && is_sui_binary_ok && [ $_CONFIG_CHANGE_DETECTED = false ]; then
+    if is_workdir_ok && is_sui_binary_ok && is_walrus_binary_ok && [ $_CONFIG_CHANGE_DETECTED = false ]; then
 
       # Note: nobody should have tried to run the sui binary yet.
       # So this is why the update_SUI_VERSION_var need to be done here.
@@ -1358,8 +1365,11 @@ workdir_exec() {
     return
   fi
 
-  # From this point is the code when a "regen", binaries were updated or
-  # creation of the client.yaml/sui.keystore needs to be done.
+  # Check if walrus binaries or configs need to be downloaded/updated.
+  update_walrus "$WORKDIR"
+
+  # From this point is the code when a "regen", binaries were potentially
+  # updated or creation of the client.yaml/sui.keystore needs to be done.
 
   if $is_local; then
     # shellcheck source=SCRIPTDIR/__workdir-init-local.sh

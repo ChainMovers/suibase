@@ -4,7 +4,7 @@
 # will never try to override or modify these).
 #
 # Example:
-#  suibase_daemon_src_type: "suibase_rust"
+#  suibase_daemon_src_type: "suibase"
 #
 # is loaded in a script with ${CFG_suibase_daemon_src_type}
 suibase_daemon_assets_name: "suibase-daemon"
@@ -36,3 +36,17 @@ sui_run_type: "cli"
 sui_precompiled_bin: ~
 sui_precompiled_type: "mystenlabs"
 sui_precompiled_path: ~
+
+walrus_assets_name: "walrus"
+walrus_bin_names: "walrus"
+walrus_install_type: "workdir"
+walrus_src_type: ~
+walrus_src_path: ~
+walrus_repo_url: "https://github.com/MystenLabs/walrus.git"
+walrus_repo_branch: ~
+walrus_force_tag: ~
+walrus_build_type: ~
+walrus_run_type: "cli"
+walrus_precompiled_bin: true
+walrus_precompiled_type: "mystenlabs"
+walrus_precompiled_path: ~

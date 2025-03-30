@@ -100,7 +100,6 @@ setup_local_bin_as_needed() {
   echo_info
   echo_info "The installation will not proceed until you complete this step."
   echo_info
-  echo_info "(Please report this to the developer to make the install script better)"
   exit 1
 }
 
@@ -190,10 +189,13 @@ main() {
   echo_info
   echo_info "Suibase is installed now for user [$username]. Great!"
   echo_info
-  echo_info "You can start your localnet with:"
-  echo_info "  \$ localnet start"
+  echo_info "You can start working with testnet by doing:"
+  echo_info "  \$ testnet start"
   echo_info
-  echo_info "For more info type \"localnet\"."
+  echo_info "Update to latest binaries from Mysten Labs with:"
+  echo_info "  \$ testnet update"
+  echo_info
+  echo_info "For more info type \"testnet\"."
   echo_info
   if $EXIT_TERMINAL_INSTRUCTION; then
     echo_info "To get started you may need to restart your current shell."

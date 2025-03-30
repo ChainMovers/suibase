@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# This script simply call the proper sui binary and config combination to interact
+# with remote testnet Walrus network (operated by Mysten Lab).
+#
+# Your testnet workdir should have been created when you
+# did 'testnet start' or 'testnet update'.
+#
+# You use 'twalrus' in the same way you would use 'walrus' from Mysten. Example:
+#    'twalrus info epoch'
+#
+# One convenience is you do not have to specify the --config and --context,
+# since this script will provide all the matching config files for testnet.
+#
+
+SUIBASE_DIR="$HOME/suibase"
+
+# Source '__globals.sh'.
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="testnet"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
+# shellcheck source=SCRIPTDIR/common/__walrus-exec.sh
+source "$SUIBASE_DIR/scripts/common/__walrus-exec.sh"
+
+# shellcheck source=SCRIPTDIR/common/__walrus-binaries.sh
+source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "suibase-script-name" ]]; then
+  # This also test if the sourced "globals" works.
+  echo "$WALRUS_SCRIPT"
+  exit
+fi
+
+walrus_exec "$@"

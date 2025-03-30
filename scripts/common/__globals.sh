@@ -53,6 +53,7 @@ export CONFIG_DATA_DIR="$WORKDIRS/$WORKDIR/config"
 export PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
 export FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
 export SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
+export WALRUS_BIN_DIR="$WORKDIRS/$WORKDIR/bin"
 
 # Suibase binaries are common to all workdirs, therefore are
 # installed in a common location.
@@ -75,6 +76,7 @@ SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 
 export WORKDIR_NAME="$WORKDIR"
 export SUI_SCRIPT
+export WALRUS_SCRIPT
 case $WORKDIR in
 localnet)
   SUI_SCRIPT="lsui"
@@ -84,9 +86,11 @@ devnet)
   ;;
 testnet)
   SUI_SCRIPT="tsui"
+  WALRUS_SCRIPT="twalrus"
   ;;
 mainnet)
   SUI_SCRIPT="msui"
+  WALRUS_SCRIPT="mwalrus"
   ;;
 active)
   SUI_SCRIPT="asui"
@@ -156,6 +160,7 @@ export SUIBASE_CLI_LOCK_ACQUIRED_MAINNET=0
 export SUIBASE_CLI_LOCK_ACQUIRED_CARGOBIN=0
 export SUIBASE_CLI_LOCK_ACQUIRED_ACTIVE=0
 export SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=0
+export SUIBASE_CLI_LOCK_ACQUIRED_WALRUS=0
 export SUIBASE_CLI_LOCK_DISABLED=0
 
 # Disable CLI mutex mechanism.
@@ -211,6 +216,12 @@ cleanup() {
     cli_mutex_release "suibase_daemon"
     SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=0
   fi
+
+  if [ "$SUIBASE_CLI_LOCK_ACQUIRED_WALRUS" == "1" ]; then
+    cli_mutex_release "walrus"
+    SUIBASE_CLI_LOCK_ACQUIRED_WALRUS=0
+  fi
+
 }
 
 # Add color
@@ -465,6 +476,9 @@ cli_mutex_lock() {
   suibase_daemon)
     _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON
     ;;
+  walrus)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_WALRUS
+    ;;
   *)
     setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
     ;;
@@ -501,6 +515,9 @@ cli_mutex_lock() {
     ;;
   suibase_daemon)
     SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=1
+    ;;
+  walrus)
+    SUIBASE_CLI_LOCK_ACQUIRED_WALRUS=1
     ;;
   *)
     setup_error "Internal error. cli_mutex_lock called with an unknown workdir $_WORKDIR"
@@ -542,6 +559,9 @@ cli_mutex_release()
   suibase_daemon)
     _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON
     ;;
+  walrus)
+    _IS_ACQUIRED=$SUIBASE_CLI_LOCK_ACQUIRED_WALRUS
+    ;;
   *)
     setup_error "Internal error. cli_mutex_release called with an unknown workdir $_WORKDIR"
     ;;
@@ -575,6 +595,9 @@ cli_mutex_release()
     ;;
   suibase_daemon)
     SUIBASE_CLI_LOCK_ACQUIRED_SUIBASE_DAEMON=0
+    ;;
+  walrus)
+    SUIBASE_CLI_LOCK_ACQUIRED_WALRUS=0
     ;;
   esac
 
@@ -1197,7 +1220,7 @@ exit_if_sui_binary_not_ok() {
       echo
       echo "The sui binary for $WORKDIR was not found."
       echo
-      echo " Do one of the following to build it:"
+      echo " Do one of the following to install it:"
       echo "    $WORKDIR start"
       echo "    $WORKDIR update"
       echo
@@ -1225,7 +1248,7 @@ exit_if_sui_binary_not_ok() {
         echo
         echo "The sui-faucet binary for $WORKDIR was not found."
         echo
-        echo " Do one of the following to build it:"
+        echo " Do one of the following to install it:"
         echo "    $WORKDIR start"
         echo "    $WORKDIR update"
         echo

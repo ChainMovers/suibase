@@ -142,23 +142,23 @@ init_app_obj() {
 
   # The following are extracted from defaults/consts.yaml
   #
-  #   Defines the installation:
+  #   Defines the scope of the installation:
   #      {cfg_name}_install_type: user|workdir
   #
   #   Defines how to get the source code:
-  #      {cfg_name}_src_type: suibase|git
-  #      {cfg_name}_src_path: "either_git_url_or_suibase_subdir"
+  #      {cfg_name}_src_type: ~|suibase|git
+  #      {cfg_name}_src_path: ~|git_url|suibase_subdir"
   #
   #   Defines how to build the source code:
-  #      {cfg_name}_build_type: rust|npm
+  #      {cfg_name}_build_type: ~|rust
   #
-  #   Defines how to install/run the binary:
+  #   Defines how to the binary is executed:
   #      {cfg_name}_run_type: daemon|cli
   #
   #  Defines precompiled binaries support:
   #      {cfg_name}_precompiled_bin: true|false
-  #      {cfg_name}_precompiled_type: suibase|url
-  #      {cfg_name}_precompiled_path: suibase|url
+  #      {cfg_name}_precompiled_type: suibase|mystenlabs
+  #      {cfg_name}_precompiled_path: ~|subdir
   #
 
   local self=$1
@@ -210,8 +210,8 @@ init_app_obj() {
   get_app_var "$self" "repo_branch"
   local _BRANCH=$APP_VAR
   if [[ -z $_BRANCH ]] || [[ $_BRANCH == "~" ]]; then
-    _BRANCH="main"
-    set_app_var "$self" "repo_branch" $_BRANCH
+    _BRANCH="$_WORKDIR"
+    set_app_var "$self" "repo_branch" "$_BRANCH"
   fi
 
   # Set path depending if user vs workdir installation.

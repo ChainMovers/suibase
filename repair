@@ -188,6 +188,9 @@ suibase_repair() {
   # shellcheck source=SCRIPTDIR/scripts/common/__apps.sh
   source "$REPAIR_SB_DIR/scripts/common/__apps.sh"
 
+  # shellcheck source=SCRIPTDIR/scripts/common/__walrus-binaries.sh
+  source "$REPAIR_SB_DIR/scripts/common/__walrus-binaries.sh"
+
   if [ -z "$SUIBASE_DAEMON_VERSION_FILE" ]; then
     # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
     source "$REPAIR_SB_DIR/scripts/common/__suibase-daemon.sh"
@@ -199,6 +202,9 @@ suibase_repair() {
     source "$REPAIR_SB_DIR/scripts/common/__dtp-daemon.sh"
     start_dtp_daemon_as_needed
   fi
+
+  update_walrus_configs "testnet"
+  update_walrus_configs "mainnet"
 
   # Exit instruction to the user.
   local _EXIT=false
