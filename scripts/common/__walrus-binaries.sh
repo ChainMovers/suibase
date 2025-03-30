@@ -6,6 +6,16 @@ update_walrus_config() {
   local _WORKDIR="$1"
   local _CONFIG_NAME="$2"
 
+  # Do nothing if not testnet/mainnet workdirs
+  if [ "$_WORKDIR" != "testnet" ] && [ "$_WORKDIR" != "mainnet" ]; then
+    return 0
+  fi
+
+  # Do nothing if the workdir/config-default does not exists (something getting done out-of-order?).
+  if [ ! -d "$WORKDIRS/$_WORKDIR/config-default" ]; then
+    return 0
+  fi
+
   # Copy ~/suibase/scripts/templates/$WORKDIR/config-default/client_config.yaml
   # to $WORKDIRS/$WORKDIR/config/client_config.yaml if:
   #   - it does not exists.
@@ -39,6 +49,7 @@ export -f update_walrus_config
 
 update_walrus_configs() {
   local _WORKDIR="$1"
+
   update_walrus_config "$_WORKDIR" "client_config.yaml"
   update_walrus_config "$_WORKDIR" "sites-config.yaml"
 }
@@ -48,6 +59,16 @@ update_walrus() {
 
   local _WORKDIR="$1"
   # Return 0 on success or not needed.
+
+  # Do nothing if not testnet/mainnet workdirs
+  if [ "$_WORKDIR" != "testnet" ] && [ "$_WORKDIR" != "mainnet" ]; then
+    return 0
+  fi
+
+  # Do nothing if the workdir does not exists (something getting done out-of-order?).
+  if [ ! -d "$WORKDIRS/$_WORKDIR" ]; then
+    return 0
+  fi
 
   # Changes to true if the daemon is tentatively started
   # anywhere within this call.
