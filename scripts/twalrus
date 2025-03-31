@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script simply call the proper sui binary and config combination to interact
+# This script simply call the proper 'walrus' binary and config combination to interact
 # with remote testnet Walrus network (operated by Mysten Lab).
 #
 # Your testnet workdir should have been created when you

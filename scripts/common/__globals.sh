@@ -54,6 +54,7 @@ export PUBLISHED_DATA_DIR="$WORKDIRS/$WORKDIR/published-data"
 export FAUCET_DIR="$WORKDIRS/$WORKDIR/faucet"
 export SUI_BIN_DIR="$SUI_REPO_DIR/target/debug"
 export WALRUS_BIN_DIR="$WORKDIRS/$WORKDIR/bin"
+export SITE_BUILDER_BIN_DIR="$WORKDIRS/$WORKDIR/bin"
 
 # Suibase binaries are common to all workdirs, therefore are
 # installed in a common location.
@@ -77,6 +78,7 @@ SUI_BIN_ENV="env SUI_CLI_LOG_FILE_ENABLE=1"
 export WORKDIR_NAME="$WORKDIR"
 export SUI_SCRIPT
 export WALRUS_SCRIPT
+export SITE_BUILDER_SCRIPT
 case $WORKDIR in
 localnet)
   SUI_SCRIPT="lsui"
@@ -87,10 +89,12 @@ devnet)
 testnet)
   SUI_SCRIPT="tsui"
   WALRUS_SCRIPT="twalrus"
+  SITE_BUILDER_SCRIPT="tsite"
   ;;
 mainnet)
   SUI_SCRIPT="msui"
   WALRUS_SCRIPT="mwalrus"
+  SITE_BUILDER_SCRIPT="msite"
   ;;
 active)
   SUI_SCRIPT="asui"
@@ -2879,6 +2883,10 @@ update_client_yaml_active_address() {
   # (a client call switch to an address, using output of another client call picking a default).
   STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
   if [ -n "$STR_FOUND" ]; then
+    # Default to "sb-1-ed25519" alias if it exists. Otherwise, let the sui client pick one (it seems
+    # to favor picking the "highest" hexadecimal address).
+    
+
     update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$CLIENT_CONFIG"
     if [ -n "$ACTIVE_ADDRESS" ]; then
       $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CLIENT_CONFIG" switch --address "$ACTIVE_ADDRESS"

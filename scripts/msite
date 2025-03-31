@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# This script simply call the proper 'walrus' binary and config combination to interact
+# This script simply call the proper 'site-builder' binary and config combination to interact
 # with remote mainnet Walrus network (operated by Mysten Lab).
 #
 # Your mainnet workdir should have been created when you
 # did 'mainnet start' or 'mainnet update'.
 #
-# You use 'mwalrus' in the same way you would use 'walrus' from Mysten. Example:
-#    'mwalrus info epoch'
+# You use 'msite' in the same way you would use 'site-builder' from Mysten. Example:
+#    'msite publish'
 #
 # One convenience is you do not have to specify the --config and --context,
 # since this script will provide all the matching config files for mainnet.
@@ -22,8 +22,8 @@ WORKDIR="mainnet"
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
 trap cleanup EXIT
 
-# shellcheck source=SCRIPTDIR/common/__walrus-exec.sh
-source "$SUIBASE_DIR/scripts/common/__walrus-exec.sh"
+# shellcheck source=SCRIPTDIR/common/__site-builder-exec.sh
+source "$SUIBASE_DIR/scripts/common/__site-builder-exec.sh"
 
 # shellcheck source=SCRIPTDIR/common/__walrus-binaries.sh
 source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
@@ -31,8 +31,8 @@ source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
 # Trap the case of doing just a self-test for installation.
 if [[ "$1" == "suibase-script-name" ]]; then
   # This also test if the sourced "globals" works.
-  echo "$WALRUS_SCRIPT"
+  echo "$SITE_BUILDER_SCRIPT"
   exit
 fi
 
-walrus_exec "$@"
+site_builder_exec "$@"

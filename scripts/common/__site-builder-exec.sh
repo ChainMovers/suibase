@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Call the proper walrus binary and config file combination.
+# Call the proper site-builder binary and config file combination.
 
-# You must source __globals.sh and __walrus_binaries.sh before __walrus-exec.sh
+# You must source __globals.sh and __walrus_binaries.sh before __site-builder-exec.sh
 
-walrus_exec() {
+site_builder_exec() {
 
   exit_if_workdir_not_ok
 
@@ -19,7 +19,7 @@ walrus_exec() {
   #fi
 
   # All other workdir use the binary from their repo.
-  WALRUS_BIN="$WALRUS_BIN_DIR/walrus"
+  _BIN="$SITE_BUILDER_BIN_DIR/site-builder"
 
   exit_if_walrus_binary_not_ok
 
@@ -34,15 +34,15 @@ walrus_exec() {
   local _OPT_DEFAULT_CONTEXT=""
 
   if ! has_param "" "--config" "$@"; then
-    _OPT_DEFAULT_CONFIG="--config $WORKDIRS/$WORKDIR/config/client_config.yaml"
+    _OPT_DEFAULT_CONFIG="--config $WORKDIRS/$WORKDIR/config/sites-config.yaml"
   else
     echo "Overriding suibase default --config is error prone and not recommended."
     echo
     echo "If you *must* use your own config consider one of these alternatives:"
-    echo "  1. Modify $WORKDIRS/$WORKDIR/config/client_config.yaml"
+    echo "  1. Modify $WORKDIRS/$WORKDIR/config/sites-config.yaml"
     echo "     for temporary changes until the next '$WORKDIR update'."
     echo
-    echo "  2. Call directly $WALRUS_BIN"
+    echo "  2. Call directly $_BIN"
     echo "     for full parameter control."
     info_exit ""
   fi
@@ -53,17 +53,29 @@ walrus_exec() {
     echo "Overriding suibase default --context is error prone and not recommended."
     echo
     echo "If you *must* use your own context consider one of these alternatives:"
-    echo "  1. Modify $WORKDIRS/$WORKDIR/config/client_config.yaml"
+    echo "  1. Modify $WORKDIRS/$WORKDIR/config/sites-config.yaml"
     echo "     for temporary changes until the next '$WORKDIR update'."
     echo
-    echo "  2. Call directly $WALRUS_BIN"
+    echo "  2. Call directly $_BIN"
     echo "     for full parameter control."
     info_exit ""
   fi
 
+  if has_param "" "--walrus-binary" "$@"; then
+    warn_user "Overriding suibase default --walrus-binary is error prone and not recommended."
+    echo "Your --walrus-binary option is being applied, but try to avoid incompatible binary mixing."
+    echo
+  fi
+
+  if has_param "" "--walrus-config" "$@"; then
+    warn_user "Overriding suibase default --walrus-config is error prone and not recommended."
+    echo "Your --walrus-config option is being applied, but try to avoid mixing configs."
+    echo
+  fi
+
   # shellcheck disable=SC2086,SC2068
-  $WALRUS_BIN $_OPT_DEFAULT_CONFIG $_OPT_DEFAULT_CONTEXT "$@"
+  $_BIN $_OPT_DEFAULT_CONFIG $_OPT_DEFAULT_CONTEXT "$@"
 
   exit
 }
-export -f walrus_exec
+export -f site_builder_exec

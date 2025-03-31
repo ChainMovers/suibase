@@ -50,3 +50,17 @@ walrus_run_type: "cli"
 walrus_precompiled_bin: true
 walrus_precompiled_type: "mystenlabs"
 walrus_precompiled_path: ~
+
+site_builder_assets_name: "site-builder"
+site_builder_bin_names: "site-builder"
+site_builder_install_type: "workdir"
+site_builder_src_type: ~
+site_builder_src_path: ~
+site_builder_repo_url: "https://github.com/chainmovers/sui-binaries.git"
+site_builder_repo_branch: ~
+site_builder_force_tag: ~
+site_builder_build_type: ~
+site_builder_run_type: "cli"
+site_builder_precompiled_bin: true
+site_builder_precompiled_type: "mystenlabs"
+site_builder_precompiled_path: ~
