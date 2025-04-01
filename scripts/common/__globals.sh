@@ -2485,11 +2485,26 @@ add_test_addresses() {
 
   wait_for_json_rpc_up "${WORKDIR_NAME}"
 
+  # Track the highest ED25519 address during creation. This will tentatively become
+  # the active address later.
+  local _HIGH_ADDR=""
+  local _OUTPUT
+  local _ADDRESS
+
   {
     echo "["
     for _i in {1..5}; do
-      $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519 --json 2>/dev/null
-      echo ","
+      _OUTPUT=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address ed25519 --json 2>/dev/null)
+      echo "$_OUTPUT,"
+
+      # Extract address from output and compare with highest so far
+      if [[ "$_OUTPUT" =~ \"address\":\ *\"(0x[0-9a-fA-F]+)\" ]]; then
+        _ADDRESS="${BASH_REMATCH[1]}"
+        if [[ -z "$_HIGH_ADDR" || "$_ADDRESS" > "$_HIGH_ADDR" ]]; then
+          _HIGH_ADDR="$_ADDRESS"
+        fi
+      fi
+
       $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256k1 --json 2>/dev/null
       echo ","
       $SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" new-address secp256r1 --json 2>/dev/null
@@ -2500,10 +2515,36 @@ add_test_addresses() {
     echo "]"
   } >>"$_WORDS_FILE"
 
+  # Logic to select the default test address.
+  #
+  # The _WORDS_FILE look somthing like this:
+  #
+  # [{
+  #  "alias": "agitated-zircon",
+  #  "address": "0x09bc4b4a704bf8994ba28b3dfcaee530540963153fdfe1c8ab897b459197d73d",
+  #  "keyScheme": "ED25519",
+  #  "recoveryPhrase": "impulse crater hockey gun fine remember member depend shine episode venture damp"
+  #  }
+  #  ,
+  #  {
+  #    "alias": "blissful-avanturine",
+  #    "address": "0x7f23e100ea0da802a683cd7261f6ddadf8bbc2968b0c1c7834361366ee09b452",
+  #    "keyScheme": "ED25519",
+  #    "recoveryPhrase": "lend banner script damage afford express sunny tiger useful sustain tuition cart"
+  #  }
+  #  ,
+  #  {
+  #    "alias": "romantic-felspar",
+  #    "address": "0xef7ee5a26cc80426d22e0470c051063c6631055f19fea5cd53fab129f9dbccf4",
+  #    "keyScheme": "Secp256r1",
+  #    "recoveryPhrase": "pool poet dignity ceiling alcohol glove interest idle poet sure balcony stock"
+  #  }
+  # ]
+  #
+
+
   # Set highest address as active. Best-effort... just warn if fails.
-  local _HIGH_ADDR
   local _SET_ACTIVE_SUCCESS=false
-  _HIGH_ADDR=$($SUI_BIN_ENV "$_SUI_BINARY" client --client.config "$_CLIENT_FILE" addresses --json | grep -v "activeAddress" | grep "0x" | sort -r | { head -n 1; cat >/dev/null 2>&1; })
   if [[ "$_HIGH_ADDR" =~ 0x[[:xdigit:]]+ ]]; then
     _HIGH_ADDR="${BASH_REMATCH[0]}"
 
@@ -2883,10 +2924,6 @@ update_client_yaml_active_address() {
   # (a client call switch to an address, using output of another client call picking a default).
   STR_FOUND=$(grep "active_address:" "$CLIENT_CONFIG" | grep "~")
   if [ -n "$STR_FOUND" ]; then
-    # Default to "sb-1-ed25519" alias if it exists. Otherwise, let the sui client pick one (it seems
-    # to favor picking the "highest" hexadecimal address).
-    
-
     update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$CLIENT_CONFIG"
     if [ -n "$ACTIVE_ADDRESS" ]; then
       $SUI_BIN_ENV "$SUI_BIN_DIR"/sui client --client.config "$CLIENT_CONFIG" switch --address "$ACTIVE_ADDRESS"
