@@ -54,7 +54,7 @@ actions:
 <div class="vp-features">
 
 <a class="route-link vp-feature-item link" href="/how-to/install.html" aria-label="Fast Installation" style="text-decoration: none">
-  <h3 class="vp-feature-title">    
+  <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="fluent-mdl2:installation"></iconify-icon>
     <span style="position: relative; top: 3px">Fast Installation</span>
   </h3>
@@ -64,17 +64,27 @@ actions:
 </a>
 
 <a class="route-link vp-feature-item link" href="/intro.html" aria-label="Open-Source and Free" style="text-decoration: none">
-  <h3 class="vp-feature-title">    
+  <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="fluent-emoji-flat:free-button"></iconify-icon>
-    <span style="position: relative; top: 3px">Fully Open-Source</span>
+    <span style="position: relative; top: 3px">100% Open-Source</span>
   </h3>
   <p class="vp-feature-details">
     No fee to use Suibase. From developers for developers.
   </p>
 </a>
 
+<a class="route-link vp-feature-item link" href="/walrus.html" aria-label="Walrus" style="text-decoration: none">
+  <h3 class="vp-feature-title">
+    <iconify-icon class="font-icon icon" icon="lucide:database"></iconify-icon>
+    <span style="position: relative; top: 3px">Walrus</span>
+  </h3>
+  <p class="vp-feature-details">
+    Fully integrated. All needed binaries and configs remain in-synch with latest networks.
+  </p>
+</a>
+
 <a class="route-link vp-feature-item link" href="/how-to/localnet.html" aria-label="A &quotBetter&quot Localnet" style="text-decoration: none">
-  <h3 class="vp-feature-title">    
+  <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="octicon:thumbsup-16"></iconify-icon>
     <span style="position: relative; top: 3px">A &quotBetter&quot Localnet</span>
   </h3>
@@ -84,7 +94,7 @@ actions:
 </a>
 
 <a class="route-link vp-feature-item link" href="/how-to/proxy.html" aria-label="Proxy Server" style="text-decoration: none">
-  <h3 class="vp-feature-title">    
+  <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="lucide:network"></iconify-icon>
     <span style="position: relative; top: 3px">Proxy Server</span>
   </h3>
@@ -94,17 +104,17 @@ actions:
 </a>
 
 <a class="route-link vp-feature-item link" href="/intro.html" aria-label="Version Matching" style="text-decoration: none">
-  <h3 class="vp-feature-title">    
+  <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="fluent:plug-disconnected-48-regular"></iconify-icon>
     <span style="position: relative; top: 3px">Version Matching</span>
   </h3>
   <p class="vp-feature-details">
-    Eliminate version mismatch bugs. Distinct Sui client and repo is installed to match each network (localnet, devnet, testnet, mainnet).
+    Eliminate version mismatch bugs. Distinct Sui and Walrus client are installed to match each network (devnet, testnet, mainnet).
   </p>
 </a>
 
 <a class="route-link vp-feature-item link" href="/intro.html" aria-label="More to come" style="text-decoration: none">
-  <h3 class="vp-feature-title">    
+  <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="octicon:rocket-24"></iconify-icon>
     <span style="position: relative; top: 3px">More to come</span>
   </h3>

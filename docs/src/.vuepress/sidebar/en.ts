@@ -23,6 +23,10 @@ export const enSidebar = sidebar({
           text: "Devnet/Testnet/Mainnet",
           link: "how-to/devnet-testnet.md",
         },
+        {
+          text: "Walrus",
+          link: "walrus.md",
+        },
       ],
     },
     {
@@ -78,11 +82,7 @@ export const enSidebar = sidebar({
         {
           text: "Workdir Conventions",
           link: "references.md",
-        },
-        {
-          text: "Integration",
-          link: "how-to/integration.md",
-        },
+        }
       ],
     },
     {
