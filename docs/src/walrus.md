@@ -1,7 +1,3 @@
-::: warning
-Beta feature. General availability scheduled at same time as Testnet v3 release (Early April)
-:::
-
 Walrus is fully integrated with Suibase, so it "just works" out of the box.
 
 Suibase makes it easy to develop concurrently with Walrus testnet and mainnet with the peace of mind that every operation are done with the proper binary and config matching the network.
