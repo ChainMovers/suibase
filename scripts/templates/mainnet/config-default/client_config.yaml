@@ -5,7 +5,7 @@ contexts:
     subsidies_object: 0xb606eb177899edc2130c93bf65985af7ec959a2755dc126c953755e59324209e
     exchange_objects: []
     wallet_config:
-      path: ~/suibase/workdirs/mainnet/config/client.yaml
+      path: $HOME/suibase/workdirs/mainnet/config/client.yaml
       active_env: mainnet
   testnet:
     system_object: 0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af
@@ -17,6 +17,6 @@ contexts:
       - 0x83b454e524c71f30803f4d6c302a86fb6a39e96cdfb873c2d1e93bc1c26a3bc5
       - 0x8d63209cf8589ce7aef8f262437163c67577ed09f3e636a9d8e0813843fb8bf1
     wallet_config:
-      path: ~/suibase/workdirs/testnet/config/client.yaml
+      path: $HOME/suibase/workdirs/testnet/config/client.yaml
       active_env: testnet
 default_context: mainnet

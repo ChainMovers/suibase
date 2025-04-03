@@ -5,9 +5,9 @@ contexts:
     package: 0xf99aee9f21493e1590e7e5a9aea6f343a1f381031a04a732724871fc294be799
     general:
       rpc_url: https://fullnode.testnet.sui.io:443
-      wallet: ~/suibase/workdirs/testnet/config-default/client.yaml
-      walrus_binary: ~/suibase/workdirs/testnet/bin/walrus
-      walrus_config: ~/suibase/workdirs/testnet/config-default/client_config.yaml
+      wallet: $HOME/suibase/workdirs/testnet/config-default/client.yaml
+      walrus_binary: $HOME/suibase/workdirs/testnet/bin/walrus
+      walrus_config: $HOME/suibase/workdirs/testnet/config-default/client_config.yaml
     #   gas_budget: 500000000
   mainnet:
     # module: site
@@ -15,9 +15,9 @@ contexts:
     package: 0x26eb7ee8688da02c5f671679524e379f0b837a12f1d1d799f255b7eea260ad27
     general:
       rpc_url: https://fullnode.mainnet.sui.io:443
-      wallet: ~/suibase/workdirs/mainnet/config-default/client.yaml
-      walrus_binary: ~/suibase/workdirs/mainnet/bin/walrus
-      walrus_config: ~/suibase/workdirs/mainnet/config-default/client_config.yaml
+      wallet: $HOME/suibase/workdirs/mainnet/config-default/client.yaml
+      walrus_binary: $HOME/suibase/workdirs/mainnet/bin/walrus
+      walrus_config: $HOME/suibase/workdirs/mainnet/config-default/client_config.yaml
     #   gas_budget: 500000000
 
 default_context: testnet

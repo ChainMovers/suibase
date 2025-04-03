@@ -16,19 +16,27 @@ update_walrus_config() {
     return 0
   fi
 
-  # Copy ~/suibase/scripts/templates/$WORKDIR/config-default/client_config.yaml
-  # to $WORKDIRS/$WORKDIR/config/client_config.yaml if:
+  # Copy ~/suibase/scripts/templates/$WORKDIR/config-default/_CONFIG_NAME
+  # to $WORKDIRS/$WORKDIR/config/_CONFIG_NAME if:
   #   - it does not exists.
   #   - Any line with an "0x" is different.
+  #
+  # Note: On copy replace $HOME with the actual home directory.
+  local _TEMPLATE_PATH="$SUIBASE_DIR/scripts/templates/$_WORKDIR/config-default/$_CONFIG_NAME"
+  local _DEST_PATH="$WORKDIRS/$_WORKDIR/config-default/$_CONFIG_NAME"
   local _DO_COPY=false
 
-  if [ -f "$WORKDIRS/$_WORKDIR/config-default/$_CONFIG_NAME" ]; then
+  if [ -f "$_DEST_PATH" ]; then
+      local _TEMPLATE_CONTENT
+    _TEMPLATE_CONTENT=$(cat "$_TEMPLATE_PATH")
+    _TEMPLATE_CONTENT=$(echo "$_TEMPLATE_CONTENT" | sed "s|\\\$HOME/|$HOME/|g")
+
     # Extract and compare only lines containing "0x" from both files
     local _USER_0X_LINES
     local _TEMPLATE_0X_LINES
 
-    _USER_0X_LINES=$(grep "0x" "$WORKDIRS/$_WORKDIR/config/$_CONFIG_NAME" 2>/dev/null || echo "")
-    _TEMPLATE_0X_LINES=$(grep "0x" "$SUIBASE_DIR/scripts/templates/$_WORKDIR/config-default/$_CONFIG_NAME" 2>/dev/null || echo "")
+    _USER_0X_LINES=$(grep "0x" "$_DEST_PATH" 2>/dev/null || echo "")
+    _TEMPLATE_0X_LINES=$(echo "$_TEMPLATE_CONTENT" | grep "0x" 2>/dev/null || echo "")
 
     # Check if the "0x" lines are different
     if [ "$_USER_0X_LINES" != "$_TEMPLATE_0X_LINES" ]; then
@@ -40,8 +48,9 @@ update_walrus_config() {
 
   if [ "$_DO_COPY" = "true" ]; then
     mkdir -p "$WORKDIRS/$_WORKDIR/config-default"
-    cp "$SUIBASE_DIR/scripts/templates/$_WORKDIR/config-default/$_CONFIG_NAME" \
-      "$WORKDIRS/$_WORKDIR/config-default/$_CONFIG_NAME"
+
+    cat "$_TEMPLATE_PATH" | sed "s|\\\$HOME/|$HOME/|g" > "$_DEST_PATH"
+
     echo "$_WORKDIR/$_CONFIG_NAME updated with defaults."
   fi
 }
