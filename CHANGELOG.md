@@ -8,6 +8,12 @@ Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] 2025-04-03
+### Added
+
+- (#118) New walrus and site-builder scripts (mwalrus/twalrus and msite/tsite).
+         Binaries and configs are installed/updated on "mainnet update" or "testnet update".
+         See https://suibase.io/walrus for more details.
 
 ## [0.1.7] 2024-10-17
 ### Added
