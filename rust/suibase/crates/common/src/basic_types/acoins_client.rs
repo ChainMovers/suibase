@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{Local, Utc};
+use chrono::Utc;
 use std::path::Path;
 
 // Run autocoins proof-of-installation protocol for the client.
@@ -81,7 +81,7 @@ use reqwest::Client;
 
 use crate::log_safe_err;
 
-use super::{StatusState, StatusYaml, UserKeypair, ACOINS_PROTOCOL_VERSION_LATEST};
+use super::{StatusYaml, UserKeypair, ACOINS_PROTOCOL_VERSION_LATEST};
 pub struct ACoinsClient {
     client: Client,
 }
@@ -104,8 +104,8 @@ impl ACoinsClient {
 
     async fn run_network_protocol(
         &mut self,
-        status_yaml: &mut StatusYaml,
-        user_keypair: &UserKeypair,
+        _status_yaml: &mut StatusYaml,
+        _user_keypair: &UserKeypair,
     ) -> Result<()> {
         // Run the login+verify+download protocol (see integration_tests.rs: test_verification() for example).
         Ok(())
@@ -143,9 +143,7 @@ impl ACoinsClient {
             let now = Utc::now();
 
             #[cfg(any(test, feature = "integration-tests"))]
-            {
-                
-            }
+            {}
             // Do not attempt to run the protocol if last attempt was less than 1 hour ago.
             status.last_verification_attempt = Some(now);
             match self.run_network_protocol(&mut status, &user_keypair).await {
@@ -164,7 +162,7 @@ impl ACoinsClient {
         }
 
         // Update percent_downloaded.
-        let storage_dir = autocoins_dir.as_ref().join("data");
+        let _storage_dir = autocoins_dir.as_ref().join("data");
 
         // If status.yaml deposit_address is not matching the configuration, then
         // force the status to the configured address and show a deposit of 0.

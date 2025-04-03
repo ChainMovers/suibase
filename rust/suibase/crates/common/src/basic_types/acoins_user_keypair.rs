@@ -2,12 +2,11 @@ use std::path::Path;
 
 use base64ct::{Base64UrlUnpadded, Encoding as Base64Encoding};
 use secrecy::{ExposeSecret, SecretBox};
-use tokio::fs;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use fastcrypto::{
     ed25519::Ed25519KeyPair,
-    encoding::{Base58, Encoding as FastCryptoEncoding, Hex},
+    encoding::{Base58, Encoding as FastCryptoEncoding},
     traits::{KeyPair, Signer, ToFromBytes},
 };
 use rand::rngs::StdRng;
