@@ -9,10 +9,7 @@ use crate::network_monitor::NetMonTx;
 use crate::proxy_server::ProxyServer;
 use crate::shared_types::{Globals, InputPort};
 use crate::workdirs_watcher::WorkdirsWatcher;
-use crate::workers::{
-    CliPoller, CliPollerParams, EventsWriterWorker, EventsWriterWorkerParams, PackagesPoller,
-    PackagesPollerParams,
-};
+use crate::workers::{CliPoller, CliPollerParams, PackagesPoller, PackagesPollerParams};
 use common::workers::ShellWorker;
 
 use anyhow::{anyhow, Result};
@@ -736,6 +733,7 @@ impl AdminController {
             let wd_tracking = self.wd_tracking.get_mut(workdir_idx);
 
             // Starts the task handling Sui events for latest published packages.
+            /*
             if workdir_idx == WORKDIR_IDX_LOCALNET && wd_tracking.events_worker_handle.is_none() {
                 let (events_worker_tx, events_worker_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
@@ -753,7 +751,7 @@ impl AdminController {
                     |a| events_worker.run(a),
                 ));
                 wd_tracking.events_worker_handle = Some(nested);
-            }
+            }*/
 
             // Start a CLI poller.
             if wd_tracking.cli_poller.is_none() {

@@ -62,20 +62,18 @@ jsonrpsee-types = { version = "0.24.7" }
 md5 = "0.7"
 mime = "0.3"
 once_cell = "1.19.0"
-r2d2 = "0.8.0"
-r2d2_sqlite = "0.27.0"
 rand = "0.8.5"
 reqwest = { version = "0.12", default-features = false, features = [
     "http2",
     "json",
     "rustls-tls",
+    "stream"
 ] }
 rustls = { version = "0.23", default-features = false, features = [
     "std",
     "tls12",
     "ring",
 ] }
-rusqlite = { version = "0.34.0", features = ["bundled"] }
 schemars = { version = "0.8.22", features = ["either"] }
 secrecy = "0.10.0"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
@@ -84,6 +82,7 @@ serde_json = { version = "1.0.95", features = [
     "arbitrary_precision",
 ] }
 serde_with = "3.8"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "chrono", "migrate"] }
 static_assertions = "1.1.0"
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = ["full"] }
@@ -114,6 +113,8 @@ tower-http = { version = "0.5", features = [
     "propagate-header",
 ] }
 tower-layer = "0.3.2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.15.0", features = ["v4","v7","fast-rng"] }
 uuid7 = { version= "1.1.0", features = [ "uuid" ] }
 zeroize = "1.8.1"

@@ -5,3 +5,5 @@ rustflags = ["--cfg", "uuid_unstable"]
 
 [alias]
 test-poi = "test -p poi-server --features integration-tests"
+test-common = "test -p common"
+test-all = "test -p poi-server -p common --features integration-tests"

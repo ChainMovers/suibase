@@ -34,7 +34,6 @@ mime.workspace = true
 md5.workspace = true
 once_cell.workspace = true
 rand.workspace = true
-rusqlite.workspace = true
 reqwest.workspace = true
 secrecy.workspace = true
 schemars.workspace = true
@@ -48,10 +47,8 @@ tokio-graceful-shutdown.workspace = true
 tokio-tungstenite.workspace = true
 tower.workspace = true
 tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 uuid.workspace = true
 uuid7.workspace = true
 zeroize.workspace = true
-
-[dev-dependencies]
-env_logger = "0.10"
-log = "0.4"

@@ -4,110 +4,159 @@
 // are counted instead of being log.
 //
 use chrono::{Duration, Utc};
-use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
+pub struct TracingSafe {
+    logger_states: Arc<std::sync::Mutex<HashMap<String, LoggerState>>>,
+}
 
 struct LoggerState {
     last_log_time: Option<chrono::DateTime<Utc>>,
     counter: u32,
 }
 
-pub struct LogSafe {
-    logger_states: Arc<Mutex<HashMap<String, Arc<Mutex<LoggerState>>>>>,
-}
-
-impl LogSafe {
+impl TracingSafe {
     fn new() -> Self {
-        LogSafe {
-            logger_states: Arc::new(Mutex::new(HashMap::new())),
+        TracingSafe {
+            logger_states: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
-    async fn log_message(&self, level: &str, msg: &str, file: &str, line: u32) {
-        // Remove the path portion in 'file'
-        // Uses OsStr to make sure this never panic.
+    // Make synchronous for easier use in macros
+    pub fn log_safe(&self, level: tracing::Level, msg: &str, file: &str, line: u32) {
+        // Get just the filename
         let file = Path::new(file)
             .file_name()
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("unknown");
+
         let caller = format!("{}:{}:{}", level, file, line);
-        let state = {
-            let mut logger_states = self.logger_states.lock().await;
-            logger_states
-                .entry(caller.to_string())
-                .or_insert_with(|| {
-                    Arc::new(Mutex::new(LoggerState {
-                        last_log_time: None,
-                        counter: 0,
-                    }))
-                })
-                .clone()
+
+        // Use std::sync::Mutex
+        let mut logger_states = match self.logger_states.lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                error!("Failed to acquire lock for log deduplication");
+                return;
+            }
         };
 
-        let mut state = state.lock().await;
+        let state = logger_states.entry(caller.clone()).or_insert(LoggerState {
+            last_log_time: None,
+            counter: 0,
+        });
 
         let now = Utc::now();
         match state.last_log_time {
             Some(last_time) if (now - last_time) < Duration::minutes(1) => {
-                // If it's been less than a minute since the last log, increment the counter
+                // If less than a minute, increment counter
                 state.counter += 1;
             }
             _ => {
-                // If it's been more than a minute since the last log or if this is the first log,
-                // log the counter (if this isn't the first log), reset the counter and update the last log time
+                // Log with tracing, including structured fields
                 match level {
-                    "ERROR" => error!("(repeat {}) {} [{}]", state.counter, file, msg),
-                    "WARN" => warn!("(repeat {}) {} [{}]", state.counter, file, msg),
-                    _ => info!("(repeat {}) {} [{}]", state.counter, file, msg),
+                    tracing::Level::ERROR => {
+                        error!(
+                            target: "dedup",
+                            repeat_count = state.counter,
+                            file = file,
+                            message = %msg,
+                            "{}",
+                            msg
+                        )
+                    }
+                    tracing::Level::WARN => {
+                        warn!(
+                            target: "dedup",
+                            repeat_count = state.counter,
+                            file = file,
+                            message = %msg,
+                            "{}",
+                            msg
+                        )
+                    }
+                    tracing::Level::DEBUG => {
+                        debug!(
+                            target: "dedup",
+                            repeat_count = state.counter,
+                            file = file,
+                            message = %msg,
+                            "{}",
+                            msg
+                        )
+                    }
+                    _ => {
+                        info!(
+                            target: "dedup",
+                            repeat_count = state.counter,
+                            file = file,
+                            message = %msg,
+                            "{}",
+                            msg
+                        )
+                    }
                 }
+
+                // Reset state
                 state.counter = 0;
                 state.last_log_time = Some(now);
             }
         }
     }
-    pub async fn info(&self, msg: &str, file: &str, line: u32) {
-        self.log_message("INFO", msg, file, line).await;
-    }
-
-    pub async fn warn(&self, msg: &str, file: &str, line: u32) {
-        self.log_message("WARN", msg, file, line).await;
-    }
-
-    pub async fn error(&self, msg: &str, file: &str, line: u32) {
-        self.log_message("ERROR", msg, file, line).await;
-    }
 }
 
-pub static LOG_SAFE: Lazy<LogSafe> = Lazy::new(LogSafe::new);
+// Singleton instance
+pub static TRACING_SAFE: Lazy<TracingSafe> = Lazy::new(TracingSafe::new);
 
+// Synchronous macros (no await needed)
 #[macro_export]
 macro_rules! log_safe {
     ($msg:expr) => {
-        $crate::basic_types::LOG_SAFE
-            .info(&format!("{}", $msg), file!(), line!())
-            .await;
+        $crate::basic_types::TRACING_SAFE.log_safe(
+            tracing::Level::INFO,
+            &format!("{}", $msg),
+            file!(),
+            line!(),
+        );
     };
 }
 
 #[macro_export]
 macro_rules! log_safe_warn {
     ($msg:expr) => {
-        $crate::basic_types::LOG_SAFE
-            .warn(&format!("{}", $msg), file!(), line!())
-            .await;
+        $crate::basic_types::TRACING_SAFE.log_safe(
+            tracing::Level::WARN,
+            &format!("{}", $msg),
+            file!(),
+            line!(),
+        );
     };
 }
 
 #[macro_export]
 macro_rules! log_safe_err {
     ($msg:expr) => {
-        $crate::basic_types::LOG_SAFE
-            .error(&format!("{}", $msg), file!(), line!())
-            .await;
+        $crate::basic_types::TRACING_SAFE.log_safe(
+            tracing::Level::ERROR,
+            &format!("{}", $msg),
+            file!(),
+            line!(),
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! log_safe_debug {
+    ($msg:expr) => {
+        $crate::basic_types::TRACING_SAFE.log_safe(
+            tracing::Level::DEBUG,
+            &format!("{}", $msg),
+            file!(),
+            line!(),
+        );
     };
 }
 
@@ -118,13 +167,12 @@ macro_rules! log_safe_err {
 macro_rules! mpsc_q_check {
     ($param:expr) => {
         if $param.len() > $crate::basic_types::MPSC_Q_THRESHOLD {
-            $crate::basic_types::LOG_SAFE
-                .info(
-                    &format!("Queue size over threshold: {}", $param.len()),
-                    file!(),
-                    line!(),
-                )
-                .await;
+            $crate::basic_types::TRACING_SAFE.log_safe(
+                tracing::Level::INFO,
+                &format!("{:?} len={}", $param, $param.len()),
+                file!(),
+                line!(),
+            );
         }
     };
 }

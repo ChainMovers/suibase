@@ -40,6 +40,9 @@ pub const ACOINS_SIGNATURE_STRING_LENGTH: usize = base64_len(ACOINS_SIGNATURE_BY
 pub const ACOINS_SUI_ADDRESS_BYTES_LENGTH: usize = 32;
 pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = base64_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
 
+pub const ACOINS_SERVER_PORT_API: u16 = 44400;
+pub const ACOINS_SERVER_PORT_DOWNLOAD: u16 = 44401;
+
 // Utility to convert a Sui address ("0x"+64 hex chars) to a base64 unpadded string.
 pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {
     if sui_address.len() != 66 && sui_address.len() != 64 {
@@ -82,20 +85,7 @@ impl ACoinsChallenge {
     }
 
     pub fn to_base64(&self) -> String {
-        let mut buffer = [0u8; ACOINS_CHALLENGE_BYTES_LENGTH];
-        // Big-endian serialization.
-        buffer[0] = (self.day_offset >> 24) as u8;
-        buffer[1] = (self.day_offset >> 16) as u8;
-        buffer[2] = (self.day_offset >> 8) as u8;
-        buffer[3] = self.day_offset as u8;
-        buffer[4] = (self.file_offset >> 24) as u8;
-        buffer[5] = (self.file_offset >> 16) as u8;
-        buffer[6] = (self.file_offset >> 8) as u8;
-        buffer[7] = self.file_offset as u8;
-        buffer[8] = self.file_number;
-        buffer[9] = self.length;
-        buffer[10] = self.flag0;
-        buffer[11] = self.flag1;
+        let buffer = self.to_bytes();
         Base64UrlUnpadded::encode_string(&buffer)
     }
 
@@ -140,6 +130,24 @@ impl ACoinsChallenge {
             flag0,
             flag1,
         }
+    }
+
+    pub fn to_bytes(&self) -> [u8; ACOINS_CHALLENGE_BYTES_LENGTH] {
+        let mut buffer = [0u8; ACOINS_CHALLENGE_BYTES_LENGTH];
+        // Big-endian serialization.
+        buffer[0] = (self.day_offset() >> 24) as u8;
+        buffer[1] = (self.day_offset() >> 16) as u8;
+        buffer[2] = (self.day_offset() >> 8) as u8;
+        buffer[3] = self.day_offset() as u8;
+        buffer[4] = (self.file_offset() >> 24) as u8;
+        buffer[5] = (self.file_offset() >> 16) as u8;
+        buffer[6] = (self.file_offset() >> 8) as u8;
+        buffer[7] = self.file_offset() as u8;
+        buffer[8] = self.file_number();
+        buffer[9] = self.length();
+        buffer[10] = self.flag0();
+        buffer[11] = self.flag1();
+        buffer
     }
 
     pub fn day_offset(&self) -> u32 {
@@ -210,13 +218,21 @@ pub struct VerifyResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tsui_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tsui_deposit: Option<String>,
+    pub tsui_deposit: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub twal_deposit: Option<String>,
+    pub twal_deposit: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dsui_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub dsui_deposit: Option<String>,
+    pub dsui_deposit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dwal_deposit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub msui_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub msui_deposit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mwal_deposit: Option<u64>,
 }
 
 impl VerifyResponse {

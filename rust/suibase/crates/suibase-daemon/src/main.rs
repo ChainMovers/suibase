@@ -151,6 +151,8 @@ impl Command {
                     globals.config_testnet.clone(),
                     globals.status_devnet.clone(),
                     globals.status_testnet.clone(),
+                    globals.config_mainnet.clone(),
+                    globals.status_mainnet.clone(),
                     acoinsmon_rx,
                 );
 
@@ -217,10 +219,18 @@ impl Command {
 
 #[tokio::main]
 async fn main() {
-    // Un-comment the following for tokio-console
-    //   https://github.com/tokio-rs/console
-    // console_subscriber::init();
+    // Initialize tracing with env filter support
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "poi_server=info,database=info,tower_http=warn".into()),
+        )
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::ACTIVE)
+        .compact() // Modern preference for daemon logs
+        .finish();
 
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+    
     // Allocate the globals "singleton".
     //
     // Globals are cloned by reference count.

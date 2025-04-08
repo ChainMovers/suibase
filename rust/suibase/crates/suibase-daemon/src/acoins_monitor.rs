@@ -98,8 +98,10 @@ pub type ACoinsMonRx = tokio::sync::mpsc::Receiver<ACoinsMonMsg>;
 pub struct ACoinsMonitor {
     globals_devnet_config: GlobalsWorkdirConfigMT,
     globals_testnet_config: GlobalsWorkdirConfigMT,
+    globals_mainnet_config: GlobalsWorkdirConfigMT,
     globals_devnet_status: GlobalsWorkdirStatusMT,
     globals_testnet_status: GlobalsWorkdirStatusMT,
+    globals_mainnet_status: GlobalsWorkdirStatusMT,
     acoinsmon_rx: ACoinsMonRx,
     user_keypair: Option<LocalUserKeyPair>,
     acoins_client: Option<ACoinsClient>,
@@ -111,6 +113,8 @@ impl ACoinsMonitor {
         globals_testnet_config: GlobalsWorkdirConfigMT,
         globals_devnet_status: GlobalsWorkdirStatusMT,
         globals_testnet_status: GlobalsWorkdirStatusMT,
+        globals_mainnet_config: GlobalsWorkdirConfigMT,
+        globals_mainnet_status: GlobalsWorkdirStatusMT,
         acoinsmon_rx: ACoinsMonRx,
     ) -> Self {
         Self {
@@ -118,6 +122,9 @@ impl ACoinsMonitor {
             globals_testnet_config,
             globals_devnet_status,
             globals_testnet_status,
+            globals_mainnet_config,
+            globals_mainnet_status,
+
             acoinsmon_rx,
             user_keypair: None,
             acoins_client: None,
@@ -183,9 +190,22 @@ impl ACoinsMonitor {
             )
         };
 
+        let (mstarted, menabled, msui_address) = {
+            let globals_read_guard = self.globals_mainnet_config.read().await;
+            let globals = &*globals_read_guard;
+            let user_config = &globals.user_config;
+            (
+                user_config.is_user_request_start(),
+                user_config.is_autocoins_enabled(),
+                user_config.autocoins_address(),
+            )
+        };
+
         let path = common::shared_types::get_workdir_common_path().join("autocoins");
         if !path.exists() {
-            if (tstarted == false && tenabled == false) && (dstarted == false && denabled == false)
+            if (tstarted == false && tenabled == false)
+                && (dstarted == false && denabled == false)
+                && (mstarted == false && menabled == false)
             {
                 return; // Don't even touch the FS if the user never enabled autocoins.
             }
@@ -222,10 +242,13 @@ impl ACoinsMonitor {
                     user_keypair.get_kp(),
                     tstarted,
                     tenabled,
-                    tsui_address,
+                    &tsui_address,
                     dstarted,
                     denabled,
-                    dsui_address,
+                    &dsui_address,
+                    mstarted,
+                    menabled,
+                    &msui_address,
                 )
                 .await;
         }

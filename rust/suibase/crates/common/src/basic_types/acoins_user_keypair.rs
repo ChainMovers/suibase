@@ -164,6 +164,10 @@ impl UserKeypair {
         self.kp.expose_secret().pk_to_string()
     }
 
+    pub fn pk_as_bytes(&self) -> &[u8] {
+        self.kp.expose_secret().pk_as_bytes()
+    }
+
     pub fn sign(&self, data: &[u8]) -> String {
         let binding = self.kp.expose_secret().as_ed25519_keypair();
         Base64UrlUnpadded::encode_string(binding.sign(data).as_ref())

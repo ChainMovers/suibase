@@ -73,11 +73,11 @@ pub struct StatusYaml {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tsui_address: Option<String>,
 
-    #[serde(default)]
-    pub tsui_deposit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tsui_deposit: Option<u64>,
 
-    #[serde(default)]
-    pub twal_deposit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub twal_deposit: Option<u64>,
 
     // Fields specific to devnet
     #[serde(default)]
@@ -98,8 +98,36 @@ pub struct StatusYaml {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dsui_address: Option<String>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dsui_deposit: Option<u64>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dwal_deposit: Option<u64>,
+
+    // Fields specific to mainnet
     #[serde(default)]
-    pub dsui_deposit: u64,
+    pub mstatus: StatusState,
+
+    #[serde(default)]
+    pub menabled: bool,
+
+    #[serde(default)]
+    pub mstarted: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mlast_error: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mlast_warning: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub msui_address: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub msui_deposit: Option<u64>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mwal_deposit: Option<u64>,
 
     // Fields not serialized to YAML
     #[serde(skip)]
@@ -151,8 +179,8 @@ impl Default for StatusYaml {
             tlast_error: None,
             tlast_warning: None,
             tsui_address: None,
-            tsui_deposit: 0,
-            twal_deposit: 0,
+            tsui_deposit: None,
+            twal_deposit: None,
 
             dstatus: StatusState::default(),
             denabled: false,
@@ -160,7 +188,17 @@ impl Default for StatusYaml {
             dlast_error: None,
             dlast_warning: None,
             dsui_address: None,
-            dsui_deposit: 0,
+            dsui_deposit: None,
+            dwal_deposit: None,
+
+            mstatus: StatusState::default(),
+            menabled: false,
+            mstarted: false,
+            mlast_error: None,
+            mlast_warning: None,
+            msui_address: None,
+            msui_deposit: None,
+            mwal_deposit: None,
 
             loaded_from: None,
             content_hash: None,
@@ -262,11 +300,15 @@ impl StatusYaml {
     }
 
     /// Format deposit total for display
-    pub fn format_deposit_total(&self) -> String {
-        if self.tsui_deposit > 999 {
-            ">999".to_string()
+    pub fn format_deposit_total(&self, deposit: Option<u64>) -> String {
+        if let Some(deposit) = deposit {
+            if deposit > 999 {
+                ">999".to_string()
+            } else {
+                deposit.to_string()
+            }
         } else {
-            self.tsui_deposit.to_string()
+            String::from("0")
         }
     }
 

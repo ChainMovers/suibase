@@ -42,7 +42,6 @@ jsonrpsee-proc-macros.workspace = true
 jsonrpsee-types.workspace = true
 md5.workspace = true
 rand.workspace = true
-rusqlite.workspace = true
 schemars.workspace = true
 serde_json.workspace = true
 serde.workspace = true
@@ -54,9 +53,7 @@ tokio-graceful-shutdown.workspace = true
 tokio-tungstenite.workspace = true
 tower.workspace = true
 tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 uuid.workspace = true
 uuid7.workspace = true
-
-[dev-dependencies]
-env_logger = "0.10"
-log = "0.4"
