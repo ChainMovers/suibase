@@ -206,6 +206,9 @@ suibase_repair() {
   update_walrus_configs "testnet"
   update_walrus_configs "mainnet"
 
+  repair_walrus_config_as_needed "testnet"
+  repair_walrus_config_as_needed "mainnet"
+
   # Exit instruction to the user.
   local _EXIT=false
   if [ "$_RENAME_DIRECTORY_REPAIR" = true ]; then

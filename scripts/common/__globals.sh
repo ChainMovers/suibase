@@ -1965,6 +1965,40 @@ cleanup_cache_as_needed() {
 }
 export -f cleanup_cache_as_needed
 
+repair_walrus_config_as_needed() {
+  WORKDIR_PARAM="$1"
+
+  if [ "$WORKDIR_PARAM" = "cargobin" ] || [ "$WORKDIR_PARAM" = "active" ]; then
+    return
+  fi
+
+  # Replace $HOME string in client_config.yaml and sites-config.yaml with
+  #the actual home directory.
+  local _CONFIG_FILES=("client_config.yaml" "sites-config.yaml")
+
+  for _CONFIG_FILE in "${_CONFIG_FILES[@]}"; do
+    local _CONFIG_PATH="$WORKDIRS/$WORKDIR_PARAM/config/$_CONFIG_FILE"
+
+    # Only process the file if it exists
+    if [ -f "$_CONFIG_PATH" ]; then
+      # Check if the file contains $HOME/ references
+      if grep -q "\\\$HOME/" "$_CONFIG_PATH"; then
+        # Create a temporary file for the replacement
+        local _TEMP_FILE=$(mktemp)
+
+        # Replace $HOME/ with the actual home directory path
+        sed "s|\\\$HOME/|$HOME/|g" "$_CONFIG_PATH" > "$_TEMP_FILE"
+
+        # Move the temporary file back to the original location
+        mv "$_TEMP_FILE" "$_CONFIG_PATH"
+
+        echo "Replaced \$HOME/ references in $_CONFIG_FILE with actual home directory"
+      fi
+    fi
+  done
+}
+export -f repair_walrus_config_as_needed
+
 repair_workdir_as_needed() {
   WORKDIR_PARAM="$1"
 
@@ -2014,6 +2048,8 @@ repair_workdir_as_needed() {
         mkdir -p "$WORKDIRS/common"
         cp "$SCRIPTS_DIR/templates/common/suibase.yaml" "$WORKDIRS/common/suibase.yaml"
       fi
+
+      repair_walrus_config_as_needed "$WORKDIR_PARAM"
     fi
     create_active_symlink_as_needed "$WORKDIR_PARAM"
   fi
