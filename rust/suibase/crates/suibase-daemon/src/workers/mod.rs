@@ -18,7 +18,7 @@ pub(crate) use self::cli_poller::*;
 pub(crate) use self::packages_poller::*;
 pub(crate) use self::request_worker::*;
 pub(crate) use self::webserver::*;
-pub(crate) use self::websocket_worker::*;
+//pub(crate) use self::websocket_worker::*;
 
 mod cli_poller;
 //mod db_worker;

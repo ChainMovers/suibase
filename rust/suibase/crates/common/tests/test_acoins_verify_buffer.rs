@@ -4,7 +4,7 @@ use common::basic_types::{
     ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH, ACOINS_PK_BYTES_LENGTH, ACOINS_SIGNATURE_STRING_LENGTH,
     ACOINS_SUI_ADDRESS_BYTES_LENGTH,
 };
-use fastcrypto::traits::KeyPair;
+
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 
