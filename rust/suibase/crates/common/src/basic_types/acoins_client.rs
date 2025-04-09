@@ -292,7 +292,7 @@ impl ACoinsClient {
         cfg_mainnet_address: &Option<String>,
     ) -> Result<()> {
         // Do the login step of the protocol.
-        let pk = user_keypair.to_string();
+        let pk = user_keypair.pk_to_string();
         let mut signer = match self.do_login_step(&pk).await {
             Ok(signer) => signer,
             Err(e) => {
@@ -517,6 +517,15 @@ impl ACoinsClient {
             }
         }
 
+        if let Err(e) = tokio::fs::create_dir_all(&data_dir).await {
+            log_safe_err!(format!(
+                "Failed to create directory {}: {}",
+                data_dir.display(),
+                e
+            ));
+            return false;
+        }
+
         // Download the file from the server as a stream so we
         // can protect against unexpectedly large files (hack?).
         let response = match self.request_download_stream(&download_id, pk_short).await {
@@ -613,7 +622,11 @@ impl ACoinsClient {
                 }
             }
             Err(e) => {
-                log_safe_err!(format!("Failed to create file: {}", e));
+                log_safe_err!(format!(
+                    "Failed to create file '{}': {}",
+                    file_path.to_string_lossy(),
+                    e
+                ));
                 file_error = true;
             }
         }
