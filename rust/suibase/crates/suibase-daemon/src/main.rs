@@ -46,7 +46,7 @@ use clap::*;
 
 use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
-use common::basic_types::MPSC_Q_SIZE;
+use common::basic_types::{ServerMode, MPSC_Q_SIZE};
 use env_logger::{Builder, Env};
 
 mod admin_controller;
@@ -154,6 +154,7 @@ impl Command {
                     globals.config_mainnet.clone(),
                     globals.status_mainnet.clone(),
                     acoinsmon_rx,
+                    ServerMode::Stage, // TODO Change to public!!!!
                 );
 
                 let apiserver_params = APIServerParams::new(globals.clone(), admctrl_tx.clone());
@@ -230,7 +231,7 @@ async fn main() {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
-    
+
     // Allocate the globals "singleton".
     //
     // Globals are cloned by reference count.

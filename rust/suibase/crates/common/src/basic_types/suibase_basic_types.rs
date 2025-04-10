@@ -163,3 +163,18 @@ pub trait Instantiable<P> {
 pub trait WorkdirContext {
     fn workdir_idx(&self) -> WorkdirIdx;
 }
+
+// Daemon/servers have 3 distinct operational mode
+// allowing them to run concurrently on the same machine.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ServerMode {
+    Test,
+    Stage,
+    Public,
+}
+
+impl Default for ServerMode {
+    fn default() -> Self {
+        ServerMode::Stage // Default to stage environment
+    }
+}

@@ -105,6 +105,7 @@ pub struct ACoinsMonitor {
     acoinsmon_rx: ACoinsMonRx,
     user_keypair: Option<LocalUserKeyPair>,
     acoins_client: Option<ACoinsClient>,
+    mode: ServerMode,
 }
 
 impl ACoinsMonitor {
@@ -116,6 +117,7 @@ impl ACoinsMonitor {
         globals_mainnet_config: GlobalsWorkdirConfigMT,
         globals_mainnet_status: GlobalsWorkdirStatusMT,
         acoinsmon_rx: ACoinsMonRx,
+        mode: ServerMode,
     ) -> Self {
         Self {
             globals_devnet_config,
@@ -128,6 +130,8 @@ impl ACoinsMonitor {
             acoinsmon_rx,
             user_keypair: None,
             acoins_client: None,
+
+            mode,
         }
     }
 
@@ -232,7 +236,7 @@ impl ACoinsMonitor {
 
         // Run the client side of the POI protocol.
         if self.acoins_client.is_none() {
-            let acoins_client = ACoinsClient::new();
+            let acoins_client = ACoinsClient::new(self.mode);
             self.acoins_client = Some(acoins_client);
         }
         if let Some(acoins_client) = &mut self.acoins_client {

@@ -86,24 +86,28 @@ use tokio::io::AsyncWriteExt;
 use reqwest::Client;
 
 use crate::{
-    basic_types::{ACoinsChallenge, ACoinsVerifyBuffer, ACOINS_STORAGE_FILE_SIZE},
+    basic_types::{
+        ACoinsChallenge, ACoinsVerifyBuffer, ACOINS_SERVER_STAGE_PORT_API,
+        ACOINS_SERVER_STAGE_PORT_DOWNLOAD, ACOINS_SERVER_TEST_PORT_API,
+        ACOINS_SERVER_TEST_PORT_DOWNLOAD, ACOINS_STORAGE_FILE_SIZE,
+    },
     log_safe_err, log_safe_warn,
 };
 
 use super::{
-    json_rpc::parse_json_rpc_response, LoginResponse, StatusYaml, UserKeypair, VerifyResponse,
-    ACOINS_PROTOCOL_VERSION_LATEST, ACOINS_SERVER_PORT_API, ACOINS_SERVER_PORT_DOWNLOAD,
-    ACOINS_STORAGE_NB_FILES,
+    json_rpc::parse_json_rpc_response, LoginResponse, ServerMode, StatusYaml, UserKeypair,
+    VerifyResponse, ACOINS_PROTOCOL_VERSION_LATEST, ACOINS_SERVER_PUBLIC_PORT_API,
+    ACOINS_SERVER_PUBLIC_PORT_DOWNLOAD, ACOINS_STORAGE_NB_FILES,
 };
 pub struct ACoinsClient {
     client: Client,
     last_run_network_protocol: Option<chrono::DateTime<Utc>>,
-    is_test_setup: bool,
+    mode: ServerMode,
 }
 
 impl ACoinsClient {
     /// Create a new ACoinsClient.
-    pub fn new() -> Self {
+    pub fn new(mode: ServerMode) -> Self {
         ACoinsClient {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -115,12 +119,16 @@ impl ACoinsClient {
                 .build()
                 .unwrap_or_default(),
             last_run_network_protocol: None,
-            is_test_setup: false,
+            mode,
         }
     }
 
-    pub fn config_as_test_setup(&mut self) {
-        self.is_test_setup = true;
+    pub fn is_test_setup(&self) -> bool {
+        self.mode == ServerMode::Test
+    }
+
+    pub fn is_stage_setup(&self) -> bool {
+        self.mode == ServerMode::Stage
     }
 
     async fn request_rpc(
@@ -128,10 +136,15 @@ impl ACoinsClient {
         method: &str,
         params: serde_json::Value,
     ) -> Result<reqwest::Response, reqwest::Error> {
-        let url = if self.is_test_setup {
-            format!("http://127.0.0.1:{}", ACOINS_SERVER_PORT_API)
+        let url = if self.is_test_setup() {
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_TEST_PORT_API)
+        } else if self.is_stage_setup() {
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_STAGE_PORT_API)
         } else {
-            format!("https://poi-server.suibase.io:{}", ACOINS_SERVER_PORT_API)
+            format!(
+                "https://poi-server.suibase.io:{}",
+                ACOINS_SERVER_PUBLIC_PORT_API
+            )
         };
 
         let request_body = serde_json::json!({
@@ -154,12 +167,14 @@ impl ACoinsClient {
         download_id: &str,
         pk_short: &str,
     ) -> Result<reqwest::Response, reqwest::Error> {
-        let url = if self.is_test_setup {
-            format!("http://127.0.0.1:{}", ACOINS_SERVER_PORT_DOWNLOAD)
+        let url = if self.is_test_setup() {
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_TEST_PORT_DOWNLOAD)
+        } else if self.is_stage_setup() {
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_STAGE_PORT_DOWNLOAD)
         } else {
             format!(
                 "https://poi-server.suibase.io:{}",
-                ACOINS_SERVER_PORT_DOWNLOAD
+                ACOINS_SERVER_PUBLIC_PORT_DOWNLOAD
             )
         };
 
@@ -181,7 +196,7 @@ impl ACoinsClient {
     ) -> Result<()> {
         let dt_now = Utc::now();
 
-        if !self.is_test_setup {
+        if !self.is_test_setup() {
             // Rate limit the protocol to 1 per hour using the storage persistent state.
             if let Some(last_verification_attempt) = status_yaml.last_verification_attempt {
                 let elapsed = dt_now.signed_duration_since(last_verification_attempt);
@@ -205,7 +220,7 @@ impl ACoinsClient {
         }
 
         let mut run_protocol = false;
-        if self.is_test_setup {
+        if self.is_test_setup() {
             run_protocol = true;
         } else {
             // Always run the protocol once after the process is started.
