@@ -4,7 +4,7 @@ icon: home
 title: Home
 heroImage: /logo.png
 heroText: Suibase
-tagline: Open-Source Development Tools and Community Cookbook
+tagline: Easier Sui and Walrus CLI Tools
 actions:
   - text: Install
     link: /how-to/install.md
