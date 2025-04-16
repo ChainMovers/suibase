@@ -4,7 +4,7 @@ use serde_with::serde_as;
 
 use common::basic_types::SafeUuid;
 
-fn is_empty_string(s: &String) -> bool {
+fn is_empty_string(s: &str) -> bool {
     s.is_empty()
 }
 

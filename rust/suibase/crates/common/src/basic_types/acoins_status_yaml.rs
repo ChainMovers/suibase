@@ -8,20 +8,14 @@ use std::{
 use tokio::fs;
 use twox_hash::XxHash64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
-
 pub enum StatusState {
     Ok,
+    #[default]
     Verifying,
     Downloading,
     Down,
-}
-
-impl Default for StatusState {
-    fn default() -> Self {
-        StatusState::Verifying
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,8 +226,10 @@ impl StatusYaml {
 
         // Return default if file doesn't exist
         if !fs::try_exists(path).await? {
-            let mut status = Self::default();
-            status.loaded_from = Some(path.to_path_buf());
+            let status = StatusYaml {
+                loaded_from: Some(path.to_path_buf()),
+                ..Default::default()
+            };
             return Ok(status);
         }
 

@@ -1,4 +1,7 @@
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct PackagePath {
@@ -21,8 +24,9 @@ impl PackagePath {
         }
     }
 
-    pub fn get_path(&self, published_data_path: &std::path::PathBuf) -> std::path::PathBuf {
+    pub fn get_path<P: AsRef<Path>>(&self, published_data_path: P) -> PathBuf {
         published_data_path
+            .as_ref()
             .join(&self.package_name)
             .join(&self.package_uuid)
             .join(&self.package_timestamp)

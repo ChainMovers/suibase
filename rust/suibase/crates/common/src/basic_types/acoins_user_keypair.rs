@@ -174,6 +174,12 @@ impl UserKeypair {
     }
 }
 
+impl Default for UserKeypair {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // LocalUserKeyPair is a factory of a UserKeypair that succeed only if
 // a "user.keypair" file is loaded/created at the specified path.
 pub struct LocalUserKeyPair {

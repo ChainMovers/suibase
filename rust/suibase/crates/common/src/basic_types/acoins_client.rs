@@ -179,7 +179,7 @@ impl ACoinsClient {
         };
 
         self.client
-            .get(&format!("{}/download/{}/{}", url, download_id, pk_short))
+            .get(format!("{}/download/{}/{}", url, download_id, pk_short))
             .timeout(Duration::from_secs(60))
             .send()
             .await
@@ -214,7 +214,7 @@ impl ACoinsClient {
 
             // Do not attempt execution in the "maintenance window" of the server.
             let now = dt_now.timestamp() % 86400;
-            if now < 360 || now > 82800 {
+            if !(360..=82800).contains(&now) {
                 return Ok(());
             }
         }
@@ -274,7 +274,7 @@ impl ACoinsClient {
             .run_protocol_inner(
                 &autocoins_dir,
                 status_yaml,
-                &user_keypair,
+                user_keypair,
                 cfg_testnet_address,
                 cfg_devnet_address,
                 cfg_mainnet_address,
@@ -543,7 +543,7 @@ impl ACoinsClient {
 
         // Download the file from the server as a stream so we
         // can protect against unexpectedly large files (hack?).
-        let response = match self.request_download_stream(&download_id, pk_short).await {
+        let response = match self.request_download_stream(download_id, pk_short).await {
             Ok(response) => response,
             Err(e) => {
                 log_safe_err!(format!(
@@ -659,7 +659,7 @@ impl ACoinsClient {
             return false;
         }
 
-        return true; // Successfully downloaded a new file.
+        true // Successfully downloaded a new file.
     }
 
     async fn do_login_step(&mut self, pk: &str) -> Result<ACoinsVerifyBuffer> {
@@ -696,7 +696,7 @@ impl ACoinsClient {
     ) -> (Option<String>, Option<usize>, usize) {
         // Attempt to return the read data and a file_number recommended to be downloaded next.
         // On any error, the recommended file is the one that was requested in the challenge.
-        let acoins_challenge = ACoinsChallenge::from_bytes(&signer.challenge());
+        let acoins_challenge = ACoinsChallenge::from_bytes(signer.challenge());
         let file_number = acoins_challenge.file_number() as usize;
         let file_offset = acoins_challenge.file_offset() as usize;
         let length = acoins_challenge.length() as usize;
@@ -833,7 +833,7 @@ impl ACoinsClient {
             }
         }
 
-        let signature = signer.sign(&user_keypair);
+        let signature = signer.sign(user_keypair);
         params["signature"] = serde_json::json!(signature);
 
         let response = self
@@ -888,7 +888,7 @@ impl ACoinsClient {
                 .run_protocol_outer(
                     &autocoins_dir,
                     &mut status,
-                    &user_keypair,
+                    user_keypair,
                     cfg_testnet_address,
                     cfg_devnet_address,
                     cfg_mainnet_address,

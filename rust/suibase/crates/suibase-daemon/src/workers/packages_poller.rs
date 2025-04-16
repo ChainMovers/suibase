@@ -427,9 +427,9 @@ impl PollingTraitObject {
                                 let package_id_path = path.join("package-id.json");
                                 let created_objects_path = path.join("created-objects.json");
                                 let publish_output_path = path.join("publish-output.json");
-                                if !tokio::fs::metadata(&package_id_path).await.is_ok()
-                                    || !tokio::fs::metadata(&created_objects_path).await.is_ok()
-                                    || !tokio::fs::metadata(&publish_output_path).await.is_ok()
+                                if tokio::fs::metadata(&package_id_path).await.is_err()
+                                    || tokio::fs::metadata(&created_objects_path).await.is_err()
+                                    || tokio::fs::metadata(&publish_output_path).await.is_err()
                                 {
                                     continue;
                                 }

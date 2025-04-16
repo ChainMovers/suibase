@@ -207,10 +207,7 @@ impl ACoinsMonitor {
 
         let path = common::shared_types::get_workdir_common_path().join("autocoins");
         if !path.exists() {
-            if (tstarted == false && tenabled == false)
-                && (dstarted == false && denabled == false)
-                && (mstarted == false && menabled == false)
-            {
+            if (!tstarted && !tenabled) && (!dstarted && !denabled) && (!mstarted && !menabled) {
                 return; // Don't even touch the FS if the user never enabled autocoins.
             }
             if let Err(error) = tokio::fs::create_dir_all(&path).await {
@@ -266,7 +263,6 @@ impl ACoinsMonitor {
                 }
                 _ => {
                     log::debug!("process_msg unexpected event id {}", msg.event_id);
-                    return;
                 }
             }
         }

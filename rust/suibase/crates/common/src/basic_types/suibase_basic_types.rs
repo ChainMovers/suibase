@@ -135,6 +135,12 @@ impl AdminControllerMsg {
     }
 }
 
+impl Default for AdminControllerMsg {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Debug for AdminControllerMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AdminControllerMsg")
@@ -166,15 +172,10 @@ pub trait WorkdirContext {
 
 // Daemon/servers have 3 distinct operational mode
 // allowing them to run concurrently on the same machine.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ServerMode {
     Test,
+    #[default]
     Stage,
     Public,
-}
-
-impl Default for ServerMode {
-    fn default() -> Self {
-        ServerMode::Stage // Default to stage environment
-    }
 }

@@ -323,3 +323,9 @@ impl ACoinsVerifyBuffer {
         &self.buffer
     }
 }
+
+impl Default for ACoinsVerifyBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}

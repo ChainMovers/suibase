@@ -211,8 +211,14 @@ impl LoginResponse {
     }
 }
 
+impl Default for LoginResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[serde_as]
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyResponse {
     pub pass: bool,
@@ -250,5 +256,11 @@ impl VerifyResponse {
             pass: false,
             ..Default::default()
         }
+    }
+}
+
+impl Default for VerifyResponse {
+    fn default() -> Self {
+        Self::new()
     }
 }

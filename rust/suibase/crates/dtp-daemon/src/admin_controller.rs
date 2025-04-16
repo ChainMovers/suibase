@@ -4,10 +4,9 @@ use common::shared_types::{GlobalsWorkdirConfigST, WorkdirUserConfig};
 use common::{basic_types::*, log_safe};
 
 use crate::network_monitor::NetMonTx;
-use crate::shared_types::{Globals, InputPort, WebSocketWorkerMsg, WebSocketWorkerTx};
+use crate::shared_types::{Globals, InputPort};
 use crate::workdirs_watcher::WorkdirsWatcher;
 use crate::workers::ShellWorker;
-use crate::workers::{WebSocketWorker, WebSocketWorkerParams};
 
 use anyhow::{anyhow, Result};
 
@@ -482,6 +481,7 @@ impl AdminController {
         }*/
 
         // As needed, start a WebSocketWorker for this workdir.
+        /* Events are no longer functional with Sui JSON-RPC.
         if wd_tracking.events_worker_handle.is_none() {
             if workdir_config.is_user_request_start() {
                 let (websocket_worker_tx, websocket_worker_rx) =
@@ -515,7 +515,7 @@ impl AdminController {
                     ));
                 }
             }
-        }
+        }*/
 
         // Remember the changes that were applied.
         wd_tracking.last_read_config = Some(workdir_config);

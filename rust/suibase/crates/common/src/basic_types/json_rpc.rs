@@ -9,10 +9,10 @@ trait JsonRpcValidation {
     /// Validate common JSON-RPC requirements
     fn validate_json_rpc(&self) -> Result<()> {
         if self.jsonrpc() != "2.0" {
-            return Err(anyhow::anyhow!("Invalid JSON-RPC version").into());
+            return Err(anyhow::anyhow!("Invalid JSON-RPC version"));
         }
         if self.id() != 1 {
-            return Err(anyhow::anyhow!("Invalid JSON-RPC ID").into());
+            return Err(anyhow::anyhow!("Invalid JSON-RPC ID"));
         }
         if let Some(error) = self.error() {
             let err_msg = format!(
@@ -20,7 +20,7 @@ trait JsonRpcValidation {
                 serde_json::to_string_pretty(error)
                     .unwrap_or_else(|_| String::from("<failed to serialize error>"))
             );
-            return Err(anyhow::anyhow!(err_msg).into());
+            return Err(anyhow::anyhow!(err_msg));
         }
         Ok(())
     }
