@@ -4,6 +4,20 @@ Changing the remote GitHub repo, branch, RPC ports etc... are done using the sui
 
 We will cover here only a few common use case. See this [suibase.yaml](https://github.com/chainmovers/suibase/blob/main/scripts/defaults/localnet/suibase.yaml) for the complete parameters list.
 
+### GitHub Rate Limit ( GITHUB_TOKEN )
+Suibase make use of the GitHub API, which is rate limited for non-authenticated users.
+
+You can avoid rate limit errors by creating and adding your own GITHUB_TOKEN to suibase.yaml:
+
+
+``` yaml
+github_token: ghp_9UsdjErt5jJusimndApo3i2wreuYsu2dHnEm
+```
+
+Recommended adding to ~/suibase/workdirs/common/suibase.yaml so that it applies to all workdir.
+
+More info: [ Github Rate Limits ]( https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api ), [ GitHub Tokens ]( https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens )
+
 
 ### Change default repo branch
 Add the `default_repo_branch` to suibase.yaml and type the workdir "update" command (e.g. `localnet update`). Example:
