@@ -8,6 +8,11 @@ Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] 2025-05-03
+### Fixed
+
+- (#120) Fix for faucet failing to start (options and output of binaries were changed by Mysten Labs).
+
 ## [0.1.8] 2025-04-03
 ### Added
 
