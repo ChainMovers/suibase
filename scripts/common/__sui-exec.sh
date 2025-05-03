@@ -166,9 +166,9 @@ sui_exec() {
             if [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
               error_exit "suibase faucet not enabled for localnet. Check suibase.yaml config."
             fi
-            _OPT_URL_PARAM="--url http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/v1/gas"
+            _OPT_URL_PARAM="--url http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/gas"
           elif [ "$WORKDIR" = "devnet" ] || [ "$WORKDIR" = "testnet" ]; then
-            _OPT_URL_PARAM="--url https://faucet.${WORKDIR}.sui.io/v1/gas"
+            _OPT_URL_PARAM="--url https://faucet.${WORKDIR}.sui.io/gas"
           else
             error_exit "faucet command not applicable to $WORKDIR"
           fi
