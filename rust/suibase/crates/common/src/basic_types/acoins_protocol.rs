@@ -254,7 +254,17 @@ impl VerifyResponse {
     pub fn new() -> Self {
         Self {
             pass: false,
-            ..Default::default()
+            download_fn: None,
+            download_id: None,
+            tsui_address: None,
+            tsui_deposit: None,
+            twal_deposit: None,
+            dsui_address: None,
+            dsui_deposit: None,
+            dwal_deposit: None,
+            msui_address: None,
+            msui_deposit: None,
+            mwal_deposit: None,
         }
     }
 }

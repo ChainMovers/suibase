@@ -165,7 +165,7 @@ impl Command {
                     acoinsmon_tx.clone(),
                     admctrl_tx.clone(),
                 );
-                let clock: ClockTrigger = ClockTrigger::new(clock_params);
+                let clock = ClockTrigger::new(clock_params);
 
                 let suiexplorer_params =
                     WebserverParams::new(globals.clone(), admctrl_tx.clone(), "sui-explorer");
@@ -181,7 +181,7 @@ impl Command {
                     s.start(SubsystemBuilder::new("apiserver", |a| apiserver.run(a)));
                 })
                 .catch_signals()
-                .handle_shutdown_requests(Duration::from_millis(1000))
+                .handle_shutdown_requests(Duration::from_secs(10))
                 .await;
 
                 if let Err(e) = &errors {
