@@ -38,12 +38,9 @@ start_sui_faucet_process() {
       env SUI_CONFIG_DIR="$WORKDIRS/$WORKDIR/faucet" "$SUI_BIN_DIR/sui-faucet" \
         --amount "${CFG_sui_faucet_coin_value:?}" \
         --host-ip "$_HOST_IP" \
-        --max-request-per-second "${CFG_sui_faucet_max_request_per_second:?}" \
         --num-coins "${CFG_sui_faucet_num_coins:?}" \
         --port "${CFG_sui_faucet_port:?}" \
-        --request-buffer-size "${CFG_sui_faucet_request_buffer_size:?}" \
-        --wallet-client-timeout-secs "${CFG_sui_faucet_client_timeout_secs:?}" \
-        --write-ahead-log "$CONFIG_DATA_DIR/faucet.wal" >"$CONFIG_DATA_DIR/sui-faucet-process.log" 2>&1 &
+        --wallet-client-timeout-secs "${CFG_sui_faucet_client_timeout_secs:?}"  >"$CONFIG_DATA_DIR/sui-faucet-process.log" 2>&1 &
     fi
 
     # Loop until confirms can connect, or exit if takes too much time.
@@ -269,17 +266,20 @@ faucet_command() {
     # Check for 3 confirmations of success.
     local _ERROR_ID
     ((_ERROR_ID = 0))
-    if [[ "$_RESP_CLEAN" != *"transferredgasobjects"* ]]; then
-      ((_ERROR_ID += 1))
-    fi
+
+    # TODO Re-introduce this confirmation after the output stabilize (it changed in May 2025).
+    #if [[ "$_RESP_CLEAN" != *"success"* ]]; then
+    #  ((_ERROR_ID += 1))
+    #fi
 
     if [[ "$_RESP_CLEAN" != *"transfertxdigest"* ]]; then
       ((_ERROR_ID += 10))
     fi
 
-    if [[ "$_RESP_CLEAN" != *"\"error\":null"* ]]; then
-      ((_ERROR_ID += 100))
-    fi
+    # TODO Re-introduce this confirmation after the output stabilize (it changed in May 2025).
+    #if [[ "$_RESP_CLEAN" != *"coinssent"* ]]; then
+    #  ((_ERROR_ID += 100))
+    #fi
 
     _N_COINS=$(count_coins "$_RESP_CLEAN")
 
