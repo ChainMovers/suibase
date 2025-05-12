@@ -77,7 +77,7 @@ use workers::WebserverWorker;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "suibase-daemon",
     about = "RPC proxy for more reliable access to Sui networks and other local services",
     rename_all = "kebab-case",
@@ -85,7 +85,7 @@ use workers::WebserverWorker;
     version
 )]
 pub enum Command {
-    #[clap(name = "run")]
+    #[command(name = "run")]
     Run {},
 }
 
@@ -224,7 +224,7 @@ async fn main() {
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "poi_server=info,database=info,tower_http=warn".into()),
+                .unwrap_or_else(|_| "info,tower_http=warn".into()),
         )
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::ACTIVE)
         .compact() // Modern preference for daemon logs
