@@ -165,7 +165,27 @@ impl ShellWorker {
 
         if let Some(resp_channel) = msg.resp_channel {
             let resp = if let Some(resp) = resp {
-                resp
+                // Filter out the first line if contains both "warning" and "api version mismatch":
+                if let Some(pos) = resp.find('\n') {
+                    let first_line = &resp[..pos].to_lowercase();
+                    if first_line.contains("warning") && first_line.contains("api version mismatch")
+                    {
+                        // Skip the first line and return the rest
+                        resp[pos + 1..].to_string()
+                    } else {
+                        // Return the original response
+                        resp
+                    }
+                } else {
+                    // Single line response - check if it's the warning we want to filter
+                    let lower_resp = resp.to_lowercase();
+                    if lower_resp.contains("warning") && lower_resp.contains("api version mismatch")
+                    {
+                        String::new() // Return empty string if the only line is the warning
+                    } else {
+                        resp // Return the original response
+                    }
+                }
             } else {
                 format!(
                     "Error: do_exec({:?}, {:?}) unexpected empty response",
