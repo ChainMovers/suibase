@@ -43,14 +43,17 @@ pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = base64_len(ACOINS_SUI_ADDRES
 // Production ports, when starting server with "--public" option.
 pub const ACOINS_SERVER_PUBLIC_PORT_API: u16 = 44400;
 pub const ACOINS_SERVER_PUBLIC_PORT_DOWNLOAD: u16 = 44401;
+pub const ACOINS_SERVER_PUBLIC_PORT_DISTRIBUTOR: u16 = 44402;
 
 // Temporary ports used for integration testing.
 pub const ACOINS_SERVER_TEST_PORT_API: u16 = 44410;
 pub const ACOINS_SERVER_TEST_PORT_DOWNLOAD: u16 = 44411;
+pub const ACOINS_SERVER_TEST_PORT_DISTRIBUTOR: u16 = 44412;
 
 // Default server ports (not public).
 pub const ACOINS_SERVER_STAGE_PORT_API: u16 = 44420;
-pub const ACOINS_SERVER_STAGE_PORT_DOWNLOAD: u16 = 44422;
+pub const ACOINS_SERVER_STAGE_PORT_DOWNLOAD: u16 = 44421;
+pub const ACOINS_SERVER_STAGE_PORT_DISTRIBUTOR: u16 = 44422;
 
 // Utility to convert a Sui address ("0x"+64 hex chars) to a base64 unpadded string.
 pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {

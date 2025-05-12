@@ -170,12 +170,20 @@ pub trait WorkdirContext {
     fn workdir_idx(&self) -> WorkdirIdx;
 }
 
-// Daemon/servers have 3 distinct operational mode
+// Daemon/servers have 4 distinct operational mode
 // allowing them to run concurrently on the same machine.
+//
+// Note: When testing and staging the same daemon acts
+//       as verifier and distributor. Only the public
+//       mode runs the two roles in separate processes
+//       because multiple instance of PublicVerifier are
+//       allowed for load balancing.
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ServerMode {
     Test,
     #[default]
     Stage,
-    Public,
+    PublicVerifier,
+    PublicDistributor,
 }
