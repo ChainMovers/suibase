@@ -118,6 +118,7 @@ cargo_add_options: ~
 #
 # The script will edit the respective suibase.yaml file.
 autocoins_enabled: false
+autocoins_mode: "stage"
 
 # Proxy server related configurations. See https://suibase.io/how-to/proxy
 proxy_enabled: true

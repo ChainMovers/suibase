@@ -5,6 +5,7 @@ use common::basic_types::{
     ACOINS_SUI_ADDRESS_BYTES_LENGTH,
 };
 
+use fastcrypto::encoding::{Encoding as FastCryptoEncoding, Hex};
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 
@@ -338,28 +339,29 @@ fn test_alternate_flag_and_req_file_changes() {
 // Helper function for creating test keypair - implementation depends on your UserKeypair
 
 #[test]
-fn test_address_base64_setters() {
+#[test]
+fn test_address_hex_setters() {
     let mut buffer = ACoinsVerifyBuffer::new();
 
-    // Create test addresses
+    // Create test addresses with distinct patterns
     let devnet_addr = [0x11; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
     let testnet_addr = [0x22; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
     let mainnet_addr = [0x33; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
 
-    // Convert to base64
-    let devnet_addr_base64 = Base64UrlUnpadded::encode_string(&devnet_addr);
-    let testnet_addr_base64 = Base64UrlUnpadded::encode_string(&testnet_addr);
-    let mainnet_addr_base64 = Base64UrlUnpadded::encode_string(&mainnet_addr);
+    // Convert to hex strings
+    let devnet_addr_hex = Hex::encode(&devnet_addr);
+    let testnet_addr_hex = Hex::encode(&testnet_addr);
+    let mainnet_addr_hex = Hex::encode(&mainnet_addr);
 
-    // Set addresses using base64 methods
+    // Set addresses using hex methods
     buffer
-        .set_devnet_address_from_base64(&devnet_addr_base64)
+        .set_devnet_address_from_hex(&devnet_addr_hex)
         .unwrap();
     buffer
-        .set_testnet_address_from_base64(&testnet_addr_base64)
+        .set_testnet_address_from_hex(&testnet_addr_hex)
         .unwrap();
     buffer
-        .set_mainnet_address_from_base64(&mainnet_addr_base64)
+        .set_mainnet_address_from_hex(&mainnet_addr_hex)
         .unwrap();
 
     // Verify addresses were set correctly using accessors
@@ -368,6 +370,67 @@ fn test_address_base64_setters() {
     assert_eq!(buffer.mainnet_address(), &mainnet_addr);
 }
 
+#[test]
+fn test_address_hex_setters_with_0x_prefix() {
+    let mut buffer = ACoinsVerifyBuffer::new();
+
+    // Create test addresses
+    let devnet_addr = [0xAA; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
+    let testnet_addr = [0xBB; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
+    let mainnet_addr = [0xCC; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
+
+    // Convert to hex strings with 0x prefix
+    let devnet_addr_hex = format!("0x{}", Hex::encode(&devnet_addr));
+    let testnet_addr_hex = format!("0x{}", Hex::encode(&testnet_addr));
+    let mainnet_addr_hex = format!("0x{}", Hex::encode(&mainnet_addr));
+
+    // Set addresses using hex methods
+    buffer
+        .set_devnet_address_from_hex(&devnet_addr_hex)
+        .unwrap();
+    buffer
+        .set_testnet_address_from_hex(&testnet_addr_hex)
+        .unwrap();
+    buffer
+        .set_mainnet_address_from_hex(&mainnet_addr_hex)
+        .unwrap();
+
+    // Verify addresses were set correctly using accessors
+    assert_eq!(buffer.devnet_address(), &devnet_addr);
+    assert_eq!(buffer.testnet_address(), &testnet_addr);
+    assert_eq!(buffer.mainnet_address(), &mainnet_addr);
+}
+
+#[test]
+fn test_invalid_hex_addresses() {
+    let mut buffer = ACoinsVerifyBuffer::new();
+
+    // Test with invalid hex
+    let invalid_hex = "This is not valid hex!";
+    assert!(buffer.set_devnet_address_from_hex(invalid_hex).is_err());
+    assert!(buffer.set_testnet_address_from_hex(invalid_hex).is_err());
+    assert!(buffer.set_mainnet_address_from_hex(invalid_hex).is_err());
+
+    // Test with valid hex but wrong length
+    let short_hex = "aabbcc";
+    assert!(buffer.set_devnet_address_from_hex(short_hex).is_err());
+    assert!(buffer.set_testnet_address_from_hex(short_hex).is_err());
+    assert!(buffer.set_mainnet_address_from_hex(short_hex).is_err());
+
+    // Ensure addresses remain unchanged
+    assert_eq!(
+        buffer.devnet_address(),
+        &[0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
+    );
+    assert_eq!(
+        buffer.testnet_address(),
+        &[0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
+    );
+    assert_eq!(
+        buffer.mainnet_address(),
+        &[0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
+    );
+}
 #[test]
 fn test_address_manual_setters() {
     let mut buffer = ACoinsVerifyBuffer::new();
@@ -386,106 +449,6 @@ fn test_address_manual_setters() {
     assert_eq!(buffer.devnet_address(), &devnet_addr);
     assert_eq!(buffer.testnet_address(), &testnet_addr);
     assert_eq!(buffer.mainnet_address(), &mainnet_addr);
-}
-
-#[test]
-fn test_address_base64_roundtrip() {
-    let mut buffer = ACoinsVerifyBuffer::new();
-
-    // Create test addresses with recognizable patterns
-    let devnet_addr = {
-        let mut addr = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
-        for i in 0..addr.len() {
-            addr[i] = (i * 3) as u8;
-        }
-        addr
-    };
-
-    let testnet_addr = {
-        let mut addr = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
-        for i in 0..addr.len() {
-            addr[i] = (i * 5 + 1) as u8;
-        }
-        addr
-    };
-
-    let mainnet_addr = {
-        let mut addr = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
-        for i in 0..addr.len() {
-            addr[i] = (i * 7 + 2) as u8;
-        }
-        addr
-    };
-
-    // Set addresses using mutable references
-    buffer.devnet_address_mut().copy_from_slice(&devnet_addr);
-    buffer.testnet_address_mut().copy_from_slice(&testnet_addr);
-    buffer.mainnet_address_mut().copy_from_slice(&mainnet_addr);
-
-    // Encode to base64
-    let devnet_addr_base64 = Base64UrlUnpadded::encode_string(buffer.devnet_address());
-    let testnet_addr_base64 = Base64UrlUnpadded::encode_string(buffer.testnet_address());
-    let mainnet_addr_base64 = Base64UrlUnpadded::encode_string(buffer.mainnet_address());
-
-    // Create a new buffer and set from base64
-    let mut buffer2 = ACoinsVerifyBuffer::new();
-    buffer2
-        .set_devnet_address_from_base64(&devnet_addr_base64)
-        .unwrap();
-    buffer2
-        .set_testnet_address_from_base64(&testnet_addr_base64)
-        .unwrap();
-    buffer2
-        .set_mainnet_address_from_base64(&mainnet_addr_base64)
-        .unwrap();
-
-    // Verify addresses match original
-    assert_eq!(buffer2.devnet_address(), &devnet_addr);
-    assert_eq!(buffer2.testnet_address(), &testnet_addr);
-    assert_eq!(buffer2.mainnet_address(), &mainnet_addr);
-}
-
-#[test]
-fn test_invalid_base64_addresses() {
-    let mut buffer = ACoinsVerifyBuffer::new();
-
-    // Test with invalid base64
-    let invalid_base64 = "This is not valid base64!";
-    assert!(buffer
-        .set_devnet_address_from_base64(invalid_base64)
-        .is_err());
-    assert!(buffer
-        .set_testnet_address_from_base64(invalid_base64)
-        .is_err());
-    assert!(buffer
-        .set_mainnet_address_from_base64(invalid_base64)
-        .is_err());
-
-    // Test with valid base64 but wrong length
-    let short_base64 = Base64UrlUnpadded::encode_string(&[0x11, 0x22, 0x33]);
-    assert!(buffer
-        .set_devnet_address_from_base64(&short_base64)
-        .is_err());
-    assert!(buffer
-        .set_testnet_address_from_base64(&short_base64)
-        .is_err());
-    assert!(buffer
-        .set_mainnet_address_from_base64(&short_base64)
-        .is_err());
-
-    // Ensure addresses remain unchanged
-    assert_eq!(
-        buffer.devnet_address(),
-        &[0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
-    );
-    assert_eq!(
-        buffer.testnet_address(),
-        &[0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
-    );
-    assert_eq!(
-        buffer.mainnet_address(),
-        &[0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
-    );
 }
 
 #[test]
@@ -545,18 +508,18 @@ fn test_base64_challenge_combined_with_other_fields() {
     let testnet_addr = [0xBB; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
     let mainnet_addr = [0xCC; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
 
-    let devnet_addr_base64 = Base64UrlUnpadded::encode_string(&devnet_addr);
-    let testnet_addr_base64 = Base64UrlUnpadded::encode_string(&testnet_addr);
-    let mainnet_addr_base64 = Base64UrlUnpadded::encode_string(&mainnet_addr);
+    let devnet_addr_hex = Hex::encode(&devnet_addr);
+    let testnet_addr_hex = Hex::encode(&testnet_addr);
+    let mainnet_addr_hex = Hex::encode(&mainnet_addr);
 
     buffer
-        .set_devnet_address_from_base64(&devnet_addr_base64)
+        .set_devnet_address_from_hex(&devnet_addr_hex)
         .unwrap();
     buffer
-        .set_testnet_address_from_base64(&testnet_addr_base64)
+        .set_testnet_address_from_hex(&testnet_addr_hex)
         .unwrap();
     buffer
-        .set_mainnet_address_from_base64(&mainnet_addr_base64)
+        .set_mainnet_address_from_hex(&mainnet_addr_hex)
         .unwrap();
 
     // Set flags and req_file
@@ -641,20 +604,21 @@ fn test_buffer_serialization_stability() {
 
     // Buffer 2: Set everything using base64 methods
     let challenge_base64 = Base64UrlUnpadded::encode_string(&challenge);
-    let devnet_addr_base64 = Base64UrlUnpadded::encode_string(&devnet_addr);
-    let testnet_addr_base64 = Base64UrlUnpadded::encode_string(&testnet_addr);
-    let mainnet_addr_base64 = Base64UrlUnpadded::encode_string(&mainnet_addr);
+    let devnet_addr_hex = Hex::encode(&devnet_addr);
+    let testnet_addr_hex = Hex::encode(&testnet_addr);
+    let mainnet_addr_hex = Hex::encode(&mainnet_addr);
+
+    buffer2
+        .set_devnet_address_from_hex(&devnet_addr_hex)
+        .unwrap();
+    buffer2
+        .set_testnet_address_from_hex(&testnet_addr_hex)
+        .unwrap();
+    buffer2
+        .set_mainnet_address_from_hex(&mainnet_addr_hex)
+        .unwrap();
 
     buffer2.set_challenge_from_base64(challenge_base64).unwrap();
-    buffer2
-        .set_devnet_address_from_base64(&devnet_addr_base64)
-        .unwrap();
-    buffer2
-        .set_testnet_address_from_base64(&testnet_addr_base64)
-        .unwrap();
-    buffer2
-        .set_mainnet_address_from_base64(&mainnet_addr_base64)
-        .unwrap();
 
     // Compare the raw buffers - they should be identical (except for challenge_str field)
     assert_eq!(buffer1.as_bytes(), buffer2.as_bytes());

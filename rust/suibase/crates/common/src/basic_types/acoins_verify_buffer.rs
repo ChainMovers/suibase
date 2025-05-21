@@ -10,6 +10,7 @@ use arrayref::{array_mut_ref, array_ref};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use fastcrypto::{
     ed25519::{Ed25519PublicKey, Ed25519Signature},
+    encoding::{Encoding as FastCryptoEncoding, Hex},
     traits::{ToFromBytes, VerifyingKey},
 };
 
@@ -246,24 +247,86 @@ impl ACoinsVerifyBuffer {
     }
 
     /// Initialize the testnet address part from a base64 string
-    pub fn set_testnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
-        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
-            return Err("Invalid testnet address length");
+    /*
+        pub fn set_testnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
+            if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
+                return Err("Invalid testnet address length");
+            }
+
+            Base64UrlUnpadded::decode(address, self.testnet_address_mut())
+                .map_err(|_| "Error decoding testnet address")?;
+            Ok(())
         }
 
-        Base64UrlUnpadded::decode(address, self.testnet_address_mut())
-            .map_err(|_| "Error decoding testnet address")?;
+        /// Initialize the mainnet address part from a base64 string
+        pub fn set_mainnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
+            if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
+                return Err("Invalid mainnet address length");
+            }
+
+            Base64UrlUnpadded::decode(address, self.mainnet_address_mut())
+                .map_err(|_| "Error decoding mainnet address")?;
+            Ok(())
+        }
+    */
+    /// set address using an hex string instead (with or without 0x prefix)
+    pub fn set_devnet_address_from_hex(&mut self, address: &str) -> Result<(), &'static str> {
+        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
+            && address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        {
+            return Err("Invalid devnet address length");
+        }
+
+        let address = if address.starts_with("0x") {
+            &address[2..]
+        } else {
+            address
+        };
+
+        let bytes = Hex::decode(address).map_err(|_| "Error decoding devnet address")?;
+
+        self.devnet_address_mut().copy_from_slice(&bytes);
+
         Ok(())
     }
 
-    /// Initialize the mainnet address part from a base64 string
-    pub fn set_mainnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
-        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
+    pub fn set_testnet_address_from_hex(&mut self, address: &str) -> Result<(), &'static str> {
+        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
+            && address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        {
+            return Err("Invalid testnet address length");
+        }
+
+        let address = if address.starts_with("0x") {
+            &address[2..]
+        } else {
+            address
+        };
+
+        let bytes = Hex::decode(address).map_err(|_| "Error decoding testnet address")?;
+
+        self.testnet_address_mut().copy_from_slice(&bytes);
+
+        Ok(())
+    }
+
+    pub fn set_mainnet_address_from_hex(&mut self, address: &str) -> Result<(), &'static str> {
+        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
+            && address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        {
             return Err("Invalid mainnet address length");
         }
 
-        Base64UrlUnpadded::decode(address, self.mainnet_address_mut())
-            .map_err(|_| "Error decoding mainnet address")?;
+        let address = if address.starts_with("0x") {
+            &address[2..]
+        } else {
+            address
+        };
+
+        let bytes = Hex::decode(address).map_err(|_| "Error decoding mainnet address")?;
+
+        self.mainnet_address_mut().copy_from_slice(&bytes);
+
         Ok(())
     }
 

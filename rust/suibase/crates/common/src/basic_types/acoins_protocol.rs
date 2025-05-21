@@ -6,12 +6,18 @@ use base64ct::{Base64UrlUnpadded, Encoding as Base64Encoding};
 
 use fastcrypto::encoding::{Encoding as FastCryptoEncoding, Hex};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 /// Returns the number of chars in Base64 unpadded to represent `byte_length` bytes.
 pub const fn base64_len(byte_length: usize) -> usize {
     // Formula: ceiling(byte_length * 8 / 6) or ceiling(byte_length * 4 / 3)
     (byte_length * 4 + 2) / 3
+}
+
+/// Returns the number of chars in Hex to represent `byte_length` bytes. Excludes "0x" prefix.
+pub const fn hex_len(byte_length: usize) -> usize {
+    // Formula: ceiling(byte_length * 8 / 6) or ceiling(byte_length * 4 / 3)
+    byte_length * 2
 }
 
 // Protocol constants that must be same on both client/server.
@@ -38,27 +44,41 @@ pub const ACOINS_SIGNATURE_BYTES_LENGTH: usize = 64;
 pub const ACOINS_SIGNATURE_STRING_LENGTH: usize = base64_len(ACOINS_SIGNATURE_BYTES_LENGTH); // = 86
 
 pub const ACOINS_SUI_ADDRESS_BYTES_LENGTH: usize = 32;
-pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = base64_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
+pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = hex_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
 
-// Production ports, when starting server with "--public" option.
-pub const ACOINS_SERVER_PUBLIC_PORT_API: u16 = 44400;
-pub const ACOINS_SERVER_PUBLIC_PORT_DOWNLOAD: u16 = 44401;
-pub const ACOINS_SERVER_PUBLIC_PORT_DISTRIBUTOR: u16 = 44402;
+// Production address and ports
+pub const ACOINS_SERVER_PUBLIC_URL: &str = "https://autocoins.suibase.io";
+pub const ACOINS_SERVER_PUBLIC_API_PORT: u16 = 44400;
+pub const ACOINS_SERVER_PUBLIC_DOWNLOAD_PORT: u16 = 44401;
+pub const ACOINS_SERVER_PUBLIC_DISTRIBUTOR_PORT: u16 = 44402;
+pub const ACOINS_SERVER_PUBLIC_ADMIN_PORT: u16 = 44403;
 
-// Temporary ports used for integration testing.
-pub const ACOINS_SERVER_TEST_PORT_API: u16 = 44410;
-pub const ACOINS_SERVER_TEST_PORT_DOWNLOAD: u16 = 44411;
-pub const ACOINS_SERVER_TEST_PORT_DISTRIBUTOR: u16 = 44412;
+// Temporary local ports used for integration testing.
+pub const ACOINS_SERVER_TEST_URL: &str = "http://127.0.0.1";
+pub const ACOINS_SERVER_TEST_API_PORT: u16 = 44410;
+pub const ACOINS_SERVER_TEST_DOWNLOAD_PORT: u16 = 44411;
+pub const ACOINS_SERVER_TEST_DISTRIBUTOR_PORT: u16 = 44412;
+pub const ACOINS_SERVER_TEST_ADMIN_PORT: u16 = 44413;
 
-// Default server ports (not public).
-pub const ACOINS_SERVER_STAGE_PORT_API: u16 = 44420;
-pub const ACOINS_SERVER_STAGE_PORT_DOWNLOAD: u16 = 44421;
-pub const ACOINS_SERVER_STAGE_PORT_DISTRIBUTOR: u16 = 44422;
+// Default local server ports (not public), for pre-production testing.
+pub const ACOINS_SERVER_STAGE_URL: &str = "http://127.0.0.1";
+pub const ACOINS_SERVER_STAGE_API_PORT: u16 = 44420;
+pub const ACOINS_SERVER_STAGE_DOWNLOAD_PORT: u16 = 44421;
+pub const ACOINS_SERVER_STAGE_DISTRIBUTOR_PORT: u16 = 44422;
+pub const ACOINS_SERVER_STAGE_ADMIN_PORT: u16 = 44423;
 
 // Utility to convert a Sui address ("0x"+64 hex chars) to a base64 unpadded string.
 pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {
-    if sui_address.len() != 66 && sui_address.len() != 64 {
-        return Err(anyhow::anyhow!("Invalid SUI address length"));
+    if sui_address.len() != (ACOINS_SUI_ADDRESS_STRING_LENGTH + 2)
+        && sui_address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
+    {
+        let err_msg = format!(
+            "Invalid SUI address length {}. Expected {} or {}",
+            sui_address.len(),
+            ACOINS_SUI_ADDRESS_STRING_LENGTH,
+            ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        );
+        return Err(anyhow::anyhow!(err_msg));
     }
     let bytes = Hex::decode(sui_address)?;
 
@@ -66,6 +86,41 @@ pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {
     buffer.copy_from_slice(&bytes);
 
     Ok(Base64UrlUnpadded::encode_string(&buffer))
+}
+
+// Utility to convert a base64 unpadded string (often used as JSON-RPC param)
+// to a [u8; ACOINS_PK_BYTES_LENGTH]
+pub fn pk_bytes_from_base64(pk: &str) -> Result<[u8; ACOINS_PK_BYTES_LENGTH]> {
+    if pk.len() != ACOINS_PK_STRING_LENGTH {
+        return Err(anyhow!("Invalid public key length pk={}", pk));
+    }
+
+    // Decode the base64 string into a byte array.
+    let mut buffer = [0u8; ACOINS_PK_BYTES_LENGTH];
+    match Base64UrlUnpadded::decode(pk, &mut buffer) {
+        Ok(_) => Ok(buffer),
+        Err(e) => {
+            return Err(anyhow!("failed to decode base64 pk={}: {}", pk, e));
+        }
+    }
+}
+// Utility to convert a base64 unpadded string (often used as JSON-RPC param)
+// to a [u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
+pub fn sui_address_bytes_from_base64(
+    sui_address: &str,
+) -> Result<[u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]> {
+    if sui_address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
+        return Err(anyhow!("Invalid SUI address length"));
+    }
+
+    // Decode the base64 string into a byte array.
+    let mut buffer = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
+    match Base64UrlUnpadded::decode(sui_address, &mut buffer) {
+        Ok(_) => Ok(buffer),
+        Err(e) => {
+            return Err(anyhow!("failed to decode base64 pk={}: {}", sui_address, e));
+        }
+    }
 }
 
 pub struct ACoinsChallenge {

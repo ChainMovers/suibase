@@ -172,7 +172,7 @@ impl ACoinsMonitor {
 
     async fn audit(&mut self) {
         // If autocoins is NOT enabled AND there is no autocoins directory, then just do nothing.
-        let (tstarted, tenabled, tsui_address) = {
+        let (tstarted, tenabled, tsui_address, tmode) = {
             let globals_read_guard = self.globals_testnet_config.read().await;
             let globals = &*globals_read_guard;
             let user_config = &globals.user_config;
@@ -180,10 +180,11 @@ impl ACoinsMonitor {
                 user_config.is_user_request_start(),
                 user_config.is_autocoins_enabled(),
                 user_config.autocoins_address(),
+                user_config.autocoins_mode(),
             )
         };
 
-        let (dstarted, denabled, dsui_address) = {
+        let (dstarted, denabled, dsui_address, dmode) = {
             let globals_read_guard = self.globals_devnet_config.read().await;
             let globals = &*globals_read_guard;
             let user_config = &globals.user_config;
@@ -191,10 +192,11 @@ impl ACoinsMonitor {
                 user_config.is_user_request_start(),
                 user_config.is_autocoins_enabled(),
                 user_config.autocoins_address(),
+                user_config.autocoins_mode(),
             )
         };
 
-        let (mstarted, menabled, msui_address) = {
+        let (mstarted, menabled, msui_address, mmode) = {
             let globals_read_guard = self.globals_mainnet_config.read().await;
             let globals = &*globals_read_guard;
             let user_config = &globals.user_config;
@@ -202,6 +204,7 @@ impl ACoinsMonitor {
                 user_config.is_user_request_start(),
                 user_config.is_autocoins_enabled(),
                 user_config.autocoins_address(),
+                user_config.autocoins_mode(),
             )
         };
 
@@ -244,12 +247,15 @@ impl ACoinsMonitor {
                     tstarted,
                     tenabled,
                     &tsui_address,
+                    tmode,
                     dstarted,
                     denabled,
                     &dsui_address,
+                    dmode,
                     mstarted,
                     menabled,
                     &msui_address,
+                    mmode,
                 )
                 .await;
         }

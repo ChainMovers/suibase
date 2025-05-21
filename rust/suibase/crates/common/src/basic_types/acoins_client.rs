@@ -87,17 +87,17 @@ use reqwest::Client;
 
 use crate::{
     basic_types::{
-        ACoinsChallenge, ACoinsVerifyBuffer, ACOINS_SERVER_STAGE_PORT_API,
-        ACOINS_SERVER_STAGE_PORT_DOWNLOAD, ACOINS_SERVER_TEST_PORT_API,
-        ACOINS_SERVER_TEST_PORT_DOWNLOAD, ACOINS_STORAGE_FILE_SIZE,
+        ACoinsChallenge, ACoinsVerifyBuffer, ACOINS_SERVER_STAGE_API_PORT,
+        ACOINS_SERVER_STAGE_DOWNLOAD_PORT, ACOINS_SERVER_TEST_API_PORT,
+        ACOINS_SERVER_TEST_DOWNLOAD_PORT, ACOINS_STORAGE_FILE_SIZE,
     },
     log_safe_err, log_safe_warn,
 };
 
 use super::{
-    json_rpc::parse_json_rpc_response, LoginResponse, ServerMode, StatusYaml, UserKeypair,
-    VerifyResponse, ACOINS_PROTOCOL_VERSION_LATEST, ACOINS_SERVER_PUBLIC_PORT_API,
-    ACOINS_SERVER_PUBLIC_PORT_DOWNLOAD, ACOINS_STORAGE_NB_FILES,
+    json_rpc::parse_json_rpc_response, ClientMode, LoginResponse, ServerMode, StatusYaml,
+    UserKeypair, VerifyResponse, ACOINS_PROTOCOL_VERSION_LATEST, ACOINS_SERVER_PUBLIC_API_PORT,
+    ACOINS_SERVER_PUBLIC_DOWNLOAD_PORT, ACOINS_STORAGE_NB_FILES,
 };
 pub struct ACoinsClient {
     client: Client,
@@ -137,13 +137,13 @@ impl ACoinsClient {
         params: serde_json::Value,
     ) -> Result<reqwest::Response, reqwest::Error> {
         let url = if self.is_test_setup() {
-            format!("http://127.0.0.1:{}", ACOINS_SERVER_TEST_PORT_API)
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_TEST_API_PORT)
         } else if self.is_stage_setup() {
-            format!("http://127.0.0.1:{}", ACOINS_SERVER_STAGE_PORT_API)
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_STAGE_API_PORT)
         } else {
             format!(
                 "https://poi-server.suibase.io:{}",
-                ACOINS_SERVER_PUBLIC_PORT_API
+                ACOINS_SERVER_PUBLIC_API_PORT
             )
         };
 
@@ -168,13 +168,13 @@ impl ACoinsClient {
         pk_short: &str,
     ) -> Result<reqwest::Response, reqwest::Error> {
         let url = if self.is_test_setup() {
-            format!("http://127.0.0.1:{}", ACOINS_SERVER_TEST_PORT_DOWNLOAD)
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_TEST_DOWNLOAD_PORT)
         } else if self.is_stage_setup() {
-            format!("http://127.0.0.1:{}", ACOINS_SERVER_STAGE_PORT_DOWNLOAD)
+            format!("http://127.0.0.1:{}", ACOINS_SERVER_STAGE_DOWNLOAD_PORT)
         } else {
             format!(
                 "https://poi-server.suibase.io:{}",
-                ACOINS_SERVER_PUBLIC_PORT_DOWNLOAD
+                ACOINS_SERVER_PUBLIC_DOWNLOAD_PORT
             )
         };
 
@@ -809,17 +809,17 @@ impl ACoinsClient {
         // Note: challenge and pk were already set in signer while parsing LoginResponse.
         if let Some(address) = cfg_testnet_address {
             params["testnet_address"] = serde_json::json!(address);
-            let _ = signer.set_testnet_address_from_base64(address);
+            let _ = signer.set_testnet_address_from_hex(address);
         }
 
         if let Some(address) = cfg_devnet_address {
             params["devnet_address"] = serde_json::json!(address);
-            let _ = signer.set_devnet_address_from_base64(address);
+            let _ = signer.set_devnet_address_from_hex(address);
         }
 
         if let Some(address) = cfg_mainnet_address {
             params["mainnet_address"] = serde_json::json!(address);
-            let _ = signer.set_mainnet_address_from_base64(address);
+            let _ = signer.set_mainnet_address_from_hex(address);
         }
 
         if data_str.is_some() {
@@ -851,12 +851,15 @@ impl ACoinsClient {
         cfg_testnet_started: bool, // User controlled. true when testnet services are started.
         cfg_testnet_enabled: bool, // User controlled. true when suibase.yaml 'autocoins_enabled: true' for testnet.
         cfg_testnet_address: &Option<String>, // This is the user specified deposit address in suibase.yaml.
+        cfg_testnet_mode: ClientMode,
         cfg_devnet_started: bool,
         cfg_devnet_enabled: bool,
         cfg_devnet_address: &Option<String>,
+        cfg_devnet_mode: ClientMode,
         cfg_mainnet_enabled: bool,
         cfg_mainnet_started: bool,
         cfg_mainnet_address: &Option<String>,
+        cfg_mainnet_mode: ClientMode,
     ) -> Result<()> {
         // Load status.yaml file (or start with default)
         let status_yaml = autocoins_dir.as_ref().join("status.yaml");
@@ -876,6 +879,9 @@ impl ACoinsClient {
         status.dstarted = cfg_devnet_started;
         status.menabled = cfg_mainnet_enabled;
         status.mstarted = cfg_mainnet_started;
+        status.tmode = cfg_testnet_mode;
+        status.dmode = cfg_devnet_mode;
+        status.mmode = cfg_mainnet_mode;
 
         // For now, only testnet/mainnet autocoins are really working, although
         // the protocol already supports mainnet for (may be) future deposits to

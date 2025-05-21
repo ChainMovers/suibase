@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use std::sync::LazyLock;
 
-use crate::basic_types::WorkdirIdx;
+use crate::basic_types::{ClientMode, WorkdirIdx};
 
 // workdir_idx are hard coded for performance.
 pub const WORKDIR_IDX_MAINNET: WorkdirIdx = 0;
@@ -282,6 +282,7 @@ pub struct WorkdirUserConfig {
     dtp_default_gas_address: Option<String>, // Pays gas when txn not related to a service.
     autocoins_enabled: bool,
     autocoins_address: Option<String>,
+    autocoins_mode: ClientMode,
 }
 
 impl WorkdirUserConfig {
@@ -298,6 +299,7 @@ impl WorkdirUserConfig {
             dtp_default_gas_address: None,
             autocoins_enabled: false,
             autocoins_address: None,
+            autocoins_mode: ClientMode::Unknown,
         }
     }
 
@@ -331,6 +333,10 @@ impl WorkdirUserConfig {
 
     pub fn autocoins_address(&self) -> Option<String> {
         self.autocoins_address.clone()
+    }
+
+    pub fn autocoins_mode(&self) -> ClientMode {
+        self.autocoins_mode
     }
 
     pub fn dtp_services(&self) -> &LinkedList<DTPService> {
@@ -453,6 +459,19 @@ impl WorkdirUserConfig {
             self.autocoins_enabled = autocoins_enabled;
         } else if let Some(autocoins_enabled) = yaml["autocoins_enabled"].as_str() {
             self.autocoins_enabled = autocoins_enabled != "false";
+        }
+
+        if let Some(mode) = yaml["autocoins_mode"].as_str() {
+            match mode.to_lowercase().as_str() {
+                "stage" => self.autocoins_mode = ClientMode::Stage,
+                "test" => self.autocoins_mode = ClientMode::Test,
+                "public" => self.autocoins_mode = ClientMode::Public,
+                "unknown" => self.autocoins_mode = ClientMode::Unknown,
+                _ => {
+                    // Invalid mode, default to Unknown
+                    self.autocoins_mode = ClientMode::Unknown;
+                }
+            }
         }
 
         // autocoins_address is a hex string, e.g. "0x1234..." with 64 hex digits. The

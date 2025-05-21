@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 // Some common types depending only on built-in or tokio types.
 pub type EpochTimestamp = tokio::time::Instant;
 
@@ -179,11 +181,21 @@ pub trait WorkdirContext {
 //       because multiple instance of PublicVerifier are
 //       allowed for load balancing.
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ServerMode {
-    Test,
     #[default]
+    Unknown,
+    Test,
     Stage,
     PublicVerifier,
     PublicDistributor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ClientMode {
+    #[default]
+    Unknown,
+    Test,
+    Stage,
+    Public,
 }

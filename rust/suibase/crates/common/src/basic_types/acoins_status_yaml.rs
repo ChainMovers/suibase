@@ -8,6 +8,8 @@ use std::{
 use tokio::fs;
 use twox_hash::XxHash64;
 
+use super::ClientMode;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum StatusState {
@@ -58,6 +60,9 @@ pub struct StatusYaml {
     #[serde(default)]
     pub tstarted: bool,
 
+    #[serde(default)]
+    pub tmode: ClientMode,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlast_error: Option<String>,
 
@@ -83,6 +88,9 @@ pub struct StatusYaml {
     #[serde(default)]
     pub dstarted: bool,
 
+    #[serde(default)]
+    pub dmode: ClientMode,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dlast_error: Option<String>,
 
@@ -107,6 +115,9 @@ pub struct StatusYaml {
 
     #[serde(default)]
     pub mstarted: bool,
+
+    #[serde(default)]
+    pub mmode: ClientMode,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mlast_error: Option<String>,
@@ -170,6 +181,7 @@ impl Default for StatusYaml {
             tstatus: StatusState::default(),
             tenabled: false,
             tstarted: false,
+            tmode: ClientMode::default(),
             tlast_error: None,
             tlast_warning: None,
             tsui_address: None,
@@ -179,6 +191,7 @@ impl Default for StatusYaml {
             dstatus: StatusState::default(),
             denabled: false,
             dstarted: false,
+            dmode: ClientMode::default(),
             dlast_error: None,
             dlast_warning: None,
             dsui_address: None,
@@ -188,6 +201,7 @@ impl Default for StatusYaml {
             mstatus: StatusState::default(),
             menabled: false,
             mstarted: false,
+            mmode: ClientMode::default(),
             mlast_error: None,
             mlast_warning: None,
             msui_address: None,
