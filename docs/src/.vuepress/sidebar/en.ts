@@ -27,6 +27,10 @@ export const enSidebar = sidebar({
           text: "Walrus",
           link: "walrus.md",
         },
+        {
+          text: "Autocoins",
+          link: "autocoins.md",
+        },
       ],
     },
     {
@@ -82,7 +86,7 @@ export const enSidebar = sidebar({
         {
           text: "Workdir Conventions",
           link: "references.md",
-        }
+        },
       ],
     },
     {
