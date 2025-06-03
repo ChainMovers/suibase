@@ -59,9 +59,6 @@ links:
   - alias: "allnodes.com"
     rpc: "https://sui-testnet.publicnode.com:443"
     priority: 20
-  - alias: "ankr.com"
-    rpc: "https://rpc.ankr.com/sui_testnet"
-    priority: 20
   - alias: "blastapi.io"
     rpc: "https://sui-testnet.public.blastapi.io:443"
     ws: "wss://sui-testnet.public.blastapi.io:443"
@@ -71,6 +68,9 @@ links:
     metrics: "https://rpc-testnet.suiscan.xyz/metrics"
     ws: "wss://rpc-testnet.suiscan.xyz/websocket"
     priority: 20
+#  - alias: "ankr.com"
+#    rpc: "https://rpc.ankr.com/sui_testnet"
+#    priority: 20
 # - alias: "vincagame.com"
 #    rpc: "https://fullnode.testnet.vincagame.com:443"
 #    ws: "wss://fullnode.testnet.vincagame.com:443"
