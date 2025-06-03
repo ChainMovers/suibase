@@ -24,9 +24,6 @@ pub const fn hex_len(byte_length: usize) -> usize {
 pub const ACOINS_PROTOCOL_V1: u8 = 1;
 pub const ACOINS_PROTOCOL_VERSION_LATEST: u8 = ACOINS_PROTOCOL_V1;
 
-pub const ACOINS_STORAGE_NB_FILES: u8 = 25;
-pub const ACOINS_STORAGE_FILE_SIZE: usize = 20 * 1024 * 1024;
-
 pub const ACOINS_CHALLENGE_BYTES_LENGTH: usize = 12;
 pub const ACOINS_CHALLENGE_STRING_LENGTH: usize = base64_len(ACOINS_CHALLENGE_BYTES_LENGTH);
 
@@ -36,15 +33,35 @@ pub const ACOINS_PK_STRING_LENGTH: usize = base64_len(ACOINS_PK_BYTES_LENGTH);
 pub const ACOINS_PK_SHORT_BYTES_LENGTH: usize = 6;
 pub const ACOINS_PK_SHORT_STRING_LENGTH: usize = base64_len(ACOINS_PK_SHORT_BYTES_LENGTH);
 
-pub const ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH: usize = 8;
-pub const ACOINS_CHALLENGE_RESPONSE_STRING_LENGTH: usize =
-    base64_len(ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH);
-
 pub const ACOINS_SIGNATURE_BYTES_LENGTH: usize = 64;
 pub const ACOINS_SIGNATURE_STRING_LENGTH: usize = base64_len(ACOINS_SIGNATURE_BYTES_LENGTH); // = 86
 
 pub const ACOINS_SUI_ADDRESS_BYTES_LENGTH: usize = 32;
 pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = hex_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
+
+// Constants related to user specific challenges.
+pub const ACOINS_STORAGE_NB_FILES: u8 = 25;
+pub const ACOINS_STORAGE_FILE_SIZE: usize = 20 * 1024 * 1024;
+
+// Constants related to versioned installed file challenges.
+pub const ACOINS_CHALLENGE_FILE_SCRIPT_GLOBALS: u8 = 250;
+pub const ACOINS_CHALLENGE_FILE_TSITE_BIN: u8 = 251;
+pub const ACOINS_CHALLENGE_FILE_TWALRUS_BIN: u8 = 252;
+pub const ACOINS_CHALLENGE_FILE_TSUI_BIN: u8 = 253;
+pub const ACOINS_CHALLENGE_FILE_SUIBASE_BIN: u8 = 254;
+
+// The response for the challenge.
+//
+// When FILE ID is > ACOINS_STORAGE_NB_DILES, this is encoded as:
+//  - 3 bytes for <major>.<minor>.<patch> version installed.
+//  - 5 bytes digest of the file requested.
+//
+// When a FILE ID is <= ACOINS_STORAGE_NB_DILES, this is encoded as:
+//  - 8 bytes read at the challenge location.
+//
+pub const ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH: usize = 8;
+pub const ACOINS_CHALLENGE_RESPONSE_STRING_LENGTH: usize =
+    base64_len(ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH);
 
 // Production address and ports
 pub const ACOINS_SERVER_PUBLIC_URL: &str = "https://autocoins.suibase.io";
