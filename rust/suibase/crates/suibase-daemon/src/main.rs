@@ -46,8 +46,10 @@ use clap::*;
 
 use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
-use common::basic_types::{ServerMode, MPSC_Q_SIZE};
-use env_logger::{Builder, Env};
+use common::{
+    basic_types::{ServerMode, MPSC_Q_SIZE},
+    log_safe,
+};
 
 mod admin_controller;
 mod api;
@@ -123,6 +125,9 @@ impl Command {
                 if force_exit {
                     std::process::exit(13);
                 }
+
+                log::info!("log::info!() tracing enabled");
+                log_safe!("log_safe!() tracing enabled");
 
                 // Create mpsc channels (internal messaging between threads).
                 //
@@ -220,6 +225,9 @@ impl Command {
 
 #[tokio::main]
 async fn main() {
+    // Bridging log::* to tracing::*
+    tracing_log::LogTracer::init().expect("Failed to set logger");
+
     // Initialize tracing with env filter support
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(
@@ -242,10 +250,6 @@ async fn main() {
 
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
-
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .filter(Some("jsonrpsee_server::server"), log::LevelFilter::Warn)
-        .init();
 
     let cmd: Command = Command::parse();
 

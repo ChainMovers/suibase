@@ -33,7 +33,11 @@ impl TracingSafe {
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("unknown");
 
-        let caller = format!("{}:{}:{}", level, file, line);
+        // Create a target that includes only file and line
+        let location = format!("{}:{}", file, line);
+
+        // Add the level for deduplication.
+        let caller = format!("{}:{}", level, location);
 
         // Use std::sync::Mutex
         let mut logger_states = match self.logger_states.lock() {
@@ -60,42 +64,42 @@ impl TracingSafe {
                 match level {
                     tracing::Level::ERROR => {
                         error!(
-                            target: "dedup",
-                            repeat_count = state.counter,
-                            file = file,
-                            message = %msg,
-                            "{}",
-                            msg
+                            target: "safe",
+                            "{} [{}]{}{}",
+                            msg,
+                            location,
+                            if state.counter > 0 { "(" } else { "" },
+                            if state.counter > 0 { state.counter.to_string() + ")" } else { "".to_string() },
                         )
                     }
                     tracing::Level::WARN => {
                         warn!(
-                            target: "dedup",
-                            repeat_count = state.counter,
-                            file = file,
-                            message = %msg,
-                            "{}",
-                            msg
+                            target: "safe",
+                            "{} [{}]{}{}",
+                            msg,
+                            location,
+                            if state.counter > 0 { "(" } else { "" },
+                            if state.counter > 0 { state.counter.to_string() + ")" } else { "".to_string() },
                         )
                     }
                     tracing::Level::DEBUG => {
                         debug!(
-                            target: "dedup",
-                            repeat_count = state.counter,
-                            file = file,
-                            message = %msg,
-                            "{}",
-                            msg
+                            target: "safe",
+                            "{} [{}]{}{}",
+                            msg,
+                            location,
+                            if state.counter > 0 { "(" } else { "" },
+                            if state.counter > 0 { state.counter.to_string() + ")" } else { "".to_string() },
                         )
                     }
                     _ => {
                         info!(
-                            target: "dedup",
-                            repeat_count = state.counter,
-                            file = file,
-                            message = %msg,
-                            "{}",
-                            msg
+                            target: "safe",
+                            "{} [{}]{}{}",
+                            msg,
+                            location,
+                            if state.counter > 0 { "(" } else { "" },
+                            if state.counter > 0 { state.counter.to_string() + ")" } else { "".to_string() },
                         )
                     }
                 }
