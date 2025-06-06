@@ -339,7 +339,6 @@ fn test_alternate_flag_and_req_file_changes() {
 // Helper function for creating test keypair - implementation depends on your UserKeypair
 
 #[test]
-#[test]
 fn test_address_hex_setters() {
     let mut buffer = ACoinsVerifyBuffer::new();
 
