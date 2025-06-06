@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use common::{basic_types::*, log_safe};
+use common::{basic_types::*, log_safe_err};
 
 use crate::shared_types::{GlobalsWorkdirConfigMT, GlobalsWorkdirStatusMT};
 
@@ -36,7 +36,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 //     "length": 43,    // Number of bytes to read in the file. From 32 to 256 bytes
 //   }
 //
-// The ACoinsMonitor will then handle build and send the challenge response with another method:
+// The ACoinsMonitor will then create and send the challenge response with another method:
 // JSON-RPC Method: ChallengeResponse
 // data:
 //   {
@@ -59,7 +59,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 //     "download_id": "" // Ephemeral Base58 url used to download the file. Present only if a file should be downloaded.
 //   }
 //
-// The ACoinsMonitor will then immediatly initiate the download of the file using the download_id with:
+// The ACoinsMonitor will immediatly initiate the download of the file using the download_id with:
 //    https://poi.suibase.io/download/{download_id}
 //
 // The download_id a URL encode the following:
@@ -215,7 +215,7 @@ impl ACoinsMonitor {
             }
             if let Err(error) = tokio::fs::create_dir_all(&path).await {
                 let err_msg = format!("failed to create directory {}: {}", path.display(), error);
-                log_safe!(err_msg);
+                log_safe_err!(err_msg);
                 return;
             }
         }
@@ -229,7 +229,7 @@ impl ACoinsMonitor {
             Ok(user_keypair) => user_keypair,
             Err(error) => {
                 let err_msg = format!("{}", error);
-                log_safe!(err_msg);
+                log_safe_err!(err_msg);
                 return;
             }
         };

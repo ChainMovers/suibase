@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use crate::log_safe_err;
 trait JsonRpcValidation {
     fn jsonrpc(&self) -> &str;
     fn id(&self) -> i64;
@@ -57,7 +56,7 @@ where
     T: for<'de> serde::Deserialize<'de>,
 {
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!("Response error: {}", response.status()));
+        return Err(anyhow::anyhow!("JSON-RPC error: {}", response.status()));
     }
 
     let text = response.text().await?;
@@ -65,18 +64,14 @@ where
     match serde_json::from_str::<JsonRpcResponse<T>>(&text) {
         Ok(response_json) => {
             if let Err(e) = response_json.validate_json_rpc() {
-                // Log the raw response when validation fails
-                log_safe_err!(format!("JSON-RPC validation error: {}", e));
-                log_safe_err!(format!("Raw response: {}", text));
-                return Err(e);
+                let err_msg = format!("JSON-RPC validation error: [{}] Raw=[{}]", e, text);
+                return Err(anyhow::anyhow!(err_msg));
             }
             Ok(response_json.result)
         }
         Err(e) => {
-            // Log the raw response when parsing fails
-            log_safe_err!(format!("Error parsing JSON-RPC response: {}", e));
-            log_safe_err!(format!("Raw response: {}", text));
-            Err(anyhow::anyhow!("Failed to parse JSON response: {}", e))
+            let err_msg = format!("JSON-RPC parsing parsing : [{}] Raw=[{}]", e, text);
+            Err(anyhow::anyhow!(err_msg))
         }
     }
 }

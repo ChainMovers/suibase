@@ -608,8 +608,7 @@ workdir_exec() {
       _SHOW_ACOINS=false
     elif [ "${CFG_autocoins_enabled:?}" == "false" ]; then
       _SUPPORT_ACOINS=false
-      # TODO Switch this to true once autocoins feature is complete.
-      _SHOW_ACOINS=false
+      _SHOW_ACOINS=true
     else
       _SUPPORT_ACOINS=true
       _SHOW_ACOINS=true

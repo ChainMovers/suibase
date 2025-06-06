@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Utc;
 use futures::StreamExt;
@@ -91,12 +91,12 @@ use crate::{
         ACOINS_SERVER_STAGE_DOWNLOAD_PORT, ACOINS_SERVER_TEST_API_PORT,
         ACOINS_SERVER_TEST_DOWNLOAD_PORT, ACOINS_STORAGE_FILE_SIZE,
     },
-    log_safe_err, log_safe_warn,
+    log_safe, log_safe_err, log_safe_warn,
 };
 
 use super::{
-    json_rpc::parse_json_rpc_response, ClientMode, LoginResponse, ServerMode, StatusYaml,
-    UserKeypair, VerifyResponse, ACOINS_PROTOCOL_VERSION_LATEST, ACOINS_SERVER_PUBLIC_API_PORT,
+    parse_json_rpc_response, ClientMode, LoginResponse, ServerMode, StatusYaml, UserKeypair,
+    VerifyResponse, ACOINS_PROTOCOL_VERSION_LATEST, ACOINS_SERVER_PUBLIC_API_PORT,
     ACOINS_SERVER_PUBLIC_DOWNLOAD_PORT, ACOINS_STORAGE_NB_FILES,
 };
 pub struct ACoinsClient {
@@ -196,7 +196,8 @@ impl ACoinsClient {
     ) -> Result<()> {
         let dt_now = Utc::now();
 
-        if !self.is_test_setup() {
+        let is_production = !self.is_test_setup() && !self.is_stage_setup();
+        if is_production {
             // Rate limit the protocol to 1 per hour using the storage persistent state.
             if let Some(last_verification_attempt) = status_yaml.last_verification_attempt {
                 let elapsed = dt_now.signed_duration_since(last_verification_attempt);
@@ -220,7 +221,7 @@ impl ACoinsClient {
         }
 
         let mut run_protocol = false;
-        if self.is_test_setup() {
+        if !is_production {
             run_protocol = true;
         } else {
             // Always run the protocol once after the process is started.
@@ -306,14 +307,17 @@ impl ACoinsClient {
         cfg_devnet_address: &Option<String>,
         cfg_mainnet_address: &Option<String>,
     ) -> Result<()> {
+        log_safe!(format!(
+            "Running ACoinsClient protocol for user keypair: {}",
+            user_keypair.pk_to_string()
+        ));
         // Do the login step of the protocol.
         let pk = user_keypair.pk_to_string();
         let mut signer = match self.do_login_step(&pk).await {
             Ok(signer) => signer,
             Err(e) => {
                 let err_msg = format!("Failed to login: {}", e);
-                crate::log_safe_err!(err_msg);
-                return Ok(());
+                return Err(anyhow!(err_msg));
             }
         };
 
@@ -342,8 +346,7 @@ impl ACoinsClient {
             Ok(verify_response) => verify_response,
             Err(e) => {
                 let err_msg = format!("Failed to verify: {}", e);
-                crate::log_safe_err!(err_msg);
-                return Ok(());
+                return Err(anyhow!(err_msg));
             }
         };
 
@@ -883,9 +886,8 @@ impl ACoinsClient {
         status.dmode = cfg_devnet_mode;
         status.mmode = cfg_mainnet_mode;
 
-        // For now, only testnet/mainnet autocoins are really working, although
-        // the protocol already supports mainnet for (may be) future deposits to
-        // loyal long-term users.
+        // For now, only testnet autocoins are really working, although the protocol already
+        // supports mainnet for (may be) future deposits to loyal long-term users.
         if (status.tenabled && status.tstarted)
             || (status.denabled && status.dstarted)
             || (status.menabled && status.mstarted)

@@ -11,7 +11,7 @@ pub use self::autosize_vec::*;
 pub use self::autosize_vec_map_vec::*;
 //pub use self::db_objects::*;
 pub use self::error::*;
-//pub use self::json_rpc::*;
+pub use self::json_rpc::*;
 pub use self::json_sui_cmd::*;
 pub use self::log_safe::*;
 pub use self::managed_vec::*;

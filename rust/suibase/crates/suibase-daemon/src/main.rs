@@ -46,10 +46,7 @@ use clap::*;
 
 use clock_trigger::{ClockTrigger, ClockTriggerParams};
 use colored::Colorize;
-use common::{
-    basic_types::{ServerMode, MPSC_Q_SIZE},
-    log_safe,
-};
+use common::basic_types::{ServerMode, MPSC_Q_SIZE};
 
 mod admin_controller;
 mod api;
@@ -125,9 +122,6 @@ impl Command {
                 if force_exit {
                     std::process::exit(13);
                 }
-
-                log::info!("log::info!() tracing enabled");
-                log_safe!("log_safe!() tracing enabled");
 
                 // Create mpsc channels (internal messaging between threads).
                 //

@@ -3,8 +3,7 @@ use super::{
     UserKeypair, ACOINS_CHALLENGE_BYTES_LENGTH, ACOINS_CHALLENGE_RESPONSE_BYTES_LENGTH,
     ACOINS_CHALLENGE_RESPONSE_STRING_LENGTH, ACOINS_CHALLENGE_STRING_LENGTH,
     ACOINS_PK_BYTES_LENGTH, ACOINS_PK_STRING_LENGTH, ACOINS_SIGNATURE_BYTES_LENGTH,
-    ACOINS_SIGNATURE_STRING_LENGTH, ACOINS_SUI_ADDRESS_BYTES_LENGTH,
-    ACOINS_SUI_ADDRESS_STRING_LENGTH,
+    ACOINS_SIGNATURE_STRING_LENGTH, ACOINS_SUI_ADDRESS_BYTES_LENGTH, ACOINS_SUI_ADDRESS_HEX_LENGTH,
 };
 use arrayref::{array_mut_ref, array_ref};
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -235,44 +234,10 @@ impl ACoinsVerifyBuffer {
         Ok(())
     }
 
-    /// Initialize the deposit address part from a base64 string
-    pub fn set_devnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
-        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
-            return Err("Invalid devnet address length");
-        }
-
-        Base64UrlUnpadded::decode(address, self.devnet_address_mut())
-            .map_err(|_| "Error decoding devnet address")?;
-        Ok(())
-    }
-
-    /// Initialize the testnet address part from a base64 string
-    /*
-        pub fn set_testnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
-            if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
-                return Err("Invalid testnet address length");
-            }
-
-            Base64UrlUnpadded::decode(address, self.testnet_address_mut())
-                .map_err(|_| "Error decoding testnet address")?;
-            Ok(())
-        }
-
-        /// Initialize the mainnet address part from a base64 string
-        pub fn set_mainnet_address_from_base64(&mut self, address: &str) -> Result<(), &'static str> {
-            if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
-                return Err("Invalid mainnet address length");
-            }
-
-            Base64UrlUnpadded::decode(address, self.mainnet_address_mut())
-                .map_err(|_| "Error decoding mainnet address")?;
-            Ok(())
-        }
-    */
     /// set address using an hex string instead (with or without 0x prefix)
     pub fn set_devnet_address_from_hex(&mut self, address: &str) -> Result<(), &'static str> {
-        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
-            && address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        if address.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH
+            && address.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH + 2
         {
             return Err("Invalid devnet address length");
         }
@@ -291,8 +256,8 @@ impl ACoinsVerifyBuffer {
     }
 
     pub fn set_testnet_address_from_hex(&mut self, address: &str) -> Result<(), &'static str> {
-        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
-            && address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        if address.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH
+            && address.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH + 2
         {
             return Err("Invalid testnet address length");
         }
@@ -311,8 +276,8 @@ impl ACoinsVerifyBuffer {
     }
 
     pub fn set_mainnet_address_from_hex(&mut self, address: &str) -> Result<(), &'static str> {
-        if address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
-            && address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+        if address.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH
+            && address.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH + 2
         {
             return Err("Invalid mainnet address length");
         }

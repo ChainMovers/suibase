@@ -37,7 +37,8 @@ pub const ACOINS_SIGNATURE_BYTES_LENGTH: usize = 64;
 pub const ACOINS_SIGNATURE_STRING_LENGTH: usize = base64_len(ACOINS_SIGNATURE_BYTES_LENGTH); // = 86
 
 pub const ACOINS_SUI_ADDRESS_BYTES_LENGTH: usize = 32;
-pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = hex_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
+pub const ACOINS_SUI_ADDRESS_STRING_LENGTH: usize = base64_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
+pub const ACOINS_SUI_ADDRESS_HEX_LENGTH: usize = hex_len(ACOINS_SUI_ADDRESS_BYTES_LENGTH);
 
 // Constants related to user specific challenges.
 pub const ACOINS_STORAGE_NB_FILES: u8 = 25;
@@ -85,19 +86,19 @@ pub const ACOINS_SERVER_STAGE_DISTRIBUTOR_PORT: u16 = 44422;
 pub const ACOINS_SERVER_STAGE_ADMIN_PORT: u16 = 44423;
 
 // Utility to convert a Sui address ("0x"+64 hex chars) to a base64 unpadded string.
-pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {
-    if sui_address.len() != (ACOINS_SUI_ADDRESS_STRING_LENGTH + 2)
-        && sui_address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH
+pub fn sui_address_hex_to_base64(sui_address_hex: &str) -> Result<String> {
+    if sui_address_hex.len() != (ACOINS_SUI_ADDRESS_HEX_LENGTH + 2)
+        && sui_address_hex.len() != ACOINS_SUI_ADDRESS_HEX_LENGTH
     {
         let err_msg = format!(
             "Invalid SUI address length {}. Expected {} or {}",
-            sui_address.len(),
-            ACOINS_SUI_ADDRESS_STRING_LENGTH,
-            ACOINS_SUI_ADDRESS_STRING_LENGTH + 2
+            sui_address_hex.len(),
+            ACOINS_SUI_ADDRESS_HEX_LENGTH,
+            ACOINS_SUI_ADDRESS_HEX_LENGTH + 2
         );
         return Err(anyhow::anyhow!(err_msg));
     }
-    let bytes = Hex::decode(sui_address)?;
+    let bytes = Hex::decode(sui_address_hex)?;
 
     let mut buffer = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
     buffer.copy_from_slice(&bytes);
@@ -107,35 +108,40 @@ pub fn sui_address_to_base64(sui_address: &str) -> Result<String> {
 
 // Utility to convert a base64 unpadded string (often used as JSON-RPC param)
 // to a [u8; ACOINS_PK_BYTES_LENGTH]
-pub fn pk_bytes_from_base64(pk: &str) -> Result<[u8; ACOINS_PK_BYTES_LENGTH]> {
-    if pk.len() != ACOINS_PK_STRING_LENGTH {
-        return Err(anyhow!("Invalid public key length pk={}", pk));
+pub fn pk_bytes_from_base64(pk_base64: &str) -> Result<[u8; ACOINS_PK_BYTES_LENGTH]> {
+    if pk_base64.len() != ACOINS_PK_STRING_LENGTH {
+        return Err(anyhow!("Invalid public key length pk={}", pk_base64));
     }
 
     // Decode the base64 string into a byte array.
     let mut buffer = [0u8; ACOINS_PK_BYTES_LENGTH];
-    match Base64UrlUnpadded::decode(pk, &mut buffer) {
+    match Base64UrlUnpadded::decode(pk_base64, &mut buffer) {
         Ok(_) => Ok(buffer),
         Err(e) => {
-            return Err(anyhow!("failed to decode base64 pk={}: {}", pk, e));
+            return Err(anyhow!("failed to decode base64 pk={}: {}", pk_base64, e));
         }
     }
 }
 // Utility to convert a base64 unpadded string (often used as JSON-RPC param)
 // to a [u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]
 pub fn sui_address_bytes_from_base64(
-    sui_address: &str,
+    sui_address_base64: &str,
 ) -> Result<[u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH]> {
-    if sui_address.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
-        return Err(anyhow!("Invalid SUI address length"));
+    if sui_address_base64.len() != ACOINS_SUI_ADDRESS_STRING_LENGTH {
+        return Err(anyhow!(
+            "Invalid sui_address base64 length {} != expected {} for [{}]",
+            sui_address_base64.len(),
+            ACOINS_SUI_ADDRESS_STRING_LENGTH,
+            sui_address_base64
+        ));
     }
 
     // Decode the base64 string into a byte array.
     let mut buffer = [0u8; ACOINS_SUI_ADDRESS_BYTES_LENGTH];
-    match Base64UrlUnpadded::decode(sui_address, &mut buffer) {
+    match Base64UrlUnpadded::decode(sui_address_base64, &mut buffer) {
         Ok(_) => Ok(buffer),
         Err(e) => {
-            return Err(anyhow!("failed to decode base64 pk={}: {}", sui_address, e));
+            return Err(anyhow!("failed to decode base64 pk={}: {}", sui_address_base64, e));
         }
     }
 }

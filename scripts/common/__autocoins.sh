@@ -56,9 +56,10 @@ update_autocoins_status_yaml() {
     eval "$(parse_yaml "$AUTOCOINS_STATUS_FILE" "ACOINS_")"
   else
     # Use default values if file doesn't exist yet...
-    ACOINS_status="INITIALIZING"
-    ACOINS_deposit_address=""
-    ACOINS_deposit_total=0
+    ACOINS_tstatus="INITIALIZING"
+    ACOINS_tenabled="false"
+    ACOINS_tsui_address=""
+    ACOINS_tsui_deposit=0
     ACOINS_percent_downloaded=0
     # shellcheck disable=SC2034
     ACOINS_last_verification_attempt=0
@@ -215,20 +216,23 @@ autocoins_status() {
   #  Autocoins : STOPPED      (0x123..bcd) (   9 deposits) 100% downloaded
   #
   # Get the info from the status.yaml file
-  AUTOCOINS_INFO="$(format_address "${ACOINS_deposit_address:-}") $(format_deposit_count "${ACOINS_deposit_total:-0}") ${ACOINS_percent_downloaded:-0}% downloaded"
+  AUTOCOINS_INFO="$(format_address "${ACOINS_tsui_address:-}") $(format_deposit_count "${ACOINS_tsui_deposit:-0}") ${ACOINS_percent_downloaded:-0}% downloaded"
 
   if [ "$user_request" = "stop" ]; then
     AUTOCOINS_STATUS="STOPPED"
   elif [ -z "$suibase_daemon_pid" ]; then
     AUTOCOINS_STATUS="NOT RUNNING"
+  elif [ "${ACOINS_tenabled:-}" = "false" ]; then
+    # The config was changed to enabled, but not yet refelected by the daemon.
+    AUTOCOINS_STATUS="ENABLING"
   else
-    AUTOCOINS_STATUS="$ACOINS_status"
+    AUTOCOINS_STATUS="$ACOINS_tstatus"
   fi
 
   if [ "$verbosity" = "verbose" ]; then
     echo -n "Autocoins: "
     autocoins_echo_status_color "$AUTOCOINS_STATUS"
-    echo "$AUTOCOINS_INFO"
+    echo " $AUTOCOINS_INFO"
 
     # Help the user...
     if [ -z "$suibase_daemon_pid" ]; then
