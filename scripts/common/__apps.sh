@@ -975,16 +975,52 @@ sb_app_rust_build_and_install() {
   # Rust (re)build.
   echo "Building $_ASSETS_NAME"
   exit_if_rust_build_deps_missing
+
+  # Check if musl target is installed
+  local USE_MUSL=false
+  if [ "$HOST_PLATFORM" = "Linux" ]; then
+    if rustup target list --installed | grep -q "x86_64-unknown-linux-musl"; then
+      USE_MUSL=true
+      echo "Using musl target for static compilation"
+    else
+      echo "Musl target not installed. Using default dynamic compilation"
+      echo "To install musl support: rustup target add x86_64-unknown-linux-musl"
+    fi
+  fi
+
+  # TODO This supports only suibase-daemon for now...
+
   rm -f "$SUIBASE_DAEMON_VERSION_FILE" >/dev/null 2>&1
 
   # Clean the build directory.
   rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
 
-  (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then cargo build -p "$SUIBASE_DAEMON_NAME"; else setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"; fi)
+  # Build with or without musl
+  if [ "$USE_MUSL" = true ]; then
+    # Build with musl for static binary
+    (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then
+      cargo build --target x86_64-unknown-linux-musl -p "$SUIBASE_DAEMON_NAME"
+     else
+      setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"
+     fi)
+
+    # Use the musl build path
+    local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/x86_64-unknown-linux-musl/debug/$SUIBASE_DAEMON_NAME"
+  else
+    # Standard build
+    (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then
+      cargo build -p "$SUIBASE_DAEMON_NAME"
+     else
+      setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"
+     fi)
+
+    # Use the standard build path
+    local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
+  fi
+
   # Copy the build result from target to $SUIBASE_BIN_DIR
-  local _SRC="$SUIBASE_DAEMON_BUILD_DIR/target/debug/$SUIBASE_DAEMON_NAME"
   if [ ! -f "$_SRC" ]; then
-    setup_error "Fail to build $SUIBASE_DAEMON_NAME"
+    setup_error "Failed to build $SUIBASE_DAEMON_NAME"
   fi
 
   # Sanity test that the binary is working.
@@ -993,7 +1029,7 @@ sb_app_rust_build_and_install() {
 
   # _VERSION should be a string that starts with $SUIBASE_DAEMON_NAME
   if [ -z "$_VERSION" ] || [[ ! "$_VERSION" =~ ^$SUIBASE_DAEMON_NAME ]]; then
-    setup_error "Fail to run $SUIBASE_DAEMON_NAME --version"
+    setup_error "Failed to run $SUIBASE_DAEMON_NAME --version"
   fi
 
   # Remove the leading $SUIBASE_DAEMON_NAME so $_VERSION is just the remaining

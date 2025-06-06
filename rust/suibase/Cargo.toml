@@ -96,7 +96,7 @@ tokio-rustls = { version = "0.26", default-features = false, features = [
 # tokio = { version = "1.36.0", features = ["full","tracing"] }
 # console-subscriber = "0.2.0"
 tokio-graceful-shutdown = "0.16"
-tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
 tokio-util = "0.7.13"
 tower = { version = "0.4.12", features = [
     "full",
