@@ -130,6 +130,7 @@ set_deposit_address_as_needed() {
     # Try to get active address from client.yaml
     local active_address
     update_ACTIVE_ADDRESS_var "$SUI_BIN_DIR/sui" "$CLIENT_CONFIG"
+    # shellcheck disable=SC2153
     active_address="$ACTIVE_ADDRESS"
 
     if [ -n "$active_address" ]; then

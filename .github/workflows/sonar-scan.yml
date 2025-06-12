@@ -15,26 +15,6 @@ jobs:
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
-      - name: Install Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: clippy
-
-      - name: Run Cargo Check
-        run: |
-          cd rust/suibase
-          cargo check --all-features --message-format=json > cargo-check-results.json 2>&1 || true
-
-      - name: Run Clippy
-        run: |
-          cd rust/suibase
-          cargo clippy --all-targets --all-features -- -D warnings > clippy-results.txt 2>&1 || true
-
-      - name: Run ShellCheck for Bash Scripts
-        run: |
-          sudo apt-get install -y shellcheck
-          find . -type f -name "*.sh" -exec shellcheck {} \; > shellcheck-results.txt 2>&1 || true
-
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
