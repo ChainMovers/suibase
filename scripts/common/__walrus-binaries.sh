@@ -74,39 +74,38 @@ update_walrus_app() {
   get_app_var "$app_obj" "assets_name"
   local _ASSETS_NAME=$APP_VAR
 
+  # Note: cli_mutex_lock remains re-entrant within the same process.
+  #       Use the same "walrus" mutex for all walrus app installations.
+  cli_mutex_lock "walrus"
+
+  get_app_var "$app_obj" "local_bin_version"
+  local _OLD_VERSION=$APP_VAR
+
+  app_call "$app_obj" "install"
+  app_call "$app_obj" "set_local_vars"
   get_app_var "$app_obj" "is_installed"
-  local _IS_INSTALLED=$APP_VAR
+  _IS_INSTALLED=$APP_VAR
+  get_app_var "$app_obj" "local_bin_version"
+  local _LOCAL_BIN_LATEST_VERSION=$APP_VAR
+  get_app_var "$app_obj" "local_bin_branch"
+  local _LOCAL_BIN_LATEST_BRANCH=$APP_VAR
 
-  if [ "$_IS_INSTALLED" != "true" ]; then
-    # Note: cli_mutex_lock remains re-entrant within the same process.
-    #       Use the same "walrus" mutex for all walrus app installations.
-    cli_mutex_lock "walrus"
-
-    get_app_var "$app_obj" "local_bin_version"
-    local _OLD_VERSION=$APP_VAR
-
-    app_call "$app_obj" "install"
-    app_call "$app_obj" "set_local_vars"
-    get_app_var "$app_obj" "is_installed"
-    _IS_INSTALLED=$APP_VAR
-    get_app_var "$app_obj" "local_bin_version"
-    local _NEW_VERSION=$APP_VAR
-
-    if [ "$_IS_INSTALLED" != "true" ] || [ -z "$_NEW_VERSION" ]; then
-      setup_error "Failed to install $_ASSETS_NAME"
-    fi
-
-    if [ "$_OLD_VERSION" != "$_NEW_VERSION" ]; then
-      if [ -n "$_OLD_VERSION" ]; then
-        echo "$_ASSETS_NAME upgraded from $_OLD_VERSION to $_NEW_VERSION"
-        _WAS_UPGRADED=true
-      else
-        echo "$_ASSETS_NAME $_NEW_VERSION installed"
-      fi
-    fi
+  if [ "$_IS_INSTALLED" != "true" ] || [ -z "$_LOCAL_BIN_LATEST_VERSION" ]; then
+    setup_error "Failed to install $_ASSETS_NAME"
   fi
 
-  #app_call "$app_obj" "print"
+  if [ "$_OLD_VERSION" != "$_LOCAL_BIN_LATEST_VERSION" ]; then
+    if [ -n "$_OLD_VERSION" ]; then
+      echo "$_ASSETS_NAME upgraded from $_OLD_VERSION to $_LOCAL_BIN_LATEST_VERSION"
+    else
+      echo "$_ASSETS_NAME $_LOCAL_BIN_LATEST_VERSION installed"
+    fi
+  else
+    #app_call "$app_obj" "print"
+    echo "Using precompiled $_ASSETS_NAME [$_LOCAL_BIN_LATEST_BRANCH-v$_LOCAL_BIN_LATEST_VERSION]"
+  fi
+
+
 }
 export -f update_walrus_app
 

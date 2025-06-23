@@ -1070,11 +1070,11 @@ sb_app_install() {
   # Best-effort attempt to update the app locally.
   # (both binaries and code as needed).
   #
-  # Because of potential slow network call, should be called
-  # only when an update/installation is found needed.
+  # Because of potential slow network call, try to call
+  # only when an update/installation is needed.
   #
   # Will check for precompiled binaries and fallback
-  # to buildign as needed.
+  # to building as needed.
 
   # It is assumed that init_app_obj() and set_local_vars were already
   # called on self.
@@ -1092,12 +1092,13 @@ sb_app_install() {
     _PRECOMP_ALLOWED=${CFG_precompiled_bin:?}
   fi
 
-  # Check if the platform/arch are supported.
+
   if [ "$_PRECOMP_ALLOWED" = "true" ]; then
-    # Do a precompiled remote installation.
+    # Attempt a precompiled installation.
     sb_app_init_PRECOMP_REMOTE_vars "$self"
     get_app_var "$self" "PRECOMP_REMOTE_NOT_SUPPORTED"
     local _PRECOMP_REMOTE_NOT_SUPPORTED=$APP_VAR
+    # Check if the platform/arch are supported.
     if [ "$_PRECOMP_REMOTE_NOT_SUPPORTED" = "true" ]; then
       get_app_var "$self" "PRECOMP_REMOTE_PLATFORM"
       local _PRECOMP_REMOTE_PLATFORM=$APP_VAR
@@ -1106,8 +1107,27 @@ sb_app_install() {
       warn_user "Precompiled binaries not supported for ${_PRECOMP_REMOTE_PLATFORM}-${_PRECOMP_REMOTE_ARCH}"
       _PRECOMP_ALLOWED="false"
     else
-      sb_app_download_PRECOMP_REMOTE "$self"
-      sb_app_install_PRECOMP_REMOTE "$self"
+      get_app_var "$self" "is_installed"
+      local _IS_INSTALLED=$APP_VAR
+      local _DO_INSTALL="false"
+      if [ "$_IS_INSTALLED" != "true" ]; then
+        _DO_INSTALL="true"
+      else
+        get_app_var "$self" "local_bin_version"
+        local _LOCAL_BIN_LATEST_VERSION=$APP_VAR
+        get_app_var "$self" "PRECOMP_REMOTE_VERSION"
+        local _PRECOMP_REMOTE_VERSION=$APP_VAR
+        if [ -n "$_LOCAL_BIN_LATEST_VERSION" ] && [ -n "$_PRECOMP_REMOTE_VERSION" ]; then
+          if version_less_than "$_LOCAL_BIN_LATEST_VERSION" "$_PRECOMP_REMOTE_VERSION"; then
+            _DO_INSTALL="true"
+          fi
+        fi
+      fi
+
+      if [ "$_DO_INSTALL" = "true" ]; then
+        sb_app_download_PRECOMP_REMOTE "$self"
+        sb_app_install_PRECOMP_REMOTE "$self"
+      fi
     fi
   fi
 

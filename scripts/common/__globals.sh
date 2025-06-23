@@ -1142,7 +1142,8 @@ build_sui_repo_branch() {
   # Help user by reminding the origin of the binaries.
   if [ "$_FEEDBACK_BEFORE_RETURN" = "true" ]; then
     if [ "$USE_PRECOMPILED" = "true" ]; then
-      echo "Using precompiled binaries from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+      #echo "Using precompiled binaries from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+      echo "Using precompiled sui binaries [$PRECOMP_REMOTE_TAG_NAME]"
     else
       if [ "$_IS_SET_SUI_REPO" = true ]; then
         echo "Using binaries built from repo [$RESOLVED_SUI_REPO_DIR]"
