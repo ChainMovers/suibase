@@ -5,8 +5,4 @@
     ".github/workflows/release-tests.yml",
     ".github/workflows/trig-rust-api-docs.yml"
   ],
-  "sonarlint.connectedMode.project": {
-    "connectionId": "chainmovers",
-    "projectKey": "chainmovers_suibase"
-  }
 }
