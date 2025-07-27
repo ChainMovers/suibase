@@ -61,6 +61,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: "false" # Control cache in "Rust Caching" step instead.
+          target: ${{ runner.os == 'Linux' && 'x86_64-unknown-linux-musl' || '' }}
 
       - name: Rust suibase-daemon caching
         uses: Swatinem/rust-cache@v2
@@ -72,12 +73,13 @@ jobs:
           cache-provider: buildjet
           cache-all-crates: true
 
-      - name: Sui Prerequesites (Ubuntu)
+      - name: Sui Prerequisites (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          sudo apt-get update
+          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential musl musl-tools musl-dev
 
-      - name: Sui Prerequesites (macOS)
+      - name: Sui Prerequisites (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install curl cmake
@@ -88,11 +90,43 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
+      - name: Install Rust musl target (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # Install musl target matching Suibase's rust-toolchain.toml
+          rust_channel=$(grep '^channel' $GITHUB_WORKSPACE/rust/suibase/rust-toolchain.toml | sed 's/channel = "\(.*\)"/\1/')
+          echo "Installing Rust $rust_channel toolchain with musl target (required by Suibase)"
+          rustup toolchain install $rust_channel --target x86_64-unknown-linux-musl --profile minimal
+
       - name: Run suibase rust apps only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           "$HOME/suibase/scripts/tests/run-all.sh" --suibase-daemon-tests
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            echo "=== Binary Analysis ==="
+            binary_path="$HOME/suibase/workdirs/common/bin/suibase-daemon"
+
+            if [[ ! -f "$binary_path" ]]; then
+              echo "❌ Binary not found at $binary_path"
+              exit 1
+            fi
+
+            echo "File info:"
+            file "$binary_path" || echo "Warning: file command failed"
+
+            echo "Library dependencies:"
+            ldd_output=$(ldd "$binary_path" 2>&1) || echo "Warning: ldd command failed"
+            echo "$ldd_output"
+
+            # Check for MUSL specifically
+            if strings "$binary_path" | grep -i musl > /dev/null 2>&1; then
+              echo "✅ MUSL detected in binary"
+            else
+              echo "❌ Binary appears to be dynamically linked"
+              exit 1
+            fi
+          fi
 
   trig:
     needs: test
