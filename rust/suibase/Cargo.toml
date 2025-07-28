@@ -13,7 +13,11 @@ exclude = ["crates/dtp-daemon",
 [workspace.package]
 # Bump 'version' for the daemon to self-restart after an update.
 # (this is not the Suibase package version, it is specifically for the Rust crates).
-version = "0.1.2"
+# Note: Must bump major or minor in version for auto-update.
+#       Changing build field does not trig auto-update (only new installation would
+#       get the updated build).
+#
+version = "0.2.0"
 edition = "2021"
 
 [workspace.dependencies]
