@@ -322,7 +322,7 @@ version_greater_equal() {
   local _arg1 _arg2
   # Remove everything until first digit
   # Remove trailing "-build number" if specified.
-  # Keep only major/minor, ignore minor if specified.
+  # Keep only major/minor, ignore patch if specified.
   # shellcheck disable=SC2001
   _arg1=$(echo "$1" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
   # shellcheck disable=SC2001

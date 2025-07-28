@@ -194,7 +194,7 @@ suibase_repair() {
   if [ -z "$SUIBASE_DAEMON_VERSION_FILE" ]; then
     # shellcheck source=SCRIPTDIR/scripts/common/__suibase-daemon.sh
     source "$REPAIR_SB_DIR/scripts/common/__suibase-daemon.sh"
-    start_suibase_daemon_as_needed
+    start_suibase_daemon_as_needed --check-for-update
   fi
 
   if [ -z "$DTP_DAEMON_VERSION_FILE" ]; then

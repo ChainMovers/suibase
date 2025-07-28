@@ -340,7 +340,7 @@ start_suibase_daemon_as_needed() {
     set_app_var "$app_obj" "precompiled_bin" "false"
   fi
 
-  if [ "$_IS_INSTALLED" != "true" ]; then
+  if [ "$_IS_INSTALLED" != "true" ] || [ "$1" = "--check-for-update" ]; then
     local _PERFORM_INSTALL=false
 
     # Check SUIBASE_DAEMON_UPGRADING to prevent multiple attempts to upgrade

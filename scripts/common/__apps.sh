@@ -922,7 +922,7 @@ sb_app_set_local_vars() {
             _ALL_INSTALLED="false"
             echo "Upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION"
           else
-            warn_user "Not upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION because not on main branch"
+            echo "Not upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION (not on main branch: $_LOCAL_BRANCH)"
           fi
         fi
       fi
