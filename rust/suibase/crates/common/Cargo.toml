@@ -52,3 +52,6 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 uuid7.workspace = true
 zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

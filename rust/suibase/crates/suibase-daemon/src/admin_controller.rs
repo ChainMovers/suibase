@@ -23,7 +23,7 @@ use tokio_graceful_shutdown::{FutureExt, NestedSubsystem, SubsystemBuilder, Subs
 //     (implemented by dequeuing and processing one event at the time).
 //   - Handle events to hot-reload the suibase.yaml
 //   - Handle events for various user actions (e.g. from JSONRPCServer).
-//   - Responsible to keep one "ProxyServer" and "ShellProcessor" running per workdir.
+//   - Responsible to keep one "ProxyServer" and "ShellWorker" running per workdir.
 //
 // globals.proxy: InputPort Instantiation
 // =======================================
@@ -83,7 +83,7 @@ struct InputPortTracking {
 
 impl std::fmt::Debug for InputPortTracking {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WorkdirTracking")
+        f.debug_struct("InputPortTracking")
             // NestedSubsystem does not implement Debug
             .field("port_number", &self.port_number)
             .finish()

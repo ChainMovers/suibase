@@ -1,4 +1,4 @@
-// Child thread of events_writer_worker
+// Child thread of EventsWriterWorker
 //
 // Responsible to:
 //   - websocket auto-reconnect for a single server.

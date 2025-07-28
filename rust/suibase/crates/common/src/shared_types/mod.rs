@@ -5,4 +5,4 @@
 // Flattens everything under "common::shared_type" module.
 pub use self::workdirs::*;
 
-mod workdirs;
+pub mod workdirs;

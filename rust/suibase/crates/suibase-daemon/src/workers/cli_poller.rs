@@ -94,7 +94,7 @@ impl PollingTraitObject {
         resp: &mut WorkdirStatusResponse,
     ) -> (bool, Option<String>) {
         // First line is two words, first should match the workdir name followed by the status word.
-        // If the workdir name does not match, then the resp.status is set to "DOWN" else the status word is stores in resp.status.
+        // If the workdir name does not match, then the resp.status is set to "DOWN" else the status word is stored in resp.status.
         let mut first_line_parsed = false;
         let mut asui_selection: Option<String> = None;
 

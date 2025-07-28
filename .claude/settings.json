@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(find:*)",
+      "Bash(source:*)",
+      "Bash(echo:*)"
+    ],
+    "deny": [
+      "Bash(command:*run-all.sh*)"
+    ]
+  }
+}

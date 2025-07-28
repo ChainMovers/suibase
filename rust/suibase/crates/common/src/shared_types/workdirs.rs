@@ -169,6 +169,7 @@ pub struct Link {
     pub metrics: Option<String>,
     pub ws: Option<String>,
     pub priority: u8,
+    pub max_per_secs: Option<u32>, // Rate limit: maximum requests per second (None = unlimited)
 }
 
 impl Link {
@@ -181,6 +182,7 @@ impl Link {
             metrics: None,
             ws: None,
             priority: u8::MAX,
+            max_per_secs: None, // Default: no rate limit
         }
     }
 }
@@ -560,6 +562,7 @@ impl WorkdirUserConfig {
                     let metrics = link["metrics"].as_str().map(|s| s.to_string()); // Optional
                     let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
                     let priority = link["priority"].as_u64().unwrap_or(u64::MAX) as u8;
+                    let max_per_secs = link["max_per_secs"].as_u64().map(|v| v as u32); // Optional rate limit
                     let link = Link {
                         alias: alias.to_string(),
                         selectable,
@@ -568,6 +571,7 @@ impl WorkdirUserConfig {
                         metrics,
                         ws,
                         priority,
+                        max_per_secs,
                     };
                     // Replace if already present.
                     self.links.insert(alias.to_string(), link);
@@ -648,6 +652,282 @@ impl WorkdirUserConfig {
 impl Default for WorkdirUserConfig {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// Include unit tests for configuration parsing
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+    use std::io::Write;
+
+    #[test]
+    fn test_link_struct_defaults() {
+        let link = Link::new("test".to_string(), "http://localhost:9000".to_string());
+        
+        assert_eq!(link.alias, "test");
+        assert_eq!(link.selectable, true);
+        assert_eq!(link.monitored, true);
+        assert_eq!(link.rpc, Some("http://localhost:9000".to_string()));
+        assert_eq!(link.metrics, None);
+        assert_eq!(link.ws, None);
+        assert_eq!(link.priority, u8::MAX);
+        assert_eq!(link.max_per_secs, None); // Default: no rate limit
+    }
+
+    #[test]
+    fn test_yaml_parsing_with_max_per_secs() {
+        let yaml_content = r#"
+proxy_enabled: true
+links:
+  - alias: "testnet_rpc"
+    rpc: "https://fullnode.testnet.sui.io:443"
+    max_per_secs: 100
+    priority: 10
+  - alias: "localnet_rpc"  
+    rpc: "http://localhost:9000"
+    max_per_secs: 50
+    priority: 20
+  - alias: "unlimited_rpc"
+    rpc: "http://localhost:8000"
+    priority: 30
+"#;
+
+        // Create a temporary file with the YAML content
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        
+        assert!(result.is_ok(), "Failed to parse YAML: {:?}", result.err());
+        assert_eq!(config.is_proxy_enabled(), true);
+        
+        let links = config.links();
+        assert_eq!(links.len(), 3);
+
+        // Test testnet_rpc link with rate limit
+        let testnet_link = links.get("testnet_rpc").unwrap();
+        assert_eq!(testnet_link.alias, "testnet_rpc");
+        assert_eq!(testnet_link.rpc, Some("https://fullnode.testnet.sui.io:443".to_string()));
+        assert_eq!(testnet_link.max_per_secs, Some(100));
+        assert_eq!(testnet_link.priority, 10);
+
+        // Test localnet_rpc link with different rate limit
+        let localnet_link = links.get("localnet_rpc").unwrap();
+        assert_eq!(localnet_link.alias, "localnet_rpc");
+        assert_eq!(localnet_link.rpc, Some("http://localhost:9000".to_string()));
+        assert_eq!(localnet_link.max_per_secs, Some(50));
+        assert_eq!(localnet_link.priority, 20);
+
+        // Test unlimited_rpc link without rate limit
+        let unlimited_link = links.get("unlimited_rpc").unwrap();
+        assert_eq!(unlimited_link.alias, "unlimited_rpc");
+        assert_eq!(unlimited_link.rpc, Some("http://localhost:8000".to_string()));
+        assert_eq!(unlimited_link.max_per_secs, None);
+        assert_eq!(unlimited_link.priority, 30);
+    }
+
+    #[test]
+    fn test_yaml_parsing_zero_rate_limit() {
+        let yaml_content = r#"
+links:
+  - alias: "zero_rate_rpc"
+    rpc: "http://localhost:9000"
+    max_per_secs: 0
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        
+        assert!(result.is_ok());
+        
+        let links = config.links();
+        let zero_rate_link = links.get("zero_rate_rpc").unwrap();
+        assert_eq!(zero_rate_link.max_per_secs, Some(0)); // 0 should be preserved (blocks all requests)
+    }
+
+    #[test]
+    fn test_yaml_parsing_large_rate_limit() {
+        let yaml_content = r#"
+links:
+  - alias: "high_rate_rpc"
+    rpc: "http://localhost:9000"
+    max_per_secs: 4294967295
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        
+        assert!(result.is_ok());
+        
+        let links = config.links();
+        let high_rate_link = links.get("high_rate_rpc").unwrap();
+        assert_eq!(high_rate_link.max_per_secs, Some(u32::MAX)); // Should handle max u32 value
+    }
+
+    #[test]
+    fn test_yaml_parsing_invalid_rate_limit() {
+        let yaml_content = r#"
+links:
+  - alias: "invalid_rate_rpc"
+    rpc: "http://localhost:9000"
+    max_per_secs: "not_a_number"
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        
+        assert!(result.is_ok()); // Should not fail, just ignore invalid value
+        
+        let links = config.links();
+        let invalid_rate_link = links.get("invalid_rate_rpc").unwrap();
+        assert_eq!(invalid_rate_link.max_per_secs, None); // Should be None for invalid values
+    }
+
+    #[test]
+    fn test_yaml_parsing_negative_rate_limit() {
+        let yaml_content = r#"
+links:
+  - alias: "negative_rate_rpc"
+    rpc: "http://localhost:9000"
+    max_per_secs: -1
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        
+        assert!(result.is_ok()); // Should not fail, just ignore negative value
+        
+        let links = config.links();
+        let negative_rate_link = links.get("negative_rate_rpc").unwrap();
+        assert_eq!(negative_rate_link.max_per_secs, None); // Should be None for negative values
+    }
+
+    #[test]
+    fn test_configuration_merging_preserves_rate_limits() {
+        // Create first config file
+        let yaml_content1 = r#"
+links:
+  - alias: "server1"
+    rpc: "http://server1:9000"
+    max_per_secs: 100
+  - alias: "server2"
+    rpc: "http://server2:9000"
+    max_per_secs: 200
+"#;
+
+        // Create second config file that overrides server1 but adds server3
+        let yaml_content2 = r#"
+links:
+  - alias: "server1"
+    rpc: "http://server1-updated:9000"
+    max_per_secs: 150
+  - alias: "server3"
+    rpc: "http://server3:9000"
+    max_per_secs: 300
+"#;
+
+        let mut temp_file1 = NamedTempFile::new().unwrap();
+        temp_file1.write_all(yaml_content1.as_bytes()).unwrap();
+        let temp_path1 = temp_file1.path().to_str().unwrap();
+
+        let mut temp_file2 = NamedTempFile::new().unwrap();
+        temp_file2.write_all(yaml_content2.as_bytes()).unwrap();
+        let temp_path2 = temp_file2.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        
+        // Load first file
+        let result1 = config.load_and_merge_from_file(temp_path1);
+        assert!(result1.is_ok());
+        
+        // Load second file (should merge)
+        let result2 = config.load_and_merge_from_file(temp_path2);
+        assert!(result2.is_ok());
+        
+        let links = config.links();
+        assert_eq!(links.len(), 3);
+
+        // server1 should be updated
+        let server1 = links.get("server1").unwrap();
+        assert_eq!(server1.rpc, Some("http://server1-updated:9000".to_string()));
+        assert_eq!(server1.max_per_secs, Some(150));
+
+        // server2 should remain from first config
+        let server2 = links.get("server2").unwrap();
+        assert_eq!(server2.rpc, Some("http://server2:9000".to_string()));
+        assert_eq!(server2.max_per_secs, Some(200));
+
+        // server3 should be added from second config
+        let server3 = links.get("server3").unwrap();
+        assert_eq!(server3.rpc, Some("http://server3:9000".to_string()));
+        assert_eq!(server3.max_per_secs, Some(300));
+    }
+
+    #[test]
+    fn test_links_overrides_clears_rate_limits() {
+        // Create first config file with links
+        let yaml_content1 = r#"
+links:
+  - alias: "server1"
+    rpc: "http://server1:9000"
+    max_per_secs: 100
+"#;
+
+        // Create second config file with links_overrides: true
+        let yaml_content2 = r#"
+links_overrides: true
+links:
+  - alias: "server2"
+    rpc: "http://server2:9000"
+    max_per_secs: 200
+"#;
+
+        let mut temp_file1 = NamedTempFile::new().unwrap();
+        temp_file1.write_all(yaml_content1.as_bytes()).unwrap();
+        let temp_path1 = temp_file1.path().to_str().unwrap();
+
+        let mut temp_file2 = NamedTempFile::new().unwrap();
+        temp_file2.write_all(yaml_content2.as_bytes()).unwrap();
+        let temp_path2 = temp_file2.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        
+        // Load first file
+        let result1 = config.load_and_merge_from_file(temp_path1);
+        assert!(result1.is_ok());
+        assert_eq!(config.links().len(), 1);
+
+        // Load second file with overrides (should clear previous links)
+        let result2 = config.load_and_merge_from_file(temp_path2);
+        assert!(result2.is_ok());
+        
+        let links = config.links();
+        assert_eq!(links.len(), 1); // Should only have server2
+        assert!(links.get("server1").is_none()); // server1 should be cleared
+        
+        let server2 = links.get("server2").unwrap();
+        assert_eq!(server2.max_per_secs, Some(200));
+        assert!(config.links_overrides());
     }
 }
 

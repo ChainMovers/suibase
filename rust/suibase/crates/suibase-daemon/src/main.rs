@@ -10,6 +10,8 @@ use acoins_monitor::ACoinsMonitor;
 //     - NetworkMonitor: Maintains all remote server stats. Info coming from multiple sources (on a mpsc channel).
 //     - APIServer: Does "sandboxing" of the JSON-RPC server (auto-restart in case of panic).
 //     - ClockTrigger: Send periodic audit events to other threads.
+//     - ACoinsMonitor: Monitors autocoin functionality for devnet/testnet/mainnet.
+//     - WebserverWorker: Serves static web content (e.g., sui-explorer UI).
 //
 // Other tasks (not started here):
 //
@@ -39,6 +41,8 @@ use acoins_monitor::ACoinsMonitor;
 //  - ShellWorker:        Perform external call to Suibase command line. One instance per workdir (by design, will
 //                        serialize all command execution). Started/stopped by the AdminController.
 //
+//  - PackagesPoller:     Periodic polling of package information for each workdir. Started by the AdminController.
+//
 use anyhow::Result;
 
 use api::APIServerParams;
@@ -56,6 +60,7 @@ mod acoins_monitor;
 mod clock_trigger;
 mod network_monitor;
 mod proxy_server;
+mod rate_limiter;
 mod shared_types;
 mod workdirs_watcher;
 mod workers;
