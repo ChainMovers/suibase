@@ -20,9 +20,10 @@ impl std::error::Error for RateLimitExceeded {}
 
 /// Lock-free rate limiter using token bucket algorithm with hard limit (no burst)
 /// Supports both QPS and QPM limits simultaneously using a unified atomic operation
+#[derive(Debug)]
 pub struct RateLimiter {
-    max_per_secs: u32,    // 0 = no tokens allowed, max 32,767 (15 bits)
-    max_per_min: u32,     // 0 = unlimited, max 262,143 (18 bits)
+    max_per_secs: u32, // 0 = unlimited, max 32,767 (15 bits)
+    max_per_min: u32,  // 0 = unlimited, max 262,143 (18 bits)
     // Single atomic storing packed state (64 bits):
     // [minute_window_id: 15][minute_tokens: 18][second_window_id: 16][second_tokens: 15]
     state: AtomicU64,
@@ -36,18 +37,47 @@ impl RateLimiter {
     /// Returns error if limits exceed bit field capacity
     pub fn new(max_per_secs: u32, max_per_min: u32) -> Result<Self, &'static str> {
         // Validate limits fit in their bit fields
-        if max_per_secs > 32_767 {  // 15 bits
+        if max_per_secs > 32_767 {
+            // 15 bits
             return Err("max_per_secs exceeds 32,767 limit");
         }
-        if max_per_min > 262_143 {  // 18 bits
+        if max_per_min > 262_143 {
+            // 18 bits
             return Err("max_per_min exceeds 262,143 limit");
         }
-        
+
+        let startup_time = Instant::now();
+
+        // Initialize state with full tokens available for immediate use
+        // This prevents the "first minute" bug where QPM limiters don't work initially
+        let initial_sec_tokens = if max_per_secs == 0 {
+            0x7FFF
+        } else {
+            max_per_secs
+        };
+        let initial_min_tokens = if max_per_min == 0 {
+            0x3FFFF
+        } else {
+            max_per_min
+        };
+
+        // Set initial window IDs to 1 so they're different from the packed 0 state
+        // This ensures has_window_expired works correctly from the start
+        let initial_sec_id = 1u32;
+        let initial_min_id = 1u32;
+
+        let initial_state = pack_state(
+            initial_min_id,
+            initial_min_tokens,
+            initial_sec_id,
+            initial_sec_tokens,
+        );
+
         Ok(Self {
             max_per_secs,
             max_per_min,
-            state: AtomicU64::new(0),
-            startup_time: Instant::now(),
+            state: AtomicU64::new(initial_state),
+            startup_time,
         })
     }
 
@@ -55,16 +85,17 @@ impl RateLimiter {
     pub fn try_acquire_token(&self) -> Result<(), RateLimitExceeded> {
         let start_time_secs = self.get_current_time_seconds();
         const TIMEOUT_SECS: u32 = 2; // Prevent indefinite blocking in async context
-        
+
         // Quick initial check: if we're in the same time window and have no tokens, fail immediately
         let current_second_id = start_time_secs & 0xFFFF;
         let current_minute_id = (start_time_secs / 60) & 0x7FFF;
         let current_state = self.state.load(Ordering::Acquire);
-        let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) = unpack_state(current_state);
-        
+        let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) =
+            unpack_state(current_state);
+
         let sec_window_fresh = self.has_window_expired(current_second_id, last_sec_id, true);
         let min_window_fresh = self.has_window_expired(current_minute_id, last_min_id, false);
-        
+
         // If no windows are fresh and we need tokens but have none, fail immediately
         if !sec_window_fresh && !min_window_fresh {
             if self.max_per_secs > 0 && last_sec_tokens == 0 {
@@ -74,12 +105,12 @@ impl RateLimiter {
                 return Err(RateLimitExceeded);
             }
         }
-        
+
         // If both limits are disabled (0), allow unlimited access
         if self.max_per_secs == 0 && self.max_per_min == 0 {
             return Ok(());
         }
-        
+
         // Track if we've seen a fresh window but still no tokens (true rate limit)
         let mut seen_fresh_window = false;
         let mut iterations = 0u32;
@@ -87,25 +118,30 @@ impl RateLimiter {
         loop {
             // Recalculate time inside loop to detect window changes
             let current_time_secs = self.get_current_time_seconds();
-            let current_second_id = current_time_secs & 0xFFFF;  // 16 bits
-            let current_minute_id = (current_time_secs / 60) & 0x7FFF;  // 15 bits
-            
+            let current_second_id = current_time_secs & 0xFFFF; // 16 bits
+            let current_minute_id = (current_time_secs / 60) & 0x7FFF; // 15 bits
+
             // Timeout protection for tokio context
             if current_time_secs > start_time_secs + TIMEOUT_SECS {
                 return Err(RateLimitExceeded);
             }
             let current_state = self.state.load(Ordering::Acquire);
-            let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) = unpack_state(current_state);
+            let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) =
+                unpack_state(current_state);
 
             // Calculate intended token counts based on current time (prevents stale refill race)
             let sec_window_fresh = self.has_window_expired(current_second_id, last_sec_id, true);
             let min_window_fresh = self.has_window_expired(current_minute_id, last_min_id, false);
-            
+
             let mut available_sec_tokens = if self.max_per_secs == 0 {
-                0 // Unlimited: don't track in state, just store 0
+                0x7FFF // Unlimited: use max possible value for 15 bits
             } else if sec_window_fresh {
                 seen_fresh_window = true;
                 self.max_per_secs // Window expired: full refill
+            } else if current_state == 0 {
+                // Initial state: no tokens have ever been processed, start with fresh tokens
+                seen_fresh_window = true;
+                self.max_per_secs
             } else {
                 last_sec_tokens // Same window: use current count
             };
@@ -133,7 +169,8 @@ impl RateLimiter {
                     }
                     // Yield CPU to prevent hot spinning in tokio context
                     iterations += 1;
-                    if iterations % 10 == 0 {  // Yield every 10 iterations
+                    if iterations % 10 == 0 {
+                        // Yield every 10 iterations
                         std::thread::yield_now();
                     }
                     continue;
@@ -151,7 +188,8 @@ impl RateLimiter {
                     }
                     // Yield CPU to prevent hot spinning in tokio context
                     iterations += 1;
-                    if iterations % 10 == 0 {  // Yield every 10 iterations
+                    if iterations % 10 == 0 {
+                        // Yield every 10 iterations
                         std::thread::yield_now();
                     }
                     continue;
@@ -161,12 +199,23 @@ impl RateLimiter {
             // If max_per_min is 0 (unlimited), we don't consume minute tokens
 
             // Attempt atomic update with calculated tokens
-            let new_state = pack_state(current_minute_id, available_min_tokens, current_second_id, available_sec_tokens);
-            
-            if self.state.compare_exchange_weak(
-                current_state, new_state,
-                Ordering::Release, Ordering::Relaxed
-            ).is_ok() {
+            let new_state = pack_state(
+                current_minute_id,
+                available_min_tokens,
+                current_second_id,
+                available_sec_tokens,
+            );
+
+            if self
+                .state
+                .compare_exchange_weak(
+                    current_state,
+                    new_state,
+                    Ordering::Release,
+                    Ordering::Relaxed,
+                )
+                .is_ok()
+            {
                 return Ok(()); // Success: both limits satisfied atomically
             }
             // CAS failed, retry with fresh state
@@ -180,7 +229,8 @@ impl RateLimiter {
         let current_minute_id = (current_time_secs / 60) & 0x7FFF;
 
         let current_state = self.state.load(Ordering::Acquire);
-        let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) = unpack_state(current_state);
+        let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) =
+            unpack_state(current_state);
 
         let sec_window_expired = self.has_window_expired(current_second_id, last_sec_id, true);
         let min_window_expired = self.has_window_expired(current_minute_id, last_min_id, false);
@@ -224,20 +274,20 @@ impl RateLimiter {
         if current_id == last_id {
             return false; // Same window
         }
-        
+
         // Special case: if last_id is 0 (initial state), any non-zero current_id means window expired
         if last_id == 0 && current_id > 0 {
             return true;
         }
-        
+
         let half_range = if is_second_window {
             32767 // Half of 65535 (16-bit max)
         } else {
             16383 // Half of 32767 (15-bit max)
         };
-        
+
         let diff = current_id.wrapping_sub(last_id);
-        
+
         // Handle normal progression and wrap-around
         // diff > 0 && diff <= half_range means forward progression
         // Large diff values indicate backward movement (stale data)
@@ -256,16 +306,16 @@ fn pack_state(min_id: u32, min_tokens: u32, sec_id: u32, sec_tokens: u32) -> u64
     ((min_id as u64 & 0x7FFF) << 49) |      // 15 bits: minute window ID
     ((min_tokens as u64 & 0x3FFFF) << 31) | // 18 bits: minute tokens  
     ((sec_id as u64 & 0xFFFF) << 15) |      // 16 bits: second window ID
-    (sec_tokens as u64 & 0x7FFF)            // 15 bits: second tokens
+    (sec_tokens as u64 & 0x7FFF) // 15 bits: second tokens
 }
 
 /// Unpack 64-bit state into four values with correct bit masks
 /// Returns (min_id, min_tokens, sec_id, sec_tokens)
 fn unpack_state(state: u64) -> (u32, u32, u32, u32) {
-    let min_id = ((state >> 49) & 0x7FFF) as u32;        // 15 bits
-    let min_tokens = ((state >> 31) & 0x3FFFF) as u32;   // 18 bits
-    let sec_id = ((state >> 15) & 0xFFFF) as u32;        // 16 bits  
-    let sec_tokens = (state & 0x7FFF) as u32;            // 15 bits
+    let min_id = ((state >> 49) & 0x7FFF) as u32; // 15 bits
+    let min_tokens = ((state >> 31) & 0x3FFFF) as u32; // 18 bits
+    let sec_id = ((state >> 15) & 0xFFFF) as u32; // 16 bits
+    let sec_tokens = (state & 0x7FFF) as u32; // 15 bits
     (min_id, min_tokens, sec_id, sec_tokens)
 }
 
@@ -279,13 +329,14 @@ mod tests {
 
     #[test]
     fn test_pack_unpack_state() {
-        let min_id = 12345u32;      // 15 bits
+        let min_id = 12345u32; // 15 bits
         let min_tokens = 150000u32; // 18 bits
-        let sec_id = 54321u32;      // 16 bits
-        let sec_tokens = 25000u32;  // 15 bits
-        
+        let sec_id = 54321u32; // 16 bits
+        let sec_tokens = 25000u32; // 15 bits
+
         let packed = pack_state(min_id, min_tokens, sec_id, sec_tokens);
-        let (unpacked_min_id, unpacked_min_tokens, unpacked_sec_id, unpacked_sec_tokens) = unpack_state(packed);
+        let (unpacked_min_id, unpacked_min_tokens, unpacked_sec_id, unpacked_sec_tokens) =
+            unpack_state(packed);
 
         assert_eq!(min_id, unpacked_min_id);
         assert_eq!(min_tokens, unpacked_min_tokens);
@@ -297,9 +348,9 @@ mod tests {
     fn test_rate_limiter_basic() {
         let limiter = RateLimiter::new(2, 0).unwrap(); // 2 tokens per second, unlimited per minute
 
-        // Should start with 0 tokens
-        assert_eq!(limiter.tokens_available(), 0);
-        assert!(limiter.try_acquire_token().is_err());
+        // Should start with 2 tokens immediately available (bug fix)
+        assert_eq!(limiter.tokens_available(), 2);
+        assert!(limiter.try_acquire_token().is_ok());
     }
 
     #[test]
@@ -503,15 +554,15 @@ mod tests {
     }
 
     // === Dual Rate Limiting Tests ===
-    
+
     #[test]
     fn test_dual_rate_limiting_basic() {
         // 3 tokens per second, 5 tokens per minute
         let limiter = RateLimiter::new(3, 5).unwrap();
 
-        // Should start with 0 tokens
-        assert_eq!(limiter.tokens_available(), 0);
-        assert!(limiter.try_acquire_token().is_err());
+        // Should start with 3 tokens (limited by min of QPS and QPM) immediately available (bug fix)
+        assert_eq!(limiter.tokens_available(), 3);
+        assert!(limiter.try_acquire_token().is_ok());
     }
 
     #[test]
@@ -526,7 +577,7 @@ mod tests {
         // Should be able to consume 2 tokens
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
-        
+
         // Third token should fail
         assert!(limiter.try_acquire_token().is_err());
     }
@@ -538,15 +589,15 @@ mod tests {
 
         // Wait for tokens to be available
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Should be limited by QPM (3), not QPS (unlimited)
         assert_eq!(limiter.tokens_available(), 3);
-        
+
         // Should be able to consume 3 tokens
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
-        
+
         // Fourth token should fail (QPM limit reached)
         assert!(limiter.try_acquire_token().is_err());
     }
@@ -556,12 +607,10 @@ mod tests {
         // Both limits: 10 tokens per second, 15 tokens per minute
         let limiter = RateLimiter::new(10, 15).unwrap();
 
-        // Should start with 0 tokens
-        assert_eq!(limiter.tokens_available(), 0);
+        // Should start with 10 tokens immediately available (limited by min of QPS and QPM) (bug fix)
+        assert_eq!(limiter.tokens_available(), 10);
 
-        // Wait for tokens to be available
-        thread::sleep(Duration::from_millis(1100));
-        
+        // No need to wait - tokens are immediately available
         // Should be limited by the minimum of both (10 QPS)
         assert_eq!(limiter.tokens_available(), 10);
 
@@ -582,7 +631,7 @@ mod tests {
 
         // Wait for initial window
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Should be limited by QPM (30), not QPS (60)
         assert_eq!(limiter.tokens_available(), 30);
 
@@ -612,11 +661,11 @@ mod tests {
 
         // Wait for next second
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Should have 1 more token (3 QPM - 2 already consumed = 1 remaining)
         assert_eq!(limiter.tokens_available(), 1);
         assert!(limiter.try_acquire_token().is_ok());
-        
+
         // Now exhausted for this minute
         assert_eq!(limiter.tokens_available(), 0);
         assert!(limiter.try_acquire_token().is_err());
@@ -642,12 +691,33 @@ mod tests {
 
         for (min_id, min_tokens, sec_id, sec_tokens) in test_cases {
             let packed = pack_state(min_id, min_tokens, sec_id, sec_tokens);
-            let (unpacked_min_id, unpacked_min_tokens, unpacked_sec_id, unpacked_sec_tokens) = unpack_state(packed);
-            
-            assert_eq!(min_id, unpacked_min_id, "min_id mismatch for {:?}", (min_id, min_tokens, sec_id, sec_tokens));
-            assert_eq!(min_tokens, unpacked_min_tokens, "min_tokens mismatch for {:?}", (min_id, min_tokens, sec_id, sec_tokens));
-            assert_eq!(sec_id, unpacked_sec_id, "sec_id mismatch for {:?}", (min_id, min_tokens, sec_id, sec_tokens));
-            assert_eq!(sec_tokens, unpacked_sec_tokens, "sec_tokens mismatch for {:?}", (min_id, min_tokens, sec_id, sec_tokens));
+            let (unpacked_min_id, unpacked_min_tokens, unpacked_sec_id, unpacked_sec_tokens) =
+                unpack_state(packed);
+
+            assert_eq!(
+                min_id,
+                unpacked_min_id,
+                "min_id mismatch for {:?}",
+                (min_id, min_tokens, sec_id, sec_tokens)
+            );
+            assert_eq!(
+                min_tokens,
+                unpacked_min_tokens,
+                "min_tokens mismatch for {:?}",
+                (min_id, min_tokens, sec_id, sec_tokens)
+            );
+            assert_eq!(
+                sec_id,
+                unpacked_sec_id,
+                "sec_id mismatch for {:?}",
+                (min_id, min_tokens, sec_id, sec_tokens)
+            );
+            assert_eq!(
+                sec_tokens,
+                unpacked_sec_tokens,
+                "sec_tokens mismatch for {:?}",
+                (min_id, min_tokens, sec_id, sec_tokens)
+            );
         }
     }
 
@@ -657,7 +727,7 @@ mod tests {
         let error = RateLimitExceeded;
         assert_eq!(format!("{}", error), "Rate limit exceeded");
         assert_eq!(format!("{:?}", error), "RateLimitExceeded");
-        
+
         // Test error trait implementation
         use std::error::Error;
         assert!(error.source().is_none());
@@ -667,15 +737,15 @@ mod tests {
     fn test_zero_qps_with_nonzero_qpm() {
         // Test unlimited QPS with limited QPM - should be limited by QPM only
         let limiter = RateLimiter::new(0, 5).unwrap();
-        
+
         thread::sleep(Duration::from_millis(1100));
         assert_eq!(limiter.tokens_available(), 5);
-        
+
         // Should be able to consume all 5 QPM tokens instantly (unlimited QPS)
         for _ in 0..5 {
             assert!(limiter.try_acquire_token().is_ok());
         }
-        
+
         // Sixth token should fail
         assert!(limiter.try_acquire_token().is_err());
     }
@@ -684,21 +754,21 @@ mod tests {
     fn test_nonzero_qps_with_zero_qpm() {
         // Test limited QPS with unlimited QPM - should be limited by QPS only
         let limiter = RateLimiter::new(3, 0).unwrap();
-        
+
         thread::sleep(Duration::from_millis(1100));
         assert_eq!(limiter.tokens_available(), 3);
-        
+
         // Should be able to consume 3 QPS tokens
         for _ in 0..3 {
             assert!(limiter.try_acquire_token().is_ok());
         }
-        
+
         // Fourth token should fail (QPS limit)
         assert!(limiter.try_acquire_token().is_err());
-        
+
         // Wait for next second
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Should have 3 more tokens available
         assert_eq!(limiter.tokens_available(), 3);
     }
@@ -707,54 +777,54 @@ mod tests {
     fn test_window_progression_detection() {
         // Test that window ID progression is handled correctly
         let limiter = RateLimiter::new(10, 20).unwrap();
-        
+
         // Test normal forward progression
-        assert!(limiter.has_window_expired(1, 0, true));     // Window 0 -> 1 (initial state special case)
-        assert!(limiter.has_window_expired(100, 99, true));  // Window 99 -> 100  
-        assert!(limiter.has_window_expired(10, 5, true));    // Window 5 -> 10
+        assert!(limiter.has_window_expired(1, 0, true)); // Window 0 -> 1 (initial state special case)
+        assert!(limiter.has_window_expired(100, 99, true)); // Window 99 -> 100
+        assert!(limiter.has_window_expired(10, 5, true)); // Window 5 -> 10
         assert!(limiter.has_window_expired(1000, 999, false)); // Window 999 -> 1000
-        
+
         // Test same window (no progression)
-        assert!(!limiter.has_window_expired(5, 5, true));    // Same window
+        assert!(!limiter.has_window_expired(5, 5, true)); // Same window
         assert!(!limiter.has_window_expired(100, 100, false)); // Same window
-        
+
         // Test backward movement (should be detected as stale and ignored)
-        assert!(!limiter.has_window_expired(50, 100, true));    // Backward: 100 -> 50
+        assert!(!limiter.has_window_expired(50, 100, true)); // Backward: 100 -> 50
         assert!(!limiter.has_window_expired(1000, 2000, false)); // Backward: 2000 -> 1000
-        
+
         // Test large forward jumps (should be detected as stale and ignored)
-        assert!(!limiter.has_window_expired(50000, 1, true));    // Too large a jump
-        assert!(!limiter.has_window_expired(20000, 1, false));   // Too large a jump
-        
+        assert!(!limiter.has_window_expired(50000, 1, true)); // Too large a jump
+        assert!(!limiter.has_window_expired(20000, 1, false)); // Too large a jump
+
         // Test boundary cases for the half-range detection (using non-zero last_id to avoid special case)
-        assert!(limiter.has_window_expired(32768, 1, true));     // Max valid forward jump for 16-bit: diff = 32767
-        assert!(!limiter.has_window_expired(32769, 1, true));    // Just over the limit: diff = 32768  
-        assert!(limiter.has_window_expired(16384, 1, false));    // Max valid forward jump for 15-bit: diff = 16383
-        assert!(!limiter.has_window_expired(16385, 1, false));   // Just over the limit: diff = 16384
+        assert!(limiter.has_window_expired(32768, 1, true)); // Max valid forward jump for 16-bit: diff = 32767
+        assert!(!limiter.has_window_expired(32769, 1, true)); // Just over the limit: diff = 32768
+        assert!(limiter.has_window_expired(16384, 1, false)); // Max valid forward jump for 15-bit: diff = 16383
+        assert!(!limiter.has_window_expired(16385, 1, false)); // Just over the limit: diff = 16384
     }
 
     #[test]
     fn test_immediate_failure_behavior() {
         // Test that try_acquire_token fails immediately when no tokens available in same window
         let limiter = RateLimiter::new(1, 1).unwrap();
-        
+
         // Wait for tokens to be available
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Verify tokens are available first
         assert_eq!(limiter.tokens_available(), 1);
-        
+
         // Consume the available tokens (both QPS and QPM)
-        assert!(limiter.try_acquire_token().is_ok()); 
-        
+        assert!(limiter.try_acquire_token().is_ok());
+
         // Verify no tokens remain
         assert_eq!(limiter.tokens_available(), 0);
-        
+
         // Next attempt should fail immediately (quick check optimization)
         let start = Instant::now();
         let result = limiter.try_acquire_token();
         let elapsed = start.elapsed();
-        
+
         assert!(result.is_err());
         assert!(elapsed < Duration::from_millis(10)); // Should be very fast
     }
@@ -763,29 +833,33 @@ mod tests {
     fn test_tokens_available_never_exceeds_limits() {
         // Test that tokens_available never exceeds configured limits even after long waits
         let limiter = RateLimiter::new(5, 10).unwrap();
-        
+
         // Wait much longer than necessary
         thread::sleep(Duration::from_millis(5100)); // 5+ seconds
-        
+
         // Should still be capped at min(5, 10) = 5
         let available = limiter.tokens_available();
-        assert!(available <= 5, "Available tokens {} exceeds QPS limit", available);
+        assert!(
+            available <= 5,
+            "Available tokens {} exceeds QPS limit",
+            available
+        );
         assert_eq!(available, 5);
     }
 
     #[test]
     fn test_bit_field_boundary_values() {
         // Test that we can handle maximum values for each bit field
-        
+
         // Test maximum valid configuration
         let limiter = RateLimiter::new(32_767, 262_143).unwrap();
         assert_eq!(limiter.max_per_secs(), 32_767);
         assert_eq!(limiter.max_per_min(), 262_143);
-        
+
         // Test that values exceeding bit field limits are rejected
         assert!(RateLimiter::new(32_768, 0).is_err()); // QPS too large (16 bits: 32768 > 32767)
         assert!(RateLimiter::new(0, 262_144).is_err()); // QPM too large (18 bits: 262144 > 262143)
-        
+
         // Test edge case: exactly at the boundary
         assert!(RateLimiter::new(32_767, 0).is_ok());
         assert!(RateLimiter::new(0, 262_143).is_ok());
@@ -795,21 +869,21 @@ mod tests {
     fn test_state_consistency_after_operations() {
         // Test that internal state remains consistent after various operations
         let limiter = RateLimiter::new(3, 5).unwrap();
-        
+
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Consume some tokens
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
-        
+
         // Verify state consistency
         let available = limiter.tokens_available();
         assert_eq!(available, 1); // min(3-2, 5-2) = min(1, 3) = 1
-        
+
         // Consume remaining token
         assert!(limiter.try_acquire_token().is_ok());
         assert_eq!(limiter.tokens_available(), 0);
-        
+
         // Should be rate limited now
         assert!(limiter.try_acquire_token().is_err());
     }
@@ -817,14 +891,14 @@ mod tests {
     #[test]
     fn test_initial_state_edge_cases() {
         // Test various scenarios at the very beginning of rate limiter lifecycle
-        
-        // Test that tokens_available() works correctly at time 0
+
+        // Test that tokens_available() works correctly at time 0 (bug fix)
         let limiter = RateLimiter::new(10, 15).unwrap();
-        assert_eq!(limiter.tokens_available(), 0); // Should start with 0 tokens
-        
-        // Test that try_acquire_token fails immediately at startup
-        assert!(limiter.try_acquire_token().is_err());
-        
+        assert_eq!(limiter.tokens_available(), 10); // Should start with 10 tokens (limited by min)
+
+        // Test that try_acquire_token succeeds immediately at startup (bug fix)
+        assert!(limiter.try_acquire_token().is_ok());
+
         // Test unlimited limiter at startup
         let unlimited = RateLimiter::new(0, 0).unwrap();
         assert!(unlimited.tokens_available() >= 1000); // Should be unlimited
@@ -835,23 +909,23 @@ mod tests {
     fn test_rapid_successive_window_transitions() {
         // Test behavior during rapid window transitions
         let limiter = RateLimiter::new(1, 2).unwrap();
-        
+
         // Wait for initial tokens
         thread::sleep(Duration::from_millis(1100));
         assert_eq!(limiter.tokens_available(), 1); // min(1, 2) = 1
-        
+
         // Consume token
         assert!(limiter.try_acquire_token().is_ok());
         assert_eq!(limiter.tokens_available(), 0);
-        
+
         // Wait for next second
         thread::sleep(Duration::from_millis(1100));
         assert_eq!(limiter.tokens_available(), 1); // min(1, 1) = 1 (remaining QPM)
-        
+
         // Consume final QPM token
         assert!(limiter.try_acquire_token().is_ok());
         assert_eq!(limiter.tokens_available(), 0);
-        
+
         // Should be exhausted for this minute
         assert!(limiter.try_acquire_token().is_err());
     }
@@ -859,13 +933,14 @@ mod tests {
     #[test]
     fn test_bit_packing_boundaries() {
         // Test with maximum values for each field to ensure no bit overflow or bleed.
-        let max_min_id = 0x7FFF;      // 15 bits
+        let max_min_id = 0x7FFF; // 15 bits
         let max_min_tokens = 0x3FFFF; // 18 bits
-        let max_sec_id = 0xFFFF;      // 16 bits
-        let max_sec_tokens = 0x7FFF;  // 15 bits
+        let max_sec_id = 0xFFFF; // 16 bits
+        let max_sec_tokens = 0x7FFF; // 15 bits
 
         let packed = pack_state(max_min_id, max_min_tokens, max_sec_id, max_sec_tokens);
-        let (unpacked_min_id, unpacked_min_tokens, unpacked_sec_id, unpacked_sec_tokens) = unpack_state(packed);
+        let (unpacked_min_id, unpacked_min_tokens, unpacked_sec_id, unpacked_sec_tokens) =
+            unpack_state(packed);
 
         assert_eq!(unpacked_min_id, max_min_id);
         assert_eq!(unpacked_min_tokens, max_min_tokens);
@@ -895,7 +970,7 @@ mod tests {
 
         // Wait for initial token to be available
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Consume the only token.
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_err());
@@ -905,7 +980,7 @@ mod tests {
         let next_second = ((elapsed.as_secs() + 1) * 1000) as u64;
         let current_millis = elapsed.as_millis() as u64;
         let until_next_sec = next_second.saturating_sub(current_millis);
-        
+
         if until_next_sec > 50 {
             thread::sleep(Duration::from_millis(until_next_sec - 50));
             // Should still be rate-limited.
@@ -919,7 +994,7 @@ mod tests {
         assert!(limiter.try_acquire_token().is_ok());
     }
 
-    #[test] 
+    #[test]
     fn test_dual_refill_at_minute_boundary() {
         // Ensure that when a minute window expires, BOTH the minute and second
         // buckets are refilled correctly.
@@ -927,12 +1002,12 @@ mod tests {
 
         // Wait for initial window
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Consume most QPS tokens to create interesting state
         for _ in 0..10 {
             assert!(limiter.try_acquire_token().is_ok());
         }
-        
+
         // At this point, QPS is exhausted but QPM still has tokens
         assert_eq!(limiter.tokens_available(), 0);
         assert!(limiter.try_acquire_token().is_err());
@@ -948,9 +1023,9 @@ mod tests {
 
     #[test]
     fn test_concurrent_storm_at_window_boundary() {
-        use std::sync::{Arc, Barrier};
         use std::sync::atomic::{AtomicUsize, Ordering};
-        
+        use std::sync::{Arc, Barrier};
+
         // Spawn more threads than available tokens and have them all try to acquire
         // at the exact same moment using a barrier.
         let limiter = Arc::new(RateLimiter::new(10, 0).unwrap()); // 10 QPS
@@ -1028,15 +1103,15 @@ mod tests {
         // Consume all QPS tokens but leave QPM tokens available
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
-        
+
         // Now we're QPS-limited but QPM still has capacity
         assert_eq!(limiter.tokens_available(), 0);
-        
+
         // This should fail immediately because same window, no QPS tokens
         let now = Instant::now();
         assert_eq!(limiter.try_acquire_token(), Err(RateLimitExceeded));
         assert!(now.elapsed() < Duration::from_millis(100));
-        
+
         // After waiting for next second, should get QPS refill
         thread::sleep(Duration::from_millis(1100));
         assert_eq!(limiter.tokens_available(), 1); // min(2, 1) = 1 (remaining QPM)
@@ -1051,26 +1126,26 @@ mod tests {
 
         // Wait for initial tokens
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Initially should return min(5, 12) = 5
         assert_eq!(limiter.tokens_available(), 5);
-        
+
         // Consume 3 tokens
         for _ in 0..3 {
             assert!(limiter.try_acquire_token().is_ok());
         }
-        
+
         // Should now return min(2, 9) = 2
         assert_eq!(limiter.tokens_available(), 2);
-        
+
         // Multiple calls to tokens_available() should not change the result
         assert_eq!(limiter.tokens_available(), 2);
         assert_eq!(limiter.tokens_available(), 2);
-        
+
         // Consume remaining QPS tokens
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
-        
+
         // Should now be QPS-limited: min(0, 7) = 0
         assert_eq!(limiter.tokens_available(), 0);
         assert!(limiter.try_acquire_token().is_err());
@@ -1083,36 +1158,36 @@ mod tests {
 
         // Wait for initial tokens
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Should be QPM-limited: min(10, 5) = 5
         assert_eq!(limiter.tokens_available(), 5);
-        
+
         // Consume all QPM tokens
         for _ in 0..5 {
             assert!(limiter.try_acquire_token().is_ok());
         }
-        
+
         // Should now be QPM-exhausted: min(5, 0) = 0
         assert_eq!(limiter.tokens_available(), 0);
         assert!(limiter.try_acquire_token().is_err());
-        
+
         // Wait for next second (QPS refills but QPM doesn't)
         thread::sleep(Duration::from_millis(1100));
-        
+
         // Still QPM-limited: min(10, 0) = 0
         // This validates that QPM is correctly enforced as the bottleneck
         assert_eq!(limiter.tokens_available(), 0);
         assert!(limiter.try_acquire_token().is_err());
-        
+
         // Test that the limiting logic works: QPS has tokens but QPM doesn't
         // This confirms the min() logic in tokens_available() is working correctly
         let current_state = limiter.state.load(std::sync::atomic::Ordering::Acquire);
         let (_, min_tokens, _, _sec_tokens) = unpack_state(current_state);
-        
+
         // QPS should have refilled (or be unlimited), QPM should be 0
         // The exact values depend on timing, but QPM should be the constraint
         assert_eq!(min_tokens, 0, "QPM tokens should be exhausted");
-        
+
         // Verify one more time that QPM limit is enforced
         assert_eq!(limiter.tokens_available(), 0);
     }

@@ -141,7 +141,11 @@ pub fn sui_address_bytes_from_base64(
     match Base64UrlUnpadded::decode(sui_address_base64, &mut buffer) {
         Ok(_) => Ok(buffer),
         Err(e) => {
-            return Err(anyhow!("failed to decode base64 pk={}: {}", sui_address_base64, e));
+            return Err(anyhow!(
+                "failed to decode base64 pk={}: {}",
+                sui_address_base64,
+                e
+            ));
         }
     }
 }

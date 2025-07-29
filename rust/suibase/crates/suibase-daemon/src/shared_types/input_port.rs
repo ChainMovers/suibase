@@ -210,7 +210,7 @@ impl InputPort {
                 let rng = hasher.finish() as usize;
                 for i in 0..vector.len() {
                     let idx = vector[(i + rng) % vector.len()];
-                    if let Some(uri) = self.uri(idx) {
+                    if let Some(uri) = self.uri_if_not_rate_limited(idx) {
                         target_servers.push((idx, uri));
                         count += 1;
                         if count == RETRY_COUNT {
@@ -223,7 +223,7 @@ impl InputPort {
             // Select sequentially from this point on.
             for vector in &self.selection_vectors[vector_idx..] {
                 for &idx in vector {
-                    if let Some(uri) = self.uri(idx) {
+                    if let Some(uri) = self.uri_if_not_rate_limited(idx) {
                         target_servers.push((idx, uri));
                         count += 1;
                         if count == RETRY_COUNT {
@@ -237,11 +237,26 @@ impl InputPort {
             // worst selections.
             // Note: This can normally happen on initialization or hard recovery.
             for &idx in &self.selection_worst {
-                if let Some(uri) = self.uri(idx) {
+                if let Some(uri) = self.uri_if_not_rate_limited(idx) {
                     target_servers.push((idx, uri));
                     count += 1;
                     if count == RETRY_COUNT {
                         return; // Done
+                    }
+                }
+            }
+
+            // If we still don't have enough servers because of rate limiting,
+            // fall back to ignoring rate limits but include all available servers
+            // This ensures we don't completely block when all servers are rate limited
+            if count == 0 {
+                for &idx in &self.selection_worst {
+                    if let Some(uri) = self.uri(idx) {
+                        target_servers.push((idx, uri));
+                        count += 1;
+                        if count == RETRY_COUNT {
+                            return; // Done
+                        }
                     }
                 }
             }
@@ -250,11 +265,26 @@ impl InputPort {
         // traffic is already coming in... so default to a simpler best server selection
         // that may rely more on the config user priority.
         if target_servers.is_empty() {
+            // First try to get servers that are not rate limited
             for (_, target_server) in self.target_servers.iter() {
                 if target_server.is_selectable() {
                     if let Some(idx) = target_server.idx() {
-                        if let Some(uri) = self.uri(idx) {
+                        if let Some(uri) = self.uri_if_not_rate_limited(idx) {
                             target_servers.push((idx, uri));
+                        }
+                    }
+                }
+            }
+
+            // If all servers are rate limited, fall back to including them anyway
+            // The actual rate limiting will happen during request sending
+            if target_servers.is_empty() {
+                for (_, target_server) in self.target_servers.iter() {
+                    if target_server.is_selectable() {
+                        if let Some(idx) = target_server.idx() {
+                            if let Some(uri) = self.uri(idx) {
+                                target_servers.push((idx, uri));
+                            }
                         }
                     }
                 }
@@ -284,6 +314,26 @@ impl InputPort {
 
     pub fn uri(&self, server_idx: TargetServerIdx) -> Option<String> {
         self.target_servers.get(server_idx).map(|ts| ts.rpc())
+    }
+
+    /// Check if a server has available tokens (not rate limited) and return its URI
+    /// Returns Some(uri) if the server has tokens available, None if rate limited or unavailable
+    fn uri_if_not_rate_limited(&self, server_idx: TargetServerIdx) -> Option<String> {
+        if let Some(target_server) = self.target_servers.get(server_idx) {
+            // Check rate limit first - don't consume a token yet, just check availability
+            if target_server.has_rate_limiting() {
+                // If rate limiting is enabled, check if tokens are available
+                if let Some(available_tokens) = target_server.tokens_available() {
+                    if available_tokens == 0 {
+                        return None; // Rate limited
+                    }
+                }
+            }
+            // No rate limiting or tokens available
+            Some(target_server.rpc())
+        } else {
+            None
+        }
     }
 
     pub fn update_selection_vectors(&mut self) {

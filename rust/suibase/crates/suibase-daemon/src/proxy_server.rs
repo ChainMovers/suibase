@@ -150,7 +150,9 @@ impl ProxyServer {
         let _ = ProxyServer::process_header_server_health_check(&mut headers, &mut report);
         headers.remove(header::HOST); // Remove the host header (will be replace with the target server).
 
-        let mut retry_count = 0;
+        // Separate failure types with different limits
+        let mut server_failures = 0; // Real server problems (connection, HTTP)
+        let mut rate_limit_attempts = 0; // Rate limiting attempts (temporary)
 
         // Find which target servers to send to...
         let mut targets: Vec<(u8, String)> = Vec::new();
@@ -162,7 +164,7 @@ impl ProxyServer {
                 // Check that the proxy is still enabled/running.
                 if !input_port.is_proxy_enabled() {
                     let _perf_report = report
-                        .req_fail(retry_count, REQUEST_FAILED_CONFIG_DISABLED)
+                        .req_fail(server_failures, REQUEST_FAILED_CONFIG_DISABLED)
                         .await;
                     return Err(anyhow!(format!(
                         "{} proxy disabled with suibase.yaml (check proxy_enabled settings)",
@@ -173,7 +175,7 @@ impl ProxyServer {
                 /*
                 if !input_port.is_user_request_start() {
                     let _perf_report = report
-                        .req_fail(retry_count, REQUEST_FAILED_NOT_STARTED)
+                        .req_fail(server_failures, REQUEST_FAILED_NOT_STARTED)
                         .await;
                     return Err(anyhow!(format!(
                         "{0} not started (did you forget to do '{0} start'?)",
@@ -195,7 +197,7 @@ impl ProxyServer {
 
         if targets.is_empty() {
             let _perf_report = report
-                .req_fail(retry_count, REQUEST_FAILED_NO_SERVER_AVAILABLE)
+                .req_fail(server_failures, REQUEST_FAILED_NO_SERVER_AVAILABLE)
                 .await;
             return Err(anyhow!("No server available").into());
         }
@@ -204,7 +206,7 @@ impl ProxyServer {
         // into bytes here (to keep a copy).
         //
         // TODO interpret the JSON to identify what is safe to retry.
-
+        //
         // TODO Optimize (eliminate clone) when there is no retry possible?
         let method = req.method().clone();
         /* This code on hold until deciding to move to hyper v1.0, which is a dependency of reqwest >= 0.11
@@ -224,194 +226,220 @@ impl ProxyServer {
         let bytes = match req.into_body().collect().await {
             Ok(body) => body.to_bytes(),
             Err(err) => {
-                let _perf_report = report.req_fail(retry_count, REQUEST_FAILED_BODY_READ).await;
+                let _perf_report = report.req_fail(0, REQUEST_FAILED_BODY_READ).await;
                 return Err(err.into());
             }
         };
 
-        const MAX_RETRIES: u8 = 4; // Must be >= 1
+        const MAX_SERVER_FAILURES: u8 = 4; // Must be >= 1, original limit for real failures
+        let max_cycles: u8 = (targets.len() as u8).saturating_mul(3); // Allow 3 full cycles
+        let mut cycle_count = 0;
+        let mut server_index = 0; // Current server index for cycling
 
-        for (server_idx, target_uri) in targets.iter() {
-            let mut same_server_attempt = true;
+        while server_failures < MAX_SERVER_FAILURES && cycle_count < max_cycles {
+            // Give a break between cycles to avoid hammering the same server(s) too fast.
+            if server_index == 0 {
+                if cycle_count > 0 {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+                cycle_count += 1; //
+            }
 
-            while same_server_attempt && retry_count < MAX_RETRIES {
-                same_server_attempt = false; // Will change to true in this loop if need to retry *same* server.
+            let (server_idx, target_uri) = &targets[server_index];
+            server_index = (server_index + 1) % targets.len(); // Advance to next server (for next iteration if any).
 
-                // Build the request toward the current target server.
-                let req_builder = states
-                    .client
-                    .request(method.clone(), target_uri)
-                    .headers(headers.clone())
-                    .body(bytes.clone());
+            // Build the request toward the current target server.
+            let req_builder = states
+                .client
+                .request(method.clone(), target_uri)
+                .headers(headers.clone())
+                .body(bytes.clone());
 
-                // Following works also (if one day bytes and cloning won't be needed):
-                //       .body(req.into_body())
+            // Following works also (if one day bytes and cloning won't be needed):
+            //       .body(req.into_body())
 
-                let req_initiation_time = EpochTimestamp::now();
-                // Execute the request.
-                let resp = req_builder.send().await;
+            // Check rate limit before sending the request
+            {
+                let globals_read_guard = states.globals.read().await;
+                let globals = &*globals_read_guard;
 
-                let resp = match resp {
-                    Ok(resp) => resp,
-                    Err(_err) => {
-                        // TODO Map _err to SendFailureReason for debugging.
-
-                        // Report a 'send' error, which is a failure to connect to a target server.
-                        // This is not intended to count in the total *request* count stats (because
-                        // may succeed on a retry on another server) but will affect the health score
-                        // of this target server.
-                        let _ = report
-                            .send_failed(
-                                *server_idx,
-                                req_initiation_time,
-                                SEND_FAILED_UNSPECIFIED_ERROR,
-                                axum::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                            )
-                            .await;
-                        // Try with another server.
-                        retry_count += 1;
-                        continue;
-                    }
-                };
-
-                let resp_received = EpochTimestamp::now();
-
-                // Check HTTP errors
-                let resp = match resp.error_for_status() {
-                    Ok(resp) => resp,
-                    Err(err) => {
-                        // Decide if trying another server or not depending if the HTTP
-                        // problem is with the request or with the server.
-                        // When in doubt, this will assume a problem with the server.
-                        //
-                        // Note: http_response_err does a "req_fail" when returning false.
-                        let try_next_server = report
-                            .http_response_error(
-                                server_idx,
-                                req_initiation_time,
-                                resp_received,
-                                retry_count,
-                                &err,
-                            )
-                            .await;
-                        if try_next_server {
-                            retry_count += 1;
-                            continue;
-                        } else {
-                            return Err(err.into());
+                if let Some(input_port) = globals.input_ports.get(states.port_idx) {
+                    if let Some(target_server) = input_port.target_servers.get(*server_idx) {
+                        if target_server.try_acquire_token().is_err() {
+                            // Rate limit exceeded for this server - DON'T count as server failure
+                            rate_limit_attempts += 1;
+                            continue; // try next server
                         }
                     }
-                };
+                }
+            } // Release the read lock
 
-                let resp_bytes = resp.bytes().await;
+            let req_initiation_time = EpochTimestamp::now();
+            // Execute the request.
+            let resp = req_builder.send().await;
 
-                let resp_bytes = match resp_bytes {
-                    Ok(resp_bytes) => resp_bytes,
-                    Err(err) => {
-                        let _ = report
-                            .req_resp_err(
-                                *server_idx,
-                                req_initiation_time,
-                                resp_received,
-                                retry_count,
-                                REQUEST_FAILED_RESP_BYTES_RX,
-                            )
-                            .await;
-                        // TODO worth logging a few of these.
+            let resp = match resp {
+                Ok(resp) => resp,
+                Err(_err) => {
+                    // TODO Map _err to SendFailureReason for debugging.
+
+                    // Report a 'send' error, which is a failure to connect to a target server.
+                    // This is not intended to count in the total *request* count stats (because
+                    // may succeed on a retry on another server) but will affect the health score
+                    // of this target server.
+                    let _ = report
+                        .send_failed(
+                            *server_idx,
+                            req_initiation_time,
+                            SEND_FAILED_UNSPECIFIED_ERROR,
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                        )
+                        .await;
+                    // Connection failure - count as server failure
+                    server_failures += 1;
+                    continue; // try next server
+                }
+            };
+
+            let resp_received = EpochTimestamp::now();
+
+            // Check HTTP errors
+            let resp = match resp.error_for_status() {
+                Ok(resp) => resp,
+                Err(err) => {
+                    // Decide if trying another server or not depending if the HTTP
+                    // problem is with the request or with the server.
+                    // When in doubt, this will assume a problem with the server.
+                    //
+                    // Note: http_response_err does a "req_fail" when returning false.
+                    let try_next_server = report
+                        .http_response_error(
+                            server_idx,
+                            req_initiation_time,
+                            resp_received,
+                            server_failures,
+                            &err,
+                        )
+                        .await;
+                    if try_next_server {
+                        // HTTP error - count as server failure
+                        server_failures += 1;
+                        continue; // try next server
+                    } else {
                         return Err(err.into());
                     }
-                };
+                }
+            };
 
-                // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
+            let resp_bytes = resp.bytes().await;
 
-                // if the response is a JSON error then add proxy specific 'data' to it to help
-                // find the problem.
-                //
-                // Do first a "weak" but "very fast" check before starting to do costly JSON serde.
-                //
-                // Also, check to retry with a different server some failed requests when safe to do so.
+            let resp_bytes = match resp_bytes {
+                Ok(resp_bytes) => resp_bytes,
+                Err(err) => {
+                    let _ = report
+                        .req_resp_err(
+                            *server_idx,
+                            req_initiation_time,
+                            resp_received,
+                            server_failures,
+                            REQUEST_FAILED_RESP_BYTES_RX,
+                        )
+                        .await;
+                    // TODO worth logging a few of these.
+                    return Err(err.into());
+                }
+            };
 
-                let mut modified_resp_bytes: Option<Bytes> = None;
-                let mut find_json_error = memmem::find_iter(&resp_bytes, "\"error\":");
-                if find_json_error.next().is_some() {
-                    if let Ok(json_resp) = serde_json::from_slice::<serde_json::Value>(&resp_bytes)
+            // TODO Parse the http::response, detect bad requests and call 'req_resp_err'
+
+            // if the response is a JSON error then add proxy specific 'data' to it to help
+            // find the problem.
+            //
+            // Do first a "weak" but "very fast" check before starting to do costly JSON serde.
+            //
+            // Also, check to retry with a different server some failed requests when safe to do so.
+
+            let mut modified_resp_bytes: Option<Bytes> = None;
+            let mut find_json_error = memmem::find_iter(&resp_bytes, "\"error\":");
+            if find_json_error.next().is_some() {
+                if let Ok(json_resp) = serde_json::from_slice::<serde_json::Value>(&resp_bytes) {
+                    // Check for a failed JSON-RPC that can be safely retried.
+                    if let Ok(safe_retry_approved) =
+                        Self::is_retryable_sui_level_error(&bytes, &json_resp).await
                     {
-                        // Check for a failed JSON-RPC that can be safely retried.
-                        // Why MAX_RETRIES-1?
-                        // At some point, have to stop retrying and return a "success with NotExists error" to
-                        // the user (instead of keep going until reaching "failure for too much retry").
-                        if retry_count < (MAX_RETRIES - 1) {
-                            if let Ok(safe_retry_approved) =
-                                Self::is_retryable_sui_level_error(&bytes, &json_resp).await
-                            {
-                                if safe_retry_approved {
-                                    // Safe to retry after a delay of 1 secs.
-                                    tokio::time::sleep(Duration::from_secs(1)).await;
-                                    // Retry with a different server, except when there is no other server
-                                    // left to try.
-                                    retry_count += 1;
-                                    if retry_count as usize >= targets.len() {
-                                        same_server_attempt = true;
-                                    }
-                                    continue;
-                                }
-                            }
+                        if safe_retry_approved {
+                            // Note: not a server_failure. The server is working
+                            // but an object is not found. This is sometimes OK
+                            // because the object may exists but was not yet created
+                            // for the RPC server. So give a change for the RPC
+                            // servers to catch up.
+                            tokio::time::sleep(Duration::from_millis(200)).await;
+                            continue; // try next server
                         }
+                    }
 
-                        // This is the standard way to handle JSON-RPC errors (with "error" object).
-                        if let Some(err_obj) = json_resp["error"].as_object() {
-                            if !err_obj.contains_key("data") {
-                                // Insert our own "data" field.
-                                let data =
-                                    JsonRpcErrorDataObject::new(target_uri.clone(), retry_count);
-                                let mut json_resp = json_resp.clone();
-                                if let Ok(data_obj) = serde_json::to_value(data) {
-                                    json_resp["data"] = data_obj;
-                                    modified_resp_bytes =
-                                        Some(serde_json::to_vec(&json_resp).unwrap().into());
-                                }
+                    // This is the standard way to handle JSON-RPC errors (with "error" object).
+                    if let Some(err_obj) = json_resp["error"].as_object() {
+                        if !err_obj.contains_key("data") {
+                            // Insert our own "data" field.
+                            let data =
+                                JsonRpcErrorDataObject::new(target_uri.clone(), server_failures);
+                            let mut json_resp = json_resp.clone();
+                            if let Ok(data_obj) = serde_json::to_value(data) {
+                                json_resp["data"] = data_obj;
+                                modified_resp_bytes =
+                                    Some(serde_json::to_vec(&json_resp).unwrap().into());
                             }
                         }
                     }
                 }
+            }
 
-                let builder = if let Some(modified_resp_bytes) = modified_resp_bytes {
-                    Response::builder().body(Body::from(modified_resp_bytes))
-                } else {
-                    Response::builder().body(Body::from(resp_bytes))
-                };
+            let builder = if let Some(modified_resp_bytes) = modified_resp_bytes {
+                Response::builder().body(Body::from(modified_resp_bytes))
+            } else {
+                Response::builder().body(Body::from(resp_bytes))
+            };
 
-                let resp = match builder {
-                    Ok(resp) => resp,
-                    Err(err) => {
-                        let _ = report
-                            .req_resp_err(
-                                *server_idx,
-                                req_initiation_time,
-                                resp_received,
-                                retry_count,
-                                REQUEST_FAILED_RESP_BUILDER,
-                            )
-                            .await;
-                        // TODO worth logging a few of these.
-                        return Err(err.into());
-                    }
-                };
+            let resp = match builder {
+                Ok(resp) => resp,
+                Err(err) => {
+                    let _ = report
+                        .req_resp_err(
+                            *server_idx,
+                            req_initiation_time,
+                            resp_received,
+                            server_failures,
+                            REQUEST_FAILED_RESP_BUILDER,
+                        )
+                        .await;
+                    // TODO worth logging a few of these.
+                    return Err(err.into());
+                }
+            };
 
-                let _ = report
-                    .req_resp_ok(*server_idx, req_initiation_time, resp_received, retry_count)
-                    .await;
+            let _ = report
+                .req_resp_ok(
+                    *server_idx,
+                    req_initiation_time,
+                    resp_received,
+                    server_failures,
+                )
+                .await;
 
-                return Ok(resp);
-            } // while (same_server_attempt)
-        } // for (server_idx, target_uri)
+            return Ok(resp);
+        } // while (server_failures < MAX_SERVER_FAILURES && rate_limit_attempts < max_cycles)
 
         // If we get here, then all the retries failed.
         let _ = report
-            .req_fail(retry_count, REQUEST_FAILED_NO_SERVER_RESPONDING)
+            .req_fail(server_failures, REQUEST_FAILED_NO_SERVER_RESPONDING)
             .await;
 
-        Err(anyhow!(format!("No server responding ({})", retry_count)).into())
+        Err(anyhow!(format!(
+            "No server responding (server_failures: {}, rate_limit_attempts: {})",
+            server_failures, rate_limit_attempts
+        ))
+        .into())
     }
 
     pub async fn run(

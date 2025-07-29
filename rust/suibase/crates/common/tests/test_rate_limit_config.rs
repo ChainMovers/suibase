@@ -1,8 +1,8 @@
 // Integration tests for rate limiting configuration parsing
 
 use common::shared_types::workdirs::WorkdirUserConfig;
-use tempfile::NamedTempFile;
 use std::io::Write;
+use tempfile::NamedTempFile;
 
 #[test]
 fn test_sample_rate_limit_configuration() {
@@ -51,30 +51,42 @@ links:
 
     // Create temporary file
     let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
-    temp_file.write_all(yaml_content.as_bytes()).expect("Failed to write temp file");
+    temp_file
+        .write_all(yaml_content.as_bytes())
+        .expect("Failed to write temp file");
     let temp_path = temp_file.path().to_str().expect("Failed to get temp path");
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
-    assert!(result.is_ok(), "Failed to parse configuration: {:?}", result.err());
-    
+
+    assert!(
+        result.is_ok(),
+        "Failed to parse configuration: {:?}",
+        result.err()
+    );
+
     // Verify proxy settings
     assert_eq!(config.is_proxy_enabled(), true);
     assert_eq!(config.proxy_port_number(), 44399);
-    
+
     let links = config.links();
     assert_eq!(links.len(), 6);
 
     // Test mainnet_public with rate limit
     let mainnet_link = links.get("mainnet_public").unwrap();
-    assert_eq!(mainnet_link.rpc, Some("https://fullnode.mainnet.sui.io:443".to_string()));
+    assert_eq!(
+        mainnet_link.rpc,
+        Some("https://fullnode.mainnet.sui.io:443".to_string())
+    );
     assert_eq!(mainnet_link.max_per_secs, Some(50));
     assert_eq!(mainnet_link.priority, 100);
 
     // Test testnet_public with different rate limit
     let testnet_link = links.get("testnet_public").unwrap();
-    assert_eq!(testnet_link.rpc, Some("https://fullnode.testnet.sui.io:443".to_string()));
+    assert_eq!(
+        testnet_link.rpc,
+        Some("https://fullnode.testnet.sui.io:443".to_string())
+    );
     assert_eq!(testnet_link.max_per_secs, Some(100));
     assert_eq!(testnet_link.priority, 90);
 
@@ -86,19 +98,28 @@ links:
 
     // Test premium_rpc with very high rate limit
     let premium_link = links.get("premium_rpc").unwrap();
-    assert_eq!(premium_link.rpc, Some("https://premium-sui-rpc.example.com:443".to_string()));
+    assert_eq!(
+        premium_link.rpc,
+        Some("https://premium-sui-rpc.example.com:443".to_string())
+    );
     assert_eq!(premium_link.max_per_secs, Some(1000));
     assert_eq!(premium_link.priority, 5);
 
     // Test emergency_fallback with no rate limit
     let emergency_link = links.get("emergency_fallback").unwrap();
-    assert_eq!(emergency_link.rpc, Some("https://backup-sui-rpc.example.com:443".to_string()));
+    assert_eq!(
+        emergency_link.rpc,
+        Some("https://backup-sui-rpc.example.com:443".to_string())
+    );
     assert_eq!(emergency_link.max_per_secs, None); // No rate limit
     assert_eq!(emergency_link.priority, 200);
 
     // Test shared_development with low rate limit
     let shared_link = links.get("shared_development").unwrap();
-    assert_eq!(shared_link.rpc, Some("https://shared-dev-sui.example.com:443".to_string()));
+    assert_eq!(
+        shared_link.rpc,
+        Some("https://shared-dev-sui.example.com:443".to_string())
+    );
     assert_eq!(shared_link.max_per_secs, Some(10));
     assert_eq!(shared_link.priority, 150);
 }
@@ -149,9 +170,9 @@ links:
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
+
     assert!(result.is_ok());
-    
+
     let links = config.links();
     assert_eq!(links.len(), 6);
 
@@ -164,12 +185,12 @@ links:
     assert_eq!(links.get("backup_node").unwrap().max_per_secs, None); // No limit
 
     // Verify priorities are parsed correctly
-    assert_eq!(links.get("local_node").unwrap().priority, 10);      // Highest priority
+    assert_eq!(links.get("local_node").unwrap().priority, 10); // Highest priority
     assert_eq!(links.get("sui_testnet").unwrap().priority, 20);
     assert_eq!(links.get("alchemy_sui").unwrap().priority, 30);
     assert_eq!(links.get("sui_mainnet_1").unwrap().priority, 50);
     assert_eq!(links.get("sui_mainnet_2").unwrap().priority, 60);
-    assert_eq!(links.get("backup_node").unwrap().priority, 100);    // Lowest priority
+    assert_eq!(links.get("backup_node").unwrap().priority, 100); // Lowest priority
 }
 
 #[test]
@@ -207,9 +228,9 @@ links:
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
+
     assert!(result.is_ok());
-    
+
     let links = config.links();
     assert_eq!(links.len(), 4);
 
@@ -217,15 +238,15 @@ links:
     let unlimited = links.get("unlimited_server").unwrap();
     assert_eq!(unlimited.max_per_secs, Some(0));
     assert_eq!(unlimited.max_per_min, Some(0));
-    
+
     let max_rate = links.get("max_rate_server").unwrap();
     assert_eq!(max_rate.max_per_secs, Some(32767));
     assert_eq!(max_rate.max_per_min, Some(262143));
-    
+
     let slow = links.get("slow_server").unwrap();
     assert_eq!(slow.max_per_secs, Some(1));
     assert_eq!(slow.max_per_min, Some(10));
-    
+
     let normal = links.get("normal_server").unwrap();
     assert_eq!(normal.max_per_secs, Some(100));
     assert_eq!(normal.max_per_min, Some(5000));
@@ -279,9 +300,13 @@ links:
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
-    assert!(result.is_ok(), "Failed to parse dual rate limiting config: {:?}", result.err());
-    
+
+    assert!(
+        result.is_ok(),
+        "Failed to parse dual rate limiting config: {:?}",
+        result.err()
+    );
+
     let links = config.links();
     assert_eq!(links.len(), 6);
 
@@ -332,7 +357,7 @@ links:
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
+
     // Should fail to parse malformed YAML syntax
     assert!(result.is_err());
 }
@@ -354,7 +379,7 @@ links:
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
+
     // This should fail because strings can't be parsed as u32
     if result.is_ok() {
         // If parsing succeeded, the fields should be None (ignored)
@@ -388,14 +413,14 @@ links:
 
     let mut config = WorkdirUserConfig::new();
     let result = config.load_and_merge_from_file(temp_path);
-    
+
     // Should successfully parse (validation happens at RateLimiter::new())
     assert!(result.is_ok());
-    
+
     let links = config.links();
     let large_qps = links.get("too_large_qps").unwrap();
     let large_qpm = links.get("too_large_qpm").unwrap();
-    
+
     assert_eq!(large_qps.max_per_secs, Some(50000));
     assert_eq!(large_qpm.max_per_min, Some(300000));
 }

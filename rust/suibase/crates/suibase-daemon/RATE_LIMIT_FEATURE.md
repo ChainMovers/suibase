@@ -587,11 +587,55 @@ For better tokio integration, consider making the rate limiter async-aware in a 
 - This would prevent blocking tokio runtime threads entirely
 - However, this requires more significant architectural changes
 
-### Phase 3: Integration NEXT TO BE DONE (after Phase 2B)
+### Phase 3: Integration COMPLETED
 
-1. Update TargetServer to use refactored RateLimiter with dual-limit support
-2. Modify server selection logic in `get_best_target_servers()`
-3. Implement blocking behavior when all servers rate limited
+Phase 3 successfully integrates the dual rate limiter (QPS + QPM) from Phase 2B into the proxy server's request handling and load balancing logic.
+
+#### Implementation Overview
+
+**TargetServer Integration:**
+- Added `rate_limiter: Option<RateLimiter>` field to TargetServer struct
+- Rate limiter created from Link configuration during TargetServer construction
+- Added methods: `try_acquire_token()`, `has_rate_limiting()`, `tokens_available()`
+- Automatic rate limiter recreation when configuration changes via `set_config()`
+
+**Load Balancing Integration:**
+- Modified `get_best_target_servers()` in InputPort to respect rate limits
+- Added `uri_if_not_rate_limited()` helper that checks token availability before server selection
+- Graceful fallback: when all servers are rate limited, includes them anyway (rate limiting happens at request time)
+- Preserves existing load balancing behavior while adding rate limit awareness
+
+**Request Handler Integration:**
+- Added rate limiting check in `proxy_handler()` before sending requests
+- Rate limiting happens just before `req_builder.send().await`
+- On rate limit exceeded, automatically tries next server in the list
+- Maintains existing retry and error handling logic
+
+#### Key Features
+
+1. **Seamless Integration**: Rate limiting is transparent to existing load balancing logic
+2. **Graceful Degradation**: System never completely blocks - always provides fallback servers
+3. **Hot Configuration Updates**: Rate limits can be changed via config reload without restart
+4. **Zero Performance Impact**: When no rate limits are configured, overhead is minimal
+5. **Dual Limit Support**: Supports QPS-only, QPM-only, both limits, or no limits per server
+
+#### Integration Points
+
+- `src/shared_types/target_server.rs`: Core rate limiter integration
+- `src/shared_types/input_port.rs`: Rate-aware server selection
+- `src/proxy_server.rs`: Request-time rate limiting enforcement
+
+#### Testing
+
+Comprehensive integration tests validate:
+- Rate limiter creation from various configurations
+- Server selection behavior with and without rate limits
+- Configuration hot-reload functionalityb  
+- Error handling for invalid rate limit values
+
+1. Update TargetServer to use refactored RateLimiter with dual-limit support ✓
+2. Modify server selection logic in `get_best_target_servers()` ✓
+3. Implement blocking behavior when all servers rate limited ✓
 
 ### Phase 4: Statistics
 1. Extend ServerStats with rate limit metrics (skips, blocks, percentage)

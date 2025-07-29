@@ -663,13 +663,13 @@ impl Default for WorkdirUserConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_link_struct_defaults() {
         let link = Link::new("test".to_string(), "http://localhost:9000".to_string());
-        
+
         assert_eq!(link.alias, "test");
         assert_eq!(link.selectable, true);
         assert_eq!(link.monitored, true);
@@ -678,7 +678,7 @@ mod tests {
         assert_eq!(link.ws, None);
         assert_eq!(link.priority, u8::MAX);
         assert_eq!(link.max_per_secs, None); // Default: no rate limit
-        assert_eq!(link.max_per_min, None);  // Default: no rate limit
+        assert_eq!(link.max_per_min, None); // Default: no rate limit
     }
 
     #[test]
@@ -711,17 +711,20 @@ links:
 
         let mut config = WorkdirUserConfig::new();
         let result = config.load_and_merge_from_file(temp_path);
-        
+
         assert!(result.is_ok(), "Failed to parse YAML: {:?}", result.err());
         assert_eq!(config.is_proxy_enabled(), true);
-        
+
         let links = config.links();
         assert_eq!(links.len(), 4);
 
         // Test testnet_rpc link with both rate limits
         let testnet_link = links.get("testnet_rpc").unwrap();
         assert_eq!(testnet_link.alias, "testnet_rpc");
-        assert_eq!(testnet_link.rpc, Some("https://fullnode.testnet.sui.io:443".to_string()));
+        assert_eq!(
+            testnet_link.rpc,
+            Some("https://fullnode.testnet.sui.io:443".to_string())
+        );
         assert_eq!(testnet_link.max_per_secs, Some(100));
         assert_eq!(testnet_link.max_per_min, Some(5000));
         assert_eq!(testnet_link.priority, 10);
@@ -737,7 +740,10 @@ links:
         // Test unlimited_rpc link without any rate limits
         let unlimited_link = links.get("unlimited_rpc").unwrap();
         assert_eq!(unlimited_link.alias, "unlimited_rpc");
-        assert_eq!(unlimited_link.rpc, Some("http://localhost:8000".to_string()));
+        assert_eq!(
+            unlimited_link.rpc,
+            Some("http://localhost:8000".to_string())
+        );
         assert_eq!(unlimited_link.max_per_secs, None);
         assert_eq!(unlimited_link.max_per_min, None);
         assert_eq!(unlimited_link.priority, 30);
@@ -766,9 +772,9 @@ links:
 
         let mut config = WorkdirUserConfig::new();
         let result = config.load_and_merge_from_file(temp_path);
-        
+
         assert!(result.is_ok());
-        
+
         let links = config.links();
         let qpm_link = links.get("qpm_rpc").unwrap();
         assert_eq!(qpm_link.max_per_secs, None);
@@ -790,12 +796,12 @@ links:
 
         let mut config = WorkdirUserConfig::new();
         let result = config.load_and_merge_from_file(temp_path);
-        
+
         assert!(result.is_ok());
-        
+
         let links = config.links();
         let zero_rate_link = links.get("zero_rate_rpc").unwrap();
-        assert_eq!(zero_rate_link.max_per_secs, Some(0)); // 0 should be preserved (blocks all requests)
+        assert_eq!(zero_rate_link.max_per_secs, Some(0)); // 0 should be preserved (means unlimited)
         assert_eq!(zero_rate_link.max_per_min, None);
     }
 
@@ -814,9 +820,9 @@ links:
 
         let mut config = WorkdirUserConfig::new();
         let result = config.load_and_merge_from_file(temp_path);
-        
+
         assert!(result.is_ok());
-        
+
         let links = config.links();
         let high_rate_link = links.get("high_rate_rpc").unwrap();
         assert_eq!(high_rate_link.max_per_secs, Some(u32::MAX)); // Should handle max u32 value
@@ -838,9 +844,9 @@ links:
 
         let mut config = WorkdirUserConfig::new();
         let result = config.load_and_merge_from_file(temp_path);
-        
+
         assert!(result.is_ok()); // Should not fail, just ignore invalid value
-        
+
         let links = config.links();
         let invalid_rate_link = links.get("invalid_rate_rpc").unwrap();
         assert_eq!(invalid_rate_link.max_per_secs, None); // Should be None for invalid values
@@ -862,9 +868,9 @@ links:
 
         let mut config = WorkdirUserConfig::new();
         let result = config.load_and_merge_from_file(temp_path);
-        
+
         assert!(result.is_ok()); // Should not fail, just ignore negative value
-        
+
         let links = config.links();
         let negative_rate_link = links.get("negative_rate_rpc").unwrap();
         assert_eq!(negative_rate_link.max_per_secs, None); // Should be None for negative values
@@ -904,15 +910,15 @@ links:
         let temp_path2 = temp_file2.path().to_str().unwrap();
 
         let mut config = WorkdirUserConfig::new();
-        
+
         // Load first file
         let result1 = config.load_and_merge_from_file(temp_path1);
         assert!(result1.is_ok());
-        
+
         // Load second file (should merge)
         let result2 = config.load_and_merge_from_file(temp_path2);
         assert!(result2.is_ok());
-        
+
         let links = config.links();
         assert_eq!(links.len(), 3);
 
@@ -963,7 +969,7 @@ links:
         let temp_path2 = temp_file2.path().to_str().unwrap();
 
         let mut config = WorkdirUserConfig::new();
-        
+
         // Load first file
         let result1 = config.load_and_merge_from_file(temp_path1);
         assert!(result1.is_ok());
@@ -972,11 +978,11 @@ links:
         // Load second file with overrides (should clear previous links)
         let result2 = config.load_and_merge_from_file(temp_path2);
         assert!(result2.is_ok());
-        
+
         let links = config.links();
         assert_eq!(links.len(), 1); // Should only have server2
         assert!(links.get("server1").is_none()); // server1 should be cleared
-        
+
         let server2 = links.get("server2").unwrap();
         assert_eq!(server2.max_per_secs, Some(200));
         assert_eq!(server2.max_per_min, None);
