@@ -170,6 +170,7 @@ pub struct Link {
     pub ws: Option<String>,
     pub priority: u8,
     pub max_per_secs: Option<u32>, // Rate limit: maximum requests per second (None = unlimited)
+    pub max_per_min: Option<u32>,  // Rate limit: maximum requests per minute (None = unlimited)
 }
 
 impl Link {
@@ -183,6 +184,7 @@ impl Link {
             ws: None,
             priority: u8::MAX,
             max_per_secs: None, // Default: no rate limit
+            max_per_min: None,  // Default: no rate limit
         }
     }
 }
@@ -563,6 +565,7 @@ impl WorkdirUserConfig {
                     let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
                     let priority = link["priority"].as_u64().unwrap_or(u64::MAX) as u8;
                     let max_per_secs = link["max_per_secs"].as_u64().map(|v| v as u32); // Optional rate limit
+                    let max_per_min = link["max_per_min"].as_u64().map(|v| v as u32); // Optional rate limit
                     let link = Link {
                         alias: alias.to_string(),
                         selectable,
@@ -572,6 +575,7 @@ impl WorkdirUserConfig {
                         ws,
                         priority,
                         max_per_secs,
+                        max_per_min,
                     };
                     // Replace if already present.
                     self.links.insert(alias.to_string(), link);
@@ -674,16 +678,18 @@ mod tests {
         assert_eq!(link.ws, None);
         assert_eq!(link.priority, u8::MAX);
         assert_eq!(link.max_per_secs, None); // Default: no rate limit
+        assert_eq!(link.max_per_min, None);  // Default: no rate limit
     }
 
     #[test]
-    fn test_yaml_parsing_with_max_per_secs() {
+    fn test_yaml_parsing_with_dual_rate_limits() {
         let yaml_content = r#"
 proxy_enabled: true
 links:
   - alias: "testnet_rpc"
     rpc: "https://fullnode.testnet.sui.io:443"
     max_per_secs: 100
+    max_per_min: 5000
     priority: 10
   - alias: "localnet_rpc"  
     rpc: "http://localhost:9000"
@@ -692,6 +698,10 @@ links:
   - alias: "unlimited_rpc"
     rpc: "http://localhost:8000"
     priority: 30
+  - alias: "qpm_only_rpc"
+    rpc: "http://localhost:7000"
+    max_per_min: 3000
+    priority: 40
 "#;
 
         // Create a temporary file with the YAML content
@@ -706,28 +716,63 @@ links:
         assert_eq!(config.is_proxy_enabled(), true);
         
         let links = config.links();
-        assert_eq!(links.len(), 3);
+        assert_eq!(links.len(), 4);
 
-        // Test testnet_rpc link with rate limit
+        // Test testnet_rpc link with both rate limits
         let testnet_link = links.get("testnet_rpc").unwrap();
         assert_eq!(testnet_link.alias, "testnet_rpc");
         assert_eq!(testnet_link.rpc, Some("https://fullnode.testnet.sui.io:443".to_string()));
         assert_eq!(testnet_link.max_per_secs, Some(100));
+        assert_eq!(testnet_link.max_per_min, Some(5000));
         assert_eq!(testnet_link.priority, 10);
 
-        // Test localnet_rpc link with different rate limit
+        // Test localnet_rpc link with QPS only
         let localnet_link = links.get("localnet_rpc").unwrap();
         assert_eq!(localnet_link.alias, "localnet_rpc");
         assert_eq!(localnet_link.rpc, Some("http://localhost:9000".to_string()));
         assert_eq!(localnet_link.max_per_secs, Some(50));
+        assert_eq!(localnet_link.max_per_min, None);
         assert_eq!(localnet_link.priority, 20);
 
-        // Test unlimited_rpc link without rate limit
+        // Test unlimited_rpc link without any rate limits
         let unlimited_link = links.get("unlimited_rpc").unwrap();
         assert_eq!(unlimited_link.alias, "unlimited_rpc");
         assert_eq!(unlimited_link.rpc, Some("http://localhost:8000".to_string()));
         assert_eq!(unlimited_link.max_per_secs, None);
+        assert_eq!(unlimited_link.max_per_min, None);
         assert_eq!(unlimited_link.priority, 30);
+
+        // Test qpm_only_rpc link with QPM only
+        let qpm_link = links.get("qpm_only_rpc").unwrap();
+        assert_eq!(qpm_link.alias, "qpm_only_rpc");
+        assert_eq!(qpm_link.rpc, Some("http://localhost:7000".to_string()));
+        assert_eq!(qpm_link.max_per_secs, None);
+        assert_eq!(qpm_link.max_per_min, Some(3000));
+        assert_eq!(qpm_link.priority, 40);
+    }
+
+    #[test]
+    fn test_yaml_parsing_max_per_min_only() {
+        let yaml_content = r#"
+links:
+  - alias: "qpm_rpc"
+    rpc: "http://localhost:9000"
+    max_per_min: 2400
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        
+        assert!(result.is_ok());
+        
+        let links = config.links();
+        let qpm_link = links.get("qpm_rpc").unwrap();
+        assert_eq!(qpm_link.max_per_secs, None);
+        assert_eq!(qpm_link.max_per_min, Some(2400));
     }
 
     #[test]
@@ -751,6 +796,7 @@ links:
         let links = config.links();
         let zero_rate_link = links.get("zero_rate_rpc").unwrap();
         assert_eq!(zero_rate_link.max_per_secs, Some(0)); // 0 should be preserved (blocks all requests)
+        assert_eq!(zero_rate_link.max_per_min, None);
     }
 
     #[test]
@@ -774,6 +820,7 @@ links:
         let links = config.links();
         let high_rate_link = links.get("high_rate_rpc").unwrap();
         assert_eq!(high_rate_link.max_per_secs, Some(u32::MAX)); // Should handle max u32 value
+        assert_eq!(high_rate_link.max_per_min, None);
     }
 
     #[test]
@@ -797,6 +844,7 @@ links:
         let links = config.links();
         let invalid_rate_link = links.get("invalid_rate_rpc").unwrap();
         assert_eq!(invalid_rate_link.max_per_secs, None); // Should be None for invalid values
+        assert_eq!(invalid_rate_link.max_per_min, None);
     }
 
     #[test]
@@ -820,6 +868,7 @@ links:
         let links = config.links();
         let negative_rate_link = links.get("negative_rate_rpc").unwrap();
         assert_eq!(negative_rate_link.max_per_secs, None); // Should be None for negative values
+        assert_eq!(negative_rate_link.max_per_min, None);
     }
 
     #[test]
@@ -871,16 +920,19 @@ links:
         let server1 = links.get("server1").unwrap();
         assert_eq!(server1.rpc, Some("http://server1-updated:9000".to_string()));
         assert_eq!(server1.max_per_secs, Some(150));
+        assert_eq!(server1.max_per_min, None);
 
         // server2 should remain from first config
         let server2 = links.get("server2").unwrap();
         assert_eq!(server2.rpc, Some("http://server2:9000".to_string()));
         assert_eq!(server2.max_per_secs, Some(200));
+        assert_eq!(server2.max_per_min, None);
 
         // server3 should be added from second config
         let server3 = links.get("server3").unwrap();
         assert_eq!(server3.rpc, Some("http://server3:9000".to_string()));
         assert_eq!(server3.max_per_secs, Some(300));
+        assert_eq!(server3.max_per_min, None);
     }
 
     #[test]
@@ -927,6 +979,7 @@ links:
         
         let server2 = links.get("server2").unwrap();
         assert_eq!(server2.max_per_secs, Some(200));
+        assert_eq!(server2.max_per_min, None);
         assert!(config.links_overrides());
     }
 }

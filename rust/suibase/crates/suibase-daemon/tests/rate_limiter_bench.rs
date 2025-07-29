@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 fn bench_high_concurrency() {
     println!("Starting high concurrency benchmark...");
     
-    let limiter = Arc::new(RateLimiter::new(1000)); // 1000 tokens per second
+    let limiter = Arc::new(RateLimiter::new(1000, 0).unwrap()); // 1000 tokens per second, unlimited per minute
     let num_threads = 100;
     let attempts_per_thread = 100;
     let total_attempts = num_threads * attempts_per_thread;
@@ -93,7 +93,7 @@ fn bench_rate_precision() {
     for rate in rates_to_test {
         println!("\n--- Testing rate: {} tokens/sec ---", rate);
         
-        let limiter = Arc::new(RateLimiter::new(rate));
+        let limiter = Arc::new(RateLimiter::new(rate, 0).unwrap());
         let successes = Arc::new(AtomicU64::new(0));
         let num_threads = 10;
         let test_duration = Duration::from_secs(5);
@@ -160,7 +160,7 @@ fn bench_memory_usage() {
     let start_time = Instant::now();
     
     for i in 0..num_limiters {
-        limiters.push(RateLimiter::new((i % 1000 + 1) as u32));
+        limiters.push(RateLimiter::new((i % 1000 + 1) as u32, 0).unwrap());
     }
     
     let creation_time = start_time.elapsed();
@@ -197,7 +197,7 @@ fn bench_mixed_workload() {
     
     let mut limiters = Vec::new();
     for (name, rate) in &server_configs {
-        limiters.push((name.to_string(), Arc::new(RateLimiter::new(*rate))));
+        limiters.push((name.to_string(), Arc::new(RateLimiter::new(*rate, 0).unwrap())));
     }
     
     let total_successes = Arc::new(AtomicU64::new(0));

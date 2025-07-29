@@ -176,25 +176,29 @@ links:
 fn test_edge_cases_in_configuration() {
     let yaml_content = r#"
 links:
-  # Zero rate limit (should block all requests)
-  - alias: "blocked_server"
-    rpc: "https://blocked.example.com:443"
+  # Zero rate limit (unlimited by new semantics)
+  - alias: "unlimited_server"
+    rpc: "https://unlimited.example.com:443"
     max_per_secs: 0
+    max_per_min: 0
 
-  # Maximum u32 value
+  # Maximum valid values for bit fields
   - alias: "max_rate_server"
     rpc: "https://fast.example.com:443"
-    max_per_secs: 4294967295
+    max_per_secs: 32767   # Maximum for 15-bit field
+    max_per_min: 262143   # Maximum for 18-bit field
 
   # Very low rate limit
   - alias: "slow_server"
     rpc: "https://slow.example.com:443"
     max_per_secs: 1
+    max_per_min: 10
 
   # Regular server for comparison
   - alias: "normal_server"
     rpc: "https://normal.example.com:443"
     max_per_secs: 100
+    max_per_min: 5000
 "#;
 
     let mut temp_file = NamedTempFile::new().unwrap();
@@ -210,8 +214,188 @@ links:
     assert_eq!(links.len(), 4);
 
     // Test edge case values
-    assert_eq!(links.get("blocked_server").unwrap().max_per_secs, Some(0));
-    assert_eq!(links.get("max_rate_server").unwrap().max_per_secs, Some(u32::MAX));
-    assert_eq!(links.get("slow_server").unwrap().max_per_secs, Some(1));
-    assert_eq!(links.get("normal_server").unwrap().max_per_secs, Some(100));
+    let unlimited = links.get("unlimited_server").unwrap();
+    assert_eq!(unlimited.max_per_secs, Some(0));
+    assert_eq!(unlimited.max_per_min, Some(0));
+    
+    let max_rate = links.get("max_rate_server").unwrap();
+    assert_eq!(max_rate.max_per_secs, Some(32767));
+    assert_eq!(max_rate.max_per_min, Some(262143));
+    
+    let slow = links.get("slow_server").unwrap();
+    assert_eq!(slow.max_per_secs, Some(1));
+    assert_eq!(slow.max_per_min, Some(10));
+    
+    let normal = links.get("normal_server").unwrap();
+    assert_eq!(normal.max_per_secs, Some(100));
+    assert_eq!(normal.max_per_min, Some(5000));
+}
+
+#[test]
+fn test_dual_rate_limiting_configuration() {
+    let yaml_content = r#"
+proxy_enabled: true
+
+links:
+  # QPS only (unlimited QPM)
+  - alias: "qps_only"
+    rpc: "https://qps-only.example.com:443"
+    max_per_secs: 50
+    # max_per_min not specified = unlimited
+
+  # QPM only (unlimited QPS)
+  - alias: "qpm_only"
+    rpc: "https://qpm-only.example.com:443"
+    max_per_min: 1000
+    # max_per_secs not specified = unlimited
+
+  # Both limits specified
+  - alias: "dual_limits"
+    rpc: "https://dual-limits.example.com:443"
+    max_per_secs: 20
+    max_per_min: 800
+
+  # Neither limit specified (unlimited)
+  - alias: "unlimited"
+    rpc: "https://unlimited.example.com:443"
+    # Both limits unspecified = unlimited
+
+  # Zero values (unlimited by new semantics)
+  - alias: "zero_unlimited"
+    rpc: "https://zero-unlimited.example.com:443"
+    max_per_secs: 0
+    max_per_min: 0
+
+  # Mixed zero/nonzero
+  - alias: "mixed_limits"
+    rpc: "https://mixed.example.com:443"
+    max_per_secs: 0    # Unlimited QPS
+    max_per_min: 500   # Limited QPM
+"#;
+
+    let mut temp_file = NamedTempFile::new().unwrap();
+    temp_file.write_all(yaml_content.as_bytes()).unwrap();
+    let temp_path = temp_file.path().to_str().unwrap();
+
+    let mut config = WorkdirUserConfig::new();
+    let result = config.load_and_merge_from_file(temp_path);
+    
+    assert!(result.is_ok(), "Failed to parse dual rate limiting config: {:?}", result.err());
+    
+    let links = config.links();
+    assert_eq!(links.len(), 6);
+
+    // QPS only
+    let qps_only = links.get("qps_only").unwrap();
+    assert_eq!(qps_only.max_per_secs, Some(50));
+    assert_eq!(qps_only.max_per_min, None);
+
+    // QPM only
+    let qpm_only = links.get("qpm_only").unwrap();
+    assert_eq!(qpm_only.max_per_secs, None);
+    assert_eq!(qpm_only.max_per_min, Some(1000));
+
+    // Both limits
+    let dual = links.get("dual_limits").unwrap();
+    assert_eq!(dual.max_per_secs, Some(20));
+    assert_eq!(dual.max_per_min, Some(800));
+
+    // Unlimited
+    let unlimited = links.get("unlimited").unwrap();
+    assert_eq!(unlimited.max_per_secs, None);
+    assert_eq!(unlimited.max_per_min, None);
+
+    // Zero unlimited
+    let zero_unlimited = links.get("zero_unlimited").unwrap();
+    assert_eq!(zero_unlimited.max_per_secs, Some(0));
+    assert_eq!(zero_unlimited.max_per_min, Some(0));
+
+    // Mixed limits
+    let mixed = links.get("mixed_limits").unwrap();
+    assert_eq!(mixed.max_per_secs, Some(0));
+    assert_eq!(mixed.max_per_min, Some(500));
+}
+
+#[test]
+fn test_configuration_with_invalid_yaml_syntax() {
+    // Test completely malformed YAML
+    let invalid_yaml = r#"
+links:
+  - alias: "test"
+    rpc: "https://test.com"
+    max_per_secs: [invalid: structure}
+"#;
+
+    let mut temp_file = NamedTempFile::new().unwrap();
+    temp_file.write_all(invalid_yaml.as_bytes()).unwrap();
+    let temp_path = temp_file.path().to_str().unwrap();
+
+    let mut config = WorkdirUserConfig::new();
+    let result = config.load_and_merge_from_file(temp_path);
+    
+    // Should fail to parse malformed YAML syntax
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_configuration_with_string_rate_limits() {
+    // Test string values for numeric fields (YAML parser might accept these)
+    let yaml_content = r#"
+links:
+  - alias: "string_test"
+    rpc: "https://test.example.com:443"
+    max_per_secs: "not_a_number"
+    max_per_min: "also_not_a_number"
+"#;
+
+    let mut temp_file = NamedTempFile::new().unwrap();
+    temp_file.write_all(yaml_content.as_bytes()).unwrap();
+    let temp_path = temp_file.path().to_str().unwrap();
+
+    let mut config = WorkdirUserConfig::new();
+    let result = config.load_and_merge_from_file(temp_path);
+    
+    // This should fail because strings can't be parsed as u32
+    if result.is_ok() {
+        // If parsing succeeded, the fields should be None (ignored)
+        let links = config.links();
+        let link = links.get("string_test").unwrap();
+        assert_eq!(link.max_per_secs, None);
+        assert_eq!(link.max_per_min, None);
+    } else {
+        // If parsing failed, that's also acceptable
+        assert!(result.is_err());
+    }
+}
+
+#[test]
+fn test_large_rate_limits() {
+    // Test very large values that exceed bit field limits
+    let yaml_content = r#"
+links:
+  - alias: "too_large_qps"
+    rpc: "https://test.example.com:443"
+    max_per_secs: 50000   # Exceeds 32767 limit
+    
+  - alias: "too_large_qpm"  
+    rpc: "https://test2.example.com:443"
+    max_per_min: 300000   # Exceeds 262143 limit
+"#;
+
+    let mut temp_file = NamedTempFile::new().unwrap();
+    temp_file.write_all(yaml_content.as_bytes()).unwrap();
+    let temp_path = temp_file.path().to_str().unwrap();
+
+    let mut config = WorkdirUserConfig::new();
+    let result = config.load_and_merge_from_file(temp_path);
+    
+    // Should successfully parse (validation happens at RateLimiter::new())
+    assert!(result.is_ok());
+    
+    let links = config.links();
+    let large_qps = links.get("too_large_qps").unwrap();
+    let large_qpm = links.get("too_large_qpm").unwrap();
+    
+    assert_eq!(large_qps.max_per_secs, Some(50000));
+    assert_eq!(large_qpm.max_per_min, Some(300000));
 }

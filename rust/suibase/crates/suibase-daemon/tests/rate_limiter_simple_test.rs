@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 fn test_simple_rate_limiting() {
     println!("Testing simple rate limiting behavior...");
     
-    let limiter = RateLimiter::new(5); // 5 tokens per second
+    let limiter = RateLimiter::new(5, 0).unwrap(); // 5 tokens per second, unlimited per minute
     
     // Initially should have 0 tokens
     assert_eq!(limiter.tokens_available(), 0);
@@ -40,7 +40,7 @@ fn test_simple_rate_limiting() {
 fn test_sustained_rate() {
     println!("Testing sustained rate over time...");
     
-    let limiter = RateLimiter::new(2); // 2 tokens per second
+    let limiter = RateLimiter::new(2, 0).unwrap(); // 2 tokens per second, unlimited per minute
     let mut successes = 0u32;
     let _start = Instant::now();
     let test_duration = Duration::from_secs(3);
