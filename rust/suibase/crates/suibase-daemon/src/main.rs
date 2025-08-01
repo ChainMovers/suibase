@@ -58,6 +58,7 @@ mod app_error;
 
 mod acoins_monitor;
 mod clock_trigger;
+mod mock_server_manager;
 mod network_monitor;
 mod proxy_server;
 mod rate_limiter;
@@ -70,14 +71,16 @@ use tokio::time::Duration;
 
 use crate::admin_controller::AdminController;
 use crate::api::APIServer;
+use crate::mock_server_manager::{MockServerManager, MockServerManagerParams};
 use crate::network_monitor::NetworkMonitor;
 use tokio_graceful_shutdown::{
     errors::{GracefulShutdownError, SubsystemError},
     SubsystemBuilder, Toplevel,
 };
 
-use workers::WebserverParams;
-use workers::WebserverWorker;
+// Webserver workers are commented out in mod.rs
+// use workers::WebserverParams;
+// use workers::WebserverWorker;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -137,6 +140,7 @@ impl Command {
                 let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
                 let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
                 let (acoinsmon_tx, acoinsmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let (mockserver_tx, mockserver_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
                 // Instantiate and connect all subsystems (while none is "running" yet).
                 let admctrl = AdminController::new(
@@ -145,6 +149,7 @@ impl Command {
                     admctrl_tx.clone(),
                     netmon_tx.clone(),
                     acoinsmon_tx.clone(),
+                    mockserver_tx.clone(),
                 );
 
                 let netmon =
@@ -161,6 +166,9 @@ impl Command {
                     ServerMode::Stage, // TODO Change to public!!!!
                 );
 
+                let mockserver_params = MockServerManagerParams::new(globals.proxy.clone());
+                let mockserver_manager = MockServerManager::new(mockserver_params, mockserver_rx);
+
                 let apiserver_params = APIServerParams::new(globals.clone(), admctrl_tx.clone());
                 let apiserver = APIServer::new(apiserver_params);
 
@@ -171,17 +179,19 @@ impl Command {
                 );
                 let clock = ClockTrigger::new(clock_params);
 
-                let suiexplorer_params =
-                    WebserverParams::new(globals.clone(), admctrl_tx.clone(), "sui-explorer");
-                let suiexplorer = WebserverWorker::new(suiexplorer_params);
+                // Webserver workers are commented out in mod.rs
+                // let suiexplorer_params =
+                //     WebserverParams::new(globals.clone(), admctrl_tx.clone(), "sui-explorer");
+                // let suiexplorer = WebserverWorker::new(suiexplorer_params);
 
                 // Start all top levels subsystems.
                 let errors = Toplevel::new(|s| async move {
                     s.start(SubsystemBuilder::new("admctrl", |a| admctrl.run(a)));
                     s.start(SubsystemBuilder::new("netmon", |a| netmon.run(a)));
                     s.start(SubsystemBuilder::new("acoinsmon", |a| acoinsmon.run(a)));
+                    s.start(SubsystemBuilder::new("mockserver", |a| mockserver_manager.run(a)));
                     s.start(SubsystemBuilder::new("clock", |a| clock.run(a)));
-                    s.start(SubsystemBuilder::new("suiexplorer", |a| suiexplorer.run(a)));
+                    // s.start(SubsystemBuilder::new("suiexplorer", |a| suiexplorer.run(a)));
                     s.start(SubsystemBuilder::new("apiserver", |a| apiserver.run(a)));
                 })
                 .catch_signals()

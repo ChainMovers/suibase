@@ -9,7 +9,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 use notify::RecursiveMode;
 use notify::{PollWatcher, Watcher};
 
-use crate::Globals;
+use crate::shared_types::Globals;
 
 pub struct WorkdirsWatcher {
     globals: Globals,

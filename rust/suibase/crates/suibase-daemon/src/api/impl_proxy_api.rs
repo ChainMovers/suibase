@@ -6,6 +6,7 @@ use jsonrpsee::core::RpcResult;
 
 use crate::shared_types::{GlobalsProxyMT, ServerStats};
 use common::basic_types::{AdminControllerMsg, AdminControllerTx, SafeUuid, TargetServerIdx};
+use common::shared_types::workdirs::Link;
 
 use super::{InfoResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
@@ -15,6 +16,7 @@ use super::def_header::Versioned;
 #[derive(Clone, PartialEq)]
 struct GetLinksInput {
     pub target_servers_stats: Option<Vec<(TargetServerIdx, ServerStats)>>,
+    pub target_servers_config: Option<Vec<(TargetServerIdx, Link)>>, // Configuration data for debug output
     pub all_servers_stats: Option<ServerStats>,
     pub selection_vectors: Option<Vec<Vec<u8>>>,
     pub input_port_found: bool,
@@ -26,6 +28,7 @@ impl GetLinksInput {
     pub fn new() -> Self {
         Self {
             target_servers_stats: None,
+            target_servers_config: None,
             all_servers_stats: None,
             selection_vectors: None,
             input_port_found: false,
@@ -268,6 +271,15 @@ impl ProxyApiServer for ProxyApiImpl {
                         .map(|(idx, target_server)| (idx, target_server.stats.clone()))
                         .collect(),
                 );
+                
+                // Also collect configuration data for debug/testing purposes
+                inputs.target_servers_config = Some(
+                    target_servers
+                        .iter()
+                        .map(|(idx, target_server)| (idx, target_server.get_config().clone()))
+                        .collect(),
+                );
+                
                 inputs.selection_vectors = Some(input_port.selection_vectors.clone());
             }
 
@@ -372,6 +384,13 @@ impl ProxyApiServer for ProxyApiImpl {
                     "DOWN".to_string()
                 };
 
+                // Populate configuration fields for debug/testing purposes
+                if let Some(ref target_servers_config) = inputs.target_servers_config {
+                    let server_config = &target_servers_config[i].1;
+                    link_stat.selectable = Some(server_config.selectable);
+                    link_stat.monitored = Some(server_config.monitored);
+                }
+
                 // Push always together for 1:1 index matching.
                 link_stats.push(link_stat);
                 link_n_request.push(n_request);
@@ -423,10 +442,10 @@ impl ProxyApiServer for ProxyApiImpl {
         } else if healthy_server_count == 0 {
             ("DOWN".to_string(), "no servers available".to_string())
         } else if healthy_server_count * 100 / server_count > 50 {
-            let resp_info = if workdir == "localnet" {
-                load_balance_str
-            } else {
+            let resp_info = if healthy_server_count >= 2 {
                 format!("protected{}", load_balance_str)
+            } else {
+                load_balance_str
             };
             ("OK".to_string(), resp_info)
         } else {
@@ -509,6 +528,7 @@ impl ProxyApiServer for ProxyApiImpl {
             }
 
             resp.debug = Some(debug_out);
+            
         }
 
         if data {

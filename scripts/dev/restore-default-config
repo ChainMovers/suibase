@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Script to manually restore default suibase.yaml configuration
+# Copies from defaults directory - daemon will auto-reload
+# 
+# NOTE: Tests no longer automatically remove config for debugging purposes.
+# This script is for manual cleanup when you want to return to defaults.
+
+set -e
+
+WORKDIR_PATH="/home/olet/suibase/workdirs/localnet"
+CONFIG_PATH="$WORKDIR_PATH/suibase.yaml"
+DEFAULT_CONFIG_PATH="/home/olet/suibase/scripts/defaults/localnet/suibase.yaml"
+
+echo "🔧 Manually restoring default suibase.yaml configuration..."
+
+# Check if default config exists
+if [ ! -f "$DEFAULT_CONFIG_PATH" ]; then
+    echo "❌ Default config not found at: $DEFAULT_CONFIG_PATH"
+    exit 1
+fi
+
+# Create workdir if it doesn't exist
+mkdir -p "$WORKDIR_PATH"
+
+# Copy default configuration
+echo "📋 Copying default config from: $DEFAULT_CONFIG_PATH"
+cp "$DEFAULT_CONFIG_PATH" "$CONFIG_PATH"
+echo "✅ Default config restored - daemon will auto-reload"
+
+echo ""
+echo "ℹ️  Notes:"
+echo "   - Tests now preserve config for debugging (no auto-cleanup)"
+echo "   - Daemon will automatically reload when config changes"
+echo "   - Only restart daemon manually when you have code changes"
+echo ""
+echo "🔍 To debug current config:"
+echo "   - API URL: http://localhost:44399"
+echo "   - Test curl: curl -X POST http://localhost:44399 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"localnet\",\"debug\":true},\"id\":1}'"

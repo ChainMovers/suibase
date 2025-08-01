@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Script to run mock server integration tests safely
+# 
+# CRITICAL: Mock server tests MUST run sequentially to prevent race conditions
+# They share a single daemon instance and modify shared configuration
+
+set -e
+
+echo "🧪 Running Mock Server Integration Tests"
+echo ""
+echo "⚠️  IMPORTANT: Tests run sequentially to prevent race conditions"
+echo "   - Tests share a single suibase-daemon instance"
+echo "   - Tests modify shared suibase.yaml configuration"
+echo "   - Parallel execution would cause state contention"
+echo ""
+
+# Change to the correct directory
+cd "$(dirname "$0")/../../rust/suibase"
+
+# Run tests with explicit single-threaded execution and exit on first failure
+echo "🔒 Running tests with --test-threads=1 for safety..."
+echo "⚡ Will exit on first failure for easier debugging"
+
+# Get list of all test names and run them one by one, stopping on first failure
+echo "📋 Discovering available tests..."
+test_names=$(cargo test --test mock_server_integration_tests -- --list | grep ": test$" | sed 's/: test$//')
+
+echo "🧪 Running tests sequentially, stopping on first failure:"
+for test_name in $test_names; do
+    echo "  🔍 Running: $test_name"
+    if ! cargo test --test mock_server_integration_tests "$test_name" -- --test-threads=1 --nocapture; then
+        echo "❌ Test failed: $test_name"
+        echo "🛑 Stopping execution due to test failure"
+        exit 1
+    fi
+    echo "  ✅ Passed: $test_name"
+done
+
+echo ""
+echo "✅ Mock server tests completed"
+echo ""
+echo "💡 To run a specific test:"
+echo "   cargo test test_selectable_flag_respected -- --nocapture"
+echo ""
+echo "🧹 To restore default configuration after tests:"
+echo "   $(dirname "$0")/restore-default-config"

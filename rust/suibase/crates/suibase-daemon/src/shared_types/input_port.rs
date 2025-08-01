@@ -35,6 +35,7 @@ pub struct InputPort {
     user_request_start: bool, // true when user_request == "start"
     proxy_enabled: bool,
 
+
     // Maintained by the AdminController such that the runtime idx remain the
     // same for a given alias ("forever", even when deleted from file config).
     pub target_servers: ManagedVec<TargetServer>,
@@ -156,6 +157,7 @@ impl InputPort {
     pub fn is_user_request_start(&self) -> bool {
         self.user_request_start
     }
+    
 
     pub fn is_proxy_enabled(&self) -> bool {
         self.proxy_enabled
@@ -350,6 +352,11 @@ impl InputPort {
         let mut best_latency_avg_idx: Option<TargetServerIdx> = None;
         for (_, target_server) in target_servers.iter() {
             if let Some(idx) = target_server.idx() {
+                // Skip non-selectable servers entirely
+                if !target_server.is_selectable() {
+                    continue;
+                }
+                
                 if target_server.stats.is_healthy() {
                     if best_latency_avg_idx.is_none()
                         || target_server.stats.avg_latency_ms() < best_latency_avg
@@ -359,6 +366,7 @@ impl InputPort {
                     }
                     ok_idx_vec.push(idx);
                 } else {
+                    // Only add unhealthy servers to selection_worst, not non-selectable ones
                     self.selection_worst.push(idx);
                 }
             }

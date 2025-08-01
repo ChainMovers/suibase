@@ -6,6 +6,7 @@
 pub(crate) use self::events::*;
 pub(crate) use self::globals::*;
 pub(crate) use self::input_port::*;
+pub use self::mock_server::*;
 pub(crate) use self::packages::*;
 pub(crate) use self::server_stats::*;
 pub(crate) use self::target_server::*;
@@ -13,6 +14,7 @@ pub(crate) use self::target_server::*;
 mod events;
 mod globals;
 mod input_port;
+mod mock_server;
 mod packages;
 mod server_stats;
 mod target_server;

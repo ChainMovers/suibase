@@ -8,8 +8,9 @@ pub(crate) use self::rpc_error::*;
 
 mod api_server;
 mod def_header;
-mod def_methods;
+pub mod def_methods;
 mod impl_general_api;
+mod impl_mock_api;
 mod impl_packages_api;
 mod impl_proxy_api;
 mod rpc_error;

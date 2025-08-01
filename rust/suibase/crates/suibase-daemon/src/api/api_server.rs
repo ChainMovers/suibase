@@ -30,6 +30,9 @@ use crate::api::impl_proxy_api::ProxyApiImpl;
 use super::PackagesApiServer;
 use crate::api::impl_packages_api::PackagesApiImpl;
 
+use super::MockApiServer;
+use crate::api::impl_mock_api::MockApiImpl;
+
 use jsonrpsee::{core::server::Methods, server::ServerBuilder};
 use std::net::SocketAddr;
 use tower_http::cors::AllowOrigin;
@@ -138,6 +141,17 @@ impl APIServerThread {
             let methods = api.into_rpc();
             if let Err(e) = all_methods.merge(methods) {
                 log::error!("Error merging ModulesApiImpl methods: {}", e);
+            }
+        }
+
+        {
+            let api = MockApiImpl::new(
+                self.params.globals.proxy.clone(),
+                self.params.admctrl_tx.clone(),
+            );
+            let methods = api.into_rpc();
+            if let Err(e) = all_methods.merge(methods) {
+                log::error!("Error merging MockApiImpl methods: {}", e);
             }
         }
 

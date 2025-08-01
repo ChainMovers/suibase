@@ -534,7 +534,7 @@ impl NetworkMonitor {
                             }
                         } else {
                             // This is for the user traffic.
-                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
+                            if let Some(stats) = Self::get_mut_all_servers_stats(
                                 input_ports,
                                 &cur_msg,
                             ) {
@@ -586,7 +586,7 @@ impl NetworkMonitor {
                             }
                         } else {
                             // An error in the response for the user traffic.
-                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
+                            if let Some(stats) = Self::get_mut_all_servers_stats(
                                 input_ports,
                                 &cur_msg,
                             ) {
@@ -651,7 +651,7 @@ impl NetworkMonitor {
                         {
                             // Update the stats. Not related to a specific target server
                             // so update only the all_servers stats.
-                            if let Some(stats) = crate::NetworkMonitor::get_mut_all_servers_stats(
+                            if let Some(stats) = Self::get_mut_all_servers_stats(
                                 input_ports,
                                 &cur_msg,
                             ) {

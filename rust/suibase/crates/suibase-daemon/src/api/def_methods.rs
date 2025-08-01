@@ -36,23 +36,30 @@ pub struct LinkStats {
     // The alias of the link, as specified in the config file.
     pub alias: String,
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub status: String, // Empty string, "OK" or "DOWN"
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub health_pct: String,
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub load_pct: String,
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub resp_time: String,
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub success_pct: String,
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     pub error_info: String, // Sometime more info when DOWN.
+
+    // Configuration flags for testing/debugging
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selectable: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")] 
+    pub monitored: Option<bool>,
 }
 
 impl LinkStats {
@@ -108,6 +115,7 @@ pub struct LinksResponse {
     // Will also change the default to true for the summary/links/display output.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub debug: Option<String>,
+
 }
 
 impl LinksResponse {
@@ -776,5 +784,31 @@ pub trait PackagesApi {
         package_uuid: String,
         package_timestamp: String,
         package_id: String,
+    ) -> RpcResult<SuccessResponse>;
+}
+
+#[rpc(server)]
+pub trait MockApi {
+    /// Control mock server behavior for testing
+    #[method(name = "mockServerControl")]
+    async fn mock_server_control(
+        &self,
+        alias: String,
+        behavior: crate::shared_types::MockServerBehavior,
+    ) -> RpcResult<SuccessResponse>;
+
+    /// Get detailed statistics for a mock server
+    #[method(name = "mockServerStats")]
+    async fn mock_server_stats(
+        &self,
+        alias: String,
+        reset_after: Option<bool>,
+    ) -> RpcResult<crate::shared_types::MockServerStatsResponse>;
+
+    /// Control multiple mock servers at once
+    #[method(name = "mockServerBatch")]
+    async fn mock_server_batch(
+        &self,
+        servers: Vec<crate::shared_types::MockServerControlRequest>,
     ) -> RpcResult<SuccessResponse>;
 }

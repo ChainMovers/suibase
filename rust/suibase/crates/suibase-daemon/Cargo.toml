@@ -41,6 +41,7 @@ jsonrpsee.workspace = true
 jsonrpsee-proc-macros.workspace = true
 jsonrpsee-types.workspace = true
 md5.workspace = true
+once_cell.workspace = true
 rand.workspace = true
 schemars.workspace = true
 serde_json.workspace = true

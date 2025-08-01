@@ -554,11 +554,10 @@ impl WorkdirUserConfig {
                     // TODO: Consider implementing link level member merging.
 
                     // Default of "enabled" is true. Allow the user to disable a single link.
-                    //
-                    // May allow later user finer control with "selectable" and "monitored".
+                    // Also support separate "selectable" and "monitored" flags for finer control.
                     let enabled = link["enabled"].as_bool().unwrap_or(true);
-                    let selectable = enabled;
-                    let monitored = enabled;
+                    let selectable = link["selectable"].as_bool().unwrap_or(enabled);
+                    let monitored = link["monitored"].as_bool().unwrap_or(enabled);
 
                     let rpc = link["rpc"].as_str().map(|s| s.to_string()); // Optional
                     let metrics = link["metrics"].as_str().map(|s| s.to_string()); // Optional

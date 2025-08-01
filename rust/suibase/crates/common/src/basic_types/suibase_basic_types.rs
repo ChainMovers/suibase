@@ -158,6 +158,10 @@ pub const EVENT_NOTIF_CONFIG_FILE_CHANGE: u8 = 128;
 pub const EVENT_DEBUG_PRINT: u8 = 129;
 pub const EVENT_SHELL_EXEC: u8 = 130;
 pub const EVENT_POST_PUBLISH: u8 = 131;
+pub const EVENT_MOCK_SERVER_CONFIG: u8 = 132;
+pub const EVENT_MOCK_SERVER_CONTROL: u8 = 133;
+pub const EVENT_MOCK_SERVER_STATS_RESET: u8 = 134;
+pub const EVENT_MOCK_SERVER_BATCH_CONTROL: u8 = 135;
 
 pub type AdminControllerTx = tokio::sync::mpsc::Sender<AdminControllerMsg>;
 pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;
