@@ -123,12 +123,10 @@ impl MockServerTestHarness {
     pub async fn new() -> Result<Self> {
         // CRITICAL: Acquire global test execution lock to prevent concurrent test execution
         // This lock is held for the entire duration of the test
-        println!("🔒 Acquiring test execution lock to prevent race conditions...");
         let test_lock = TEST_EXECUTION_LOCK.lock().unwrap_or_else(|poisoned| {
             println!("⚠️  Test lock was poisoned - recovering...");
             poisoned.into_inner()
         });
-        println!("✅ Test execution lock acquired - test can proceed safely");
 
         let yaml_path = PathBuf::from("/home/olet/suibase/workdirs/localnet/suibase.yaml");
         let api_base_url = "http://localhost:44399".to_string();
@@ -145,24 +143,26 @@ impl MockServerTestHarness {
         if daemon_responsive {
             // Daemon is running and responsive
             daemon_state.is_running = true;
-            println!("✅ Daemon is running and responsive - no restart needed");
+            println!("✅ Daemon is running and responsive");
 
-            // Always ensure test config is in place, but don't restart for config changes
-            // This allows tests to run with the current daemon state
-            if !yaml_path.exists() {
-                println!("📝 Writing test config");
-                std::fs::write(&yaml_path, MOCK_SERVER_CONFIG)?;
-
-                // Give daemon a moment to pick up the config change
-                tokio::time::sleep(Duration::from_millis(500)).await;
-                println!("✅ Test config written - daemon should auto-reload");
+            // Determine if the test configuration needs to be written.
+            // This is true if the file doesn't exist or if its content is outdated.
+            let should_write_config = if !yaml_path.exists() {
+                println!("📝 Test config does not exist - creating it");
+                true
             } else {
-                println!("📝 Test config already exists - ensuring it's current");
+                let current_config = std::fs::read_to_string(&yaml_path)?;
+                let needs_update = current_config != MOCK_SERVER_CONFIG;
+                if needs_update {
+                    println!("📝 Test config needs updating - writing it");
+                }
+                needs_update
+            };
 
-                // Rewrite the config to ensure it's exactly what we want
+            if should_write_config {
                 std::fs::write(&yaml_path, MOCK_SERVER_CONFIG)?;
+                // Give daemon a moment to pick up the config change.
                 tokio::time::sleep(Duration::from_millis(500)).await;
-                println!("✅ Test config refreshed");
             }
         } else {
             // Daemon is not responsive - this is the only case where we restart
@@ -971,57 +971,71 @@ impl MockServerTestHarness {
 
         Ok(responses)
     }
-    
+
     /// Wait for servers to be included in the load balancing subset
     /// Returns the list of servers that are marked for load distribution
-    pub async fn wait_for_load_balanced_servers(&self, expected_servers: &[&str], timeout_secs: u64) -> Result<Vec<String>> {
-        println!("⏳ Waiting for servers {:?} to be included in load balancing subset...", expected_servers);
+    pub async fn wait_for_load_balanced_servers(
+        &self,
+        expected_servers: &[&str],
+        timeout_secs: u64,
+    ) -> Result<Vec<String>> {
+        println!(
+            "⏳ Waiting for servers {:?} to be included in load balancing subset...",
+            expected_servers
+        );
         let start = std::time::Instant::now();
-        
+
         loop {
             // Get current statistics with debug info to see selection status
-            let stats = self.get_links("localnet", true, true, true, false, true).await?;
-            
+            let stats = self
+                .get_links("localnet", true, true, true, false, true)
+                .await?;
+
             // Check debug output for selection information
             if let Some(debug_info) = &stats.debug {
                 // The debug info should contain information about selection_vectors
                 // which determines the load balancing subset
-                
+
                 // For now, check the links data with debug enabled
                 if let Some(links) = &stats.links {
                     let mut load_balanced_servers = Vec::new();
-                    
+
                     // Find servers that are selectable and OK
                     // The load balancing subset consists of the first N healthy selectable servers
                     // where N is determined by the selection algorithm
                     for link in links {
-                        if link.alias.starts_with("mock-") && 
-                           link.selectable == Some(true) && 
-                           link.status == "OK" {
+                        if link.alias.starts_with("mock-")
+                            && link.selectable == Some(true)
+                            && link.status == "OK"
+                        {
                             load_balanced_servers.push(link.alias.clone());
                         }
                     }
-                    
-                    println!("  Current healthy selectable servers: {:?}", load_balanced_servers);
-                    
+
+                    println!(
+                        "  Current healthy selectable servers: {:?}",
+                        load_balanced_servers
+                    );
+
                     // Check if all expected servers are healthy and selectable
-                    let all_present = expected_servers.iter()
+                    let all_present = expected_servers
+                        .iter()
                         .all(|&server| load_balanced_servers.iter().any(|s| s == server));
-                    
+
                     if all_present && !load_balanced_servers.is_empty() {
                         println!("✅ Expected servers are healthy and selectable");
                         return Ok(load_balanced_servers);
                     }
                 }
             }
-            
+
             if start.elapsed().as_secs() > timeout_secs {
                 return Err(anyhow::anyhow!(
                     "Timeout waiting for servers {:?} to be healthy and selectable",
                     expected_servers
                 ));
             }
-            
+
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
     }
@@ -1110,21 +1124,15 @@ impl MockServerTestHarness {
 
     /// Reset configuration file to baseline (clean state with no rate limits)
     pub async fn reset_to_baseline_config(&self) -> Result<()> {
-        println!("🔄 Checking if baseline configuration reset is needed...");
-
         // First check if the current configuration already matches baseline
         if Self::config_matches_baseline(&self.yaml_path).await? {
-            println!("✅ Configuration already matches baseline - no reset needed");
             // Still validate via API to be sure
             Self::validate_baseline_config(&self.api_client, &self.api_base_url).await?;
             return Ok(());
         }
 
-        println!("🔄 Configuration differs from baseline - performing reset...");
-
         // Write baseline config
         std::fs::write(&self.yaml_path, MOCK_SERVER_CONFIG)?;
-        println!("📝 Baseline config written - notifying daemon...");
 
         // Notify daemon about the configuration change to accelerate processing
         Self::notify_config_change(
@@ -1150,7 +1158,7 @@ impl MockServerTestHarness {
         // Now validate that the baseline configuration was properly applied via traditional API validation
         Self::validate_baseline_config(&self.api_client, &self.api_base_url).await?;
 
-        println!("✅ Configuration reset to baseline completed and validated");
+        println!("✅ Configuration reset to baseline completed");
         Ok(())
     }
 
