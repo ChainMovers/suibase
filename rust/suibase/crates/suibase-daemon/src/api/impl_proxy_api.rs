@@ -17,6 +17,7 @@ use super::def_header::Versioned;
 struct GetLinksInput {
     pub target_servers_stats: Option<Vec<(TargetServerIdx, ServerStats)>>,
     pub target_servers_config: Option<Vec<(TargetServerIdx, Link)>>, // Configuration data for debug output
+    pub target_servers_qps_qpm: Option<Vec<(TargetServerIdx, u32, u32)>>, // (idx, qps, qpm) from rate limiters
     pub all_servers_stats: Option<ServerStats>,
     pub selection_vectors: Option<Vec<Vec<u8>>>,
     pub input_port_found: bool,
@@ -29,6 +30,7 @@ impl GetLinksInput {
         Self {
             target_servers_stats: None,
             target_servers_config: None,
+            target_servers_qps_qpm: None,
             all_servers_stats: None,
             selection_vectors: None,
             input_port_found: false,
@@ -178,6 +180,19 @@ impl ProxyApiImpl {
             format!("{:+6.1}", input)
         }
     }
+
+    fn fmt_rate_metric(value: u64) -> String {
+        // Format QPS/QPM for 7-character column with K/M units, right-aligned
+        if value == 0 {
+            "      0".to_string()
+        } else if value < 1000 {
+            format!("{:7}", value)
+        } else if value < 1_000_000 {
+            format!("{:6}K", value / 1000)
+        } else {
+            format!("{:6}M", value / 1_000_000)
+        }
+    }
     /*
         fn fmt_u64(input: u64) -> String {
             // Fix field width of 9 characters.
@@ -277,6 +292,18 @@ impl ProxyApiServer for ProxyApiImpl {
                     target_servers
                         .iter()
                         .map(|(idx, target_server)| (idx, target_server.get_config().clone()))
+                        .collect(),
+                );
+                
+                // Collect QPS/QPM data from all servers (for usage monitoring)
+                inputs.target_servers_qps_qpm = Some(
+                    target_servers
+                        .iter()
+                        .map(|(idx, target_server)| {
+                            // Always collect actual QPS/QPM to reflect real system activity
+                            let (qps, qpm) = target_server.get_current_qps_qpm();
+                            (idx, qps, qpm)
+                        })
                         .collect(),
                 );
                 
@@ -384,11 +411,37 @@ impl ProxyApiServer for ProxyApiImpl {
                     "DOWN".to_string()
                 };
 
+                // Populate rate limiting statistics
+                let rate_limit_count = server_stats.get_rate_limit_count();
+                if rate_limit_count > 0 {
+                    link_stat.rate_limit_count = Some(Self::fmt_rate_metric(rate_limit_count));
+                    link_stat.rate_limit_count_raw = Some(rate_limit_count);
+                }
+
+                // Populate QPS/QPM statistics from rate limiters (recent max values)
+                if let Some(ref qps_qpm_data) = inputs.target_servers_qps_qpm {
+                    if let Some((_, qps, qpm)) = qps_qpm_data.iter().find(|(idx, _, _)| *idx == target_servers_stats[i].0) {
+                        // Always set raw values, even if 0
+                        link_stat.qps_raw = Some(*qps);
+                        link_stat.qpm_raw = Some(*qpm);
+                        
+                        // Format for display only if > 0
+                        if *qps > 0 {
+                            link_stat.qps = Some(Self::fmt_rate_metric(*qps as u64));
+                        }
+                        if *qpm > 0 {
+                            link_stat.qpm = Some(Self::fmt_rate_metric(*qpm as u64));
+                        }
+                    }
+                }
+
                 // Populate configuration fields for debug/testing purposes
                 if let Some(ref target_servers_config) = inputs.target_servers_config {
                     let server_config = &target_servers_config[i].1;
                     link_stat.selectable = Some(server_config.selectable);
                     link_stat.monitored = Some(server_config.monitored);
+                    link_stat.max_per_secs = server_config.max_per_secs;
+                    link_stat.max_per_min = server_config.max_per_min;
                 }
 
                 // Push always together for 1:1 index matching.
@@ -484,25 +537,41 @@ impl ProxyApiServer for ProxyApiImpl {
 
             if links {
                 display_out.push_str(
-                    "alias                Status  Health%   Load%   RespT ms  Success%\n--------------------------------------------------------------------\n"
+                    "alias                Status  Health%   Load%   RespT ms  Success%    QPS    QPM   LIMIT\n------------------------------------------------------------------------------------------\n"
                 );
                 let mut load_distributed = load_distribution_depth;
                 for link_stat in link_stats.iter() {
-                    let load_dist_marker = if load_distributed > 0 {
+                    // Determine the load distribution marker
+                    let load_dist_marker = if link_stat.selectable == Some(false) {
+                        // Non-selectable servers show "-"
+                        "-"
+                    } else if load_distributed > 0 {
                         load_distributed -= 1;
                         "*"
                     } else {
                         ""
                     };
+                    
+                    // Determine the status display
+                    let status_display = if link_stat.monitored == Some(false) {
+                        // Non-monitored servers show "--"
+                        "--".to_string()
+                    } else {
+                        link_stat.status.clone()
+                    };
+                    
                     display_out.push_str(&format!(
-                        "{:<21}{:^6}{:1}{:>7}{:>8}{:>11}{:>10}  {}\n",
+                        "{:<21}{:^6}{:1}{:>7}{:>8}{:>11}{:>10}{:>7}{:>7}{:>7}  {}\n",
                         format!("{:.20}", link_stat.alias),
-                        link_stat.status,
+                        status_display,
                         load_dist_marker,
                         Self::fmt_str_score(&link_stat.health_pct),
                         Self::fmt_str_pct(&link_stat.load_pct),
                         Self::fmt_str_ms(&link_stat.resp_time),
                         Self::fmt_str_pct(&link_stat.success_pct),
+                        link_stat.qps.as_deref().unwrap_or("      0"),
+                        link_stat.qpm.as_deref().unwrap_or("      0"),
+                        link_stat.rate_limit_count.as_deref().unwrap_or("      0"),
                         link_stat.error_info,
                     ));
                 }
@@ -564,6 +633,47 @@ impl ProxyApiServer for ProxyApiImpl {
         let _ = self.admctrl_tx.send(msg).await;
 
         resp.info = "Success".to_string();
+        Ok(resp)
+    }
+    
+    async fn reset_server_stats(
+        &self,
+        workdir: String,
+    ) -> RpcResult<super::SuccessResponse> {
+        use super::SuccessResponse;
+        
+        let mut resp = SuccessResponse::new();
+        resp.header.method = "resetServerStats".to_string();
+        
+        // Validate workdir exists
+        {
+            let globals = self.globals.read().await;
+            if globals.find_input_port_by_name(&workdir).is_none() {
+                return Err(RpcInputError::InvalidParams(
+                    "workdir".to_string(),
+                    format!("'{}' workdir not found", workdir),
+                ).into());
+            }
+        }
+        
+        // Send message to AdminController to reset all server stats for this workdir
+        use common::basic_types::{AdminControllerMsg, EVENT_RESET_SERVER_STATS};
+        
+        let mut msg = AdminControllerMsg::new();
+        msg.event_id = EVENT_RESET_SERVER_STATS;
+        msg.data_string = Some(workdir.clone());
+        
+        match self.admctrl_tx.send(msg).await {
+            Ok(_) => {
+                resp.result = true;
+                resp.info = Some(format!("Successfully sent reset request for all servers in workdir '{}'", workdir));
+            }
+            Err(e) => {
+                resp.result = false;
+                resp.info = Some(format!("Failed to send reset request: {}", e));
+            }
+        }
+        
         Ok(resp)
     }
 }

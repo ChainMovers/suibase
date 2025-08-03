@@ -3,7 +3,7 @@
 // Manages the lifecycle of mock server async tasks and provides control
 // interfaces for test scenarios.
 
-use crate::shared_types::{GlobalsProxyMT, MockServerState, MockServerBehavior, MockServerStats, MockServerControlRequest};
+use crate::shared_types::{GlobalsProxyMT, MockServerState, MockServerBehavior, MockServerStats};
 use crate::workers::{MockServerWorker, MockServerParams};
 
 use anyhow::{Result, anyhow};
@@ -23,14 +23,14 @@ pub enum MockServerMsg {
         alias: String,
         behavior: MockServerBehavior,
     },
-    /// Control multiple servers at once
-    ServerBatchControl {
-        requests: Vec<MockServerControlRequest>,
+    /// Get statistics for a specific server without reset
+    ServerStats {
+        alias: String,
+        response_channel: tokio::sync::oneshot::Sender<Result<(MockServerStats, MockServerBehavior)>>,
     },
     /// Reset statistics for a specific server (mutable operation)
-    ServerStatsReset {
+    ServerReset {
         alias: String,
-        response_channel: tokio::sync::oneshot::Sender<Result<MockServerStats>>,
     },
 }
 
@@ -108,20 +108,19 @@ impl MockServerManager {
             MockServerMsg::ServerControl { alias, behavior } => {
                 self.handle_server_control(&alias, behavior).await
             }
-            MockServerMsg::ServerBatchControl { requests } => {
-                self.handle_server_batch_control(&requests).await
-            }
-            MockServerMsg::ServerStatsReset { alias, response_channel } => {
-                let result = self.handle_server_stats_reset(&alias).await;
+            MockServerMsg::ServerStats { alias, response_channel } => {
+                let result = self.handle_server_stats(&alias).await;
                 let _ = response_channel.send(result); // Ignore send error if receiver dropped
                 Ok(())
+            }
+            MockServerMsg::ServerReset { alias } => {
+                self.handle_server_reset(&alias).await
             }
         }
     }
 
     /// Handle configuration update message
     async fn handle_config_update(&mut self, workdir_name: &str, subsys: &SubsystemHandle) -> Result<()> {
-        log::debug!("MockServerManager::handle_config_update for workdir: {}", workdir_name);
         
         // Only process localnet workdir for now (as per the spec)
         if workdir_name != "localnet" {
@@ -190,7 +189,6 @@ impl MockServerManager {
                         // Port is same - server can continue running
                         // Update configuration parameters like rate limits without restart
                         state.update_rate_limiter(&link_config);
-                        log::debug!("Mock server {} configuration updated (no restart needed)", alias);
                         continue;
                     }
                 }
@@ -239,14 +237,6 @@ impl MockServerManager {
         Ok(())
     }
 
-    /// Handle batch server control message
-    async fn handle_server_batch_control(&mut self, requests: &[MockServerControlRequest]) -> Result<()> {
-        for request in requests {
-            self.handle_server_control(&request.alias, request.behavior.clone())
-                .await?;
-        }
-        Ok(())
-    }
 
     /// Get statistics for a specific mock server (read-only)
     /// For stats with reset, use messaging through AdminController
@@ -259,9 +249,9 @@ impl MockServerManager {
 
         Ok(state.get_stats())
     }
-
-    /// Get statistics for a specific mock server and reset (internal helper for message handling)
-    async fn handle_server_stats_reset(&mut self, alias: &str) -> Result<MockServerStats> {
+    
+    /// Get statistics and behavior for a specific mock server (internal helper for message handling)
+    async fn handle_server_stats(&mut self, alias: &str) -> Result<(MockServerStats, MockServerBehavior)> {
         let mock_servers = self.mock_servers.read().unwrap();
         
         let state = mock_servers
@@ -269,8 +259,22 @@ impl MockServerManager {
             .ok_or_else(|| anyhow!("Mock server '{}' not found", alias))?;
 
         let stats = state.get_stats();
+        let behavior = state.get_behavior();
+        
+        Ok((stats, behavior))
+    }
+
+    /// Reset statistics for a specific mock server (internal helper for message handling)
+    async fn handle_server_reset(&mut self, alias: &str) -> Result<()> {
+        let mock_servers = self.mock_servers.read().unwrap();
+        
+        let state = mock_servers
+            .get(alias)
+            .ok_or_else(|| anyhow!("Mock server '{}' not found", alias))?;
+
         state.clear_stats();
-        Ok(stats)
+        log::debug!("Reset stats for mock server: {}", alias);
+        Ok(())
     }
 
     /// Get list of all mock servers

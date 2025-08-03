@@ -4,7 +4,7 @@ use axum::async_trait;
 use jsonrpsee::core::RpcResult;
 
 use crate::mock_server_manager::MockServerManager;
-use crate::shared_types::{GlobalsProxyMT, MockServerBehavior, MockServerControlRequest, MockServerStatsResponse};
+use crate::shared_types::{GlobalsProxyMT, MockServerBehavior, MockServerStatsResponse};
 
 use super::{MockApiServer, SuccessResponse, RpcInputError, RpcSuibaseError};
 use common::basic_types::AdminControllerTx;
@@ -65,7 +65,6 @@ impl MockApiServer for MockApiImpl {
     async fn mock_server_stats(
         &self,
         alias: String,
-        reset_after: Option<bool>,
     ) -> RpcResult<MockServerStatsResponse> {
         // Validate that the alias is a mock server
         if !MockServerManager::is_mock_server(&alias) {
@@ -75,14 +74,13 @@ impl MockApiServer for MockApiImpl {
             ).into());
         }
 
-        let reset_stats = reset_after.unwrap_or(false);
-
-        if reset_stats {
-            // Reset stats requires messaging (mutable operation)
-            use common::basic_types::{AdminControllerMsg, EVENT_MOCK_SERVER_STATS_RESET};
+        // Read-only stats access - request from AdminController without reset
+        {
+            // Read-only stats access - need to request from AdminController without reset
+            use common::basic_types::{AdminControllerMsg, EVENT_MOCK_SERVER_STATS};
             
             let mut msg = AdminControllerMsg::new();
-            msg.event_id = EVENT_MOCK_SERVER_STATS_RESET;
+            msg.event_id = EVENT_MOCK_SERVER_STATS;
             msg.data_string = Some(alias.clone());
             
             let (tx, rx) = tokio::sync::oneshot::channel();
@@ -92,11 +90,24 @@ impl MockApiServer for MockApiImpl {
                 Ok(_) => {
                     match rx.await {
                         Ok(response) => {
-                            // Parse the response as MockServerStats JSON
-                            match serde_json::from_str::<crate::shared_types::MockServerStats>(&response) {
+                            // Response format: "stats_json|behavior_json"
+                            log::debug!("Raw response from AdminController: {}", response);
+                            let parts: Vec<&str> = response.splitn(2, '|').collect();
+                            log::debug!("Split into {} parts", parts.len());
+                            
+                            match serde_json::from_str::<crate::shared_types::MockServerStats>(parts[0]) {
                                 Ok(stats) => {
-                                    log::debug!("Retrieved and reset stats for mock server: {}", alias);
-                                    Ok(MockServerStatsResponse::new(alias, stats, reset_stats))
+                                    let mut response = MockServerStatsResponse::new(alias, stats, false);
+                                    
+                                    // Parse behavior if present
+                                    if parts.len() > 1 {
+                                        if let Ok(behavior) = serde_json::from_str::<crate::shared_types::MockServerBehavior>(parts[1]) {
+                                            response = response.with_behavior(behavior);
+                                        }
+                                    }
+                                    
+                                    log::debug!("Retrieved read-only stats for mock server: {}", response.alias);
+                                    Ok(response)
                                 }
                                 Err(e) => {
                                     log::warn!("Failed to parse stats response for mock server '{}': {}", alias, e);
@@ -111,56 +122,49 @@ impl MockApiServer for MockApiImpl {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to send stats reset message for mock server '{}': {}", alias, e);
+                    log::warn!("Failed to send stats request for mock server '{}': {}", alias, e);
                     Err(RpcSuibaseError::InfoError(format!("Failed to send mock server stats request: {}", e)).into())
                 }
             }
-        } else {
-            // Read-only stats access through globals
-            // TODO: Implement globals access to mock server stats
-            // For now, return empty stats
-            log::debug!("Retrieved read-only stats for mock server: {}", alias);
-            Ok(MockServerStatsResponse::new(alias, Default::default(), reset_stats))
         }
     }
 
-    async fn mock_server_batch(
+    async fn mock_server_reset(
         &self,
-        servers: Vec<MockServerControlRequest>,
+        alias: String,
     ) -> RpcResult<SuccessResponse> {
         let mut resp = SuccessResponse::new();
-        resp.header.method = "mockServerBatch".to_string();
-
-        // Validate all server aliases are mock servers
-        for request in &servers {
-            if !MockServerManager::is_mock_server(&request.alias) {
-                return Err(RpcInputError::InvalidParams(
-                    "servers".to_string(),
-                    format!("'{}' is not a mock server (must start with 'mock-')", request.alias),
-                ).into());
-            }
+        resp.header.method = "mockServerReset".to_string();
+        
+        // Validate that the alias is a mock server
+        if !MockServerManager::is_mock_server(&alias) {
+            return Err(RpcInputError::InvalidParams(
+                "alias".to_string(),
+                format!("'{}' is not a mock server (must start with 'mock-')", alias),
+            ).into());
         }
 
-        // Send batch control message to AdminController
-        use common::basic_types::{AdminControllerMsg, EVENT_MOCK_SERVER_BATCH_CONTROL};
+        // Send reset message to AdminController
+        use common::basic_types::{AdminControllerMsg, EVENT_MOCK_SERVER_RESET};
         
         let mut msg = AdminControllerMsg::new();
-        msg.event_id = EVENT_MOCK_SERVER_BATCH_CONTROL;
-        msg.data_string = Some(serde_json::to_string(&servers).unwrap_or_default());
+        msg.event_id = EVENT_MOCK_SERVER_RESET;
+        msg.data_string = Some(alias.clone());
         
         match self.admctrl_tx.send(msg).await {
             Ok(_) => {
                 resp.result = true;
-                resp.info = Some(format!("Successfully sent batch control command for {} mock servers", servers.len()));
-                log::debug!("Mock server batch control message sent: {} servers", servers.len());
+                resp.info = Some(format!("Successfully reset stats for mock server '{}'", alias));
+                log::debug!("Mock server '{}' stats reset successfully", alias);
             }
             Err(e) => {
                 resp.result = false;
-                resp.info = Some(format!("Failed to send batch control command: {}", e));
-                log::warn!("Mock server batch control message failed: {}", e);
+                resp.info = Some(format!("Failed to reset stats for mock server '{}': {}", alias, e));
+                log::warn!("Failed to send reset message for mock server '{}': {}", alias, e);
             }
         }
 
         Ok(resp)
     }
+
 }

@@ -35,7 +35,22 @@ async fn api_request(method: &str) -> serde_json::Value {
     assert!(value.is_ok());
     let value: serde_json::Value = value.unwrap();
 
+    // Log the full response for debugging
+    log::info!("Full API response: {}", serde_json::to_string_pretty(&value).unwrap());
+
     // Some sanity checks.
+    // Check if "result" exists
+    if value.get("result").is_none() {
+        log::error!("Missing 'result' in response: {:?}", value);
+        panic!("Response missing 'result' field");
+    }
+    
+    // Check if "header" exists within result
+    if value["result"].get("header").is_none() {
+        log::error!("Missing 'header' in result: {:?}", value["result"]);
+        panic!("Response missing 'header' field in result");
+    }
+    
     let hdr_method = value["result"]["header"]["method"].as_str().unwrap();
     assert_eq!(hdr_method, method);
     let _ = value["result"]["header"]["methodUuid"].as_str().unwrap();
@@ -46,12 +61,12 @@ async fn api_request(method: &str) -> serde_json::Value {
 #[tokio::test]
 async fn test_sanity_api() {
     init();
-    // Do a JSON-RPC 2.0 call of the method getStatus at http://localhost:44340
-    let response = api_request("getStatus").await;
+    // Do a JSON-RPC 2.0 call of the method getWorkdirStatus at http://localhost:44399
+    let response = api_request("getWorkdirStatus").await;
 
     // Example of valid response:
     // {"jsonrpc":"2.0","result":{
-    // "header":{"method":"getStatus", "methodUuid":"1E7...61G","dataUuid":"065...2N0","key":"localnet"},
+    // "header":{"method":"getWorkdirStatus", "methodUuid":"1E7...61G","dataUuid":"065...2N0","key":"localnet"},
     // "status":"OK",
     // "services":[{"label":"localnet process","status":"OK","statusInfo":null,"helpInfo":null,"pid":null},
     // {"label":"faucet process","status":"OK","statusInfo":null,"helpInfo":null,"pid":null},

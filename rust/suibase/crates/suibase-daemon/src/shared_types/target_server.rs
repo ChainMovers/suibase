@@ -29,24 +29,21 @@ impl TargetServer {
     }
 
     fn create_rate_limiter_from_config(config: &Link) -> Option<RateLimiter> {
-        // Only create a rate limiter if at least one limit is configured (including 0 for unlimited)
-        if config.max_per_secs.is_some() || config.max_per_min.is_some() {
-            let max_per_secs = config.max_per_secs.unwrap_or(0);
-            let max_per_min = config.max_per_min.unwrap_or(0);
+        // Always create a rate limiter for QPS/QPM tracking
+        // Use 0 (unlimited) when no limits are configured
+        let max_per_secs = config.max_per_secs.unwrap_or(0);
+        let max_per_min = config.max_per_min.unwrap_or(0);
 
-            match RateLimiter::new(max_per_secs, max_per_min) {
-                Ok(limiter) => Some(limiter),
-                Err(err) => {
-                    log::warn!(
-                        "Failed to create rate limiter for {}: {}",
-                        config.alias,
-                        err
-                    );
-                    None
-                }
+        match RateLimiter::new(max_per_secs, max_per_min) {
+            Ok(limiter) => Some(limiter),
+            Err(err) => {
+                log::warn!(
+                    "Failed to create rate limiter for {}: {}",
+                    config.alias,
+                    err
+                );
+                None
             }
-        } else {
-            None
         }
     }
 
@@ -107,14 +104,33 @@ impl TargetServer {
 
     /// Check if rate limiting is enabled for this server
     pub fn has_rate_limiting(&self) -> bool {
-        self.rate_limiter.is_some()
+        // Rate limiting is enabled only if we have actual limits (not 0/unlimited)
+        if let Some(limiter) = &self.rate_limiter {
+            limiter.max_per_secs() > 0 || limiter.max_per_min() > 0
+        } else {
+            false
+        }
     }
 
     /// Get available tokens for monitoring (returns minimum of QPS/QPM limits)
     pub fn tokens_available(&self) -> Option<u32> {
+        // Only return tokens if rate limiting is actually enabled
+        if self.has_rate_limiting() {
+            self.rate_limiter
+                .as_ref()
+                .map(|limiter| limiter.tokens_available())
+        } else {
+            None
+        }
+    }
+
+    /// Get current QPS and QPM (queries per second/minute) based on token consumption
+    /// Returns (QPS, QPM) tuple
+    pub fn get_current_qps_qpm(&self) -> (u32, u32) {
         self.rate_limiter
             .as_ref()
-            .map(|limiter| limiter.tokens_available())
+            .map(|limiter| limiter.get_current_qps_qpm())
+            .unwrap_or((0, 0))
     }
 }
 
@@ -240,20 +256,34 @@ mod tests {
         // Test that zero values mean unlimited requests allowed
         let config_zero_qps = create_test_link("zero_qps", "http://localhost:8008", Some(0), None);
         let server = TargetServer::new(config_zero_qps);
-        assert!(server.has_rate_limiting()); // Rate limiter exists but allows unlimited
+        assert!(!server.has_rate_limiting()); // Zero means no rate limiting
+        
+        // Rate limiter still exists internally for tracking
+        assert!(server.rate_limiter.is_some());
 
         // Should be able to make many requests
         for _ in 0..100 {
             assert!(server.try_acquire_token().is_ok());
         }
+        
+        // QPS/QPM should still be tracked
+        let (qps, _qpm) = server.get_current_qps_qpm();
+        assert!(qps > 0);
 
         let config_zero_qpm = create_test_link("zero_qpm", "http://localhost:8009", None, Some(0));
         let server = TargetServer::new(config_zero_qpm);
-        assert!(server.has_rate_limiting()); // Rate limiter exists but allows unlimited
+        assert!(!server.has_rate_limiting()); // Zero means no rate limiting
+        
+        // Rate limiter still exists internally for tracking
+        assert!(server.rate_limiter.is_some());
 
         // Should be able to make many requests
         for _ in 0..100 {
             assert!(server.try_acquire_token().is_ok());
         }
+        
+        // QPM should still be tracked
+        let (_qps, qpm) = server.get_current_qps_qpm();
+        assert!(qpm > 0);
     }
 }

@@ -33,7 +33,7 @@ pub struct RateLimiter {
 impl RateLimiter {
     /// Create a rate limiter with both QPS and QPM limits
     /// max_per_secs: 0 = unlimited, >0 = tokens per second limit
-    /// max_per_min: 0 = unlimited, >0 = tokens per minute limit  
+    /// max_per_min: 0 = unlimited, >0 = tokens per minute limit
     /// Returns error if limits exceed bit field capacity
     pub fn new(max_per_secs: u32, max_per_min: u32) -> Result<Self, &'static str> {
         // Validate limits fit in their bit fields
@@ -51,20 +51,20 @@ impl RateLimiter {
         // Initialize state with full tokens available for immediate use
         // This prevents the "first minute" bug where QPM limiters don't work initially
         let initial_sec_tokens = if max_per_secs == 0 {
-            0x7FFF
+            0x7FFF // Max value for 15 bits (32,767)
         } else {
             max_per_secs
         };
         let initial_min_tokens = if max_per_min == 0 {
-            0x3FFFF
+            0x3FFFF // Max value for 18 bits (262,143)
         } else {
             max_per_min
         };
 
-        // Set initial window IDs to 1 so they're different from the packed 0 state
-        // This ensures has_window_expired works correctly from the start
-        let initial_sec_id = 1u32;
-        let initial_min_id = 1u32;
+        // Initialize window IDs to 0 to match time calculation at startup
+        // (elapsed time starts at 0)
+        let initial_sec_id = 0u32;
+        let initial_min_id = 0u32;
 
         let initial_state = pack_state(
             initial_min_id,
@@ -86,45 +86,12 @@ impl RateLimiter {
         let start_time_secs = self.get_current_time_seconds();
         const TIMEOUT_SECS: u32 = 2; // Prevent indefinite blocking in async context
 
-        // Quick initial check: if we're in the same time window and have no tokens, fail immediately
-        let current_second_id = start_time_secs & 0xFFFF;
-        let current_minute_id = (start_time_secs / 60) & 0x7FFF;
-        let current_state = self.state.load(Ordering::Acquire);
-        let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) =
-            unpack_state(current_state);
-
-        let sec_window_fresh = self.has_window_expired(current_second_id, last_sec_id, true);
-        let min_window_fresh = self.has_window_expired(current_minute_id, last_min_id, false);
-
-        // If no windows are fresh and we need tokens but have none, fail immediately
-        if !sec_window_fresh && !min_window_fresh {
-            if self.max_per_secs > 0 && last_sec_tokens == 0 {
-                return Err(RateLimitExceeded);
-            }
-            if self.max_per_min > 0 && last_min_tokens == 0 {
-                return Err(RateLimitExceeded);
-            }
-        }
-
-        // If both limits are disabled (0), allow unlimited access
-        if self.max_per_secs == 0 && self.max_per_min == 0 {
-            return Ok(());
-        }
-
-        // Track if we've seen a fresh window but still no tokens (true rate limit)
-        let mut seen_fresh_window = false;
-        let mut iterations = 0u32;
+        let mut current_time_secs = start_time_secs;
 
         loop {
-            // Recalculate time inside loop to detect window changes
-            let current_time_secs = self.get_current_time_seconds();
             let current_second_id = current_time_secs & 0xFFFF; // 16 bits
             let current_minute_id = (current_time_secs / 60) & 0x7FFF; // 15 bits
 
-            // Timeout protection for tokio context
-            if current_time_secs > start_time_secs + TIMEOUT_SECS {
-                return Err(RateLimitExceeded);
-            }
             let current_state = self.state.load(Ordering::Acquire);
             let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) =
                 unpack_state(current_state);
@@ -133,28 +100,38 @@ impl RateLimiter {
             let sec_window_fresh = self.has_window_expired(current_second_id, last_sec_id, true);
             let min_window_fresh = self.has_window_expired(current_minute_id, last_min_id, false);
 
+            // Fail fast: if no windows are fresh and we need tokens but have none
+            if !sec_window_fresh && !min_window_fresh {
+                if self.max_per_secs > 0 && last_sec_tokens == 0 {
+                    return Err(RateLimitExceeded);
+                }
+                if self.max_per_min > 0 && last_min_tokens == 0 {
+                    return Err(RateLimitExceeded);
+                }
+            }
+
             let mut available_sec_tokens = if self.max_per_secs == 0 {
-                0x7FFF // Unlimited: use max possible value for 15 bits
+                // Unlimited: keep existing count to track usage, but ensure we have tokens
+                if sec_window_fresh {
+                    0x7FFF // Max value for 15 bits (32,767)
+                } else {
+                    last_sec_tokens.max(1) // Ensure at least 1 token remains to allow request
+                }
             } else if sec_window_fresh {
-                seen_fresh_window = true;
                 self.max_per_secs // Window expired: full refill
-            } else if current_state == 0 {
-                // Initial state: no tokens have ever been processed, start with fresh tokens
-                seen_fresh_window = true;
-                self.max_per_secs
             } else {
                 last_sec_tokens // Same window: use current count
             };
 
             let mut available_min_tokens = if self.max_per_min == 0 {
-                0x3FFFF // Unlimited: use max possible value for 18 bits
+                // Unlimited: keep existing count to track usage, but ensure we have tokens
+                if min_window_fresh {
+                    0x3FFFF // Max value for 18 bits (262,143)
+                } else {
+                    last_min_tokens.max(1) // Ensure at least 1 token remains to allow request
+                }
             } else if min_window_fresh {
-                seen_fresh_window = true;
                 self.max_per_min // Window expired: full refill
-            } else if current_state == 0 {
-                // Initial state: no tokens have ever been processed, start with fresh tokens
-                seen_fresh_window = true;
-                self.max_per_min
             } else {
                 last_min_tokens // Same window: use current count
             };
@@ -162,41 +139,25 @@ impl RateLimiter {
             // Check availability and consume tokens atomically (prevents premature failure)
             if self.max_per_secs > 0 {
                 if available_sec_tokens == 0 {
-                    // No tokens available. If we've seen a fresh window but still no tokens,
-                    // this is a true rate limit. Otherwise, continue waiting for next window.
-                    if seen_fresh_window {
-                        return Err(RateLimitExceeded);
-                    }
-                    // Yield CPU to prevent hot spinning in tokio context
-                    iterations += 1;
-                    if iterations % 10 == 0 {
-                        // Yield every 10 iterations
-                        std::thread::yield_now();
-                    }
-                    continue;
+                    // No tokens available - fail fast
+                    return Err(RateLimitExceeded);
                 }
+            }
+            // Always consume second tokens for tracking (even when unlimited)
+            if available_sec_tokens > 0 {
                 available_sec_tokens -= 1;
             }
-            // If max_per_secs is 0 (unlimited), we don't consume second tokens
 
             if self.max_per_min > 0 {
                 if available_min_tokens == 0 {
-                    // No tokens available. If we've seen a fresh window but still no tokens,
-                    // this is a true rate limit. Otherwise, continue waiting for next window.
-                    if seen_fresh_window {
-                        return Err(RateLimitExceeded);
-                    }
-                    // Yield CPU to prevent hot spinning in tokio context
-                    iterations += 1;
-                    if iterations % 10 == 0 {
-                        // Yield every 10 iterations
-                        std::thread::yield_now();
-                    }
-                    continue;
+                    // No tokens available - fail fast
+                    return Err(RateLimitExceeded);
                 }
+            }
+            // Always consume minute tokens for tracking (even when unlimited)
+            if available_min_tokens > 0 {
                 available_min_tokens -= 1;
             }
-            // If max_per_min is 0 (unlimited), we don't consume minute tokens
 
             // Attempt atomic update with calculated tokens
             let new_state = pack_state(
@@ -216,9 +177,15 @@ impl RateLimiter {
                 )
                 .is_ok()
             {
-                return Ok(()); // Success: both limits satisfied atomically
+                // Success: both limits satisfied atomically
+                return Ok(());
             }
             // CAS failed, retry with fresh state
+            current_time_secs = self.get_current_time_seconds();
+            // Timeout protection for tokio context
+            if current_time_secs > start_time_secs + TIMEOUT_SECS {
+                return Err(RateLimitExceeded);
+            }
         }
     }
 
@@ -248,9 +215,6 @@ impl RateLimiter {
             u32::MAX // Unlimited
         } else if min_window_expired {
             self.max_per_min
-        } else if current_state == 0 {
-            // Initial state: no tokens have ever been processed, start with fresh tokens
-            self.max_per_min
         } else {
             last_min_tokens
         };
@@ -269,15 +233,82 @@ impl RateLimiter {
         self.max_per_min
     }
 
+    /// Calculate current QPS and QPM based on token consumption
+    /// Returns (QPS, QPM) for both rate-limited and unlimited servers
+    /// Returns (0, 0) if windows are stale (more than 1 second/minute since last activity)
+    /// 
+    /// This method should be called periodically by monitoring systems for self-healing.
+    /// It automatically clears stale state to prevent wrap-around bugs where old activity
+    /// could be incorrectly reported after 18+ hours (QPS) or 22+ days (QPM).
+    pub fn get_current_qps_qpm(&self) -> (u32, u32) {
+        let current_time_secs = self.get_current_time_seconds();
+        let current_second_id = current_time_secs & 0xFFFF;
+        let current_minute_id = (current_time_secs / 60) & 0x7FFF;
+        
+        let observed_state = self.state.load(Ordering::Acquire);
+        let (last_min_id, last_min_tokens, last_sec_id, last_sec_tokens) = unpack_state(observed_state);
+        
+        // Calculate window differences accounting for wrap-around
+        let sec_window_diff = if current_second_id >= last_sec_id {
+            current_second_id - last_sec_id
+        } else {
+            // Handle wrap-around (65536 second cycle)
+            (0x10000 - last_sec_id) + current_second_id
+        };
+        
+        let min_window_diff = if current_minute_id >= last_min_id {
+            current_minute_id - last_min_id
+        } else {
+            // Handle wrap-around (32768 minute cycle)
+            (0x8000 - last_min_id) + current_minute_id
+        };
+        
+        // Calculate initial token values
+        let initial_sec_tokens = if self.max_per_secs == 0 { 0x7FFF } else { self.max_per_secs };
+        let initial_min_tokens = if self.max_per_min == 0 { 0x3FFFF } else { self.max_per_min };
+        
+        // Check if we need to clear stale state
+        let sec_stale_with_consumption = sec_window_diff > 1 && last_sec_tokens < initial_sec_tokens;
+        let min_stale_with_consumption = min_window_diff > 1 && last_min_tokens < initial_min_tokens;
+        
+        if sec_stale_with_consumption || min_stale_with_consumption {
+            // Attempt to clear stale state atomically
+            let new_state = pack_state(current_minute_id, initial_min_tokens, 
+                                      current_second_id, initial_sec_tokens);
+            
+            // Only update if state hasn't changed (prevents race with concurrent acquire_token)
+            let _ = self.state.compare_exchange(
+                observed_state,
+                new_state,
+                Ordering::Release,
+                Ordering::Acquire
+            );
+            // Whether the update succeeded or not, return 0 for stale windows
+            return (0, 0);
+        }
+        
+        // Calculate QPS (tokens consumed in second window)
+        let qps = if sec_window_diff > 1 {
+            0  // Stale window
+        } else {
+            initial_sec_tokens.saturating_sub(last_sec_tokens)
+        };
+        
+        // Calculate QPM (tokens consumed in minute window)
+        let qpm = if min_window_diff > 1 {
+            0  // Stale window
+        } else {
+            initial_min_tokens.saturating_sub(last_min_tokens)
+        };
+        
+        (qps, qpm)
+    }
+
+
     /// Determines if a new time window has started, correctly handling both normal time progression and timer wrap-around
     fn has_window_expired(&self, current_id: u32, last_id: u32, is_second_window: bool) -> bool {
         if current_id == last_id {
             return false; // Same window
-        }
-
-        // Special case: if last_id is 0 (initial state), any non-zero current_id means window expired
-        if last_id == 0 && current_id > 0 {
-            return true;
         }
 
         let half_range = if is_second_window {
@@ -296,6 +327,8 @@ impl RateLimiter {
 
     /// Get current time in seconds since startup
     pub fn get_current_time_seconds(&self) -> u32 {
+        // This could be speed optimized with CLOCK_MONOTONIC_COARSE, but
+        // starting at zero brings some clarity while debugging.
         let elapsed = self.startup_time.elapsed();
         elapsed.as_secs() as u32
     }
@@ -304,7 +337,7 @@ impl RateLimiter {
 /// Pack 15-bit minute ID, 18-bit minute tokens, 16-bit second ID, 15-bit second tokens
 fn pack_state(min_id: u32, min_tokens: u32, sec_id: u32, sec_tokens: u32) -> u64 {
     ((min_id as u64 & 0x7FFF) << 49) |      // 15 bits: minute window ID
-    ((min_tokens as u64 & 0x3FFFF) << 31) | // 18 bits: minute tokens  
+    ((min_tokens as u64 & 0x3FFFF) << 31) | // 18 bits: minute tokens
     ((sec_id as u64 & 0xFFFF) << 15) |      // 16 bits: second window ID
     (sec_tokens as u64 & 0x7FFF) // 15 bits: second tokens
 }
@@ -486,6 +519,84 @@ mod tests {
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
         assert!(limiter.try_acquire_token().is_ok());
+    }
+
+    #[test]
+    fn test_unlimited_limiter_tracks_qps_qpm() {
+        // Test that unlimited rate limiters still track QPS/QPM
+        let limiter = RateLimiter::new(0, 0).unwrap();
+
+        // Wait for initial window
+        thread::sleep(Duration::from_millis(1100));
+
+        // Make some requests
+        assert!(limiter.try_acquire_token().is_ok());
+        assert!(limiter.try_acquire_token().is_ok());
+        assert!(limiter.try_acquire_token().is_ok());
+
+        // Should now show 3 QPS and 3 QPM (3 requests made)
+        let (qps, qpm) = limiter.get_current_qps_qpm();
+        assert_eq!(qps, 3);
+        assert_eq!(qpm, 3);
+
+        // Make many more requests to verify tracking continues
+        for _ in 0..50 {
+            assert!(limiter.try_acquire_token().is_ok());
+        }
+
+        // Should now show 53 QPS and QPM
+        let (qps, qpm) = limiter.get_current_qps_qpm();
+        assert_eq!(qps, 53);
+        assert_eq!(qpm, 53);
+
+        // Wait for next second
+        thread::sleep(Duration::from_millis(1100));
+
+        // Should show previous window's activity
+        let (qps, _) = limiter.get_current_qps_qpm();
+        assert_eq!(qps, 53);
+
+        // Make some requests in new window
+        assert!(limiter.try_acquire_token().is_ok());
+        assert!(limiter.try_acquire_token().is_ok());
+
+        // Current window QPS should now be 2, QPM should be cumulative: 53 + 2 = 55
+        let (qps, qpm) = limiter.get_current_qps_qpm();
+        assert_eq!(qps, 2);
+        assert_eq!(qpm, 55);
+    }
+
+    #[test]
+    fn test_partial_unlimited_tracking() {
+        // Test with unlimited QPS but limited QPM
+        let limiter_unlimited_qps = RateLimiter::new(0, 100).unwrap();
+
+        thread::sleep(Duration::from_millis(1100));
+
+        // Make 10 requests
+        for _ in 0..10 {
+            assert!(limiter_unlimited_qps.try_acquire_token().is_ok());
+        }
+
+        // QPS should track usage even though it's unlimited
+        let (qps, qpm) = limiter_unlimited_qps.get_current_qps_qpm();
+        assert_eq!(qps, 10);
+        assert_eq!(qpm, 10);
+
+        // Test with limited QPS but unlimited QPM
+        let limiter_unlimited_qpm = RateLimiter::new(10, 0).unwrap();
+
+        thread::sleep(Duration::from_millis(1100));
+
+        // Make 5 requests
+        for _ in 0..5 {
+            assert!(limiter_unlimited_qpm.try_acquire_token().is_ok());
+        }
+
+        // Both should track usage
+        let (qps, qpm) = limiter_unlimited_qpm.get_current_qps_qpm();
+        assert_eq!(qps, 5);
+        assert_eq!(qpm, 5);
     }
 
     #[test]
@@ -946,6 +1057,60 @@ mod tests {
         assert_eq!(unpacked_min_tokens, max_min_tokens);
         assert_eq!(unpacked_sec_id, max_sec_id);
         assert_eq!(unpacked_sec_tokens, max_sec_tokens);
+    }
+
+    #[test]
+    fn test_qps_qpm_calculation() {
+        // Test QPS calculation
+        let limiter = RateLimiter::new(10, 100).unwrap();
+
+        // Initially should show 0 since no tokens consumed
+        let (qps, qpm) = limiter.get_current_qps_qpm();
+        assert_eq!(qps, 0);
+        assert_eq!(qpm, 0);
+
+        // Wait for initial tokens to be available
+        thread::sleep(Duration::from_millis(1100));
+
+        // Consume some tokens
+        assert!(limiter.try_acquire_token().is_ok());
+        assert!(limiter.try_acquire_token().is_ok());
+        assert!(limiter.try_acquire_token().is_ok());
+
+        // Should show 3 QPS (3 tokens consumed from 10 limit) and 3 QPM
+        let (qps, qpm) = limiter.get_current_qps_qpm();
+        assert_eq!(qps, 3);
+        assert_eq!(qpm, 3);
+    }
+
+    #[test]
+    fn test_qps_qpm_with_unlimited() {
+        // Test with unlimited limits - now tracks actual usage
+        let unlimited_qps = RateLimiter::new(0, 100).unwrap();
+        let unlimited_qpm = RateLimiter::new(10, 0).unwrap();
+        let both_unlimited = RateLimiter::new(0, 0).unwrap();
+
+        thread::sleep(Duration::from_millis(1100));
+
+        // Consume tokens
+        assert!(unlimited_qps.try_acquire_token().is_ok());
+        assert!(unlimited_qpm.try_acquire_token().is_ok());
+        assert!(both_unlimited.try_acquire_token().is_ok());
+
+        // Unlimited QPS (0 limit) should track actual usage: 1 QPS and 1 QPM
+        let (qps, qpm) = unlimited_qps.get_current_qps_qpm();
+        assert_eq!(qps, 1);
+        assert_eq!(qpm, 1);
+
+        // Unlimited QPM (0 limit) should track actual usage: 1 QPS and 1 QPM
+        let (qps, qpm) = unlimited_qpm.get_current_qps_qpm();
+        assert_eq!(qps, 1);
+        assert_eq!(qpm, 1);
+
+        // Both unlimited should track actual usage: 1 for both
+        let (qps, qpm) = both_unlimited.get_current_qps_qpm();
+        assert_eq!(qps, 1);
+        assert_eq!(qpm, 1);
     }
 
     #[test]

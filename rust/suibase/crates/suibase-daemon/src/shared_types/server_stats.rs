@@ -96,6 +96,9 @@ pub struct ServerStats {
     down_score: f64, // Value from 0 to 100
 
     error_info: Option<String>, // Info on most recent failure.
+    
+    // Rate limiting statistics
+    rate_limit_count: u64, // Cumulative count of rate limit occurrences
 }
 
 impl ServerStats {
@@ -127,11 +130,32 @@ impl ServerStats {
             down_score: 0.0,
 
             error_info: None,
+            
+            rate_limit_count: 0,
         }
     }
 
     pub fn clear(&mut self) {
         *self = Self::new(self.alias.clone());
+    }
+
+    pub fn reset(&mut self) {
+        // Reset all counters while preserving current health state
+        self.latency_report_count = 0;
+        self.success_on_first_attempt = 0;
+        self.success_on_retry = 0;
+        self.retry_count = 0;
+        
+        self.req_failure_reasons = [0; REQUEST_FAILED_VEC_SIZE];
+        self.req_unknown_reason = 0;
+        
+        self.send_failure_reasons = [0; SEND_FAILED_VEC_SIZE];
+        self.send_unknown_reason = 0;
+        
+        self.req_failure_internal = 0;
+        self.rate_limit_count = 0;
+        
+        // Note: We keep is_healthy, scores, and error_info as they represent current state
     }
 
     pub fn alias(&self) -> String {
@@ -194,6 +218,14 @@ impl ServerStats {
 
     pub fn latency_report_most_recent(&self) -> Option<EpochTimestamp> {
         self.latency_report_most_recent
+    }
+    
+    pub fn increment_rate_limit_count(&mut self) {
+        self.rate_limit_count = self.rate_limit_count.saturating_add(1);
+    }
+    
+    pub fn get_rate_limit_count(&self) -> u64 {
+        self.rate_limit_count
     }
 
     fn is_client_fault(reason: RequestFailedReason) -> bool {

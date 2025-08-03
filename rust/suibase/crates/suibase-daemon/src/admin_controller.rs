@@ -724,47 +724,43 @@ impl AdminController {
         }
     }
 
-    async fn process_mock_server_stats_reset_msg(&mut self, msg: AdminControllerMsg) {
-        if msg.event_id != EVENT_MOCK_SERVER_STATS_RESET {
+    async fn process_mock_server_stats_msg(&mut self, msg: AdminControllerMsg) {
+        if msg.event_id != EVENT_MOCK_SERVER_STATS {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             return;
         }
 
         if let Some(alias) = msg.data_string {
             if let Some(response_channel) = msg.resp_channel {
-                // Create a bridge channel to convert Result<MockServerStats> to String
-                let (mock_tx, mock_rx) = tokio::sync::oneshot::channel();
-                
-                // Forward to MockServerManager
+                // Get stats without reset from MockServerManager
                 use crate::mock_server_manager::MockServerMsg;
-                let mock_msg = MockServerMsg::ServerStatsReset {
+                
+                // Create a channel to receive stats and behavior
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                
+                let mock_msg = MockServerMsg::ServerStats {
                     alias: alias.clone(),
-                    response_channel: mock_tx,
+                    response_channel: tx,
                 };
                 
                 if let Err(e) = self.mockserver_tx.send(mock_msg).await {
-                    log::warn!("Failed to send mock server stats reset message: {}", e);
+                    log::warn!("Failed to send mock server stats message: {}", e);
                     let _ = response_channel.send(format!("Error: {}", e));
                     return;
                 }
                 
-                // Wait for the MockServerManager response and convert it to String
-                match mock_rx.await {
-                    Ok(Ok(stats)) => {
-                        // Convert stats to JSON string for the API response
-                        match serde_json::to_string(&stats) {
-                            Ok(stats_json) => {
-                                let _ = response_channel.send(stats_json);
-                            }
-                            Err(e) => {
-                                log::error!("Failed to serialize mock server stats: {}", e);
-                                let _ = response_channel.send(format!("Serialization error: {}", e));
-                            }
-                        }
+                // Wait for the MockServerManager response
+                match rx.await {
+                    Ok(Ok((stats, behavior))) => {
+                        // Convert stats and behavior to JSON string for the API response
+                        let stats_json = serde_json::to_string(&stats).unwrap_or_default();
+                        let behavior_json = serde_json::to_string(&behavior).unwrap_or_default();
+                        let response = format!("{}|{}", stats_json, behavior_json);
+                        let _ = response_channel.send(response);
                     }
                     Ok(Err(e)) => {
-                        log::warn!("Mock server stats reset failed: {}", e);
-                        let _ = response_channel.send(format!("Stats reset error: {}", e));
+                        log::warn!("Mock server stats failed: {}", e);
+                        let _ = response_channel.send(format!("Stats error: {}", e));
                     }
                     Err(e) => {
                         log::warn!("Failed to receive mock server stats response: {}", e);
@@ -772,34 +768,76 @@ impl AdminController {
                     }
                 }
             } else {
-                log::error!("Missing response channel for mock server stats reset");
+                log::error!("Missing response channel for mock server stats");
             }
         } else {
-            log::error!("Missing alias for mock server stats reset");
+            log::error!("Missing alias for mock server stats");
         }
     }
-
-    async fn process_mock_server_batch_control_msg(&mut self, msg: AdminControllerMsg) {
-        if msg.event_id != EVENT_MOCK_SERVER_BATCH_CONTROL {
+    
+    async fn process_mock_server_reset_msg(&mut self, msg: AdminControllerMsg) {
+        if msg.event_id != EVENT_MOCK_SERVER_RESET {
             log::error!("Unexpected event_id {:?}", msg.event_id);
             return;
         }
 
-        if let Some(data_string) = msg.data_string {
-            if let Ok(requests) = serde_json::from_str::<Vec<crate::shared_types::MockServerControlRequest>>(&data_string) {
-                // Forward to MockServerManager
-                use crate::mock_server_manager::MockServerMsg;
-                let msg = MockServerMsg::ServerBatchControl { requests };
-                if let Err(e) = self.mockserver_tx.send(msg).await {
-                    log::warn!("Failed to send mock server batch control message: {}", e);
-                }
+        if let Some(alias) = msg.data_string {
+            // Forward to MockServerManager (no response needed - fire and forget)
+            use crate::mock_server_manager::MockServerMsg;
+            let mock_msg = MockServerMsg::ServerReset {
+                alias: alias.clone(),
+            };
+            
+            if let Err(e) = self.mockserver_tx.send(mock_msg).await {
+                log::warn!("Failed to send mock server reset message for '{}': {}", alias, e);
             } else {
-                log::error!("Failed to parse batch control requests JSON: {}", data_string);
+                log::debug!("Sent reset message for mock server: {}", alias);
             }
         } else {
-            log::error!("Missing data_string for mock server batch control");
+            log::error!("Missing alias for mock server reset");
         }
     }
+    
+    async fn process_reset_server_stats_msg(&mut self, msg: AdminControllerMsg) {
+        if msg.event_id != EVENT_RESET_SERVER_STATS {
+            log::error!("Unexpected event_id {:?}", msg.event_id);
+            return;
+        }
+
+        if let Some(workdir) = msg.data_string {
+            // Get write access to modify the input port
+            let mut globals_proxy_write = self.globals.proxy.write().await;
+            
+            // Find the input port by name and modify it
+            let mut found = false;
+            let mut reset_count = 0;
+            
+            for (_, input_port) in globals_proxy_write.input_ports.iter_mut() {
+                if input_port.workdir_name() == workdir {
+                    // Reset stats for all servers in this workdir
+                    for (_, target_server) in input_port.target_servers.iter_mut() {
+                        target_server.stats.reset();
+                        reset_count += 1;
+                    }
+                    
+                    // Also reset the all_servers_stats
+                    input_port.all_servers_stats.reset();
+                    
+                    found = true;
+                    break;
+                }
+            }
+            
+            if found {
+                log::info!("Reset stats for {} servers in workdir '{}'", reset_count, workdir);
+            } else {
+                log::error!("Workdir '{}' not found", workdir);
+            }
+        } else {
+            log::error!("Missing workdir for reset server stats");
+        }
+    }
+
 
     async fn event_loop(&mut self, subsys: &SubsystemHandle) {
         while !subsys.is_shutdown_requested() {
@@ -828,11 +866,14 @@ impl AdminController {
                     EVENT_MOCK_SERVER_CONTROL => {
                         self.process_mock_server_control_msg(msg).await;
                     }
-                    EVENT_MOCK_SERVER_STATS_RESET => {
-                        self.process_mock_server_stats_reset_msg(msg).await;
+                    EVENT_MOCK_SERVER_STATS => {
+                        self.process_mock_server_stats_msg(msg).await;
                     }
-                    EVENT_MOCK_SERVER_BATCH_CONTROL => {
-                        self.process_mock_server_batch_control_msg(msg).await;
+                    EVENT_MOCK_SERVER_RESET => {
+                        self.process_mock_server_reset_msg(msg).await;
+                    }
+                    EVENT_RESET_SERVER_STATS => {
+                        self.process_reset_server_stats_msg(msg).await;
                     }
                     _ => {
                         log::error!("Unknown event_id {}", msg.event_id);

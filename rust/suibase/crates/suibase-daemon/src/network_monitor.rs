@@ -72,7 +72,8 @@ pub const EVENT_REPORT_REQ_FAILED: u8 = 128; // proxy_server reporting stats on 
 pub const EVENT_REPORT_TGT_REQ_RESP_OK: u8 = 129; // proxy_server reporting stats on a successful request/response.
 pub const EVENT_REPORT_TGT_REQ_RESP_ERR: u8 = 130; // proxy_server reporting stats on a response indicating an error.
 pub const EVENT_REPORT_TGT_SEND_FAILED: u8 = 131; // proxy_server reporting stats on a failed send attempt.
-pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 132; // Start an async health check (a request/response test) for one server.
+pub const EVENT_REPORT_RATE_LIMITED: u8 = 132; // proxy_server reporting that a server was rate limited.
+pub const EVENT_DO_SERVER_HEALTH_CHECK: u8 = 133; // Start an async health check (a request/response test) for one server.
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -249,6 +250,20 @@ impl<'a> ProxyHandlerReport<'a> {
         })
     }
 
+    pub async fn rate_limited(&mut self, server_idx: TargetServerIdx) -> Result<()> {
+        let mut msg = NetmonMsg::new();
+        msg.event_id = EVENT_REPORT_RATE_LIMITED;
+        self.flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
+        msg.flags = self.flags;
+        msg.port_idx = self.port_idx;
+        msg.server_idx = server_idx;
+        msg.timestamp = EpochTimestamp::now();
+        self.tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
     // Return true if the cause of the error is
     // the server and the request is likely
     // to succeed with another server.
@@ -407,17 +422,20 @@ impl NetworkMonitor {
                             if let Some(port_idx) = input_port.idx() {
                                 // Iterate every target_servers.
                                 for (_, target_server) in input_port.target_servers.iter() {
-                                    if let Some(server_idx) = target_server.idx() {
-                                        Self::process_latency_report_attempt_request(
-                                            &mut self.mon_map,
-                                            request_worker_tx,
-                                            port_idx,
-                                            server_idx,
-                                            input_port.port_number(),
-                                            now,
-                                            false,
-                                        )
-                                        .await;
+                                    // Only perform health checks on monitored servers
+                                    if target_server.is_monitored() {
+                                        if let Some(server_idx) = target_server.idx() {
+                                            Self::process_latency_report_attempt_request(
+                                                &mut self.mon_map,
+                                                request_worker_tx,
+                                                port_idx,
+                                                server_idx,
+                                                input_port.port_number(),
+                                                now,
+                                                false,
+                                            )
+                                            .await;
+                                        }
                                     }
                                 }
                             }
@@ -641,6 +659,14 @@ impl NetworkMonitor {
                             if update_selection_vectors {
                                 Self::update_selection_vectors(input_ports, &cur_msg);
                             }
+                        }
+                    }
+                    EVENT_REPORT_RATE_LIMITED => {
+                        // Update the rate limit count for the specific target server
+                        if let Some(target_server) =
+                            NetworkMonitor::get_mut_target_server(input_ports, &cur_msg)
+                        {
+                            target_server.stats.increment_rate_limit_count();
                         }
                     }
                     EVENT_REPORT_REQ_FAILED => {

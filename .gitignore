@@ -136,3 +136,4 @@ yarn.lock
 
 # Never ignore .gitkeep files. Trick to preserve empty directories.
 !**/.gitkeep
+rust/suibase/test_output.log

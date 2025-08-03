@@ -10,6 +10,7 @@ Complete testing framework for suibase-daemon proxy server using mock servers to
 - Mock servers identified by `"mock-"` prefix in alias (e.g., `mock-0`, `mock-1`)
 - Run as async HTTP tasks within suibase-daemon process (NOT separate processes)
 - Managed by `MockServerManager` subsystem following standard patterns
+- **IMPORTANT**: Mock servers are only created for the `localnet` workdir
 
 ### Key Components
 
@@ -18,8 +19,8 @@ Complete testing framework for suibase-daemon proxy server using mock servers to
 - `src/workers/mock_server.rs` - HTTP server implementation with behavior simulation
 - `src/shared_types/mock_server.rs` - Types and state management
 - `src/api/impl_mock_api.rs` - JSON-RPC API for mock control
-- `tests/mock_server_integration_tests.rs` - Integration tests
-- `tests/common/mock_test_utils.rs` - Test utilities
+- `tests/*_tests.rs` - Reorganized test suites (see Testing section)
+- `tests/common/mock_test_utils.rs` - Test utilities and harness
 
 **Configuration Example (suibase.yaml):**
 ```yaml
@@ -62,16 +63,22 @@ Control individual mock server behavior:
 **Actions:** `set_behavior`, `reset`, `pause`, `resume`
 
 ### mockServerStats
-Get statistics for mock server:
+Get statistics for mock server (read-only):
 ```json
 {
   "method": "mockServerStats",
-  "params": {"alias": "mock-0", "reset_after": true}
+  "params": {"alias": "mock-0"}
 }
 ```
 
-### mockServerBatch
-Control multiple servers at once.
+### mockServerReset
+Reset statistics for mock server:
+```json
+{
+  "method": "mockServerReset",
+  "params": {"alias": "mock-0"}
+}
+```
 
 ## Implementation Details
 
@@ -87,31 +94,50 @@ Control multiple servers at once.
 3. Mock servers inherit rate limits from Link configuration
 4. Hot-reload support for behavior changes (no restart needed)
 
+### Security & Restrictions
+- Mock servers ONLY run in `localnet` workdir (hardcoded check)
+- Alias MUST start with `"mock-"` prefix
+- API methods validate alias format before processing
+- No bypass mechanism exists for these restrictions
+
 ## Testing
 
-### Test Harness Pattern
-```rust
-// tests/common/mock_test_utils.rs
-pub struct MockServerTestHarness {
-    // Handles daemon lifecycle, config backup/restore
-    // RAII cleanup even on panic
-}
-```
+### Test Organization (NEW)
+Tests have been reorganized into three focused test suites:
 
-### Key Tests
-- `test_selectable_flag_respected` - Verifies real servers get 0% traffic
-- `test_load_balancing` - Load distribution across healthy servers
-- `test_failover_behavior` - Server failure handling
-- `test_proxy_server_rate_limiting` - Rate limiting enforcement
-- `test_cascading_failures` - Graceful degradation
+**1. mock_server_api_tests.rs**
+- Tests mock server API functionality
+- Behavior configuration, statistics, caching
+- Direct mock server features
+
+**2. rate_limiting_tests.rs**
+- Tests rate limiting enforcement
+- QPS/QPM dual limits
+- Dynamic configuration changes
+- Load balancing with rate limits
+
+**3. proxy_behavior_tests.rs**
+- Tests proxy server routing logic
+- Load balancing, failover, retry
+- Server selection behavior
+- Mixed server scenarios
+
+### Test Harness Pattern
+The `MockServerTestHarness` provides:
+- Daemon lifecycle management
+- Configuration backup/restore
+- RAII cleanup even on panic
+- Helper methods for common test operations
 
 ### Running Tests
 ```bash
 # Recommended: Use the test script for safe execution
 ~/suibase/scripts/dev/test-mock-servers
 
-# Or run directly (must be sequential)
-cargo test --test mock_server_integration_tests -- --test-threads=1
+# Or run individual test suites
+cargo test --test mock_server_api_tests -- --test-threads=1
+cargo test --test rate_limiting_tests -- --test-threads=1
+cargo test --test proxy_behavior_tests -- --test-threads=1
 ```
 
 **Important:** Tests run serially to prevent daemon conflicts.
@@ -129,32 +155,28 @@ cargo test --test mock_server_integration_tests -- --test-threads=1
 
 ### Mock Server Lifecycle
 1. Detected by `"mock-"` prefix during config parsing
-2. Started as async tasks by `MockServerManager`
-3. Inherit rate limiters from Link configuration
-4. Controlled via messaging through `AdminController`
+2. Workdir check ensures only `localnet` is processed
+3. Started as async tasks by `MockServerManager`
+4. Inherit rate limiters from Link configuration
+5. Controlled via messaging through `AdminController`
 
 ### Rate Limiting Integration
-Mock servers inherit `RateLimiter` from their Link configuration:
-```rust
-// In MockServerState
-pub rate_limiter: Arc<RwLock<Option<RateLimiter>>>,
-
-// Inheritance on config update
-pub fn update_rate_limiter(&self, link_config: &Link) {
-    let new_rate_limiter = Self::create_rate_limiter_from_config(link_config);
-    // ...
-}
-```
+Mock servers automatically inherit rate limiting from their Link configuration:
+- Rate limiter created during `MockServerState` initialization
+- Configuration updates trigger rate limiter recreation
+- Mock servers check rate limits before processing requests
+- See `update_rate_limiter()` in `MockServerState`
 
 ### Debugging
 - Extensive logging in MockServerManager and workers
 - Statistics available via existing `getLinks` API
 - Mock-specific stats via `mockServerStats` API
+- Test harness provides diagnostic helpers
 
 ## Production Considerations
 
 1. **Performance:** Zero impact when mock servers not configured
-2. **Safety:** Mock servers only run with explicit `"mock-"` alias prefix
+2. **Safety:** Mock servers only run with explicit `"mock-"` alias prefix AND localnet workdir
 3. **Isolation:** Each mock server runs in separate async task
 4. **Cleanup:** Proper shutdown via `tokio-graceful-shutdown`
 5. **Thread Safety:** All shared state uses `Arc<RwLock<>>`
@@ -165,6 +187,7 @@ pub fn update_rate_limiter(&self, link_config: &Link) {
 - Check `selectable: true` in configuration
 - Verify proxy server selection logic via `getLinks` API
 - Ensure mock server is healthy (responding to requests)
+- Confirm workdir is `localnet`
 
 ### Configuration Not Applied
 - Use config timestamp mechanism for reliable change detection
@@ -175,6 +198,7 @@ pub fn update_rate_limiter(&self, link_config: &Link) {
 - Ensure daemon restart between incompatible config changes
 - Run tests serially with `--test-threads=1`
 - Check for proper cleanup in test harness
+- Verify no leftover mock server configurations
 
 ### Development Scripts
 
@@ -197,19 +221,17 @@ pub fn update_rate_limiter(&self, link_config: &Link) {
 
 ## Event Constants
 
-```rust
-// common/basic_types.rs
-pub const EVENT_MOCK_SERVER_CONFIG: u8 = 132;
-pub const EVENT_MOCK_SERVER_CONTROL: u8 = 133;
-pub const EVENT_MOCK_SERVER_STATS_RESET: u8 = 134;
-pub const EVENT_MOCK_SERVER_BATCH_CONTROL: u8 = 135;
-```
+Mock server events use dedicated constants for message passing:
+- `EVENT_MOCK_SERVER_CONFIG`: Configuration updates
+- `EVENT_MOCK_SERVER_CONTROL`: Behavior control messages
+- `EVENT_MOCK_SERVER_STATS_RESET`: Statistics reset requests
 
 ## Future Maintenance
 
 This feature is designed to be stable and low-maintenance. Key invariants to preserve:
-1. Mock servers only run with `"mock-"` prefix
-2. All mutable operations go through messaging
-3. `selectable: false` servers never receive traffic
-4. Rate limiting inheritance from Link config
-5. Graceful shutdown handling
+1. Mock servers only run in `localnet` workdir
+2. Mock servers only run with `"mock-"` prefix
+3. All mutable operations go through messaging
+4. `selectable: false` servers never receive traffic
+5. Rate limiting inheritance from Link config
+6. Graceful shutdown handling

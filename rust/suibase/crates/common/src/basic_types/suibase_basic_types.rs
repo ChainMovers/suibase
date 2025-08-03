@@ -160,8 +160,9 @@ pub const EVENT_SHELL_EXEC: u8 = 130;
 pub const EVENT_POST_PUBLISH: u8 = 131;
 pub const EVENT_MOCK_SERVER_CONFIG: u8 = 132;
 pub const EVENT_MOCK_SERVER_CONTROL: u8 = 133;
-pub const EVENT_MOCK_SERVER_STATS_RESET: u8 = 134;
-pub const EVENT_MOCK_SERVER_BATCH_CONTROL: u8 = 135;
+pub const EVENT_MOCK_SERVER_RESET: u8 = 134; // Reset stats only (no return)
+pub const EVENT_MOCK_SERVER_STATS: u8 = 136; // Read-only stats request (no reset)
+pub const EVENT_RESET_SERVER_STATS: u8 = 137; // Reset server stats for a specific link
 
 pub type AdminControllerTx = tokio::sync::mpsc::Sender<AdminControllerMsg>;
 pub type AdminControllerRx = tokio::sync::mpsc::Receiver<AdminControllerMsg>;

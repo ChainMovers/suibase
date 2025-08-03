@@ -268,6 +268,7 @@ impl ProxyServer {
                         if target_server.try_acquire_token().is_err() {
                             // Rate limit exceeded for this server - DON'T count as server failure
                             rate_limit_attempts += 1;
+                            let _ = report.rate_limited(*server_idx).await;
                             continue; // try next server
                         }
                     }

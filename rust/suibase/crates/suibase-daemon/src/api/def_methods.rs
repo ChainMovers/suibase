@@ -54,12 +54,35 @@ pub struct LinkStats {
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub error_info: String, // Sometime more info when DOWN.
 
+    // Rate limiting statistics
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub qps: Option<String>, // Current average QPS (formatted)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub qpm: Option<String>, // Current average QPM (formatted)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub rate_limit_count: Option<String>, // Cumulative LIMIT count (formatted)
+    
+    // Raw values for data consumers
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub qps_raw: Option<u32>, // Raw QPS value
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub qpm_raw: Option<u32>, // Raw QPM value
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub rate_limit_count_raw: Option<u64>, // Raw LIMIT count
+
     // Configuration flags for testing/debugging
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selectable: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")] 
     pub monitored: Option<bool>,
+    
+    // Rate limit configuration (only shown in debug mode)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_per_secs: Option<u32>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_per_min: Option<u32>,
 }
 
 impl LinkStats {
@@ -697,6 +720,14 @@ pub trait ProxyApi {
 
     #[method(name = "fsChange")]
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
+    
+    /// Reset all server statistics for a workdir
+    /// This is primarily for testing purposes
+    #[method(name = "resetServerStats")]
+    async fn reset_server_stats(
+        &self,
+        workdir: String,
+    ) -> RpcResult<SuccessResponse>;
 }
 
 #[rpc(server)]
@@ -797,18 +828,18 @@ pub trait MockApi {
         behavior: crate::shared_types::MockServerBehavior,
     ) -> RpcResult<SuccessResponse>;
 
-    /// Get detailed statistics for a mock server
+    /// Get detailed statistics for a mock server (read-only)
     #[method(name = "mockServerStats")]
     async fn mock_server_stats(
         &self,
         alias: String,
-        reset_after: Option<bool>,
     ) -> RpcResult<crate::shared_types::MockServerStatsResponse>;
 
-    /// Control multiple mock servers at once
-    #[method(name = "mockServerBatch")]
-    async fn mock_server_batch(
+    /// Reset statistics for a mock server
+    #[method(name = "mockServerReset")]
+    async fn mock_server_reset(
         &self,
-        servers: Vec<crate::shared_types::MockServerControlRequest>,
+        alias: String,
     ) -> RpcResult<SuccessResponse>;
+
 }

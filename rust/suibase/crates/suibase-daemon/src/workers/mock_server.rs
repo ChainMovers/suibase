@@ -92,12 +92,25 @@ impl MockServerTask {
         let addr = std::net::SocketAddr::from(([127, 0, 0, 1], self.params.state.port));
         log::info!("{} listening on {}", self.task_name, addr);
 
-        // Run the server
-        axum_server::Server::bind(addr)
-            .serve(app.into_make_service())
-            .await
-            .map_err(|e| anyhow::anyhow!("Mock server error: {}", e))?;
+        // Start cache cleanup task
+        let state_for_cleanup = self.params.state.clone();
+        let cleanup_task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60)); // Clean every minute
+            loop {
+                interval.tick().await;
+                state_for_cleanup.cleanup_cache();
+            }
+        });
 
+        // Run the server
+        let server_result = axum_server::Server::bind(addr)
+            .serve(app.into_make_service())
+            .await;
+
+        // Clean up the cleanup task when server stops
+        cleanup_task.abort();
+
+        server_result.map_err(|e| anyhow::anyhow!("Mock server error: {}", e))?;
         Ok(())
     }
 }
@@ -172,9 +185,68 @@ async fn handle_jsonrpc_request(
         return Ok(Json(custom_response));
     }
 
+    // If proxy is enabled, try to proxy to localnet with caching
+    if behavior.proxy_enabled {
+        match handle_proxy_request(&state, &request, behavior.cache_ttl_secs).await {
+            Ok(response) => return Ok(Json(response)),
+            Err(e) => {
+                log::warn!("Proxy failed for {}, falling back to default response: {}", state.alias, e);
+                // Fall through to default response
+            }
+        }
+    }
+
     // Otherwise, generate a default successful JSON-RPC response
     let response = create_default_jsonrpc_response(&request);
     Ok(Json(response))
+}
+
+/// Handle proxy request with caching
+async fn handle_proxy_request(
+    state: &Arc<MockServerState>,
+    request: &Value,
+    cache_ttl_secs: u64,
+) -> Result<Value, String> {
+    // Generate cache key
+    let cache_key = state.cache_key(request);
+    
+    // Try to get response from cache first
+    if let Some(cached_response) = state.get_cached_response(&cache_key) {
+        // Record cache hit
+        if let Ok(mut stats) = state.stats.write() {
+            stats.inc_cache_hit();
+        }
+        
+        // Restore the original request ID in the response
+        let mut response = cached_response;
+        if let Some(request_id) = request.get("id") {
+            if let Some(response_obj) = response.as_object_mut() {
+                response_obj.insert("id".to_string(), request_id.clone());
+            }
+        }
+        
+        return Ok(response);
+    }
+    
+    // Cache miss - proxy to localnet
+    if let Ok(mut stats) = state.stats.write() {
+        stats.inc_cache_miss();
+    }
+    
+    match state.proxy_to_localnet(request).await {
+        Ok(response) => {
+            // Cache the response (remove ID before caching)
+            let mut cacheable_response = response.clone();
+            if let Some(response_obj) = cacheable_response.as_object_mut() {
+                response_obj.remove("id"); // Remove ID for caching
+            }
+            
+            state.cache_response(cache_key, cacheable_response, cache_ttl_secs);
+            
+            Ok(response)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Create a default successful JSON-RPC response

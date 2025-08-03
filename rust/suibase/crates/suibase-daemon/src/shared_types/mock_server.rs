@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
+use std::time::{SystemTime, Duration};
 use tokio_graceful_shutdown::SubsystemHandle;
 
 use crate::rate_limiter::RateLimiter;
@@ -30,6 +32,14 @@ pub struct MockServerBehavior {
     /// Custom JSON response body to return instead of default
     #[serde(default)]
     pub response_body: Option<serde_json::Value>,
+
+    /// Whether to proxy requests to localnet and cache responses
+    #[serde(default = "default_proxy_enabled")]
+    pub proxy_enabled: bool,
+
+    /// Cache TTL in seconds (default 5 minutes)
+    #[serde(default = "default_cache_ttl")]
+    pub cache_ttl_secs: u64,
 }
 
 impl Default for MockServerBehavior {
@@ -40,8 +50,18 @@ impl Default for MockServerBehavior {
             http_status: 200,
             error_type: None,
             response_body: None,
+            proxy_enabled: true,  // Enable proxy by default
+            cache_ttl_secs: 300,  // 5 minutes default
         }
     }
+}
+
+fn default_proxy_enabled() -> bool {
+    true
+}
+
+fn default_cache_ttl() -> u64 {
+    300 // 5 minutes
 }
 
 fn default_http_status() -> u16 {
@@ -55,6 +75,32 @@ pub enum MockErrorType {
     ConnectionRefused,
     InternalError,
     RateLimited,
+}
+
+/// Cache entry for storing proxied responses
+#[derive(Debug, Clone)]
+pub struct CacheEntry {
+    /// The cached JSON response
+    pub response: serde_json::Value,
+    /// When the entry was created
+    pub created_at: SystemTime,
+    /// TTL for this entry
+    pub ttl: Duration,
+}
+
+impl CacheEntry {
+    pub fn new(response: serde_json::Value, ttl: Duration) -> Self {
+        Self {
+            response,
+            created_at: SystemTime::now(),
+            ttl,
+        }
+    }
+
+    /// Check if this cache entry has expired
+    pub fn is_expired(&self) -> bool {
+        SystemTime::now().duration_since(self.created_at).unwrap_or(Duration::MAX) > self.ttl
+    }
 }
 
 /// Statistics for a single mock server
@@ -77,6 +123,18 @@ pub struct MockServerStats {
     
     /// Number of times behavior was changed
     pub behavior_changes: u64,
+
+    /// Number of requests served from cache
+    pub cache_hits: u64,
+
+    /// Number of requests that resulted in cache miss (proxied to localnet)
+    pub cache_misses: u64,
+
+    /// Number of requests that were proxied to localnet
+    pub proxy_requests: u64,
+
+    /// Number of proxy requests that failed
+    pub proxy_failures: u64,
 }
 
 impl MockServerStats {
@@ -122,6 +180,36 @@ impl MockServerStats {
     pub fn inc_behavior_change(&mut self) {
         self.behavior_changes += 1;
     }
+
+    /// Record a cache hit
+    pub fn inc_cache_hit(&mut self) {
+        self.cache_hits += 1;
+    }
+
+    /// Record a cache miss
+    pub fn inc_cache_miss(&mut self) {
+        self.cache_misses += 1;
+    }
+
+    /// Record a proxy request
+    pub fn inc_proxy_request(&mut self) {
+        self.proxy_requests += 1;
+    }
+
+    /// Record a proxy failure
+    pub fn inc_proxy_failure(&mut self) {
+        self.proxy_failures += 1;
+    }
+
+    /// Get cache hit rate as percentage
+    pub fn cache_hit_rate(&self) -> f64 {
+        let total_cacheable = self.cache_hits + self.cache_misses;
+        if total_cacheable == 0 {
+            0.0
+        } else {
+            (self.cache_hits as f64 / total_cacheable as f64) * 100.0
+        }
+    }
 }
 
 /// State for a single mock server instance
@@ -140,6 +228,12 @@ pub struct MockServerState {
     
     /// Rate limiter for enforcing max_per_secs/max_per_min from Link config
     pub rate_limiter: Arc<RwLock<Option<RateLimiter>>>,
+
+    /// Response cache for proxied requests (keyed by request hash)
+    pub cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
+
+    /// HTTP client for proxying requests to localnet
+    pub http_client: Arc<reqwest::Client>,
     
     /// Handle to the async task running the server
     pub handle: Option<SubsystemHandle>,
@@ -153,6 +247,8 @@ impl std::fmt::Debug for MockServerState {
             .field("behavior", &self.behavior)
             .field("stats", &self.stats)
             .field("rate_limiter", &"Arc<RwLock<Option<RateLimiter>>>")
+            .field("cache", &"Arc<RwLock<HashMap<String, CacheEntry>>>")
+            .field("http_client", &"Arc<reqwest::Client>")
             .field("handle", &"SubsystemHandle")
             .finish()
     }
@@ -166,6 +262,8 @@ impl MockServerState {
             behavior: Arc::new(RwLock::new(MockServerBehavior::default())),
             stats: Arc::new(RwLock::new(MockServerStats::new())),
             rate_limiter: Arc::new(RwLock::new(None)),
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            http_client: Arc::new(reqwest::Client::new()),
             handle: None,
         }
     }
@@ -209,7 +307,6 @@ impl MockServerState {
         let new_rate_limiter = Self::create_rate_limiter_from_config(link_config);
         if let Ok(mut rate_limiter) = self.rate_limiter.write() {
             *rate_limiter = new_rate_limiter;
-            log::debug!("Updated rate limiter for mock server {}", self.alias);
         }
     }
     
@@ -221,13 +318,7 @@ impl MockServerState {
             let max_per_min = config.max_per_min.unwrap_or(0);
 
             match RateLimiter::new(max_per_secs, max_per_min) {
-                Ok(limiter) => {
-                    log::debug!(
-                        "Created rate limiter for mock server {}: max_per_secs={}, max_per_min={}",
-                        config.alias, max_per_secs, max_per_min
-                    );
-                    Some(limiter)
-                }
+                Ok(limiter) => Some(limiter),
                 Err(err) => {
                     log::warn!(
                         "Failed to create rate limiter for mock server {}: {}",
@@ -238,7 +329,6 @@ impl MockServerState {
                 }
             }
         } else {
-            log::debug!("No rate limits configured for mock server {}", config.alias);
             None
         }
     }
@@ -258,6 +348,98 @@ impl MockServerState {
             }
         }
         false
+    }
+
+    /// Generate cache key for a request
+    pub fn cache_key(&self, request: &serde_json::Value) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        // Create a consistent hash of the request (exclude id field for caching)
+        let mut request_for_hash = request.clone();
+        if let Some(obj) = request_for_hash.as_object_mut() {
+            obj.remove("id"); // Remove id so identical queries with different IDs are cached together
+        }
+
+        let mut hasher = DefaultHasher::new();
+        request_for_hash.to_string().hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+    }
+
+    /// Get response from cache if available and not expired
+    pub fn get_cached_response(&self, cache_key: &str) -> Option<serde_json::Value> {
+        if let Ok(cache) = self.cache.read() {
+            if let Some(entry) = cache.get(cache_key) {
+                if !entry.is_expired() {
+                    return Some(entry.response.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Store response in cache
+    pub fn cache_response(&self, cache_key: String, response: serde_json::Value, ttl_secs: u64) {
+        let ttl = Duration::from_secs(ttl_secs);
+        let entry = CacheEntry::new(response, ttl);
+        
+        if let Ok(mut cache) = self.cache.write() {
+            cache.insert(cache_key, entry);
+        }
+    }
+
+    /// Clean expired entries from cache
+    pub fn cleanup_cache(&self) {
+        if let Ok(mut cache) = self.cache.write() {
+            cache.retain(|_, entry| !entry.is_expired());
+        }
+    }
+
+    /// Get cache statistics
+    pub fn cache_size(&self) -> usize {
+        self.cache.read().map(|c| c.len()).unwrap_or(0)
+    }
+
+    /// Clear the entire cache
+    pub fn clear_cache(&self) {
+        if let Ok(mut cache) = self.cache.write() {
+            cache.clear();
+        }
+    }
+
+    /// Proxy request to localnet (assuming port 9000)
+    pub async fn proxy_to_localnet(&self, request: &serde_json::Value) -> Result<serde_json::Value, String> {
+        let localnet_url = "http://127.0.0.1:9000";
+        
+        // Record proxy attempt
+        if let Ok(mut stats) = self.stats.write() {
+            stats.inc_proxy_request();
+        }
+
+        match self.http_client
+            .post(localnet_url)
+            .json(request)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                match response.json::<serde_json::Value>().await {
+                    Ok(json) => Ok(json),
+                    Err(e) => {
+                        if let Ok(mut stats) = self.stats.write() {
+                            stats.inc_proxy_failure();
+                        }
+                        Err(format!("Failed to parse localnet response: {}", e))
+                    }
+                }
+            }
+            Err(e) => {
+                if let Ok(mut stats) = self.stats.write() {
+                    stats.inc_proxy_failure();
+                }
+                Err(format!("Failed to proxy to localnet: {}", e))
+            }
+        }
     }
 }
 
@@ -282,6 +464,9 @@ pub struct MockServerStatsResponse {
     
     /// Whether stats were reset after reading
     pub reset: bool,
+    
+    /// Current behavior configuration
+    pub current_behavior: Option<MockServerBehavior>,
 }
 
 impl MockServerStatsResponse {
@@ -290,7 +475,13 @@ impl MockServerStatsResponse {
             alias,
             stats,
             reset,
+            current_behavior: None,
         }
+    }
+    
+    pub fn with_behavior(mut self, behavior: MockServerBehavior) -> Self {
+        self.current_behavior = Some(behavior);
+        self
     }
 }
 
@@ -320,9 +511,6 @@ pub mod actions {
     }
 }
 
-// Event constants for mock server communication
-pub const EVENT_MOCK_SERVER_CONTROL: u8 = 128;
-pub const EVENT_MOCK_SERVER_STATS: u8 = 129;
 
 #[cfg(test)]
 mod tests {
@@ -349,6 +537,10 @@ mod tests {
         assert_eq!(stats.total_delay_ms, 0);
         assert_eq!(stats.rate_limit_hits, 0);
         assert_eq!(stats.behavior_changes, 0);
+        assert_eq!(stats.cache_hits, 0);
+        assert_eq!(stats.cache_misses, 0);
+        assert_eq!(stats.proxy_requests, 0);
+        assert_eq!(stats.proxy_failures, 0);
         
         // Test incrementing
         stats.inc_request();
@@ -356,6 +548,10 @@ mod tests {
         stats.inc_delay(100);
         stats.inc_rate_limit();
         stats.inc_behavior_change();
+        stats.inc_cache_hit();
+        stats.inc_cache_miss();
+        stats.inc_proxy_request();
+        stats.inc_proxy_failure();
         
         assert_eq!(stats.requests_received, 1);
         assert_eq!(stats.requests_failed, 1);
@@ -363,15 +559,23 @@ mod tests {
         assert_eq!(stats.total_delay_ms, 100);
         assert_eq!(stats.rate_limit_hits, 1);
         assert_eq!(stats.behavior_changes, 1);
+        assert_eq!(stats.cache_hits, 1);
+        assert_eq!(stats.cache_misses, 1);
+        assert_eq!(stats.proxy_requests, 1);
+        assert_eq!(stats.proxy_failures, 1);
         
         // Test average delay calculation
         stats.inc_delay(200);
         assert_eq!(stats.average_delay_ms(), 150.0); // (100 + 200) / 2
         
+        // Test cache hit rate calculation
+        assert_eq!(stats.cache_hit_rate(), 50.0); // 1 hit out of 2 total (1 hit + 1 miss)
+        
         // Test clear
         stats.clear();
         assert_eq!(stats.requests_received, 0);
         assert_eq!(stats.average_delay_ms(), 0.0);
+        assert_eq!(stats.cache_hit_rate(), 0.0);
     }
 
     #[test]
@@ -388,6 +592,8 @@ mod tests {
             http_status: 500,
             error_type: Some(MockErrorType::InternalError),
             response_body: None,
+            proxy_enabled: false,
+            cache_ttl_secs: 60,
         };
         
         state.set_behavior(new_behavior.clone());
@@ -414,6 +620,8 @@ mod tests {
             http_status: 429,
             error_type: Some(MockErrorType::RateLimited),
             response_body: Some(serde_json::json!({"error": "rate limited"})),
+            proxy_enabled: true,
+            cache_ttl_secs: 300,
         };
         
         // Test serialization/deserialization
