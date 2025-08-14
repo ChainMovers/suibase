@@ -94,6 +94,7 @@ impl PackagesPoller {
     }
 }
 
+#[allow(dead_code)]
 struct PackagesPollerWorkerTask {
     task_name: String,
     params: PackagesPollerParams,

@@ -696,8 +696,8 @@ impl MockServerTestHarness {
             .await?;
 
         // Wait for health state to update (with timeout)
-        // Health checks can take up to 15 seconds to run
-        self.wait_for_server_state(alias, expected_healthy, Duration::from_secs(20))
+        // Health checks happen every 10 seconds, need multiple cycles to detect failures
+        self.wait_for_server_state(alias, expected_healthy, Duration::from_secs(35))
             .await?;
 
         Ok(())
@@ -708,7 +708,7 @@ impl MockServerTestHarness {
         println!("🔍 Verifying all servers are healthy...");
 
         for server in servers {
-            self.wait_for_server_state(server, true, Duration::from_secs(20))
+            self.wait_for_server_state(server, true, Duration::from_secs(35))
                 .await?;
         }
 
@@ -1412,8 +1412,8 @@ pub async fn configure_rate_limits(
         })
         .await?;
 
-    // Wait for configuration to propagate
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for configuration to propagate and rate limiting to become active
+    tokio::time::sleep(Duration::from_millis(2000)).await;
 
     // Verify the configuration was applied
     let links = harness.get_statistics("localnet").await?;

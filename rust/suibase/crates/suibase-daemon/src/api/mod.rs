@@ -1,9 +1,9 @@
 // This is a submodule specific to suibase-daemon.
 //
 // flatten under "api" module.
-pub(crate) use self::api_server::*;
+pub use self::api_server::{APIServer, APIServerParams};
 pub(crate) use self::def_header::*;
-pub(crate) use self::def_methods::*;
+pub use self::def_methods::*;
 pub(crate) use self::rpc_error::*;
 
 mod api_server;

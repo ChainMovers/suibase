@@ -44,6 +44,7 @@ pub struct APIServerParams {
 }
 
 impl APIServerParams {
+    #[allow(dead_code)]
     pub fn new(globals: Globals, admctrl_tx: AdminControllerTx) -> Self {
         Self {
             globals,
@@ -52,17 +53,20 @@ impl APIServerParams {
     }
 }
 
+#[allow(dead_code)]
 pub struct APIServer {
     auto_thread: AutoThread<APIServerThread, APIServerParams>,
 }
 
 impl APIServer {
+    #[allow(dead_code)]
     pub fn new(params: APIServerParams) -> Self {
         Self {
             auto_thread: AutoThread::new("APIServer".to_string(), params),
         }
     }
 
+    #[allow(dead_code)]
     pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
         self.auto_thread.run(subsys).await
     }

@@ -43,6 +43,7 @@ pub struct AdminController {
     admctrl_rx: AdminControllerRx,
     admctrl_tx: AdminControllerTx,
     netmon_tx: NetMonTx,
+    #[allow(dead_code)]
     acoinsmon_tx: ACoinsMonTx,
     mockserver_tx: MockServerTx,
 
@@ -58,6 +59,7 @@ struct WorkdirTracking {
     shell_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the ShellWorker is started.
 
     events_worker_tx: Option<GenericTx>,
+    #[allow(dead_code)]
     events_worker_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the EventsWriterWorker is started.
 
     cli_poller: Option<CliPoller>,

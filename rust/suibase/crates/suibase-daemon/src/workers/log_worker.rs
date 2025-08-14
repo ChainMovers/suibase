@@ -26,6 +26,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 // Schema: One entry per Package.
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct SuiEvent {
     id: u64, // Sequence number within this table. Event assumed inserted in chronological order.
     package_instance_id: u64, // Foreign key into PackageInstance table.
@@ -34,6 +35,7 @@ struct SuiEvent {
 }
 
 impl SuiEvent {
+    #[allow(dead_code)]
     pub fn new(package_instance_id: u64, timestamp_ms: u64, event_json: String) -> Self {
         Self {
             id: 0,
@@ -46,14 +48,17 @@ impl SuiEvent {
 
 #[derive(Clone)]
 pub struct LogWorkerParams {
+    #[allow(dead_code)]
     globals: Globals,
     event_rx: Arc<Mutex<GenericRx>>,
+    #[allow(dead_code)]
     event_tx: GenericTx,
     workdir_idx: WorkdirIdx,
     workdir_name: String,
 }
 
 impl LogWorkerParams {
+    #[allow(dead_code)]
     pub fn new(
         globals: Globals,
         event_rx: GenericRx,
@@ -71,17 +76,20 @@ impl LogWorkerParams {
     }
 }
 
+#[allow(dead_code)]
 pub struct LogWorker {
     auto_thread: AutoThread<LogWorkerThread, LogWorkerParams>,
 }
 
 impl LogWorker {
+    #[allow(dead_code)]
     pub fn new(params: LogWorkerParams) -> Self {
         Self {
             auto_thread: AutoThread::new("DBWorker".to_string(), params),
         }
     }
 
+    #[allow(dead_code)]
     pub async fn run(self, subsys: SubsystemHandle) -> anyhow::Result<()> {
         self.auto_thread.run(subsys).await
     }
@@ -89,18 +97,22 @@ impl LogWorker {
 
 #[derive(Debug, Default)]
 struct LogManagement {
+    #[allow(dead_code)]
     schema_ok: bool, // Set when all tables have been verified to exist.
 }
 
 impl LogManagement {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self { schema_ok: false }
     }
 }
 
 struct LogWorkerThread {
+    #[allow(dead_code)]
     task_name: String,
     params: LogWorkerParams,
+    #[allow(dead_code)]
     log: Vec<LogManagement>,
 }
 

@@ -99,10 +99,14 @@ pub struct ACoinsMonitor {
     globals_devnet_config: GlobalsWorkdirConfigMT,
     globals_testnet_config: GlobalsWorkdirConfigMT,
     globals_mainnet_config: GlobalsWorkdirConfigMT,
+    #[allow(dead_code)]
     globals_devnet_status: GlobalsWorkdirStatusMT,
+    #[allow(dead_code)]
     globals_testnet_status: GlobalsWorkdirStatusMT,
+    #[allow(dead_code)]
     globals_mainnet_status: GlobalsWorkdirStatusMT,
     acoinsmon_rx: ACoinsMonRx,
+    #[allow(dead_code)]
     user_keypair: Option<LocalUserKeyPair>,
     acoins_client: Option<ACoinsClient>,
     mode: ServerMode,
@@ -146,6 +150,7 @@ impl ACoinsMonitor {
 
     // Function that delete all files in a directory, except for the ones starting with the specified prefixes.
 
+    #[allow(dead_code)]
     async fn delete_old_files_except_prefixes(path: &Path, prefixes: Vec<&str>) -> Result<()> {
         let mut entries = tokio::fs::read_dir(path)
             .await

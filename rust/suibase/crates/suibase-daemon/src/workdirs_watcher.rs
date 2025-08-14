@@ -12,6 +12,7 @@ use notify::{PollWatcher, Watcher};
 use crate::shared_types::Globals;
 
 pub struct WorkdirsWatcher {
+    #[allow(dead_code)]
     globals: Globals,
     admctrl_tx: AdminControllerTx,
     tracking: AutoSizeVec<WorkdirTracking>,

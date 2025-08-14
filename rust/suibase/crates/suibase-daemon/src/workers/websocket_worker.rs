@@ -49,6 +49,7 @@ pub struct WebSocketWorkerParams {
 }
 
 impl WebSocketWorkerParams {
+    #[allow(dead_code)]
     pub fn new(
         globals: Globals,
         event_rx: GenericRx,
@@ -67,17 +68,20 @@ impl WebSocketWorkerParams {
     }
 }
 
+#[allow(dead_code)]
 pub struct WebSocketWorker {
     auto_thread: AutoThread<WebSocketWorkerThread, WebSocketWorkerParams>,
 }
 
 impl WebSocketWorker {
+    #[allow(dead_code)]
     pub fn new(params: WebSocketWorkerParams) -> Self {
         Self {
             auto_thread: AutoThread::new("WebSocketWorker".to_string(), params),
         }
     }
 
+    #[allow(dead_code)]
     pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
         self.auto_thread.run(subsys).await
     }

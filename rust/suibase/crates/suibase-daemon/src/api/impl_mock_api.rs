@@ -10,6 +10,7 @@ use super::{MockApiServer, SuccessResponse, RpcInputError, RpcSuibaseError};
 use common::basic_types::AdminControllerTx;
 
 pub struct MockApiImpl {
+    #[allow(dead_code)]
     pub globals: GlobalsProxyMT,
     pub admctrl_tx: AdminControllerTx,
 }

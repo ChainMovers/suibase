@@ -13,12 +13,15 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 #[derive(Clone)]
 pub struct WebserverParams {
+    #[allow(dead_code)]
     globals: Globals,
+    #[allow(dead_code)]
     admctrl_tx: AdminControllerTx,
     website_name: String,
 }
 
 impl WebserverParams {
+    #[allow(dead_code)]
     pub fn new(globals: Globals, admctrl_tx: AdminControllerTx, website_name: &str) -> Self {
         Self {
             globals,
@@ -28,11 +31,13 @@ impl WebserverParams {
     }
 }
 
+#[allow(dead_code)]
 pub struct WebserverWorker {
     auto_thread: AutoThread<WebserverTask, WebserverParams>,
 }
 
 impl WebserverWorker {
+    #[allow(dead_code)]
     pub fn new(params: WebserverParams) -> Self {
         let name = format!("Webserver({})", params.website_name);
         Self {
@@ -40,6 +45,7 @@ impl WebserverWorker {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn run(self, subsys: SubsystemHandle) -> Result<()> {
         self.auto_thread.run(subsys).await
     }
