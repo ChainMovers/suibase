@@ -279,7 +279,8 @@ pub struct WorkdirUserConfig {
     user_request_start: bool, // true when user_request == "start"
     proxy_enabled: bool,
     proxy_port_number: u16,
-    links_overrides: bool,
+    links_overrides: bool, // Deprecated. Use enable_default_links instead.
+    enable_default_links: bool,
     links: HashMap<String, Link>,
     dtp_package_id: Option<String>, // Package ID of the DTP package for this workdir.
     dtp_services: LinkedList<DTPService>, // Each configured service.
@@ -296,7 +297,8 @@ impl WorkdirUserConfig {
             user_request_start: false,
             proxy_enabled: false,
             proxy_port_number: 0,
-            links_overrides: false,
+            links_overrides: false, // Deprecated. Use enable_default_links instead.
+            enable_default_links: true,
             links: HashMap::new(),
             dtp_package_id: None,
             dtp_services: LinkedList::new(),
@@ -325,6 +327,10 @@ impl WorkdirUserConfig {
 
     pub fn links_overrides(&self) -> bool {
         self.links_overrides
+    }
+
+    pub fn enable_default_links(&self) -> bool {
+        self.enable_default_links
     }
 
     pub fn links(&self) -> &HashMap<String, Link> {
@@ -506,17 +512,39 @@ impl WorkdirUserConfig {
             self.autocoins_address = None;
         }
 
+        // Handle links_overrides (legacy field) and enable_default_links (new field)
         let mut clear_links = false;
+
+        // Check for links_overrides first (takes precedence)
         if let Some(links_overrides) = yaml["links_overrides"].as_bool() {
             clear_links = true;
             self.links_overrides = links_overrides;
+            // links_overrides presence implies enable_default_links: false for backward compatibility
+            self.enable_default_links = false;
         } else if let Some(links_overrides) = yaml["links_overrides"].as_str() {
             clear_links = true;
             self.links_overrides = links_overrides != "false";
+            // links_overrides presence implies enable_default_links: false for backward compatibility
+            self.enable_default_links = false;
+        } else {
+            // Handle enable_default_links only if links_overrides wasn't set
+            if let Some(enable_default_links) = yaml["enable_default_links"].as_bool() {
+                self.enable_default_links = enable_default_links;
+                // Clear links if enable_default_links is false
+                if !enable_default_links {
+                    clear_links = true;
+                }
+            } else if let Some(enable_default_links) = yaml["enable_default_links"].as_str() {
+                self.enable_default_links = enable_default_links != "false";
+                // Clear links if enable_default_links is false
+                if !self.enable_default_links {
+                    clear_links = true;
+                }
+            }
         }
 
         if clear_links {
-            // Clear all the previous links.
+            // Clear all the previous links
             self.links.clear();
         }
 
@@ -690,7 +718,7 @@ links:
     max_per_secs: 100
     max_per_min: 5000
     priority: 10
-  - alias: "localnet_rpc"  
+  - alias: "localnet_rpc"
     rpc: "http://localhost:9000"
     max_per_secs: 50
     priority: 20
@@ -941,6 +969,151 @@ links:
     }
 
     #[test]
+    fn test_enable_default_links_functionality() {
+        // Test the proper loading order: default -> common -> user
+        // When enable_default_links is false, default links should be cleared before user config
+
+        // Create a default config with default links
+        let default_yaml_content = r#"
+enable_default_links: true
+links:
+  - alias: "default_server"
+    rpc: "http://default:9000"
+    max_per_secs: 100
+"#;
+
+        // Create a user config that sets enable_default_links to false and defines custom links
+        let user_yaml_content = r#"
+enable_default_links: false
+links:
+  - alias: "custom_server"
+    rpc: "http://custom:9000"
+    max_per_secs: 200
+"#;
+
+        let mut default_temp_file = NamedTempFile::new().unwrap();
+        default_temp_file
+            .write_all(default_yaml_content.as_bytes())
+            .unwrap();
+        let default_temp_path = default_temp_file.path().to_str().unwrap();
+
+        let mut user_temp_file = NamedTempFile::new().unwrap();
+        user_temp_file
+            .write_all(user_yaml_content.as_bytes())
+            .unwrap();
+        let user_temp_path = user_temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+
+        // Load default config first
+        let result1 = config.load_and_merge_from_file(default_temp_path);
+        assert!(result1.is_ok());
+        assert_eq!(config.links().len(), 1);
+        assert!(config.links().contains_key("default_server"));
+
+        // Load user config which sets enable_default_links to false
+        let result2 = config.load_and_merge_from_file(user_temp_path);
+        assert!(result2.is_ok());
+        assert_eq!(config.enable_default_links(), false);
+
+        // The user config with enable_default_links: false should have automatically
+        // cleared the default links and added its own links
+        
+        // Should only have the custom server, not the default one
+        let links = config.links();
+        assert_eq!(links.len(), 1);
+        assert!(links.contains_key("custom_server"));
+        assert!(!links.contains_key("default_server"));
+        let custom_server = links.get("custom_server").unwrap();
+        assert_eq!(custom_server.max_per_secs, Some(200));
+    }
+
+    #[test]
+    fn test_enable_default_links_default_value() {
+        // Test that enable_default_links defaults to true
+        let yaml_content = r#"
+proxy_enabled: true
+links:
+  - alias: "test_server"
+    rpc: "http://test:9000"
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+
+        assert!(result.is_ok());
+        assert_eq!(config.enable_default_links(), true); // Should default to true
+    }
+
+    #[test]
+    fn test_enable_default_links_clears_automatically() {
+        // Test that enable_default_links: false automatically clears links
+        let yaml_content = r#"
+enable_default_links: false
+links:
+  - alias: "server1"
+    rpc: "http://server1:9000"
+  - alias: "server2"
+    rpc: "http://server2:9000"
+"#;
+
+        let mut config = WorkdirUserConfig::new();
+        
+        // First add some default links
+        let default_yaml = r#"
+links:
+  - alias: "default_server"
+    rpc: "http://default:9000"
+"#;
+        
+        let mut default_temp_file = NamedTempFile::new().unwrap();
+        default_temp_file.write_all(default_yaml.as_bytes()).unwrap();
+        let default_temp_path = default_temp_file.path().to_str().unwrap();
+        
+        let result1 = config.load_and_merge_from_file(default_temp_path);
+        assert!(result1.is_ok());
+        assert_eq!(config.links().len(), 1);
+
+        // Now load config with enable_default_links: false - should clear and add new links
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let result2 = config.load_and_merge_from_file(temp_path);
+        assert!(result2.is_ok());
+        assert_eq!(config.enable_default_links(), false);
+        assert_eq!(config.links().len(), 2); // Should have server1 and server2, not default_server
+        assert!(config.links().contains_key("server1"));
+        assert!(config.links().contains_key("server2"));
+        assert!(!config.links().contains_key("default_server"));
+    }
+
+    #[test]
+    fn test_enable_default_links_string_format() {
+        // Test that enable_default_links accepts string values
+        let yaml_content = r#"
+enable_default_links: "false"
+links:
+  - alias: "string_test_server"
+    rpc: "http://string-test:9000"
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+
+        assert!(result.is_ok());
+        assert_eq!(config.enable_default_links(), false); // "false" string should be interpreted as false
+    }
+
+    #[test]
     fn test_links_overrides_clears_rate_limits() {
         // Create first config file with links
         let yaml_content1 = r#"
@@ -986,6 +1159,54 @@ links:
         assert_eq!(server2.max_per_secs, Some(200));
         assert_eq!(server2.max_per_min, None);
         assert!(config.links_overrides());
+        // links_overrides presence should also set enable_default_links to false
+        assert_eq!(config.enable_default_links(), false);
+    }
+
+    #[test]
+    fn test_links_overrides_sets_enable_default_links_false() {
+        // Test that links_overrides presence sets enable_default_links to false
+        let yaml_content = r#"
+links_overrides: true
+links:
+  - alias: "test_server"
+    rpc: "http://test:9000"
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+
+        assert!(result.is_ok());
+        assert!(config.links_overrides());
+        assert_eq!(config.enable_default_links(), false);
+    }
+
+    #[test]
+    fn test_enable_default_links_ignored_when_links_overrides_present() {
+        // Test that enable_default_links is ignored when links_overrides is present
+        let yaml_content = r#"
+links_overrides: true
+enable_default_links: true  # This should be ignored
+links:
+  - alias: "test_server"
+    rpc: "http://test:9000"
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+
+        assert!(result.is_ok());
+        assert!(config.links_overrides());
+        // Should be false because links_overrides takes precedence
+        assert_eq!(config.enable_default_links(), false);
     }
 }
 

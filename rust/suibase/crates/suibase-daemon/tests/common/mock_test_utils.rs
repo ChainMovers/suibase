@@ -78,7 +78,7 @@ proxy_port_number: 44340
 suibase_api_port_number: 44399
 
 # Override all links completely
-links_overrides: true
+enable_default_links: false
 
 links:
   - alias: "localnet"

@@ -51,6 +51,10 @@ sui_explorer_object_path: "/testnet/object/{ID}"
 sui_explorer_package_path: "/testnet/object/{ID}/contracts"
 sui_explorer_txn_path: "/testnet/tx/{ID}"
 
+# Enable default links defined in this file. When set to false,
+# users can define their own links without inheriting the defaults.
+enable_default_links: true
+
 links:
   - alias: "sui.io"
     rpc: "https://fullnode.testnet.sui.io:443"
