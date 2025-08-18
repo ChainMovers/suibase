@@ -137,3 +137,7 @@ yarn.lock
 # Never ignore .gitkeep files. Trick to preserve empty directories.
 !**/.gitkeep
 rust/suibase/test_output.log
+
+# Claude Code personal settings
+.claude/settings.local.json
+.claude/*.local.*

@@ -1,5 +1,22 @@
 {
+  "env": {
+    "SUI_REFERENCE_PATH": "~/repos/sui-reference-main"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/dev/manage-local-repos.sh"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
+    "additionalDirectories": ["~/repos"],
     "allow": [
       "WebFetch(domain:github.com)",
       "Bash(find:*)",
@@ -7,7 +24,8 @@
       "Bash(echo:*)"
     ],
     "deny": [
-      "Bash(command:*run-all.sh*)"
+      "Bash(command:*run-all.sh*)",
+      "WebFetch(domain:github.com/MystenLabs/sui)"
     ]
   }
 }
