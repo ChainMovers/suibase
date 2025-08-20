@@ -34,12 +34,12 @@ walrus_exec() {
   local _OPT_DEFAULT_CONTEXT=""
 
   if ! has_param "" "--config" "$@"; then
-    _OPT_DEFAULT_CONFIG="--config $WORKDIRS/$WORKDIR/config/client_config.yaml"
+    _OPT_DEFAULT_CONFIG="--config $WORKDIRS/$WORKDIR/config/walrus-config.yaml"
   else
     echo "Overriding suibase default --config is error prone and not recommended."
     echo
     echo "If you *must* use your own config consider one of these alternatives:"
-    echo "  1. Modify $WORKDIRS/$WORKDIR/config/client_config.yaml"
+    echo "  1. Modify $WORKDIRS/$WORKDIR/config/walrus-config.yaml"
     echo "     for temporary changes until the next '$WORKDIR update'."
     echo
     echo "  2. Call directly $WALRUS_BIN"
@@ -53,7 +53,7 @@ walrus_exec() {
     echo "Overriding suibase default --context is error prone and not recommended."
     echo
     echo "If you *must* use your own context consider one of these alternatives:"
-    echo "  1. Modify $WORKDIRS/$WORKDIR/config/client_config.yaml"
+    echo "  1. Modify $WORKDIRS/$WORKDIR/config/walrus-config.yaml"
     echo "     for temporary changes until the next '$WORKDIR update'."
     echo
     echo "  2. Call directly $WALRUS_BIN"

@@ -3,7 +3,7 @@
 echo "🛠️  Starting manage-local-repos.sh..."
 
 # manage-local-repos.sh - Unified local repository management for Claude Code efficiency
-# Manages Sui and sui-rust-sdk repositories for faster searches, reduced tokens, local-first
+# Manages Sui, sui-rust-sdk, and Walrus repositories for faster searches, reduced tokens, local-first
 
 set -euo pipefail
 
@@ -11,21 +11,25 @@ set -euo pipefail
 declare -A REPO_URLS=(
     ["sui"]="https://github.com/MystenLabs/sui.git"
     ["sui-rust-sdk"]="https://github.com/MystenLabs/sui-rust-sdk.git"
+    ["walrus"]="https://github.com/MystenLabs/walrus.git"
 )
 
 declare -A REPO_DIRS=(
     ["sui"]="sui-reference-main"
     ["sui-rust-sdk"]="sui-rust-sdk-main"
+    ["walrus"]="walrus-reference-main"
 )
 
 declare -A REPO_ENV_VARS=(
     ["sui"]="SUI_REFERENCE_PATH"
     ["sui-rust-sdk"]="SUI_RUST_SDK_PATH"
+    ["walrus"]="WALRUS_REFERENCE_PATH"
 )
 
 declare -A REPO_SPARSE_PATHS=(
     ["sui"]="crates/,external-crates/,consensus/,sui-execution/,sdk/,bridge/,docs/,*.md,*.toml,*.lock"
     ["sui-rust-sdk"]="crates/,*.md,*.toml,*.lock,*.proto"
+    ["walrus"]="crates/walrus-upload-relay/,crates/walrus-core/,crates/walrus-sui/,crates/walrus-storage-node-client/,contracts/,*.md,*.toml,*.lock"
 )
 
 readonly CLONE_DEPTH=100
@@ -389,12 +393,13 @@ usage() {
 Usage: $0 [command]
 
 DESCRIPTION:
-  Manages local Sui repositories for Claude Code optimization.
+  Manages local Sui and Walrus repositories for Claude Code optimization.
   By default, ensures all repositories are ready (init/update as needed) and shows status.
 
 REPOSITORIES MANAGED:
   - sui: Sui main repository (gRPC API, core types)
   - sui-rust-sdk: Sui Rust SDK (proto files, client types)
+  - walrus: Walrus decentralized storage (upload relay, core types)
 
 COMMANDS:
   (default)             Ensure all repositories are ready, then show status
@@ -402,8 +407,9 @@ COMMANDS:
   clean                 Clean and optimize all repositories
 
 ENVIRONMENT VARIABLES:
-  SUI_REFERENCE_PATH    Override sui repository path (default: ~/repos/sui_reference_main)
-  SUI_RUST_SDK_PATH     Override sui-rust-sdk path (default: ~/repos/sui_rust_sdk_main)
+  SUI_REFERENCE_PATH    Override sui repository path (default: ~/repos/sui-reference-main)
+  SUI_RUST_SDK_PATH     Override sui-rust-sdk path (default: ~/repos/sui-rust-sdk-main)
+  WALRUS_REFERENCE_PATH Override walrus repository path (default: ~/repos/walrus-reference-main)
 
 OPTIMIZATION:
   - Shallow clone with depth=$CLONE_DEPTH for faster operations

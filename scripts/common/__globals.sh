@@ -1966,37 +1966,142 @@ cleanup_cache_as_needed() {
 }
 export -f cleanup_cache_as_needed
 
-repair_walrus_config_as_needed() {
-  WORKDIR_PARAM="$1"
+# Helper function to replace $HOME references in config files
+replace_home_references() {
+  local _FILE_PATH="$1"
+  local _UPDATED=false
 
-  if [ "$WORKDIR_PARAM" = "cargobin" ] || [ "$WORKDIR_PARAM" = "active" ]; then
-    return
+  if [ -f "$_FILE_PATH" ] && grep -q "\\\$HOME/" "$_FILE_PATH" 2>/dev/null; then
+    sed -i "s|\\\$HOME/|$HOME/|g" "$_FILE_PATH"
+    _UPDATED=true
   fi
 
-  # Replace $HOME string in client_config.yaml and sites-config.yaml with
-  #the actual home directory.
-  local _CONFIG_FILES=("client_config.yaml" "sites-config.yaml")
+  # Return 0 if updated, 1 if not
+  [ "$_UPDATED" = true ]
+}
 
-  for _CONFIG_FILE in "${_CONFIG_FILES[@]}"; do
-    local _CONFIG_PATH="$WORKDIRS/$WORKDIR_PARAM/config/$_CONFIG_FILE"
+# Helper function to update a YAML field if template value differs from user value
+# Takes template content as parameter and extracts field value from it
+# Returns 0 if updated, 1 if not updated
+repair_yaml_root_field_as_needed() {
+  local _TEMPLATE_CONTENT="$1"
+  local _FILE_PATH="$2"
+  local _FIELD_NAME="$3"
 
-    # Only process the file if it exists
-    if [ -f "$_CONFIG_PATH" ]; then
-      # Check if the file contains $HOME/ references
-      if grep -q "\\\$HOME/" "$_CONFIG_PATH"; then
-        # Create a temporary file for the replacement
-        local _TEMP_FILE=$(mktemp)
+  # Extract template value from content
+  local _TEMPLATE_VALUE
+  _TEMPLATE_VALUE=$(echo "$_TEMPLATE_CONTENT" | grep "$_FIELD_NAME:" | head -1 | sed "s/.*$_FIELD_NAME: *//" || echo "")
 
-        # Replace $HOME/ with the actual home directory path
-        sed "s|\\\$HOME/|$HOME/|g" "$_CONFIG_PATH" > "$_TEMP_FILE"
-
-        # Move the temporary file back to the original location
-        mv "$_TEMP_FILE" "$_CONFIG_PATH"
-
-        echo "Replaced \$HOME/ references in $_CONFIG_FILE with actual home directory"
-      fi
+  if [ -n "$_TEMPLATE_VALUE" ]; then
+    # Field exists in template - update it if different
+    local _USER_VALUE
+    _USER_VALUE=$(grep "$_FIELD_NAME:" "$_FILE_PATH" | head -1 | sed "s/.*$_FIELD_NAME: *//" || echo "")
+    if [ "$_USER_VALUE" != "$_TEMPLATE_VALUE" ] && [ -n "$_USER_VALUE" ]; then
+      sed -i "s|$_FIELD_NAME: $_USER_VALUE|$_FIELD_NAME: $_TEMPLATE_VALUE|g" "$_FILE_PATH"
+      return 0
     fi
-  done
+  else
+    # Field does not exist in template - remove it from user config if present
+    # Only do this for subsidies_object to be conservative about user's custom fields
+    if [ "$_FIELD_NAME" = "subsidies_object" ] && grep -q "$_FIELD_NAME:" "$_FILE_PATH"; then
+      sed -i "/^[[:space:]]*$_FIELD_NAME:/d" "$_FILE_PATH"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+repair_walrus_config_as_needed() {
+  local _WORKDIR="$1"
+
+  if [ "$_WORKDIR" = "cargobin" ] || [ "$_WORKDIR" = "active" ]; then
+    return 0
+  fi
+
+  # Do nothing if not testnet/mainnet workdirs
+  if [ "$_WORKDIR" != "testnet" ] && [ "$_WORKDIR" != "mainnet" ]; then
+    return 0
+  fi
+
+  # Do nothing if the workdir/config-default does not exists (something getting done out-of-order?).
+  if [ ! -d "$WORKDIRS/$_WORKDIR/config-default" ]; then
+    return 0
+  fi
+
+  # === Handle walrus-config.yaml ===
+  local _WALRUS_TEMPLATE="$SUIBASE_DIR/scripts/templates/$_WORKDIR/config-default/walrus-config.yaml"
+  local _WALRUS_DEST="$WORKDIRS/$_WORKDIR/config-default/walrus-config.yaml"
+
+  # Migration: Rename existing client_config.yaml to walrus-config.yaml
+  local _OLD_CONFIG_PATH="$WORKDIRS/$_WORKDIR/config-default/client_config.yaml"
+  if [ -f "$_OLD_CONFIG_PATH" ] && [ ! -f "$_WALRUS_DEST" ]; then
+    mv "$_OLD_CONFIG_PATH" "$_WALRUS_DEST"
+    echo "$_WORKDIR/config-default/client_config.yaml migrated to walrus-config.yaml"
+  fi
+
+  # Create or update walrus-config.yaml
+  if [ ! -f "$_WALRUS_DEST" ]; then
+    # File doesn't exist, create from template
+    mkdir -p "$WORKDIRS/$_WORKDIR/config-default"
+    \cp -rf "$_WALRUS_TEMPLATE" "$_WALRUS_DEST"
+    replace_home_references "$_WALRUS_DEST"
+    echo "$_WORKDIR/walrus-config.yaml created with defaults."
+  else
+    if replace_home_references "$_WALRUS_DEST"; then
+      echo "Replaced \$HOME/ references in $_WALRUS_DEST"
+    fi
+
+    # 2. Update specific object IDs that differ from latest template.
+    local _WALRUS_UPDATED=false
+    local _TEMPLATE_CONTENT
+    _TEMPLATE_CONTENT=$(cat "$_WALRUS_TEMPLATE")
+
+    if repair_yaml_root_field_as_needed "$_TEMPLATE_CONTENT" "$_WALRUS_DEST" "system_object"; then
+      _WALRUS_UPDATED=true
+    fi
+
+    if repair_yaml_root_field_as_needed "$_TEMPLATE_CONTENT" "$_WALRUS_DEST" "staking_object"; then
+      _WALRUS_UPDATED=true
+    fi
+
+    if repair_yaml_root_field_as_needed "$_TEMPLATE_CONTENT" "$_WALRUS_DEST" "subsidies_object"; then
+      _WALRUS_UPDATED=true
+    fi
+
+    if [ "$_WALRUS_UPDATED" = true ]; then
+      echo "$_WORKDIR/walrus-config.yaml objects ID updated"
+    fi
+  fi
+
+  # === Handle sites-config.yaml ===
+  local _SITES_TEMPLATE="$SUIBASE_DIR/scripts/templates/$_WORKDIR/config-default/sites-config.yaml"
+  local _SITES_DEST="$WORKDIRS/$_WORKDIR/config-default/sites-config.yaml"
+
+  # Create or update sites-config.yaml
+  if [ ! -f "$_SITES_DEST" ]; then
+    # File doesn't exist, create from template
+    mkdir -p "$WORKDIRS/$_WORKDIR/config-default"
+    \cp -rf "$_SITES_TEMPLATE" "$_SITES_DEST"
+    replace_home_references "$_SITES_DEST"
+    echo "$_WORKDIR/sites-config.yaml created with defaults."
+  else
+    # File exists, update $HOME references and package ID
+    local _SITES_UPDATED=false
+    if replace_home_references "$_SITES_DEST"; then
+      _SITES_UPDATED=true
+    fi
+
+    # Update package ID if different from template
+    local _SITES_TEMPLATE_CONTENT
+    _SITES_TEMPLATE_CONTENT=$(cat "$_SITES_TEMPLATE")
+    if repair_yaml_root_field_as_needed "$_SITES_TEMPLATE_CONTENT" "$_SITES_DEST" "package"; then
+      _SITES_UPDATED=true
+    fi
+
+    if [ "$_SITES_UPDATED" = true ]; then
+      echo "$_WORKDIR/sites-config.yaml updated"
+    fi
+  fi
 }
 export -f repair_walrus_config_as_needed
 

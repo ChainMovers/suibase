@@ -1,65 +1,45 @@
-# Suibase Development - Claude Code Instructions
+# Suibase Development - Claude Instructions
 
-## Local Sui Reference Repository
+## Local Repositories (USE THESE FIRST)
 
-**ALWAYS prioritize local repository over GitHub API for Sui codebase queries.**
+**Paths:**
+- Sui core: `~/repos/sui-reference-main`
+- Sui SDK: `~/repos/sui-rust-sdk-main`
+- Walrus: `~/repos/walrus-reference-main`
 
-### Setup
-- **Path**: `~/repos/sui-reference-main` (or `$SUI_REFERENCE_PATH`)
-- **Initialize**: `scripts/manage-sui-reference.sh init`
-- **Update**: `scripts/manage-sui-reference.sh auto`
-- **Status**: `scripts/manage-sui-reference.sh status`
+**Setup:** `~/suibase/scripts/dev/manage-local-repos.sh`
 
-### Efficient Search Strategy
+## Search Strategy
 
-**PRIMARY**: Use local repository with Grep tool
-```
-Grep pattern:"your_pattern" path:"~/repos/sui-reference-main"
-```
+1. **Grep local repos:**
+   ```
+   Grep pattern:"pattern" path:"~/repos/sui-reference-main"
+   Grep pattern:"pattern" path:"~/repos/sui-rust-sdk-main"
+   Grep pattern:"pattern" path:"~/repos/walrus-reference-main"
+   ```
 
-**SECONDARY**: Use pre-built search cache (faster)
-```
-Read file_path:"~/repos/sui-reference-main/.claude_search_cache/rust_files.txt"
-Read file_path:"~/repos/sui-reference-main/.claude_search_cache/structs.txt"
-```
+2. **Use cached indices (faster):**
+   ```
+   Read file_path:"~/repos/sui-reference-main/.claude_search_cache/rust_files.txt"
+   Read file_path:"~/repos/sui-reference-main/.claude_search_cache/structs.txt"
+   Read file_path:"~/repos/sui-rust-sdk-main/.claude_search_cache/proto_files.txt"
+   Read file_path:"~/repos/walrus-reference-main/.claude_search_cache/rust_files.txt"
+   ```
 
-**FALLBACK**: GitHub API only if local unavailable
+3. **Fallback:** GitHub API only if local unavailable
 
-### Performance Optimizations
+## Key Directories
 
-1. **File Discovery**: Check cached file lists first
-   - `~/repos/sui-reference-main/.claude_search_cache/rust_files.txt`
-   - `~/repos/sui-reference-main/.claude_search_cache/toml_files.txt`
-   - `~/repos/sui-reference-main/.claude_search_cache/doc_files.txt`
+**Sui Core:**
+- Node: `crates/sui-node/`
+- RPC: `crates/sui-json-rpc*/`
+- Framework: `crates/sui-framework/`
+- Protocol: `crates/sui-protocol-config/`
 
-2. **Pattern Searches**: Use cached common patterns
-   - `structs.txt` for struct definitions
-   - `enums.txt` for enum definitions  
-   - `functions.txt` for function signatures
+**Sui SDK:**
+- Client: `crates/sui-sdk/src/`
+- Proto: `*.proto` files
 
-3. **Code Analysis**: Read directly from local files
-   - Faster than API calls
-   - Full file context available
-   - No rate limiting
-
-### Integration with Suibase Development
-
-- **Sui Node Understanding**: Reference `~/repos/sui-reference-main/crates/sui-node/`
-- **RPC Implementation**: Check `~/repos/sui-reference-main/crates/sui-json-rpc*/`
-- **Framework Changes**: Monitor `~/repos/sui-reference-main/crates/sui-framework/`
-- **Protocol Updates**: Track `~/repos/sui-reference-main/crates/sui-protocol-config/`
-
-### Automation
-
-- Repository auto-updates via pre-session hooks
-- Health checks integrated with project workflow
-- Minimal maintenance required - script handles everything
-
-### Token Efficiency
-
-- **Reduce tokens**: Use cached search results instead of large file reads
-- **Targeted queries**: Grep specific patterns rather than reading entire files
-- **Smart fallbacks**: Only use GitHub when local repo unavailable
-- **Pre-computed indices**: Faster responses with less computational overhead
-
-This setup provides 10x faster Sui codebase queries while reducing Claude Code token usage and eliminating GitHub API rate limits.
+**Walrus:**
+- Upload Relay: `crates/walrus-upload-relay/`
+- Contracts: `contracts/`

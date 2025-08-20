@@ -203,9 +203,6 @@ suibase_repair() {
     start_dtp_daemon_as_needed
   fi
 
-  update_walrus_configs "testnet"
-  update_walrus_configs "mainnet"
-
   repair_walrus_config_as_needed "testnet"
   repair_walrus_config_as_needed "mainnet"
 
