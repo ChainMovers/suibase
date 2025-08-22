@@ -7,4 +7,7 @@ contexts:
     wallet_config:
       path: $HOME/suibase/workdirs/mainnet/config/client.yaml
       active_env: mainnet
+    rpc_urls:
+      - http://localhost:44343
+      - https://fullnode.mainnet.sui.io:443
 default_context: mainnet

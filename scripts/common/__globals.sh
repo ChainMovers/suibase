@@ -2011,6 +2011,118 @@ repair_yaml_root_field_as_needed() {
   return 1
 }
 
+repair_walrus_rpc_urls_as_needed() {
+  local _WALRUS_CONFIG_FILE="$1"
+  local _WORKDIR="$2"
+  
+  # Build proxy URL from configuration (suibase config already loaded in __globals.sh)
+  local _PROXY_URL="http://${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}"
+  
+  # Define direct RPC URLs based on workdir
+  local _DIRECT_RPC_URL
+  if [ "$_WORKDIR" = "testnet" ]; then
+    _DIRECT_RPC_URL="https://fullnode.testnet.sui.io:443"
+  elif [ "$_WORKDIR" = "mainnet" ]; then
+    _DIRECT_RPC_URL="https://fullnode.mainnet.sui.io:443"
+  else
+    return 1  # Unknown workdir
+  fi
+  
+  # Generate the smart rpc_urls configuration with proxy first, then direct RPC
+  local _SMART_RPC_URLS="    rpc_urls:
+      - $_PROXY_URL
+      - $_DIRECT_RPC_URL"
+  
+  # Check if rpc_urls section already exists
+  if grep -q "rpc_urls:" "$_WALRUS_CONFIG_FILE"; then
+    # Check if the current configuration already matches what we want
+    local _NEEDS_UPDATE=false
+    
+    # Check if proxy URL is present
+    if ! grep -q "$_PROXY_URL" "$_WALRUS_CONFIG_FILE"; then
+      _NEEDS_UPDATE=true
+    fi
+    
+    # Check if direct RPC URL is present
+    if ! grep -q "$_DIRECT_RPC_URL" "$_WALRUS_CONFIG_FILE"; then
+      _NEEDS_UPDATE=true
+    fi
+    
+    # Check if there are exactly 2 URLs in the rpc_urls section
+    local _RPC_URL_COUNT
+    _RPC_URL_COUNT=$(sed -n '/rpc_urls:/,/^[a-z]/p' "$_WALRUS_CONFIG_FILE" | grep -c "^      - ")
+    if [ "$_RPC_URL_COUNT" -ne 2 ]; then
+      _NEEDS_UPDATE=true
+    fi
+    
+    # If current section differs from smart version, replace it
+    if [ "$_NEEDS_UPDATE" = true ]; then
+      # Create temp file with updated content
+      local _TEMP_FILE
+      _TEMP_FILE=$(mktemp)
+      
+      # Use awk to replace the rpc_urls section while preserving everything else
+      awk -v smart_urls="$_SMART_RPC_URLS" '
+      BEGIN { 
+        in_rpc_section = 0
+        rpc_section_replaced = 0
+      }
+      /^[[:space:]]*rpc_urls:/ { 
+        in_rpc_section = 1
+        if (!rpc_section_replaced) {
+          print smart_urls
+          rpc_section_replaced = 1
+        }
+        next
+      }
+      in_rpc_section && /^[[:space:]]*-/ {
+        # Skip RPC URL entries 
+        next
+      }
+      in_rpc_section && /^[[:alpha:]]/ {
+        # End of rpc_urls section, back to normal processing
+        in_rpc_section = 0
+        print $0
+        next
+      }
+      in_rpc_section && /^[[:space:]]+[[:alpha:]]/ {
+        # End of rpc_urls section (indented field), back to normal processing
+        in_rpc_section = 0
+        print $0
+        next  
+      }
+      !in_rpc_section {
+        print $0
+      }
+      ' "$_WALRUS_CONFIG_FILE" > "$_TEMP_FILE"
+      
+      # Replace the original file
+      mv "$_TEMP_FILE" "$_WALRUS_CONFIG_FILE"
+      return 0
+    fi
+    # Section matches - no changes needed
+    return 1
+  else
+    # No rpc_urls section exists, add it before default_context
+    local _TEMP_FILE
+    _TEMP_FILE=$(mktemp)
+    
+    # Copy everything up to but not including default_context
+    grep -B 1000 "default_context:" "$_WALRUS_CONFIG_FILE" | grep -v "default_context:" > "$_TEMP_FILE"
+    
+    # Add the smart rpc_urls section
+    echo "$_SMART_RPC_URLS" >> "$_TEMP_FILE"
+    
+    # Add the default_context and any remaining lines
+    grep -A 1000 "default_context:" "$_WALRUS_CONFIG_FILE" >> "$_TEMP_FILE"
+    
+    # Replace the original file
+    mv "$_TEMP_FILE" "$_WALRUS_CONFIG_FILE"
+    return 0
+  fi
+}
+export -f repair_walrus_rpc_urls_as_needed
+
 repair_walrus_config_as_needed() {
   local _WORKDIR="$1"
 
@@ -2065,6 +2177,11 @@ repair_walrus_config_as_needed() {
     fi
 
     if repair_yaml_root_field_as_needed "$_TEMPLATE_CONTENT" "$_WALRUS_DEST" "subsidies_object"; then
+      _WALRUS_UPDATED=true
+    fi
+
+    # 3. Update or add rpc_urls section with smart proxy configuration
+    if repair_walrus_rpc_urls_as_needed "$_WALRUS_DEST" "$_WORKDIR"; then
       _WALRUS_UPDATED=true
     fi
 

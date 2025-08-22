@@ -38,7 +38,7 @@ sui_precompiled_type: "mystenlabs"
 sui_precompiled_path: ~
 
 walrus_assets_name: "walrus"
-walrus_bin_names: "walrus"
+walrus_bin_names: "walrus,walrus-upload-relay"
 walrus_install_type: "workdir"
 walrus_src_type: ~
 walrus_src_path: ~

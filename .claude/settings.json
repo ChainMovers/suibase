@@ -13,6 +13,26 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/olet/suibase/.claude/hooks/stop.sh"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command", 
+            "command": "/home/olet/suibase/.claude/hooks/notification.sh"
+          }
+        ]
+      }
     ]
   },
   "permissions": {

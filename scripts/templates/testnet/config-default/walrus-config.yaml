@@ -10,4 +10,7 @@ contexts:
     wallet_config:
       path: $HOME/suibase/workdirs/testnet/config/client.yaml
       active_env: testnet
+    rpc_urls:
+      - http://localhost:44342
+      - https://fullnode.testnet.sui.io:443
 default_context: testnet
