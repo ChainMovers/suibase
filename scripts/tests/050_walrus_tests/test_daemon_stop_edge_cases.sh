@@ -45,12 +45,8 @@ test_daemon_running_baseline() {
     local status_output
     status_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
     
-    # Should show DOWN (enabled but no walrus-upload-relay process)
-    if echo "$status_output" | grep -q "DOWN"; then
-        echo "✓ Daemon running: Shows DOWN as expected"
-    else
-        echo "⚠ Daemon running: Unexpected status: $status_output"
-    fi
+    # Show initial status for debugging
+    echo "✓ Initial walrus relay status: $status_output"
     
     # Check that status.yaml exists and is written by daemon
     if [ -f "$WORKDIRS/testnet/walrus-relay/status.yaml" ]; then

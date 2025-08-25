@@ -180,7 +180,7 @@ stop_walrus_relay_process() {
 
 cleanup_port_conflicts() {
     local test_port
-    test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/get-walrus-relay-local-port.sh" "$WORKDIR")
+    test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/__get-walrus-relay-local-port.sh" "$WORKDIR")
     echo "Checking for port conflicts on port $test_port..."
     
     # Find processes using the port with more robust detection
