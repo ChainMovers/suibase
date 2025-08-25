@@ -28,24 +28,12 @@ if grep -q "^walrus_relay_enabled:" "$WORKDIRS/testnet/suibase.yaml" 2>/dev/null
     ORIGINAL_CONFIG_STATE=$(grep "^walrus_relay_enabled:" "$WORKDIRS/testnet/suibase.yaml")
 fi
 
+# Use the common utility function instead of custom implementation
 wait_for_status_change() {
     local expected_status="$1"
     local max_wait="${2:-10}"
-    local count=0
     
-    while [ $count -lt $max_wait ]; do
-        local current_status
-        current_status=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1 | grep "Walrus Relay" | head -1)
-        
-        if echo "$current_status" | grep -q "$expected_status"; then
-            return 0
-        fi
-        
-        sleep 1
-        count=$((count + 1))
-    done
-    
-    return 1
+    wait_for_walrus_relay_status "testnet" "$expected_status" "$max_wait" false
 }
 
 test_disabled_state() {
@@ -113,27 +101,13 @@ test_enable_and_start_services() {
     start_output=$("$SUIBASE_DIR/scripts/testnet" start 2>&1)
     echo "Start command completed"
     
-    # Wait a moment for services to start
-    sleep 5
+    # Wait for services to reach OK or DOWN status (not INITIALIZING)
+    if ! wait_for_walrus_relay_status "testnet" "OK|DOWN" 15; then
+        fail "Walrus relay did not reach OK or DOWN status after starting services"
+    fi
     
-    # Check status after start
-    # Wait for INITIALIZING to resolve to OK/DOWN (max 10 seconds)
-    local attempts=0
-    local max_attempts=20  # 20 attempts * 0.5s = 10 seconds max
     local status_after_start
-    
-    while [ $attempts -lt $max_attempts ]; do
-        status_after_start=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
-        
-        if echo "$status_after_start" | grep -q "INITIALIZING"; then
-            echo "  Status: INITIALIZING (attempt $((attempts + 1))/$max_attempts)"
-            sleep 0.5
-            attempts=$((attempts + 1))
-        else
-            break
-        fi
-    done
-    
+    status_after_start=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
     echo "Status after start: $status_after_start"
     
     # The status should show the actual daemon-detected state
@@ -171,7 +145,9 @@ test_stop_services() {
     # Ensure walrus relay is enabled and services are running
     "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
     "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
-    sleep 2
+    
+    # Wait for services to be ready
+    wait_for_walrus_relay_status "testnet" "OK|DOWN" 10 >/dev/null 2>&1 || true
     
     # Check status before stop
     local status_before_stop
@@ -184,8 +160,8 @@ test_stop_services() {
     stop_output=$("$SUIBASE_DIR/scripts/testnet" stop 2>&1)
     echo "Stop command completed"
     
-    # Wait a moment for services to stop
-    sleep 3
+    # Wait for services to show STOPPED, DOWN, or DISABLED status
+    wait_for_walrus_relay_status "testnet" "STOPPED|DOWN|DISABLED" 10 >/dev/null 2>&1 || true
     
     # Check status after stop
     local status_after_stop

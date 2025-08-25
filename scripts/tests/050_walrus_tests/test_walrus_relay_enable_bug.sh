@@ -26,8 +26,8 @@ test_walrus_relay_enable_bug() {
     fi
     
     echo "Step 2a: Verify walrus relay process is stopped after 'testnet stop'"
-    sleep 2  # Wait a moment for processes to terminate
-    if ! check_walrus_process_stopped "testnet"; then
+    # Wait for processes to terminate
+    if ! wait_for_process_stopped "testnet" 5; then
         echo "BUG DETECTED: 'testnet stop' did not stop twalrus-upload-relay process"
         return 1
     fi
@@ -51,8 +51,8 @@ test_walrus_relay_enable_bug() {
     fi
     echo "✓ Services properly detected as stopped and started correctly"
     
-    # Wait a moment for services to settle
-    sleep 2
+    # Wait for services to settle and be ready
+    wait_for_walrus_relay_status "testnet" "OK|DOWN|DISABLED|INITIALIZING" 5 >/dev/null 2>&1 || true
     
     echo "Step 4: Enable walrus relay"
     testnet wal-relay enable
@@ -61,27 +61,14 @@ test_walrus_relay_enable_bug() {
         return 1
     fi
     
-    # Wait a moment for daemon to process the enable
-    sleep 3
-    
-    echo "Step 5: Check walrus relay status"
-    status_output=$(testnet wal-relay status 2>&1)
-    echo "Status output: $status_output"
-    
-    # Check if status contains DOWN (the bug symptom)
-    if echo "$status_output" | grep -q "DOWN"; then
-        echo "BUG REPRODUCED: Walrus relay status shows DOWN after enable sequence"
-        echo "Expected: Status should be OK or INITIALIZING, not DOWN"
-        return 1
-    elif echo "$status_output" | grep -q "OK"; then
-        echo "SUCCESS: Walrus relay status shows OK (bug not present)"
-        return 0
-    elif echo "$status_output" | grep -q "INITIALIZING"; then
-        echo "SUCCESS: Walrus relay status shows INITIALIZING (transitioning, acceptable)"
+    echo "Step 5: Wait for walrus relay to reach expected status"
+    # Wait for status to be OK or INITIALIZING (not DOWN) within 15 seconds
+    if wait_for_walrus_relay_status "testnet" "OK|INITIALIZING" 15 true; then
+        echo "SUCCESS: Walrus relay reached expected status (OK or INITIALIZING)"
         return 0
     else
-        echo "UNEXPECTED: Walrus relay status shows neither DOWN, OK, nor INITIALIZING"
-        echo "Status output: $status_output"
+        echo "BUG REPRODUCED: Walrus relay failed to reach expected status within 15 seconds"
+        echo "Expected: Status should be OK or INITIALIZING, not DOWN"
         return 1
     fi
 }

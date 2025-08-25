@@ -35,7 +35,7 @@ test_daemon_running_baseline() {
     if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
         echo "Starting suibase-daemon for baseline test..."
         safe_start_daemon
-        sleep 3
+        wait_for_daemon_running 10 >/dev/null 2>&1 || true
     fi
     
     # Enable walrus relay
@@ -69,16 +69,7 @@ test_daemon_stopped() {
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
     
     # Wait for daemon to fully stop
-    local wait_count=0
-    while [ $wait_count -lt 10 ]; do
-        if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
-            break
-        fi
-        sleep 1
-        wait_count=$((wait_count + 1))
-    done
-    
-    if "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+    if ! wait_for_daemon_stopped 10; then
         fail "Daemon failed to stop within timeout"
     fi
     echo "✓ suibase-daemon stopped"
@@ -114,7 +105,7 @@ test_enable_disable_without_daemon() {
     
     # Ensure daemon is stopped
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
-    sleep 2
+    wait_for_daemon_stopped 5 >/dev/null 2>&1 || true
     
     # Test disable command
     local disable_output
@@ -144,15 +135,16 @@ test_daemon_restart_recovery() {
     
     # Start with daemon stopped and walrus relay enabled
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
+    wait_for_daemon_stopped 5 >/dev/null 2>&1 || true
     "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    sleep 2
     
     # Restart daemon
     echo "Restarting suibase-daemon..."
     safe_start_daemon
     
-    # Wait for daemon to start and initialize
-    sleep 5
+    # Wait for daemon to start and walrus status to be ready
+    wait_for_daemon_running 10 >/dev/null 2>&1
+    wait_for_walrus_relay_status "testnet" "OK|DOWN|INITIALIZING" 8 >/dev/null 2>&1 || true
     
     # Check if daemon properly recovers walrus relay status
     local recovery_status
@@ -188,7 +180,10 @@ test_config_change_without_daemon() {
     
     # Start daemon
     safe_start_daemon
-    sleep 5
+    
+    # Wait for daemon to start and walrus status to be ready
+    wait_for_daemon_running 10 >/dev/null 2>&1
+    wait_for_walrus_relay_status "testnet" "OK|DOWN|DISABLED|INITIALIZING" 8 >/dev/null 2>&1 || true
     
     # Check that daemon picks up the config
     local status_after_config

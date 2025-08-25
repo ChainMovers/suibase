@@ -115,21 +115,13 @@ test_status_when_working() {
     local output
     output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
 
-    # Wait for INITIALIZING to resolve to OK/DOWN (max 10 seconds)
-    local attempts=0
-    local max_attempts=20  # 20 attempts * 0.5s = 10 seconds max
+    # Wait for INITIALIZING to resolve to OK or DOWN (max 10 seconds)
+    if ! wait_for_walrus_relay_status "testnet" "OK|DOWN" 10 true; then
+        echo "⚠ Walrus relay status did not resolve from INITIALIZING within 10 seconds"
+    fi
     
-    while [ $attempts -lt $max_attempts ]; do
-        output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
-        
-        if echo "$output" | grep -q "INITIALIZING"; then
-            echo "  Status: INITIALIZING (attempt $((attempts + 1))/$max_attempts)"
-            sleep 0.5
-            attempts=$((attempts + 1))
-        else
-            break
-        fi
-    done
+    # Get final status
+    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
     
     # Check final status after INITIALIZING resolved (or timeout)
     if echo "$output" | grep -q "OK"; then

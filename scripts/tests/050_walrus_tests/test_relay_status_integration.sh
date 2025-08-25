@@ -64,36 +64,21 @@ test_status_in_main_status_when_enabled() {
     # Start testnet services to ensure status reflects actual state
     "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
 
-    # Wait for INITIALIZING to resolve to OK/DOWN (max 10 seconds)
-    local attempts=0
-    local max_attempts=20  # 20 attempts * 0.5s = 10 seconds max
-    local output
-
-    while [ $attempts -lt $max_attempts ]; do
+    # Wait for main status to stabilize to OK or DOWN (max 10 seconds)
+    if wait_for_service_status "testnet status" "OK|DOWN" "Walrus Relay" 10 true; then
+        # Final check to confirm the result
+        local output
         output=$("$SUIBASE_DIR/scripts/testnet" status 2>&1)
-
-        if echo "$output" | grep -q "Walrus Relay.*INITIALIZING"; then
-            echo "  Main status: INITIALIZING (attempt $((attempts + 1))/$max_attempts)"
-            sleep 0.5
-            attempts=$((attempts + 1))
-        else
-            break
+        
+        if echo "$output" | grep -q "Walrus Relay.*OK"; then
+            echo "✓ Main status correctly shows OK when process is running"
+        elif echo "$output" | grep -q "Walrus Relay.*DOWN"; then
+            echo "✓ Main status correctly shows DOWN when daemon detects process issue"
         fi
-    done
-
-    # Should show OK when enabled and testnet start has started the process
-    if echo "$output" | grep -q "Walrus Relay.*OK"; then
-        # Daemon detects walrus-upload-relay process is running and responding
-        local relay_line
-        relay_line=$(echo "$output" | grep "Walrus Relay" || true)
-        echo "✓ Main status correctly shows OK when process is running"
-    elif echo "$output" | grep -q "Walrus Relay.*DOWN"; then
-        # Daemon detects process issue
-        echo "✓ Main status correctly shows DOWN when daemon detects process issue"
-    elif echo "$output" | grep -q "Walrus Relay.*INITIALIZING"; then
-        fail "Main status stuck in INITIALIZING after 10 seconds. Got: $output"
     else
-        fail "Main status should show 'Walrus Relay : OK' or 'DOWN' when enabled and services running. Got: $output"
+        local final_output
+        final_output=$("$SUIBASE_DIR/scripts/testnet" status 2>&1)
+        fail "Main status failed to reach OK or DOWN within 10 seconds. Got: $final_output"
     fi
 }
 

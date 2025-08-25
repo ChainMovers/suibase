@@ -54,8 +54,8 @@ test_testnet_start_with_walrus_enabled() {
     start_output=$("$SUIBASE_DIR/scripts/testnet" start 2>&1)
     echo "  Start output: $start_output"
     
-    # Wait a moment for services to fully start
-    sleep 3
+    # Wait for walrus relay process to be running or status to be ready
+    wait_for_walrus_relay_status "testnet" "OK|DOWN|INITIALIZING" 10 >/dev/null 2>&1 || true
     
     # Check if walrus-upload-relay process is running
     local walrus_pid
@@ -111,8 +111,8 @@ test_testnet_start_with_walrus_disabled() {
     start_output=$("$SUIBASE_DIR/scripts/testnet" start 2>&1)
     echo "  Start output: $start_output"
     
-    # Wait a moment
-    sleep 2
+    # Wait for services to settle - process should stay stopped when disabled
+    wait_for_process_stopped "testnet" 5 >/dev/null 2>&1 || true
     
     # Check that walrus-upload-relay process is NOT running
     local walrus_pid

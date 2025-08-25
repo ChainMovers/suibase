@@ -348,7 +348,205 @@ check_walrus_process_running() {
     fi
 }
 
+# Generic service status waiting utility
+wait_for_service_status() {
+    local command="$1"           # Full command to execute (e.g., "testnet wal-relay status")
+    local expected_status="$2"   # Expected status or pipe-separated list (e.g., "OK|INITIALIZING")
+    local status_label="$3"      # Label to look for in output (e.g., "Walrus Relay")
+    local timeout_seconds="${4:-15}" # Optional timeout, default 15 seconds
+    local verbose="${5:-false}"  # Optional verbose mode
+    
+    local start_time=$SECONDS
+    local end_time=$((start_time + timeout_seconds))
+    local attempt=0
+    
+    if [ "$verbose" = "true" ]; then
+        echo "Waiting for $status_label status to be [$expected_status] (timeout: ${timeout_seconds}s)"
+    fi
+    
+    while [ $SECONDS -lt $end_time ]; do
+        attempt=$((attempt + 1))
+        
+        # Execute the command and capture output
+        local output
+        output=$($command 2>&1) || true
+        
+        # Extract the line for the status label and check if any expected status is contained
+        # Strip ANSI color codes before parsing
+        local status_line
+        status_line=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep "^$status_label" | head -n1)
+        
+        if [ -n "$status_line" ]; then
+            # Get everything after the first colon
+            local status_part
+            status_part=$(echo "$status_line" | sed 's/^[^:]*: *//')
+            
+            # Check if any of the expected statuses is contained in the status part
+            local found_match=false
+            IFS='|' read -ra STATUS_LIST <<< "$expected_status"
+            for status in "${STATUS_LIST[@]}"; do
+                if echo "$status_part" | grep -q "$status"; then
+                    found_match=true
+                    break
+                fi
+            done
+            
+            if [ "$found_match" = true ]; then
+                if [ "$verbose" = "true" ]; then
+                    echo "✓ $status_label status line contains expected status after ${attempt} attempts ($(($SECONDS - start_time))s)"
+                fi
+                return 0
+            fi
+            
+            if [ "$verbose" = "true" ]; then
+                echo "  Attempt $attempt: $status_label status part is [$status_part], waiting..."
+            fi
+        else
+            if [ "$verbose" = "true" ]; then
+                echo "  Attempt $attempt: Could not parse $status_label status from output"
+                echo "  Command output: $output"
+            fi
+        fi
+        
+        sleep 1
+    done
+    
+    # Timeout reached
+    local final_output
+    final_output=$($command 2>&1) || true
+    local final_status_line
+    final_status_line=$(echo "$final_output" | sed 's/\x1b\[[0-9;]*m//g' | grep "^$status_label" | head -n1)
+    local final_status_part
+    if [ -n "$final_status_line" ]; then
+        final_status_part=$(echo "$final_status_line" | sed 's/^[^:]*: *//')
+    else
+        final_status_part="UNKNOWN"
+    fi
+    
+    echo "✗ Timeout: $status_label status did not reach [$expected_status] within ${timeout_seconds}s"
+    echo "  Final status part: [${final_status_part}] after $attempt attempts"
+    echo "  Final command output:"
+    echo "$final_output" | sed 's/^/    /'
+    
+    return 1
+}
+
+# Walrus relay specific wrapper function
+wait_for_walrus_relay_status() {
+    local workdir="$1"           # testnet, mainnet, etc.
+    local expected_status="$2"   # Expected status (e.g., "OK", "INITIALIZING", "OK|INITIALIZING")
+    local timeout_seconds="${3:-15}" # Optional timeout, default 15 seconds
+    local verbose="${4:-false}"  # Optional verbose mode
+    
+    local command="$workdir wal-relay status"
+    wait_for_service_status "$command" "$expected_status" "Walrus Relay" "$timeout_seconds" "$verbose"
+}
+
+# Wait for daemon to be running and ready
+wait_for_daemon_running() {
+    local timeout_seconds="${1:-15}" # Optional timeout, default 15 seconds
+    local verbose="${2:-false}"      # Optional verbose mode
+    
+    local start_time=$SECONDS
+    local end_time=$((start_time + timeout_seconds))
+    local attempt=0
+    
+    if [ "$verbose" = "true" ]; then
+        echo "Waiting for suibase-daemon to be running (timeout: ${timeout_seconds}s)"
+    fi
+    
+    while [ $SECONDS -lt $end_time ]; do
+        attempt=$((attempt + 1))
+        
+        if "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+            if [ "$verbose" = "true" ]; then
+                echo "✓ suibase-daemon is running after ${attempt} attempts ($(($SECONDS - start_time))s)"
+            fi
+            return 0
+        fi
+        
+        if [ "$verbose" = "true" ]; then
+            echo "  Attempt $attempt: daemon not running yet, waiting..."
+        fi
+        
+        sleep 1
+    done
+    
+    echo "✗ Timeout: suibase-daemon not running within ${timeout_seconds}s after $attempt attempts"
+    return 1
+}
+
+# Wait for daemon to be stopped
+wait_for_daemon_stopped() {
+    local timeout_seconds="${1:-10}" # Optional timeout, default 10 seconds
+    local verbose="${2:-false}"      # Optional verbose mode
+    
+    local start_time=$SECONDS
+    local end_time=$((start_time + timeout_seconds))
+    local attempt=0
+    
+    if [ "$verbose" = "true" ]; then
+        echo "Waiting for suibase-daemon to stop (timeout: ${timeout_seconds}s)"
+    fi
+    
+    while [ $SECONDS -lt $end_time ]; do
+        attempt=$((attempt + 1))
+        
+        if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+            if [ "$verbose" = "true" ]; then
+                echo "✓ suibase-daemon stopped after ${attempt} attempts ($(($SECONDS - start_time))s)"
+            fi
+            return 0
+        fi
+        
+        if [ "$verbose" = "true" ]; then
+            echo "  Attempt $attempt: daemon still running, waiting..."
+        fi
+        
+        sleep 1
+    done
+    
+    echo "✗ Timeout: suibase-daemon still running after ${timeout_seconds}s and $attempt attempts"
+    return 1
+}
+
+# Wait for walrus process to be stopped
+wait_for_process_stopped() {
+    local workdir="$1"               # testnet, mainnet, etc.
+    local timeout_seconds="${2:-10}" # Optional timeout, default 10 seconds
+    local verbose="${3:-false}"      # Optional verbose mode
+    
+    local start_time=$SECONDS
+    local end_time=$((start_time + timeout_seconds))
+    local attempt=0
+    
+    if [ "$verbose" = "true" ]; then
+        echo "Waiting for ${workdir} walrus process to stop (timeout: ${timeout_seconds}s)"
+    fi
+    
+    while [ $SECONDS -lt $end_time ]; do
+        attempt=$((attempt + 1))
+        
+        if check_walrus_process_stopped "$workdir" >/dev/null 2>&1; then
+            if [ "$verbose" = "true" ]; then
+                echo "✓ ${workdir} walrus process stopped after ${attempt} attempts ($(($SECONDS - start_time))s)"
+            fi
+            return 0
+        fi
+        
+        if [ "$verbose" = "true" ]; then
+            echo "  Attempt $attempt: walrus process still running, waiting..."
+        fi
+        
+        sleep 1
+    done
+    
+    echo "✗ Timeout: ${workdir} walrus process still running after ${timeout_seconds}s and $attempt attempts"
+    return 1
+}
+
 export -f get_process_pid check_walrus_process_stopped check_walrus_process_running
 export -f setup_clean_environment ensure_build_daemon safe_start_daemon setup_test_workdir backup_config_files restore_config_files stop_walrus_relay_process
 export -f cleanup_port_conflicts wait_for_port_available wait_for_process_ready
 export -f assert_binary_exists assert_process_running assert_config_file_exists
+export -f wait_for_service_status wait_for_walrus_relay_status wait_for_daemon_running wait_for_daemon_stopped wait_for_process_stopped
