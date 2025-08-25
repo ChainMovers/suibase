@@ -11,5 +11,6 @@ pub mod network_monitor;
 pub mod proxy_server;
 pub mod rate_limiter;
 pub mod shared_types;
+pub mod walrus_monitor;
 pub mod workdirs_watcher;
 pub mod workers;

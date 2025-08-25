@@ -1972,7 +1972,7 @@ replace_home_references() {
   local _UPDATED=false
 
   if [ -f "$_FILE_PATH" ] && grep -q "\\\$HOME/" "$_FILE_PATH" 2>/dev/null; then
-    sed -i "s|\\\$HOME/|$HOME/|g" "$_FILE_PATH"
+    sed -i.bak "s|\\\$HOME/|$HOME/|g" "$_FILE_PATH" && rm "$_FILE_PATH.bak"
     _UPDATED=true
   fi
 
@@ -1997,14 +1997,14 @@ repair_yaml_root_field_as_needed() {
     local _USER_VALUE
     _USER_VALUE=$(grep "$_FIELD_NAME:" "$_FILE_PATH" | head -1 | sed "s/.*$_FIELD_NAME: *//" || echo "")
     if [ "$_USER_VALUE" != "$_TEMPLATE_VALUE" ] && [ -n "$_USER_VALUE" ]; then
-      sed -i "s|$_FIELD_NAME: $_USER_VALUE|$_FIELD_NAME: $_TEMPLATE_VALUE|g" "$_FILE_PATH"
+      sed -i.bak "s|$_FIELD_NAME: $_USER_VALUE|$_FIELD_NAME: $_TEMPLATE_VALUE|g" "$_FILE_PATH" && rm "$_FILE_PATH.bak"
       return 0
     fi
   else
     # Field does not exist in template - remove it from user config if present
     # Only do this for subsidies_object to be conservative about user's custom fields
     if [ "$_FIELD_NAME" = "subsidies_object" ] && grep -q "$_FIELD_NAME:" "$_FILE_PATH"; then
-      sed -i "/^[[:space:]]*$_FIELD_NAME:/d" "$_FILE_PATH"
+      sed -i.bak "/^[[:space:]]*$_FIELD_NAME:/d" "$_FILE_PATH" && rm "$_FILE_PATH.bak"
       return 0
     fi
   fi
@@ -2014,10 +2014,10 @@ repair_yaml_root_field_as_needed() {
 repair_walrus_rpc_urls_as_needed() {
   local _WALRUS_CONFIG_FILE="$1"
   local _WORKDIR="$2"
-  
+
   # Build proxy URL from configuration (suibase config already loaded in __globals.sh)
   local _PROXY_URL="http://${CFG_proxy_host_ip:?}:${CFG_proxy_port_number:?}"
-  
+
   # Define direct RPC URLs based on workdir
   local _DIRECT_RPC_URL
   if [ "$_WORKDIR" = "testnet" ]; then
@@ -2027,47 +2027,47 @@ repair_walrus_rpc_urls_as_needed() {
   else
     return 1  # Unknown workdir
   fi
-  
+
   # Generate the smart rpc_urls configuration with proxy first, then direct RPC
   local _SMART_RPC_URLS="    rpc_urls:
       - $_PROXY_URL
       - $_DIRECT_RPC_URL"
-  
+
   # Check if rpc_urls section already exists
   if grep -q "rpc_urls:" "$_WALRUS_CONFIG_FILE"; then
     # Check if the current configuration already matches what we want
     local _NEEDS_UPDATE=false
-    
+
     # Check if proxy URL is present
     if ! grep -q "$_PROXY_URL" "$_WALRUS_CONFIG_FILE"; then
       _NEEDS_UPDATE=true
     fi
-    
+
     # Check if direct RPC URL is present
     if ! grep -q "$_DIRECT_RPC_URL" "$_WALRUS_CONFIG_FILE"; then
       _NEEDS_UPDATE=true
     fi
-    
+
     # Check if there are exactly 2 URLs in the rpc_urls section
     local _RPC_URL_COUNT
     _RPC_URL_COUNT=$(sed -n '/rpc_urls:/,/^[a-z]/p' "$_WALRUS_CONFIG_FILE" | grep -c "^      - ")
     if [ "$_RPC_URL_COUNT" -ne 2 ]; then
       _NEEDS_UPDATE=true
     fi
-    
+
     # If current section differs from smart version, replace it
     if [ "$_NEEDS_UPDATE" = true ]; then
       # Create temp file with updated content
       local _TEMP_FILE
       _TEMP_FILE=$(mktemp)
-      
+
       # Use awk to replace the rpc_urls section while preserving everything else
       awk -v smart_urls="$_SMART_RPC_URLS" '
-      BEGIN { 
+      BEGIN {
         in_rpc_section = 0
         rpc_section_replaced = 0
       }
-      /^[[:space:]]*rpc_urls:/ { 
+      /^[[:space:]]*rpc_urls:/ {
         in_rpc_section = 1
         if (!rpc_section_replaced) {
           print smart_urls
@@ -2076,7 +2076,7 @@ repair_walrus_rpc_urls_as_needed() {
         next
       }
       in_rpc_section && /^[[:space:]]*-/ {
-        # Skip RPC URL entries 
+        # Skip RPC URL entries
         next
       }
       in_rpc_section && /^[[:alpha:]]/ {
@@ -2089,13 +2089,13 @@ repair_walrus_rpc_urls_as_needed() {
         # End of rpc_urls section (indented field), back to normal processing
         in_rpc_section = 0
         print $0
-        next  
+        next
       }
       !in_rpc_section {
         print $0
       }
       ' "$_WALRUS_CONFIG_FILE" > "$_TEMP_FILE"
-      
+
       # Replace the original file
       mv "$_TEMP_FILE" "$_WALRUS_CONFIG_FILE"
       return 0
@@ -2106,16 +2106,16 @@ repair_walrus_rpc_urls_as_needed() {
     # No rpc_urls section exists, add it before default_context
     local _TEMP_FILE
     _TEMP_FILE=$(mktemp)
-    
+
     # Copy everything up to but not including default_context
     grep -B 1000 "default_context:" "$_WALRUS_CONFIG_FILE" | grep -v "default_context:" > "$_TEMP_FILE"
-    
+
     # Add the smart rpc_urls section
     echo "$_SMART_RPC_URLS" >> "$_TEMP_FILE"
-    
+
     # Add the default_context and any remaining lines
     grep -A 1000 "default_context:" "$_WALRUS_CONFIG_FILE" >> "$_TEMP_FILE"
-    
+
     # Replace the original file
     mv "$_TEMP_FILE" "$_WALRUS_CONFIG_FILE"
     return 0
@@ -2399,6 +2399,19 @@ update_SUI_PROCESS_PID_var() {
   fi
 }
 export -f update_SUI_PROCESS_PID_var
+
+is_walrus_supported_by_workdir() {
+  # Walrus is only supported for testnet and mainnet
+  # Usage: is_walrus_supported_by_workdir [workdir]
+  # If no workdir is provided, uses $WORKDIR
+  local _workdir="${1:-$WORKDIR}"
+  if [ "$_workdir" = "testnet" ] || [ "$_workdir" = "mainnet" ]; then
+    return 0  # true
+  else
+    return 1  # false
+  fi
+}
+export -f is_walrus_supported_by_workdir
 
 update_SUI_VERSION_var() {
   # Take note that $SUI_BIN_DIR here is used to properly consider if the
@@ -3828,48 +3841,72 @@ stop_all_services() {
   #   0: Success (all process needed to be stopped were stopped)
   #   1: Everything already stopped. Call was NOOP (except for user_request writing)
 
-  # Note: Try hard to keep the dependency here low on $WORKDIR.
+
+  # Note: Try hard to keep the dependency here low on $WORKDIR content.
   #       We want to try to stop the processes even if most of
-  #       the workdir content is in a bad state.
-  local _OLD_USER_REQUEST
+  #       the workdir files are in a bad state.
+  local _NOOP_REQUEST=0
   if [ -d "$WORKDIRS/$WORKDIR" ]; then
+    local _OLD_USER_REQUEST
     _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
     # Always write to "touch" the file and possibly cause
     # downstream resynch/fixing.
     set_key_value "$WORKDIR" "user_request" "stop"
     if [ "$_OLD_USER_REQUEST" != "stop" ]; then
       sync_client_yaml
+    else
+      _NOOP_REQUEST=1
     fi
   fi
 
   if [ "${CFG_network_type:?}" = "remote" ]; then
-    # Nothing needed to be stop for remote network.
-    if [ "$_OLD_USER_REQUEST" = "stop" ]; then
-      # Was already stopped.
-      return 1
+
+    if [ "$WORKDIR" = "devnet" ]; then
+      # There is nothing to stop for devnet, so return immediately.
+      return $_NOOP_REQUEST
     fi
-    # Transition to "stop" state successful.
-    return 0
-  fi
 
-  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
-    return 1
-  fi
+    if is_walrus_supported_by_workdir; then
+      update_WALRUS_RELAY_PROCESS_PID_var
 
-  # Stop the processes in reverse order.
-  if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
-    stop_sui_faucet_process
-  fi
+      if [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
+        # Everything that needed to be stopped already stopped.
+        return $_NOOP_REQUEST
+      fi
 
-  if [ -n "$SUI_PROCESS_PID" ]; then
-    stop_sui_process
-  fi
+      stop_walrus_relay_process
+      update_WALRUS_RELAY_PROCESS_PID_var
 
-  # Check if successful.
-  if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
-    echo "$WORKDIR now stopped"
+      # Check if successful.
+      if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
+        setup_error "Failed to stop walrus relay. Try again. Use \"$WORKDIR status\" to monitor the situation."
+      fi
+    else
+      # Nothing to stop.
+      return $_NOOP_REQUEST
+    fi
   else
-    setup_error "Failed to stop everything. Try again. Use \"$WORKDIR status\" to see what is still running."
+    update_SUI_FAUCET_PROCESS_PID_var
+    update_SUI_PROCESS_PID_var
+
+    if [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ -z "$SUI_PROCESS_PID" ]; then
+      # Everything that needed to be stopped already stopped.
+      return $_NOOP_REQUEST
+    fi
+
+    # Stop the localnet processes in reverse order.
+    if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
+      stop_sui_faucet_process
+    fi
+
+    if [ -n "$SUI_PROCESS_PID" ]; then
+      stop_sui_process
+    fi
+
+    # Check if successful.
+    if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then
+      setup_error "Failed to stop everything. Try again. Use \"$WORKDIR status\" to see what is still running."
+    fi
   fi
 
   # Success. All process that needed to be stopped were stopped.
@@ -3887,10 +3924,17 @@ start_all_services() {
   #   1: Everything needed particular to this workdir already running
   #      (Note: suibase-daemon and dtp-daemon are not *particular* to a workdir)
   #
+
   local _OLD_USER_REQUEST
+  local _NOOP_REQUEST=0
   _OLD_USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
 
   set_key_value "$WORKDIR" "user_request" "start"
+
+
+  if [ "$_OLD_USER_REQUEST" = "start" ]; then
+    _NOOP_REQUEST=1
+  fi
 
   # A good time to double-check if some commands from the suibase.yaml need to be applied.
   copy_private_keys_yaml_to_keystore "$WORKDIRS/$WORKDIR/config/sui.keystore"
@@ -3904,57 +3948,67 @@ start_all_services() {
     setup_error "$DTP_DAEMON_NAME taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting, may be try to start again or upgrade with  ~/suibase/update?"
   fi
 
-  # Verify if all other expected process are running.
+  # Verify first what is supported and already running.
+  local _WERE_ALL_RUNNING=true
+
+  local _SUPPORT_SUI_PROCESS=false
+  local _SUPPORT_FAUCET=false
+  local _SUPPORT_WALRUS_RELAY=false
+
+
+  if [ "$WORKDIR" = "localnet" ]; then
+    _SUPPORT_SUI_PROCESS=true
+
+    if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
+      _SUPPORT_FAUCET=false
+    else
+      _SUPPORT_FAUCET=true
+    fi
+
+    if [ "$_SUPPORT_FAUCET" = true ] && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+      _WERE_ALL_RUNNING=false
+    fi
+
+    if [ "$_SUPPORT_SUI_PROCESS" = true ] && [ -z "$SUI_PROCESS_PID" ]; then
+      _WERE_ALL_RUNNING=false
+    fi
+  fi
 
   if [ "${CFG_network_type:?}" = "remote" ]; then
-    # No other process expected for remote network.
-    # Just check that suibase-daemon is responding.
-    sync_client_yaml
-    trig_daemons_refresh
-    wait_for_json_rpc_up "${WORKDIR_NAME}"
-    return 0
-  fi
-
-  # Verify if the faucet is supported for this version.
-  local _SUPPORT_FAUCET
-  if version_less_than "$SUI_VERSION" "sui 0.27" || [ "${CFG_sui_faucet_enabled:?}" != "true" ]; then
-    _SUPPORT_FAUCET=false
-  else
-    _SUPPORT_FAUCET=true
-  fi
-
-  local _ALL_RUNNING=true
-  if [ "$_SUPPORT_FAUCET" = true ] && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-    _ALL_RUNNING=false
-  fi
-
-  if [ -z "$SUI_PROCESS_PID" ]; then
-    _ALL_RUNNING=false
-  fi
-
-  if [ "$_ALL_RUNNING" = true ]; then
-    sync_client_yaml
-    trig_daemons_refresh
-    wait_for_json_rpc_up "${WORKDIR_NAME}"
-    return 1
-  fi
-
-
-  if [ -z "$SUI_PROCESS_PID" ]; then
-    # Note: start_sui_process has to call sync_client_yaml itself to remove the
-    #       use of the proxy. This explains why start_sui_process is called on
-    #       the exit of this function and not before.
-    start_sui_process
-  fi
-
-  if [ -z "$SUI_PROCESS_PID" ]; then
-    setup_error "Not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
-  fi
-
-  if $_SUPPORT_FAUCET; then
-    if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
-      start_sui_faucet_process
+    if ! is_walrus_supported_by_workdir; then
+      _SUPPORT_WALRUS_RELAY=false
+    elif [ "${CFG_walrus_relay_enabled:-false}" != "true" ]; then
+      _SUPPORT_WALRUS_RELAY=false
+    else
+      _SUPPORT_WALRUS_RELAY=true
     fi
+
+    update_WALRUS_RELAY_PROCESS_PID_var
+
+    if [ "$_SUPPORT_WALRUS_RELAY" = true ] && [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
+      _WERE_ALL_RUNNING=false
+    fi
+  fi
+
+  # Start what needs to be started...
+  if [ "$_SUPPORT_WALRUS_RELAY" = true ] && [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
+    start_walrus_relay_process
+    if [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
+      setup_error "Walrus relay not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
+    fi
+  fi
+
+
+  if [ "$_SUPPORT_SUI_PROCESS" = true ] && [ -z "$SUI_PROCESS_PID" ]; then
+    start_sui_process
+    if [ -z "$SUI_PROCESS_PID" ]; then
+      setup_error "Not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
+    fi
+  fi
+
+
+  if [ "$_SUPPORT_FAUCET" = true ] && [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
+    start_sui_faucet_process
 
     if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
       setup_error "Faucet not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
@@ -3965,20 +4019,44 @@ start_all_services() {
   sync_client_yaml
   trig_daemons_refresh
   wait_for_json_rpc_up "${WORKDIR_NAME}"
-  return 0
+
+  if [ "$_WERE_ALL_RUNNING" = true ]; then
+    return $_NOOP_REQUEST
+  else
+    return 0
+  fi
 }
 
 is_at_least_one_service_running() {
-  # Keep this function cohesive with start/stop
+  # Keep this function cohesive with start/stop service architecture:
+  # - testnet/mainnet (remote): only walrus relay processes
+  # - devnet (remote): no local processes
+  # - localnet: sui-faucet and sui processes
   #
   # SUIBASE_DAEMON and DTP_DAEMON are exceptions to the rule... they should always run!
-  update_SUI_FAUCET_PROCESS_PID_var
-  update_SUI_PROCESS_PID_var
-  if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then
-    true
+
+  if [ "${CFG_network_type:?}" = "remote" ]; then
+    # Remote networks: only check walrus relay for testnet/mainnet
+    if is_walrus_supported_by_workdir; then
+      update_WALRUS_RELAY_PROCESS_PID_var
+      if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
+        true
+        return
+      fi
+    fi
+    # devnet has no local processes, always return false
+    false
+    return
+  else
+    # localnet: check sui-faucet and sui processes
+    update_SUI_FAUCET_PROCESS_PID_var
+    update_SUI_PROCESS_PID_var
+    if [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$SUI_PROCESS_PID" ]; then
+      true
+      return
+    fi
+    false
     return
   fi
-  false
-  return
 }
 export -f is_at_least_one_service_running

@@ -5,6 +5,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 
 use crate::acoins_monitor::{ACoinsMonTx, ACoinsMonitor};
 use crate::network_monitor::{NetMonTx, NetworkMonitor};
+use crate::walrus_monitor::{WalrusMonTx, WalrusMonitor};
 
 use common::basic_types::{self, AdminControllerMsg, AdminControllerTx, AutoThread, Runnable};
 
@@ -14,6 +15,7 @@ use tokio::time::{interval, Duration};
 pub struct ClockTriggerParams {
     netmon_tx: NetMonTx,
     acoinsmon_tx: ACoinsMonTx,
+    walrusmon_tx: WalrusMonTx,
     admctrl_tx: AdminControllerTx,
 }
 
@@ -21,11 +23,13 @@ impl ClockTriggerParams {
     pub fn new(
         netmon_tx: NetMonTx,
         acoinsmon_tx: ACoinsMonTx,
+        walrusmon_tx: WalrusMonTx,
         admctrl_tx: AdminControllerTx,
     ) -> Self {
         Self {
             netmon_tx,
             acoinsmon_tx,
+            walrusmon_tx,
             admctrl_tx,
         }
     }
@@ -112,6 +116,15 @@ impl ClockTriggerThread {
                 let result = ACoinsMonitor::send_event_audit(&self.params.acoinsmon_tx).await;
                 if let Err(e) = result {
                     log::error!("send_event_acoins_audit {}", e);
+                    // TODO This is bad if sustain for many seconds. Add watchdog here.
+                }
+            }
+
+            if (tick % 5) == 3 {
+                // Every 5 seconds, with first one ~3 seconds after start.
+                let result = WalrusMonitor::send_event_audit(&self.params.walrusmon_tx).await;
+                if let Err(e) = result {
+                    log::error!("send_event_walrus_audit {}", e);
                     // TODO This is bad if sustain for many seconds. Add watchdog here.
                 }
             }

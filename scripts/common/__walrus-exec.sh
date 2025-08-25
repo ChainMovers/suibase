@@ -8,7 +8,7 @@ walrus_exec() {
 
   exit_if_workdir_not_ok
 
-  if [ "$WORKDIR" != "testnet" ] && [ "$WORKDIR" != "mainnet" ]; then
+  if ! is_walrus_supported_by_workdir; then
     error_exit "This script is only for testnet and mainnet."
   fi
 

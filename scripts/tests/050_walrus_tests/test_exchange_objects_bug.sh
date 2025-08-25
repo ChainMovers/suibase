@@ -10,6 +10,10 @@ cd "$( dirname "${BASH_SOURCE[0]}" )" || exit 1
 # Source the common test infrastructure
 source __test_common.sh
 
+# Source the walrus repair function for testing
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
 test_exchange_objects_preservation() {
     local TEST_CONFIG_DIR="$WORKDIRS/$WORKDIR/config-default"
     local TEST_WALRUS_CONFIG="$TEST_CONFIG_DIR/walrus-config.yaml"

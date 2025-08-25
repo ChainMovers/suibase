@@ -12,15 +12,9 @@ test_binary_installation() {
     setup_test_workdir "testnet"
     backup_config_files "testnet"
     
-    # Source required dependencies for walrus binaries
-    # shellcheck source=SCRIPTDIR/../../common/__apps.sh
-    source "$SUIBASE_DIR/scripts/common/__apps.sh"
-    # shellcheck source=SCRIPTDIR/../../common/__walrus-binaries.sh
-    source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
-    
-    # Test updating walrus app (should download walrus-upload-relay)
-    echo "Calling update_walrus_app for testnet..."
-    update_walrus_app "testnet" "walrus"
+    # Test updating via proper script (should download walrus-upload-relay)
+    echo "Calling testnet update to install walrus binaries..."
+    "$SUIBASE_DIR/scripts/testnet" update >/dev/null 2>&1
     
     # Check if binary was installed
     assert_binary_exists "testnet"
@@ -96,8 +90,7 @@ tests() {
     test_configuration_files
     test_walrus_integration
     
-    # Cleanup
-    cleanup_test
+    # Cleanup happens automatically on test setup, not at end
     
     echo "All walrus-upload-relay binary management tests passed!"
 }

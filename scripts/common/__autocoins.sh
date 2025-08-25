@@ -279,7 +279,7 @@ autocoins_enable() {
     # Update suibase.yaml
     if grep -q "^autocoins_enabled:" "$AUTOCOINS_SUIBASE_YAML"; then
       # Replace existing line
-      sed -i "s/^autocoins_enabled:.*/autocoins_enabled: true/" "$AUTOCOINS_SUIBASE_YAML"
+      sed -i.bak "s/^autocoins_enabled:.*/autocoins_enabled: true/" "$AUTOCOINS_SUIBASE_YAML" && rm "$AUTOCOINS_SUIBASE_YAML.bak"
     else
       # Add new line
       echo "autocoins_enabled: true" >> "$AUTOCOINS_SUIBASE_YAML"
@@ -323,7 +323,7 @@ autocoins_disable() {
     # Update suibase.yaml only if not already disabled
     if grep -q "^autocoins_enabled:" "$AUTOCOINS_SUIBASE_YAML"; then
       # Replace existing line
-      sed -i "s/^autocoins_enabled:.*/autocoins_enabled: false/" "$AUTOCOINS_SUIBASE_YAML"
+      sed -i.bak "s/^autocoins_enabled:.*/autocoins_enabled: false/" "$AUTOCOINS_SUIBASE_YAML" && rm "$AUTOCOINS_SUIBASE_YAML.bak"
     else
       # Add new line
       echo "autocoins_enabled: false" >> "$AUTOCOINS_SUIBASE_YAML"
@@ -363,7 +363,7 @@ autocoins_set_address() {
   # Update suibase.yaml
   if grep -q "^autocoins_address:" "$AUTOCOINS_SUIBASE_YAML"; then
     # Replace existing line
-    sed -i "s|^autocoins_address:.*|autocoins_address: \"$address\"|" "$AUTOCOINS_SUIBASE_YAML"
+    sed -i.bak "s|^autocoins_address:.*|autocoins_address: \"$address\"|" "$AUTOCOINS_SUIBASE_YAML" && rm "$AUTOCOINS_SUIBASE_YAML.bak"
   else
     # Add new line
     echo "autocoins_address: \"$address\"" >> "$AUTOCOINS_SUIBASE_YAML"

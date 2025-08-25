@@ -288,6 +288,9 @@ pub struct WorkdirUserConfig {
     autocoins_enabled: bool,
     autocoins_address: Option<String>,
     autocoins_mode: ClientMode,
+    walrus_relay_enabled: bool,
+    walrus_relay_proxy_port: u16,
+    walrus_relay_local_port: u16,
 }
 
 impl WorkdirUserConfig {
@@ -306,6 +309,9 @@ impl WorkdirUserConfig {
             autocoins_enabled: false,
             autocoins_address: None,
             autocoins_mode: ClientMode::Unknown,
+            walrus_relay_enabled: false,
+            walrus_relay_proxy_port: 0,  // Will be set by config
+            walrus_relay_local_port: 0,  // Will be set by config
         }
     }
 
@@ -347,6 +353,18 @@ impl WorkdirUserConfig {
 
     pub fn autocoins_mode(&self) -> ClientMode {
         self.autocoins_mode
+    }
+
+    pub fn is_walrus_relay_enabled(&self) -> bool {
+        self.walrus_relay_enabled
+    }
+
+    pub fn walrus_relay_proxy_port(&self) -> u16 {
+        self.walrus_relay_proxy_port
+    }
+
+    pub fn walrus_relay_local_port(&self) -> u16 {
+        self.walrus_relay_local_port
     }
 
     pub fn dtp_services(&self) -> &LinkedList<DTPService> {
@@ -510,6 +528,21 @@ impl WorkdirUserConfig {
         }
         if !address_is_valid {
             self.autocoins_address = None;
+        }
+
+        // walrus_relay_enabled can be "true" or "false".
+        if let Some(walrus_relay_enabled) = yaml["walrus_relay_enabled"].as_bool() {
+            self.walrus_relay_enabled = walrus_relay_enabled;
+        } else if let Some(walrus_relay_enabled) = yaml["walrus_relay_enabled"].as_str() {
+            self.walrus_relay_enabled = walrus_relay_enabled != "false";
+        }
+
+        // walrus_relay_proxy_port and walrus_relay_local_port are u16 values
+        if let Some(walrus_relay_proxy_port) = yaml["walrus_relay_proxy_port"].as_u64() {
+            self.walrus_relay_proxy_port = walrus_relay_proxy_port as u16;
+        }
+        if let Some(walrus_relay_local_port) = yaml["walrus_relay_local_port"].as_u64() {
+            self.walrus_relay_local_port = walrus_relay_local_port as u16;
         }
 
         // Handle links_overrides (legacy field) and enable_default_links (new field)

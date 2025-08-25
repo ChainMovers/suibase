@@ -4,86 +4,54 @@
 # Tests for walrus-upload-relay binary management and process lifecycle
 
 SUIBASE_DIR="$HOME/suibase"
-
-# shellcheck source=SCRIPTDIR/common/__globals.sh
-SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIRS="$SUIBASE_DIR/workdirs"
 WORKDIR="testnet"  # Default to testnet for walrus relay tests
 
-# shellcheck source=SCRIPTDIR/../__scripts-lib-before-globals.sh
-source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
+# Portable process PID detection (copied from __globals.sh to avoid mutex issues)
+get_process_pid() {
+  local _PROC="$1"
+  local _ARGS="$2"
+  local _PID
+  # Given a process "string" return the pid as a string.
+  # Return NULL if not found.
+  
+  # Detect OS for platform-specific ps behavior
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # MacOS 'ps' works differently and does not show the $_ARGS to discern the
+    # process, so next best thing is to match $_PROC to end-of-line with "$".
+    # shellcheck disable=SC2009
+    _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
+  else
+    local _TARGET_CMD
+    if [ -n "$_ARGS" ]; then
+      _TARGET_CMD="$_PROC $_ARGS"
+    else
+      _TARGET_CMD="$_PROC"
+    fi
 
-# Source globals
-# shellcheck source=SCRIPTDIR/../../common/__globals.sh
-source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
-trap cleanup EXIT
+    # shellcheck disable=SC2009
+    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "$_TARGET_CMD" | grep -v grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
+  fi
 
-# shellcheck source=SCRIPTDIR/../__scripts-lib-after-globals.sh
-source "$SUIBASE_DIR/scripts/tests/__scripts-lib-after-globals.sh"
+  if [ -n "$_PID" ]; then
+    echo "$_PID"
+  else
+    echo "NULL"
+  fi
+}
 
 # Test configuration
 TEMP_TEST_DIR="/tmp/suibase_walrus_relay_test_$$"
 
-# Test helper functions
-setup_test_workdir() {
-    local workdir="$1"
-    local config_dir="$WORKDIRS/$workdir/config-default"
-    
-    # Proactively clean up any stale walrus locks from previous test runs
-    # This prevents the "stale lock" issue that blocks walrus binary downloads
-    local _WALRUS_LOCK="/tmp/.suibase/cli-walrus.lock"
-    if [ -d "$_WALRUS_LOCK" ]; then
-        # Check if any process is actually using the lock
-        if ! lsof "$_WALRUS_LOCK" >/dev/null 2>&1; then
-            echo "Removing stale walrus lock directory from previous test run: $_WALRUS_LOCK"
-            rmdir "$_WALRUS_LOCK" 2>/dev/null || true
-        fi
-    fi
-    
-    # Ensure workdir structure exists
-    mkdir -p "$config_dir"
-    mkdir -p "$WORKDIRS/$workdir/bin"
-    
-    # Create a basic suibase.yaml if it doesn't exist
-    if [ ! -f "$WORKDIRS/$workdir/suibase.yaml" ]; then
-        echo "# Test suibase.yaml for walrus relay tests" > "$WORKDIRS/$workdir/suibase.yaml"
-    fi
+# Simple test failure function
+fail() {
+    echo "ERROR: $1" >&2
+    exit 1
 }
 
-backup_config_files() {
-    local workdir="$1"
-    local config_dir="$WORKDIRS/$workdir/config-default"
-    local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
-    
-    mkdir -p "$backup_dir"
-    
-    # Backup existing config files
-    [ -f "$config_dir/walrus-config.yaml" ] && cp "$config_dir/walrus-config.yaml" "$backup_dir/"
-    [ -f "$config_dir/relay-config.yaml" ] && cp "$config_dir/relay-config.yaml" "$backup_dir/"
-}
-
-restore_config_files() {
-    local workdir="$1"
-    local config_dir="$WORKDIRS/$workdir/config-default"
-    local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
-    
-    # Restore backed up config files
-    if [ -d "$backup_dir" ]; then
-        [ -f "$backup_dir/walrus-config.yaml" ] && cp "$backup_dir/walrus-config.yaml" "$config_dir/"
-        [ -f "$backup_dir/relay-config.yaml" ] && cp "$backup_dir/relay-config.yaml" "$config_dir/"
-    fi
-}
-
-cleanup_test() {
-    echo "Cleaning up test environment..."
-    
-    # Stop any running walrus-upload-relay processes for this workdir
-    if [ -n "${WALRUS_RELAY_PROCESS_PID:-}" ]; then
-        kill "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
-        wait "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
-        unset WALRUS_RELAY_PROCESS_PID
-    fi
-    
-    # Kill any remaining processes using the test port
+# Test setup function - ensures clean environment before starting
+setup_clean_environment() {
+    # Clean up any stale processes from previous test runs
     cleanup_port_conflicts
     
     # Clean up stale walrus locks that may have been left by interrupted processes
@@ -95,16 +63,124 @@ cleanup_test() {
         fi
     fi
     
-    # Restore any backed up files
-    restore_config_files "testnet"
-    restore_config_files "mainnet"
+    # Remove any previous test temp directories
+    rm -rf /tmp/suibase_walrus_relay_test_* 2>/dev/null || true
+}
+
+# Ensure BUILD version of suibase-daemon is used (not precompiled)
+ensure_build_daemon() {
+    local version_file="$WORKDIRS/common/bin/suibase-daemon-version.yaml"
+    local daemon_binary="$WORKDIRS/common/bin/suibase-daemon"
     
-    # Remove temp directory
-    [ -d "$TEMP_TEST_DIR" ] && rm -rf "$TEMP_TEST_DIR"
+    # Check if both BUILD version file exists AND binary exists
+    if [ -f "$version_file" ] && [ -f "$daemon_binary" ] && grep -q 'origin: "built"' "$version_file"; then
+        echo "✓ BUILD version of suibase-daemon is already available"
+        return 0
+    fi
+    
+    if [ -f "$version_file" ] && grep -q 'origin: "precompiled"' "$version_file"; then
+        # Rebuild daemon for walrus relay features
+        "$SUIBASE_DIR/scripts/dev/update-daemon" >/dev/null 2>&1
+        
+        # Wait for rebuild to complete with shorter timeout
+        local wait_count=0
+        while [ $wait_count -lt 15 ]; do
+            if [ -f "$version_file" ] && ! grep -q 'origin: "precompiled"' "$version_file"; then
+                return 0
+            fi
+            sleep 1
+            wait_count=$((wait_count + 1))
+        done
+        return 1
+    elif [ ! -f "$version_file" ] || [ ! -f "$daemon_binary" ]; then
+        # Force rebuild if version file missing OR binary missing
+        echo "Rebuilding daemon (missing binary or version file)..."
+        "$SUIBASE_DIR/scripts/dev/update-daemon" >/dev/null 2>&1
+    fi
+}
+
+# Safe daemon start that ensures BUILD version 
+safe_start_daemon() {
+    # Ensure we have BUILD version
+    ensure_build_daemon
+    
+    # Start the daemon using proper script
+    if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+        echo "Starting suibase-daemon..."
+        "$SUIBASE_DIR/scripts/dev/start-daemon" >/dev/null 2>&1
+    else
+        echo "✓ suibase-daemon is already running"
+    fi
+}
+
+# Test helper functions
+setup_test_workdir() {
+    local workdir="$1"
+    
+    # Use the existing workdir create script if workdir doesn't exist
+    if [ ! -d "$WORKDIRS/$workdir" ] || [ ! -f "$WORKDIRS/$workdir/suibase.yaml" ]; then
+        echo "Setting up $workdir workdir..."
+        "$SUIBASE_DIR/scripts/$workdir" create >/dev/null 2>&1 || true
+    fi
+    
+    # Ensure additional test directories exist
+    mkdir -p "$WORKDIRS/$workdir/bin"
+    mkdir -p "$WORKDIRS/$workdir/config-default"
+}
+
+backup_config_files() {
+    local workdir="$1"
+    local config_dir="$WORKDIRS/$workdir/config-default"
+    
+    # Ensure TEMP_TEST_DIR is set
+    if [ -z "$TEMP_TEST_DIR" ]; then
+        TEMP_TEST_DIR="/tmp/suibase_walrus_relay_test_$$"
+    fi
+    
+    local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
+    
+    mkdir -p "$backup_dir"
+    
+    # Backup existing config files
+    if [ -f "$config_dir/walrus-config.yaml" ]; then
+        cp "$config_dir/walrus-config.yaml" "$backup_dir/" || echo "Warning: Failed to backup walrus-config.yaml"
+    fi
+    if [ -f "$config_dir/relay-config.yaml" ]; then
+        cp "$config_dir/relay-config.yaml" "$backup_dir/" || echo "Warning: Failed to backup relay-config.yaml"
+    fi
+}
+
+restore_config_files() {
+    local workdir="$1"
+    local config_dir="$WORKDIRS/$workdir/config-default"
+    
+    # Ensure TEMP_TEST_DIR is set
+    if [ -z "$TEMP_TEST_DIR" ]; then
+        TEMP_TEST_DIR="/tmp/suibase_walrus_relay_test_$$"
+    fi
+    
+    local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
+    
+    # Restore backed up config files
+    if [ -d "$backup_dir" ]; then
+        [ -f "$backup_dir/walrus-config.yaml" ] && cp "$backup_dir/walrus-config.yaml" "$config_dir/"
+        [ -f "$backup_dir/relay-config.yaml" ] && cp "$backup_dir/relay-config.yaml" "$config_dir/"
+    fi
+}
+
+# Stop any walrus relay process that might be running
+stop_walrus_relay_process() {
+    if [ -n "${WALRUS_RELAY_PROCESS_PID:-}" ]; then
+        echo "Stopping walrus relay process PID $WALRUS_RELAY_PROCESS_PID"
+        kill "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
+        wait "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
+        unset WALRUS_RELAY_PROCESS_PID
+    fi
 }
 
 cleanup_port_conflicts() {
-    local test_port="${CFG_walrus_relay_local_port:-45802}"
+    local test_port
+    test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/get-walrus-relay-local-port.sh" "$WORKDIR")
     echo "Checking for port conflicts on port $test_port..."
     
     # Find processes using the port with more robust detection
@@ -180,7 +256,6 @@ wait_for_process_ready() {
 
 # Override cleanup function
 cleanup() {
-    cleanup_test
     # Call original cleanup if it exists
     type original_cleanup >/dev/null 2>&1 && original_cleanup
 }
@@ -228,6 +303,52 @@ assert_config_file_exists() {
     echo "✓ $config_file exists at $config_path"
 }
 
-export -f setup_test_workdir backup_config_files restore_config_files cleanup_test
+# Portable walrus relay process checking
+check_walrus_process_stopped() {
+    local workdir="$1"
+    local workdir_prefix
+    case "$workdir" in
+        "testnet") workdir_prefix="t" ;;
+        "mainnet") workdir_prefix="m" ;;
+        *) workdir_prefix="${workdir:0:1}" ;;
+    esac
+    
+    local workdir_binary="$WORKDIRS/$workdir/bin/${workdir_prefix}walrus-upload-relay"
+    local pid
+    pid=$(get_process_pid "$workdir_binary")
+    
+    if [ "$pid" = "NULL" ]; then
+        echo "✓ ${workdir_prefix}walrus-upload-relay process is stopped"
+        return 0
+    else
+        echo "✗ ${workdir_prefix}walrus-upload-relay process still running (PID: $pid)"
+        return 1
+    fi
+}
+
+check_walrus_process_running() {
+    local workdir="$1"
+    local workdir_prefix
+    case "$workdir" in
+        "testnet") workdir_prefix="t" ;;
+        "mainnet") workdir_prefix="m" ;;
+        *) workdir_prefix="${workdir:0:1}" ;;
+    esac
+    
+    local workdir_binary="$WORKDIRS/$workdir/bin/${workdir_prefix}walrus-upload-relay"
+    local pid
+    pid=$(get_process_pid "$workdir_binary")
+    
+    if [ "$pid" != "NULL" ]; then
+        echo "✓ ${workdir_prefix}walrus-upload-relay process is running (PID: $pid)"
+        return 0
+    else
+        echo "✗ ${workdir_prefix}walrus-upload-relay process is not running"
+        return 1
+    fi
+}
+
+export -f get_process_pid check_walrus_process_stopped check_walrus_process_running
+export -f setup_clean_environment ensure_build_daemon safe_start_daemon setup_test_workdir backup_config_files restore_config_files stop_walrus_relay_process
 export -f cleanup_port_conflicts wait_for_port_available wait_for_process_ready
 export -f assert_binary_exists assert_process_running assert_config_file_exists

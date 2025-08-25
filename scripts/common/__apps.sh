@@ -973,7 +973,6 @@ sb_app_rust_build_and_install() {
   local _ASSETS_NAME=$APP_VAR
 
   # Rust (re)build.
-  echo "Building $_ASSETS_NAME"
   exit_if_rust_build_deps_missing
 
   # Check if musl target is installed
@@ -981,7 +980,6 @@ sb_app_rust_build_and_install() {
   if [ "$HOST_PLATFORM" = "Linux" ]; then
     if rustup target list --installed | grep -q "x86_64-unknown-linux-musl"; then
       USE_MUSL=true
-      echo "Using musl target for static compilation"
     else
       echo "Musl target not installed. Using default dynamic compilation"
       echo "To install musl support: rustup target add x86_64-unknown-linux-musl"
@@ -995,11 +993,48 @@ sb_app_rust_build_and_install() {
   # Clean the build directory.
   rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
 
+  # Helper function to filter cargo output
+  filter_cargo_output() {
+    local temp_file
+    temp_file="$(mktemp)"
+    local exit_code=0
+
+    # Capture all output and exit code
+    "$@" > "$temp_file" 2>&1 || exit_code=$?
+
+    # Show errors, warnings, and final status with context
+    if [ $exit_code -ne 0 ]; then
+      echo "❌ Build failed:"
+      # Show errors with more context - include the line before and after
+      grep -B1 -A1 -E "(error|Error|ERROR)" "$temp_file" | head -20
+      # Also show any compilation failures
+      grep -E "(failed|Failed|FAILED)" "$temp_file" | head -5
+    else
+      # For successful builds, show warnings with file context
+      if grep -q -E "(warning|Warning|WARNING)" "$temp_file"; then
+        local warnings
+        warnings=$(grep -c -E "(warning|Warning|WARNING)" "$temp_file" 2>/dev/null || echo 0)
+        echo "⚠️  Build succeeded with $warnings warnings:"
+        # Show warning with file context - get the warning and the line that follows (which often has the location)
+        grep -A2 -E "warning:" "$temp_file" | head -15
+      else
+        echo "✅ Build succeeded"
+      fi
+    fi
+
+    # Save full output to log
+    cat "$temp_file" >> "$SUIBASE_LOGS_DIR/cargo-build.log"
+    rm -f "$temp_file"
+
+    return $exit_code
+  }
+
   # Build with or without musl
   if [ "$USE_MUSL" = true ]; then
     # Build with musl for static binary
     (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then
-      cargo build --target x86_64-unknown-linux-musl -p "$SUIBASE_DAEMON_NAME"
+      echo "Building $_ASSETS_NAME" with musl target...
+      filter_cargo_output cargo build --target x86_64-unknown-linux-musl -p "$SUIBASE_DAEMON_NAME"
      else
       setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"
      fi)
@@ -1009,7 +1044,8 @@ sb_app_rust_build_and_install() {
   else
     # Standard build
     (if cd "$SUIBASE_DAEMON_BUILD_DIR"; then
-      cargo build -p "$SUIBASE_DAEMON_NAME"
+      echo "Building $_ASSETS_NAME"...
+      filter_cargo_output cargo build -p "$SUIBASE_DAEMON_NAME"
      else
       setup_error "unexpected missing $SUIBASE_DAEMON_BUILD_DIR"
      fi)

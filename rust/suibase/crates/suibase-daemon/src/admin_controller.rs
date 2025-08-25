@@ -6,6 +6,7 @@ use common::{basic_types::*, log_safe};
 
 use crate::acoins_monitor::ACoinsMonTx;
 use crate::network_monitor::NetMonTx;
+use crate::walrus_monitor::WalrusMonTx;
 use crate::proxy_server::ProxyServer;
 use crate::shared_types::{Globals, InputPort};
 use crate::mock_server_manager::MockServerTx;
@@ -45,6 +46,8 @@ pub struct AdminController {
     netmon_tx: NetMonTx,
     #[allow(dead_code)]
     acoinsmon_tx: ACoinsMonTx,
+    #[allow(dead_code)]
+    walrusmon_tx: WalrusMonTx,
     mockserver_tx: MockServerTx,
 
     wd_tracking: AutoSizeVec<WorkdirTracking>,
@@ -101,6 +104,7 @@ impl AdminController {
         admctrl_tx: AdminControllerTx,
         netmon_tx: NetMonTx,
         acoinsmon_tx: ACoinsMonTx,
+        walrusmon_tx: WalrusMonTx,
         mockserver_tx: MockServerTx,
     ) -> Self {
         Self {
@@ -110,6 +114,7 @@ impl AdminController {
             admctrl_tx,
             netmon_tx,
             acoinsmon_tx,
+            walrusmon_tx,
             mockserver_tx,
             wd_tracking: AutoSizeVec::new(),   // WorkdirTracking
             port_tracking: AutoSizeVec::new(), // InputPortTracking
@@ -270,6 +275,12 @@ impl AdminController {
                 Self::send_msg_to_cli_poller(wd_tracking, worker_msg.clone()).await;
                 Self::send_msg_to_packages_poller(wd_tracking, worker_msg.clone()).await;
             }
+        }
+
+        // Send EVENT_UPDATE to monitors for immediate process lifecycle reactivity (start/stop commands)
+        use crate::walrus_monitor::WalrusMonitor;
+        if let Err(e) = WalrusMonitor::send_event_update(&self.walrusmon_tx).await {
+            log::warn!("Failed to send EVENT_UPDATE to WalrusMonitor from process_update_msg: {}", e);
         }
     }
 
@@ -690,6 +701,12 @@ impl AdminController {
                     subsys.request_shutdown();
                 }
             }
+        }
+
+        // Send EVENT_UPDATE to monitors for immediate config change reactivity
+        use crate::walrus_monitor::WalrusMonitor;
+        if let Err(e) = WalrusMonitor::send_event_update(&self.walrusmon_tx).await {
+            log::warn!("Failed to send EVENT_UPDATE to WalrusMonitor: {}", e);
         }
 
         // Remember the changes that were applied.

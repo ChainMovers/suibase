@@ -9,6 +9,10 @@ cd "$( dirname "${BASH_SOURCE[0]}" )" || exit 1
 # Source the common test infrastructure
 source __test_common.sh
 
+# Source the walrus repair function for testing
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+
 # Test function for rpc_urls repair functionality
 test_rpc_urls_repair() {
     local TEST_CONFIG_DIR="$WORKDIRS/$WORKDIR/config-default"

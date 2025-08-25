@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Check suibase-daemon status using existing suibase logic
+# Returns: 0 if running, 1 if not running
+
+SUIBASE_DIR="$HOME/suibase"
+WORKDIR="none"
+
+# Source the required dependencies
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+
+# shellcheck source=SCRIPTDIR/../common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
+# shellcheck source=SCRIPTDIR/../common/__apps.sh
+source "$SUIBASE_DIR/scripts/common/__apps.sh"
+
+# shellcheck source=SCRIPTDIR/../common/__suibase-daemon.sh
+source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
+
+exit_if_not_installed
+exit_if_deps_missing
+
+cli_mutex_lock "suibase_daemon"
+
+# Use the official daemon status check
+if is_suibase_daemon_running; then
+    # Daemon is running
+    if [ "$1" = "--verbose" ]; then
+        echo "suibase-daemon is running (PID: $SUIBASE_DAEMON_PID)"
+    fi
+    exit 0
+else
+    # Daemon is not running
+    if [ "$1" = "--verbose" ]; then
+        echo "suibase-daemon is not running"
+    fi
+    exit 1
+fi

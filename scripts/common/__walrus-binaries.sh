@@ -2,6 +2,10 @@
 
 # You must source __globals.sh and __apps.sh before __walrus-binaries.sh
 
+# Source walrus-relay-process.sh for repair function
+# shellcheck source=SCRIPTDIR/__walrus-relay-process.sh
+source "$SUIBASE_DIR/scripts/common/__walrus-relay-process.sh"
+
 
 update_walrus_app() {
   local _WORKDIR="$1"
@@ -55,7 +59,7 @@ update_walrus() {
   # Return 0 on success or not needed.
 
   # Do nothing if not testnet/mainnet workdirs
-  if [ "$_WORKDIR" != "testnet" ] && [ "$_WORKDIR" != "mainnet" ]; then
+  if ! is_walrus_supported_by_workdir "$_WORKDIR"; then
     return 0
   fi
 
@@ -67,6 +71,9 @@ update_walrus() {
   update_walrus_app "$_WORKDIR" "walrus"
   update_walrus_app "$_WORKDIR" "site_builder"
   repair_walrus_config_as_needed "$_WORKDIR"
+  
+  # Repair workdir-specific symlinks for process disambiguation
+  repair_walrus_relay_symlink "$_WORKDIR"
 
   return 0
 }

@@ -1,0 +1,30 @@
+#!/bin/bash
+# Force delete all CLI mutex files for all networks.
+# This is a recovery tool for when a test or AI agent abnormally exits
+# without proper trap cleanup, leaving stale mutex locks.
+
+SUIBASE_TMP_DIR="/tmp/.suibase"
+
+echo "Mutex directory: $SUIBASE_TMP_DIR"
+
+REMOVED_COUNT=0
+
+# Find and remove all cli-*.lock directories
+if [ -d "$SUIBASE_TMP_DIR" ]; then
+    for lockfile in "$SUIBASE_TMP_DIR"/cli-*.lock; do
+        if [ -d "$lockfile" ]; then
+            echo "Removing stale mutex: $lockfile"
+            if rm -rf "$lockfile"; then
+                ((REMOVED_COUNT++))
+            else
+                echo "ERROR: Failed to remove $lockfile"
+            fi
+        fi
+    done
+fi
+
+if [ "$REMOVED_COUNT" -eq 0 ]; then
+    echo "No stale CLI mutex found"
+else
+    echo "Reset complete. Removed $REMOVED_COUNT mutex lock(s)."
+fi

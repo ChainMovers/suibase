@@ -37,20 +37,54 @@ mainnet walrus-relay enable
 mainnet walrus-relay disable
 ```
 
-Status display format (using existing echo_process function):
+## Status Hierarchy
+
+The status system uses a layered approach with CLI-detected states taking precedence over daemon-written states:
+
+### Instantaneous CLI Detection (Highest Priority)
+1. **DISABLED** - `walrus_relay_enabled: false` in suibase.yaml (takes precedence over all other states)
+2. **STOPPED** - Workdir services are stopped (testnet stop)
+3. **NOT RUNNING** - suibase-daemon is not running
+
+### Daemon-Written Status (Lower Priority)
+4. **OK** - Process running and health checks pass
+5. **DOWN** - Process not running or health checks fail
+6. **INITIALIZING** - Brief default state until daemon determines OK/DOWN
+
+**Precedence Order**: DISABLED → STOPPED → NOT RUNNING → OK/DOWN/INITIALIZING
+
+**Status File**: `workdirs/{network}/walrus-relay/status.yaml` (written by WalrusMonitor)
+
+
+### Status Display Format
 ```
 Walrus Relay     : OK ( pid 1223131 ) http://localhost:45852
+Walrus Relay     : DOWN http://localhost:45852
 Walrus Relay     : DISABLED
-Walrus Relay     : INITIALIZING ( pid 1223131 ) http://localhost:45852  
+Walrus Relay     : STOPPED
 Walrus Relay     : NOT RUNNING http://localhost:45852
+Walrus Relay     : INITIALIZING ( pid 1223131 ) http://localhost:45852
 ```
+
+**Notes:**
 - Uses 17-character left-aligned label (same as "Proxy server")
 - PID is the walrus-upload-relay backend process (not suibase-daemon)
 - URL shows suibase-daemon proxy port (where users connect)
+- DISABLED and STOPPED show no URL/PID (service unavailable)
+- Only OK/DOWN states may have race conditions requiring test timing
+
+## Implementation Status
+
+**✅ Phase 1: COMPLETE** - Binary Process Management  
+**✅ Phase 2: COMPLETE** - Bash Scripts and Command Integration  
+**🔄 Phase 3: PARTIAL** - Suibase-daemon Integration (status monitoring only)
+**❌ Phase 4: TODO** - HTTP Proxy Implementation  
+
+Current status: Configuration and status reporting work. HTTP proxy forwarding not yet implemented.
 
 ## Implementation Phases
 
-### Phase 1: Binary Process Management
+### Phase 1: Binary Process Management ✅ COMPLETE
 **Process lifecycle setup:**
 - Extend `scripts/common/__walrus-binaries.sh`:
   - Add walrus-upload-relay to binary management
@@ -71,12 +105,12 @@ Walrus Relay     : NOT RUNNING http://localhost:45852
 - Log location: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay-process.log`
 - Hook into existing `testnet update` and `mainnet update` commands
 
-### Phase 2: Bash Scripts and Command Integration
+### Phase 2: Bash Scripts and Command Integration ✅ COMPLETE
 **Files to create/modify:**
-- Create `scripts/common/__walrus-relay.sh` with:
+- Functions in `scripts/common/__walrus-relay-process.sh`:
   - `walrus_relay_status()` - Use existing echo_process() with relay PID and proxy URL
-  - `walrus_relay_enable()` - Set walrus_relay.enabled: true in suibase.yaml
-  - `walrus_relay_disable()` - Set walrus_relay.enabled: false in suibase.yaml
+  - `walrus_relay_enable()` - Set walrus_relay_enabled: true in suibase.yaml
+  - `walrus_relay_disable()` - Set walrus_relay_enabled: false in suibase.yaml
   - `update_walrus_relay_status_yaml()` - Parse status.yaml from daemon
 - Modify `scripts/common/__workdir-exec.sh`:
   - Add `walrus-relay) CMD_WALRUS_RELAY_REQ=true ;;` to command parsing
@@ -85,22 +119,20 @@ Walrus Relay     : NOT RUNNING http://localhost:45852
 
 **Configuration in suibase.yaml:**
 ```yaml
-walrus_relay:
-  enabled: false
-  proxy_port: 45852  # 45853 for mainnet
-  local_port: 45802  # 45803 for mainnet
+walrus_relay_enabled: false
+walrus_relay_proxy_port: 45852  # 45853 for mainnet
+walrus_relay_local_port: 45802  # 45803 for mainnet
 ```
 
-**Testing after Phase 1:**
-- `testnet walrus-relay enable` should start walrus-upload-relay process
-- `testnet walrus-relay status` should show relay PID and port  
-- Health check should work: `curl http://localhost:45802/v1/tip-config` (returns JSON)
-- API discovery should work: `curl http://localhost:45802/v1/api` (returns API spec)
+**Testing after Phase 2:**
+- `testnet wal-relay enable` should update configuration
+- `testnet wal-relay status` should show relay status and proxy URL
+- Configuration commands work without daemon running
 
-### Phase 2: Suibase-daemon Proxy Implementation
+### Phase 3: Suibase-daemon Status Monitoring 🔄 PARTIAL
 **Rust files to modify:**
 - Modify `rust/suibase/crates/suibase-daemon/src/admin_controller.rs`:
-  - Detect walrus_relay.enabled changes in suibase.yaml
+  - Detect walrus_relay_enabled changes in suibase.yaml
   - Configure existing ProxyServer instances for walrus relay endpoints
   - Write status to `workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
 - Extend `rust/suibase/crates/suibase-daemon/src/proxy_server.rs`:
@@ -108,13 +140,22 @@ walrus_relay:
   - Forward walrus requests to http://localhost:{local_port}
 
 **Status management:**
-- Daemon writes: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
-- Status values: DISABLED, INITIALIZING, OK, DOWN
-- Include backend connectivity info
+- ✅ Daemon writes: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
+- ✅ Status values: DISABLED, INITIALIZING, OK, DOWN
+- ✅ Include backend connectivity info
 
-**Testing after Phase 2:**
+### Phase 4: HTTP Proxy Implementation ❌ TODO
+**Rust files to modify:**
+- Extend `rust/suibase/crates/suibase-daemon/src/proxy_server.rs`:
+  - Add walrus relay route handling to existing HTTP forwarding logic
+  - Forward walrus requests to http://localhost:{local_port}
+  - Route `/v1/blob-upload-relay` and other walrus endpoints
+- Update proxy server configuration to handle walrus relay routes
+
+**Testing after Phase 4:**
 - `curl http://localhost:45852/v1/tip-config` should forward to backend relay
-- Proxy should work transparently for all endpoints
+- `curl http://localhost:45852/v1/blob-upload-relay` should work transparently
+- All walrus API endpoints should work through the proxy
 
 **Error handling:**
 - Network validation (testnet/mainnet only)
@@ -126,35 +167,34 @@ walrus_relay:
 
 ### suibase.yaml
 ```yaml
-walrus_relay:
-  enabled: false
-  proxy_port: 45852  # 45853 for mainnet  
-  local_port: 45802  # 45803 for mainnet
+walrus_relay_enabled: false
+walrus_relay_proxy_port: 45852  # 45853 for mainnet
+walrus_relay_local_port: 45802  # 45803 for mainnet
 ```
 
 
 ## Testing
 
-All walrus relay functionality should be tested using the existing test infrastructure at `scripts/tests/`. Create a new test directory `scripts/tests/050_walrus_tests/` following the established patterns.
+All walrus relay functionality is tested using the existing test infrastructure at `scripts/tests/050_walrus_tests/`.
 
-### Test Structure
-- Follow existing test conventions in `scripts/tests/`
-- Create `scripts/tests/050_walrus_tests/` directory
-- Include automated tests for:
-  - Walrus relay binary installation and management
-  - Proxy forwarding functionality  
-  - Status reporting and health checks
-  - Enable/disable command functionality
+### Test Structure ✅ COMPLETE
+- Comprehensive test suite in `scripts/tests/050_walrus_tests/`
+- Tests cover all core functionality:
+  - ✅ Binary installation and management (`test_binary_management.sh`)
+  - ✅ Status reporting and health checks (`test_relay_status_integration.sh`)
+  - ✅ Enable/disable command functionality (`test_relay_cli_commands.sh`)
+  - ✅ Daemon integration and edge cases (`test_daemon_stop_edge_cases.sh`)
+  - ✅ Configuration integrity (`test_suibase_yaml_integrity.sh`)
 
-### API Compatibility Test Examples
+### API Compatibility Test Examples (Phase 4 - TODO)
 ```bash
-# Any HTTP request works - examples:
+# These will work once HTTP proxy implementation is complete:
 curl http://localhost:45852/v1/tip-config
 curl -X POST http://localhost:45852/v1/blob-upload-relay \
   -H "Content-Type: application/octet-stream" \
   --data-binary @blob.data
-  
-# Future endpoints automatically supported:
+
+# Future endpoints will be automatically supported:
 curl http://localhost:45852/v2/new-endpoint
 ```
 
@@ -184,7 +224,7 @@ The proxy architecture enables future enhancements like pro-tier services, metri
 
 ### Technical Summary
 - **Binary Name**: `walrus-upload-relay`
-- **Configuration**: Uses `walrus-config.yaml` and `relay-config.yaml`  
+- **Configuration**: Uses `walrus-config.yaml` and `relay-config.yaml`
 - **Health Check**: `/v1/tip-config` endpoint returns JSON configuration
 - **Port Strategy**: Fully configurable via `--server-address`
 
@@ -195,6 +235,6 @@ The proxy architecture enables future enhancements like pro-tier services, metri
 
 **Suibase implementation patterns:**
 - `scripts/common/__autocoins.sh` - Command structure model
-- `scripts/common/__sui-faucet-process.sh` - Process management pattern  
+- `scripts/common/__sui-faucet-process.sh` - Process management pattern
 - `scripts/common/__walrus-binaries.sh` - Binary management integration
 - `scripts/common/__workdir-exec.sh` - `echo_process()` for status display

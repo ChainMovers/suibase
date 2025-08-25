@@ -19,6 +19,7 @@ CMD_STOP_REQ=false
 CMD_START_REQ=false
 CMD_STATUS_REQ=false
 CMD_UPDATE_REQ=false
+CMD_WALRUS_RELAY_REQ=false
 
 usage_local() {
   update_SUIBASE_VERSION_var
@@ -157,6 +158,11 @@ usage_remote() {
   echo "             Makes $WORKDIR the active context for many"
   echo "             development tools and the 'asui' script."
   echo
+  if is_walrus_supported_by_workdir; then
+  echo_low_green "   wal-relay"
+  echo " Manage Walrus upload relay proxy service."
+  echo
+  fi
 }
 
 usage() {
@@ -199,6 +205,7 @@ workdir_exec() {
   set-sui-repo) CMD_SET_SUI_REPO_REQ=true ;;
   faucet) CMD_FAUCET_REQ=true ;;
   autocoins) CMD_AUTOCOINS_REQ=true ;;
+  wal-relay) CMD_WALRUS_RELAY_REQ=true ;;
   *) usage ;;
   esac
 
@@ -222,6 +229,8 @@ workdir_exec() {
 
   local AUTOCOINS_SUBCOMMAND=""
   local AUTOCOINS_ADDRESS=""
+
+  local WALRUS_RELAY_SUBCOMMAND=""
 
   case "$CMD_REQ" in
   autocoins)
@@ -250,6 +259,28 @@ workdir_exec() {
       shift
     done
     ;; # End parsing autocoins
+  wal-relay)
+    while [[ "$#" -gt 0 ]]; do
+      case $1 in
+      --debug) DEBUG_PARAM=true ;;
+      --daemoncall) IS_DAEMON_CALL=true ;;
+      --help) SHOW_HELP=true ;;
+      --precompiled | --nobinary)
+        error_exit "Option '$1' not compatible with '$CMD_REQ' command"
+        ;;
+      status|enable|disable)
+        if [ -n "$WALRUS_RELAY_SUBCOMMAND" ]; then
+          error_exit "Only one of 'status', 'enable', or 'disable' allowed."
+        fi
+        WALRUS_RELAY_SUBCOMMAND="$1"
+        ;;
+      *)
+        error_exit "Unknown parameter passed: $1"
+        ;;
+      esac
+      shift
+    done
+    ;; # End parsing wal-relay
   faucet)
     while [[ "$#" -gt 0 ]]; do
       case $1 in
@@ -415,6 +446,20 @@ workdir_exec() {
     esac
   fi
 
+  # Validate further the wal-relay subcommands.
+  if [ "$CMD_WALRUS_RELAY_REQ" = true ]; then
+    if ! is_walrus_supported_by_workdir; then
+      setup_error "Command '$CMD_REQ' not supported for $WORKDIR"
+    fi
+    case "$WALRUS_RELAY_SUBCOMMAND" in
+    status|enable|disable)
+      ;;
+    *)
+      SHOW_HELP=true
+      ;;
+    esac
+  fi
+
   # Show subcommand help if requested
   if [ "$SHOW_HELP" = true ]; then
     if [ "$CMD_AUTOCOINS_REQ" = true ]; then
@@ -463,6 +508,37 @@ workdir_exec() {
       echo "        this data and having daily deposit normally resume."
       echo
       echo "        Data location:  ~/suibase/workdirs/testnet/autocoins/data"
+      exit 0
+    fi
+    if [ "$CMD_WALRUS_RELAY_REQ" = true ]; then
+      echo_low_yellow "USAGE: "
+      echo
+      echo "      $WORKDIR wal-relay <SUBCOMMAND>"
+      echo
+      echo " The Walrus Upload Relay provides a proxy service for Walrus blob storage"
+      echo " operations with 100% API compatibility. The relay runs locally and forwards"
+      echo " requests transparently through the suibase proxy."
+      echo
+      echo " Architecture:"
+      echo "   Application → suibase-daemon:${CFG_walrus_relay_proxy_port:?} → walrus-upload-relay:${CFG_walrus_relay_local_port:?}"
+      echo
+      echo " Requirements:"
+      echo "   - $WORKDIR services must be running (do '$WORKDIR start')"
+      echo "   - walrus-upload-relay binary will be downloaded automatically"
+      echo
+      echo_low_yellow "SUBCOMMANDS:"
+      echo
+      echo_low_green "  status"
+      echo "  Shows current relay status and connection information."
+      echo
+      echo_low_green "  enable"
+      echo "  Enable the walrus relay proxy service."
+      echo
+      echo_low_green "  disable"
+      echo "  Disable the walrus relay proxy service."
+      echo
+      echo " When enabled, applications can connect to http://localhost:${CFG_walrus_relay_proxy_port:?}"
+      echo " to access Walrus storage with full API compatibility."
       exit 0
     fi
   fi
@@ -540,8 +616,12 @@ workdir_exec() {
   source "$SUIBASE_DIR/scripts/common/__dtp-daemon.sh"
   update_DTP_DAEMON_PID_var
 
-  # shellcheck source=SCRIPTDIR/__walrus-binaries.sh
-  source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
+  # Source walrus binaries only for testnet/mainnet (walrus never enabled for devnet/localnet)
+  if is_walrus_supported_by_workdir; then
+    # shellcheck source=SCRIPTDIR/__walrus-binaries.sh
+    source "$SUIBASE_DIR/scripts/common/__walrus-binaries.sh"
+    update_WALRUS_RELAY_PROCESS_PID_var
+  fi
 
   if [ "$CMD_AUTOCOINS_REQ" = true ] || [ "$CMD_STATUS_REQ" = true ]; then
     # shellcheck source=SCRIPTDIR/__autocoins.sh
@@ -615,6 +695,22 @@ workdir_exec() {
       autocoins_status "quiet" "$SUIBASE_DAEMON_PID" "$_USER_REQUEST"
       _ACOINS_STATUS=$AUTOCOINS_STATUS
       _ACOINS_INFO=$AUTOCOINS_INFO
+    fi
+
+    local _SUPPORT_WALRUS_RELAY
+    local _SHOW_WALRUS_RELAY
+    local _WALRUS_RELAY_PID
+    local _WALRUS_RELAY_INFO
+    if ! is_walrus_supported_by_workdir; then
+      _SUPPORT_WALRUS_RELAY=false
+      _SHOW_WALRUS_RELAY=false
+    else
+      _SHOW_WALRUS_RELAY=true
+      walrus_relay_status "quiet" "$SUIBASE_DAEMON_PID" "$_USER_REQUEST"
+      _SUPPORT_WALRUS_RELAY=$WALRUS_RELAY_SUPPORT_ENABLED
+      _WALRUS_RELAY_PID=$WALRUS_RELAY_BACKEND_PID
+      _WALRUS_RELAY_STATUS=$WALRUS_RELAY_STATUS
+      _WALRUS_RELAY_INFO=$WALRUS_RELAY_INFO
     fi
 
     # Verify from suibase.yaml if sui explorer services are expected.
@@ -799,6 +895,10 @@ workdir_exec() {
           echo "DISABLED"
         fi
       fi
+
+      if [ "$_SHOW_WALRUS_RELAY" = true ]; then
+        walrus_relay_echo_status_line "Walrus Relay" "$_SUPPORT_WALRUS_RELAY" "$_WALRUS_RELAY_PID" "$_WALRUS_RELAY_STATUS" "$_WALRUS_RELAY_INFO"
+      fi
     fi
 
     echo "---"
@@ -902,6 +1002,26 @@ workdir_exec() {
       autocoins_set_address "verbose" "$AUTOCOINS_ADDRESS"
     elif [ "$AUTOCOINS_SUBCOMMAND" = "purge-data" ]; then
       autocoins_purge_data "verbose"
+    fi
+
+    exit
+  fi
+
+  if [ "$CMD_WALRUS_RELAY_REQ" = true ]; then
+    exit_if_workdir_not_ok
+
+    if ! is_walrus_supported_by_workdir; then
+      setup_error "Walrus relay is only supported for testnet and mainnet"
+    fi
+
+    if [ "$WALRUS_RELAY_SUBCOMMAND" = "status" ]; then
+      local _USER_REQUEST
+      _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
+      walrus_relay_status "verbose" "$SUIBASE_DAEMON_PID" "$_USER_REQUEST"
+    elif [ "$WALRUS_RELAY_SUBCOMMAND" = "enable" ]; then
+      walrus_relay_enable "verbose"
+    elif [ "$WALRUS_RELAY_SUBCOMMAND" = "disable" ]; then
+      walrus_relay_disable "verbose"
     fi
 
     exit
@@ -1107,7 +1227,15 @@ workdir_exec() {
   # Take care of the case that just stop/start processes.
   if [ "$CMD_START_REQ" = true ]; then
 
-    if is_workdir_ok && is_sui_binary_ok && is_walrus_binary_ok && [ $_CONFIG_CHANGE_DETECTED = false ]; then
+    # Check walrus binary only for testnet/mainnet (walrus never enabled for devnet/localnet)
+    local _walrus_check=true
+    if is_walrus_supported_by_workdir; then
+      if ! is_walrus_binary_ok; then
+        _walrus_check=false
+      fi
+    fi
+
+    if is_workdir_ok && is_sui_binary_ok && [ "$_walrus_check" = true ] && [ $_CONFIG_CHANGE_DETECTED = false ]; then
 
       # Note: nobody should have tried to run the sui binary yet.
       # So this is why the update_SUI_VERSION_var need to be done here.
@@ -1116,24 +1244,14 @@ workdir_exec() {
       start_all_services
       _RES=$?
       if [ "$_RES" -eq 1 ]; then
-        if [ "$is_local" == "true" ]; then
-          echo "$WORKDIR already running"
-        else
-          echo "$WORKDIR services already running"
-        fi
-
-        echo "$SUI_VERSION"
+        echo "$WORKDIR services already running"
       fi
 
       if [ "$_RES" -eq 0 ]; then
-        if [ "$is_local" == "false" ]; then
-          # Remote networks do not have any local process to start (the
-          # effect is only within the suibase-daemon), so put a little
-          # feedback to acknowledge the user action.
-          echo "$WORKDIR services started"
-        fi
-      fi
 
+        echo "$WORKDIR services started"
+      fi
+      echo "$SUI_VERSION"
       exit
     fi
     # Note: If workdir/binary/config not OK, keep going to install or repair it.
@@ -1143,19 +1261,12 @@ workdir_exec() {
     stop_all_services
     _RES=$?
     if [ "$_RES" -eq 1 ]; then
-      if [ "$is_local" == "true" ]; then
-        echo "$WORKDIR already stopped"
-      else
-        echo "$WORKDIR services already stopped"
-      fi
+      echo "$WORKDIR services already stopped"
     fi
     if [ "$_RES" -eq 0 ]; then
-      if [ "$is_local" == "false" ]; then
-        # Remote networks do not have any local process to stop (the
-        # effect is only within the suibase-daemon), so put a little
-        # feedback to acknowledge the user action.
-        echo "$WORKDIR services stopped"
-      fi
+
+      echo "$WORKDIR services stopped"
+
     fi
 
     exit
@@ -1365,7 +1476,10 @@ workdir_exec() {
   fi
 
   # Check if walrus binaries or configs need to be downloaded/updated.
-  update_walrus "$WORKDIR"
+  # Only for testnet/mainnet (walrus never enabled for devnet/localnet)
+  if is_walrus_supported_by_workdir; then
+    update_walrus "$WORKDIR"
+  fi
 
   # From this point is the code when a "regen", binaries were potentially
   # updated or creation of the client.yaml/sui.keystore needs to be done.

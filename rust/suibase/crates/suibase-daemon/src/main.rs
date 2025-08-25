@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use acoins_monitor::ACoinsMonitor;
+use walrus_monitor::WalrusMonitor;
 // main.rs does:
 //  - Validate command line.
 //  - Telemetry setup
@@ -12,6 +13,7 @@ use acoins_monitor::ACoinsMonitor;
 //     - ClockTrigger: Send periodic audit events to other threads.
 //     - ACoinsMonitor: Monitors autocoin functionality for devnet/testnet/mainnet.
 //     - WebserverWorker: Serves static web content (e.g., sui-explorer UI).
+//     - WalrusMonitor: Monitors walrus functionality for testnet/mainnet.
 //
 // Other tasks (not started here):
 //
@@ -63,6 +65,7 @@ mod network_monitor;
 mod proxy_server;
 mod rate_limiter;
 mod shared_types;
+mod walrus_monitor;
 mod workdirs_watcher;
 mod workers;
 
@@ -140,6 +143,7 @@ impl Command {
                 let (admctrl_tx, admctrl_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
                 let (netmon_tx, netmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
                 let (acoinsmon_tx, acoinsmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
+                let (walrusmon_tx, walrusmon_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
                 let (mockserver_tx, mockserver_rx) = tokio::sync::mpsc::channel(MPSC_Q_SIZE);
 
                 // Instantiate and connect all subsystems (while none is "running" yet).
@@ -149,6 +153,7 @@ impl Command {
                     admctrl_tx.clone(),
                     netmon_tx.clone(),
                     acoinsmon_tx.clone(),
+                    walrusmon_tx.clone(),
                     mockserver_tx.clone(),
                 );
 
@@ -166,6 +171,14 @@ impl Command {
                     ServerMode::Stage, // TODO Change to public!!!!
                 );
 
+                let walrusmon = WalrusMonitor::new(
+                    globals.config_testnet.clone(),
+                    globals.config_mainnet.clone(),
+                    globals.status_testnet.clone(),
+                    globals.status_mainnet.clone(),
+                    walrusmon_rx,
+                );
+
                 let mockserver_params = MockServerManagerParams::new(globals.proxy.clone());
                 let mockserver_manager = MockServerManager::new(mockserver_params, mockserver_rx);
 
@@ -175,6 +188,7 @@ impl Command {
                 let clock_params = ClockTriggerParams::new(
                     netmon_tx.clone(),
                     acoinsmon_tx.clone(),
+                    walrusmon_tx.clone(),
                     admctrl_tx.clone(),
                 );
                 let clock = ClockTrigger::new(clock_params);
@@ -189,6 +203,7 @@ impl Command {
                     s.start(SubsystemBuilder::new("admctrl", |a| admctrl.run(a)));
                     s.start(SubsystemBuilder::new("netmon", |a| netmon.run(a)));
                     s.start(SubsystemBuilder::new("acoinsmon", |a| acoinsmon.run(a)));
+                    s.start(SubsystemBuilder::new("walrusmon", |a| walrusmon.run(a)));
                     s.start(SubsystemBuilder::new("mockserver", |a| mockserver_manager.run(a)));
                     s.start(SubsystemBuilder::new("clock", |a| clock.run(a)));
                     // s.start(SubsystemBuilder::new("suiexplorer", |a| suiexplorer.run(a)));
