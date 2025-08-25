@@ -2029,7 +2029,7 @@ repair_walrus_rpc_urls_as_needed() {
   fi
 
   # Generate the smart rpc_urls configuration with proxy first, then direct RPC
-  local _SMART_RPC_URLS=$'    rpc_urls:\n      - '"$_PROXY_URL"$'\n      - '"$_DIRECT_RPC_URL"
+  # URLs will be generated directly in awk to avoid multiline string portability issues
 
   # Check if rpc_urls section already exists
   if grep -q "rpc_urls:" "$_WALRUS_CONFIG_FILE"; then
@@ -2060,7 +2060,7 @@ repair_walrus_rpc_urls_as_needed() {
       _TEMP_FILE=$(mktemp)
 
       # Use awk to replace the rpc_urls section while preserving everything else
-      awk -v smart_urls="$_SMART_RPC_URLS" '
+      awk -v proxy_url="$_PROXY_URL" -v direct_url="$_DIRECT_RPC_URL" '
       BEGIN {
         in_rpc_section = 0
         rpc_section_replaced = 0
@@ -2068,7 +2068,7 @@ repair_walrus_rpc_urls_as_needed() {
       /^[[:space:]]*rpc_urls:/ {
         in_rpc_section = 1
         if (!rpc_section_replaced) {
-          printf "%s\n", smart_urls
+          print "    rpc_urls:"; print "      - " proxy_url; print "      - " direct_url
           rpc_section_replaced = 1
         }
         next
@@ -2109,7 +2109,7 @@ repair_walrus_rpc_urls_as_needed() {
     grep -B 1000 "default_context:" "$_WALRUS_CONFIG_FILE" | grep -v "default_context:" > "$_TEMP_FILE"
 
     # Add the smart rpc_urls section
-    printf "%s\n" "$_SMART_RPC_URLS" >> "$_TEMP_FILE"
+    { echo "    rpc_urls:"; echo "      - $_PROXY_URL"; echo "      - $_DIRECT_RPC_URL"; } >> "$_TEMP_FILE"
 
     # Add the default_context and any remaining lines
     grep -A 1000 "default_context:" "$_WALRUS_CONFIG_FILE" >> "$_TEMP_FILE"
