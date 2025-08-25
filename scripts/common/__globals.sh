@@ -2029,9 +2029,7 @@ repair_walrus_rpc_urls_as_needed() {
   fi
 
   # Generate the smart rpc_urls configuration with proxy first, then direct RPC
-  local _SMART_RPC_URLS="    rpc_urls:
-      - $_PROXY_URL
-      - $_DIRECT_RPC_URL"
+  local _SMART_RPC_URLS=$'    rpc_urls:\n      - '"$_PROXY_URL"$'\n      - '"$_DIRECT_RPC_URL"
 
   # Check if rpc_urls section already exists
   if grep -q "rpc_urls:" "$_WALRUS_CONFIG_FILE"; then
@@ -2070,7 +2068,7 @@ repair_walrus_rpc_urls_as_needed() {
       /^[[:space:]]*rpc_urls:/ {
         in_rpc_section = 1
         if (!rpc_section_replaced) {
-          print smart_urls
+          printf "%s\n", smart_urls
           rpc_section_replaced = 1
         }
         next
@@ -2111,7 +2109,7 @@ repair_walrus_rpc_urls_as_needed() {
     grep -B 1000 "default_context:" "$_WALRUS_CONFIG_FILE" | grep -v "default_context:" > "$_TEMP_FILE"
 
     # Add the smart rpc_urls section
-    echo "$_SMART_RPC_URLS" >> "$_TEMP_FILE"
+    printf "%s\n" "$_SMART_RPC_URLS" >> "$_TEMP_FILE"
 
     # Add the default_context and any remaining lines
     grep -A 1000 "default_context:" "$_WALRUS_CONFIG_FILE" >> "$_TEMP_FILE"
