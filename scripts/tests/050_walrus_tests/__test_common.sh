@@ -49,6 +49,18 @@ fail() {
     exit 1
 }
 
+# Strip ANSI color codes from input (portable across macOS/Linux)
+# Usage: strip_ansi_colors "$input" or echo "$input" | strip_ansi_colors
+strip_ansi_colors() {
+    if [ $# -eq 0 ]; then
+        # Read from stdin - use printf to insert literal ESC character
+        sed "s/$(printf '\033')\[[0-9;]*m//g"
+    else
+        # Process argument
+        echo "$1" | sed "s/$(printf '\033')\[[0-9;]*m//g"
+    fi
+}
+
 # Test setup function - ensures clean environment before starting
 setup_clean_environment() {
     # Clean up any stale processes from previous test runs
@@ -373,7 +385,7 @@ wait_for_service_status() {
         # Extract the line for the status label and check if any expected status is contained
         # Strip ANSI color codes before parsing
         local status_line
-        status_line=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep "^$status_label" | head -n1)
+        status_line=$(strip_ansi_colors "$output" | grep "^$status_label" | head -n1)
 
         if [ -n "$status_line" ]; then
             # Get everything after the first colon
@@ -414,7 +426,7 @@ wait_for_service_status() {
     local final_output
     final_output=$($command 2>&1) || true
     local final_status_line
-    final_status_line=$(echo "$final_output" | sed 's/\x1b\[[0-9;]*m//g' | grep "^$status_label" | head -n1)
+    final_status_line=$(strip_ansi_colors "$final_output" | grep "^$status_label" | head -n1)
     local final_status_part
     if [ -n "$final_status_line" ]; then
         final_status_part=$(echo "$final_status_line" | sed 's/^[^:]*: *//')
@@ -549,3 +561,4 @@ export -f setup_clean_environment ensure_build_daemon safe_start_daemon setup_te
 export -f cleanup_port_conflicts wait_for_port_available wait_for_process_ready
 export -f assert_binary_exists assert_process_running assert_config_file_exists
 export -f wait_for_service_status wait_for_walrus_relay_status wait_for_daemon_running wait_for_daemon_stopped wait_for_process_stopped
+export -f fail strip_ansi_colors

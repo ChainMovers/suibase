@@ -79,9 +79,9 @@ test_daemon_stopped() {
     status_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
 
     # CLI should fall back to "NOT RUNNING" when daemon is stopped (can't get real status)
-    if echo "$status_output" | grep -q "NOT RUNNING"; then
+    if strip_ansi_colors "$status_output" | grep -q "NOT RUNNING"; then
         echo "✓ Shows NOT RUNNING when daemon stopped (correct fallback behavior)"
-    elif echo "$status_output" | grep -q "DISABLED"; then
+    elif strip_ansi_colors "$status_output" | grep -q "DISABLED"; then
         echo "✓ Shows DISABLED when daemon stopped (config-based fallback)"
     else
         echo "⚠ Unexpected behavior when daemon stopped: $status_output"
@@ -150,7 +150,7 @@ test_daemon_restart_recovery() {
     local recovery_status
     recovery_status=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
 
-    if echo "$recovery_status" | grep -q "DOWN\|OK"; then
+    if strip_ansi_colors "$recovery_status" | grep -q "DOWN\|OK"; then
         echo "✓ Daemon properly recovers walrus relay status after restart"
 
         # Verify status.yaml is recreated
@@ -189,7 +189,7 @@ test_config_change_without_daemon() {
     local status_after_config
     status_after_config=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
 
-    if echo "$status_after_config" | grep -q "DOWN\|OK"; then
+    if strip_ansi_colors "$status_after_config" | grep -q "DOWN\|OK"; then
         echo "✓ Daemon picks up config changes made while it was stopped"
     else
         echo "⚠ Daemon may not have picked up config changes: $status_after_config"
