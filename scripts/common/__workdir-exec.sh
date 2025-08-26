@@ -177,7 +177,7 @@ usage() {
     echo "All suibase outputs are in ~/suibase/workdirs/$WORKDIR"
   fi
 
-  exit
+  exit 0
 }
 
 workdir_exec() {
@@ -547,7 +547,7 @@ workdir_exec() {
   if [ -n "$OPTIONAL_PATH" ]; then
     if [ ! -d "$OPTIONAL_PATH" ]; then
       echo "Path [ $OPTIONAL_PATH ] not found"
-      exit
+      exit 1
     fi
   fi
 
@@ -950,7 +950,7 @@ workdir_exec() {
         fi
       fi
     fi
-    exit
+    exit 0
   fi
 
   if [ "$CMD_LINKS_REQ" = true ]; then
@@ -970,7 +970,7 @@ workdir_exec() {
     # Display the stats from the proxy server.
     show_suibase_daemon_get_links "$DEBUG_PARAM" "$JSON_PARAM"
 
-    exit
+    exit 0
   fi
 
   # A good time to check if the user did mess up with the workdir and fix potentially missing files.
@@ -1004,7 +1004,7 @@ workdir_exec() {
       autocoins_purge_data "verbose"
     fi
 
-    exit
+    exit 0
   fi
 
   if [ "$CMD_WALRUS_RELAY_REQ" = true ]; then
@@ -1020,11 +1020,32 @@ workdir_exec() {
       walrus_relay_status "verbose" "$SUIBASE_DAEMON_PID" "$_USER_REQUEST"
     elif [ "$WALRUS_RELAY_SUBCOMMAND" = "enable" ]; then
       walrus_relay_enable "verbose"
+
+      # Reload config to pick up the enable change
+      update_suibase_yaml
+
+      # If services are currently running, start walrus relay immediately
+      local _USER_REQUEST
+      _USER_REQUEST=$(get_key_value "$WORKDIR" "user_request")
+      if [ "$_USER_REQUEST" = "start" ]; then
+        # Verify prerequisites and start if all are met
+        if is_workdir_ok && is_sui_binary_ok && is_walrus_binary_ok; then
+          start_all_services
+        else
+          echo "To start the walrus relay service, do '$WORKDIR start'."
+        fi
+      fi
     elif [ "$WALRUS_RELAY_SUBCOMMAND" = "disable" ]; then
+      # Stop walrus relay service if running (safe to call always)
+      stop_walrus_relay_service_only
+
       walrus_relay_disable "verbose"
+
+      # Reload config to pick up the disable change
+      update_suibase_yaml
     fi
 
-    exit
+    exit 0
   fi
 
   # Determine how the binary should be produced (build from local repos or downloaded etc...)
@@ -1252,7 +1273,7 @@ workdir_exec() {
         echo "$WORKDIR services started"
       fi
       echo "$SUI_VERSION"
-      exit
+      exit 0
     fi
     # Note: If workdir/binary/config not OK, keep going to install or repair it.
   fi
@@ -1269,7 +1290,7 @@ workdir_exec() {
 
     fi
 
-    exit
+    exit 0
   fi
 
   if [ "$CMD_FAUCET_REQ" = true ]; then
@@ -1293,7 +1314,7 @@ workdir_exec() {
     start_all_services # Start the faucet as needed (and exit if fails).
 
     faucet_command "$PASSTHRU_OPTIONS"
-    exit
+    exit 0
   fi
 
   if [ "$CMD_PUBLISH_REQ" = true ]; then
@@ -1318,7 +1339,7 @@ workdir_exec() {
       error_exit "Unable to start $WORKDIR"
     fi
     publish_all "$PASSTHRU_OPTIONS"
-    exit
+    exit 0
   fi
 
   if [ "$CMD_SET_ACTIVE_REQ" = true ]; then
@@ -1440,7 +1461,7 @@ workdir_exec() {
       fi
     fi
 
-    exit
+    exit 0
   fi
 
   # Create and build the sui-repo.

@@ -252,11 +252,11 @@ stop_suibase_daemon() {
     kill -s SIGTERM "$SUIBASE_DAEMON_PID"
 
     # Make sure it was killed.
-    end=$((SECONDS + 15))
+    end=$((SECONDS + 95))
     AT_LEAST_ONE_SECOND=false
     while [ $SECONDS -lt $end ]; do
       update_SUIBASE_DAEMON_PID_var
-      if [ -z "$SUIBASE_DAEMON__PID" ] || [ "$SUIBASE_DAEMON_PID" != "$_OLD_PID" ]; then
+      if [ -z "$SUIBASE_DAEMON_PID" ] || [ "$SUIBASE_DAEMON_PID" != "$_OLD_PID" ]; then
         break
       else
         echo -n "."
@@ -270,9 +270,13 @@ stop_suibase_daemon() {
       echo
     fi
 
-    if [ -n "$SUIBASE_DAEMON__PID" ]; then
-      setup_error " $SUIBASE_DAEMON_NAME pid=$SUIBASE_DAEMON__PID still running. Try again, or stop (kill) the process yourself before proceeding."
+    if [ -n "$SUIBASE_DAEMON_PID" ]; then
+      setup_error " $SUIBASE_DAEMON_NAME pid=$SUIBASE_DAEMON_PID still running. Try again, or stop (kill) the process yourself before proceeding."
     fi
+    
+    # Brief delay to allow run-daemon.sh supervisor loop to terminate
+    # TODO: Consider verifying run-daemon.sh loop termination in the future
+    sleep 1
   fi
 }
 export -f stop_suibase_daemon
@@ -308,11 +312,11 @@ update_SUIBASE_DAEMON_PID_var() {
   local _PID
   _PID=$(get_process_pid "$SUIBASE_DAEMON_BIN")
   if [ -n "$_PID" ] && [ "$_PID" != "NULL" ]; then
-    SUIBASE_DAEMON_PID="$_PID"
+    export SUIBASE_DAEMON_PID="$_PID"
     return
   fi
 
-  SUIBASE_DAEMON_PID=""
+  export SUIBASE_DAEMON_PID=""
 }
 export -f update_SUIBASE_DAEMON_PID_var
 

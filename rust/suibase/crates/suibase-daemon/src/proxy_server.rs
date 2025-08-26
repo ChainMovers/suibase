@@ -579,7 +579,7 @@ async fn graceful_shutdown(subsys: SubsystemHandle, axum_handle: axum_server::Ha
     // Run as a thread. Block until shutdown requested.
     subsys.on_shutdown_requested().await;
     // Signal the axum server to shutdown.
-    axum_handle.graceful_shutdown(Some(Duration::from_secs(30)));
+    axum_handle.graceful_shutdown(Some(Duration::from_secs(60)));
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

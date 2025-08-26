@@ -20,5 +20,8 @@ exit_if_deps_missing
 cli_mutex_lock "suibase_daemon"
 
 # Force stop the daemon by deleting the binary first.
-rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
+if ! rm -f "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon"; then
+  echo "Failed to delete daemon binary"
+  exit 1
+fi
 stop_suibase_daemon

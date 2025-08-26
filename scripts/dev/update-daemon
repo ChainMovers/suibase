@@ -25,8 +25,22 @@ exit_if_deps_missing
 cli_mutex_lock "suibase_daemon"
 
 # Stop the daemon. Force rebuild by deleting the binary.
-rm "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon" >/dev/null 2>&1
+if ! rm -f "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon"; then
+    echo "Error: Failed to delete daemon binary"
+    exit 1
+fi
+echo "Stopping daemon for rebuild..."
+_STOP_START_TIME=$SECONDS
 stop_suibase_daemon
+_STOP_END_TIME=$SECONDS
+echo "✓ Daemon stopped in $((_STOP_END_TIME - _STOP_START_TIME)) seconds"
 
+_START_START_TIME=$SECONDS
 start_suibase_daemon_as_needed --force-build
+_START_END_TIME=$SECONDS
+echo "✓ Daemon started in $((_START_END_TIME - _START_START_TIME)) seconds"
+
+_WAIT_START_TIME=$SECONDS
 wait_for_json_rpc_up "any"
+_WAIT_END_TIME=$SECONDS
+echo "✓ Daemon responding in $((_WAIT_END_TIME - _WAIT_START_TIME)) seconds"

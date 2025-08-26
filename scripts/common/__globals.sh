@@ -2373,7 +2373,9 @@ get_process_pid() {
     fi
 
     # shellcheck disable=SC2009
-    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "$_TARGET_CMD" | grep -v grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
+    # Use grep with word boundary to match only processes that START with the target command
+    # This prevents matching supervisor processes that contain the binary path in arguments
+    _PID=$(ps x -o pid,cmd 2>/dev/null | grep "^[[:space:]]*[0-9]*[[:space:]]*$_TARGET_CMD" | grep -v grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
   fi
 
   if [ -n "$_PID" ]; then
@@ -3912,6 +3914,39 @@ stop_all_services() {
   return 0
 }
 export -f stop_all_services
+
+stop_walrus_relay_service_only() {
+  # Similar to stop_all_services() but only for walrus relay service
+  # Returns:
+  #   0: Success (walrus relay process was stopped)
+  #   1: Nothing to stop (walrus relay was already stopped)
+
+  # Check if walrus relay is supported for this workdir
+  if ! is_walrus_supported_by_workdir; then
+    return 1
+  fi
+
+  update_WALRUS_RELAY_PROCESS_PID_var
+
+  if [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
+    # Nothing to stop
+    return 1
+  fi
+
+  # Stop the walrus relay process (this produces the expected output)
+  stop_walrus_relay_process
+
+  # Verify it was stopped
+  update_WALRUS_RELAY_PROCESS_PID_var
+  if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
+    setup_error "Failed to stop walrus relay process (PID $WALRUS_RELAY_PROCESS_PID). The process may still be running. Try 'testnet wal-relay disable' again."
+  fi
+
+  # Success. process that needed to be stopped was stopped.
+  trig_daemons_refresh
+  return 0
+}
+export -f stop_walrus_relay_service_only
 
 start_all_services() {
   #

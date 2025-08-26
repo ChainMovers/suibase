@@ -14,7 +14,7 @@ get_process_pid() {
   local _PID
   # Given a process "string" return the pid as a string.
   # Return NULL if not found.
-  
+
   # Detect OS for platform-specific ps behavior
   if [[ "$OSTYPE" == "darwin"* ]]; then
     # MacOS 'ps' works differently and does not show the $_ARGS to discern the
@@ -53,7 +53,7 @@ fail() {
 setup_clean_environment() {
     # Clean up any stale processes from previous test runs
     cleanup_port_conflicts
-    
+
     # Clean up stale walrus locks that may have been left by interrupted processes
     local _WALRUS_LOCK="/tmp/.suibase/cli-walrus.lock"
     if [ -d "$_WALRUS_LOCK" ]; then
@@ -62,7 +62,7 @@ setup_clean_environment() {
             rmdir "$_WALRUS_LOCK" 2>/dev/null || true
         fi
     fi
-    
+
     # Remove any previous test temp directories
     rm -rf /tmp/suibase_walrus_relay_test_* 2>/dev/null || true
 }
@@ -71,17 +71,17 @@ setup_clean_environment() {
 ensure_build_daemon() {
     local version_file="$WORKDIRS/common/bin/suibase-daemon-version.yaml"
     local daemon_binary="$WORKDIRS/common/bin/suibase-daemon"
-    
+
     # Check if both BUILD version file exists AND binary exists
     if [ -f "$version_file" ] && [ -f "$daemon_binary" ] && grep -q 'origin: "built"' "$version_file"; then
         echo "✓ BUILD version of suibase-daemon is already available"
         return 0
     fi
-    
+
     if [ -f "$version_file" ] && grep -q 'origin: "precompiled"' "$version_file"; then
         # Rebuild daemon for walrus relay features
         "$SUIBASE_DIR/scripts/dev/update-daemon" >/dev/null 2>&1
-        
+
         # Wait for rebuild to complete with shorter timeout
         local wait_count=0
         while [ $wait_count -lt 15 ]; do
@@ -94,16 +94,15 @@ ensure_build_daemon() {
         return 1
     elif [ ! -f "$version_file" ] || [ ! -f "$daemon_binary" ]; then
         # Force rebuild if version file missing OR binary missing
-        echo "Rebuilding daemon (missing binary or version file)..."
-        "$SUIBASE_DIR/scripts/dev/update-daemon" >/dev/null 2>&1
+        "$SUIBASE_DIR/scripts/dev/update-daemon"
     fi
 }
 
-# Safe daemon start that ensures BUILD version 
+# Safe daemon start that ensures BUILD version
 safe_start_daemon() {
     # Ensure we have BUILD version
     ensure_build_daemon
-    
+
     # Start the daemon using proper script
     if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
         echo "Starting suibase-daemon..."
@@ -116,13 +115,13 @@ safe_start_daemon() {
 # Test helper functions
 setup_test_workdir() {
     local workdir="$1"
-    
+
     # Use the existing workdir create script if workdir doesn't exist
     if [ ! -d "$WORKDIRS/$workdir" ] || [ ! -f "$WORKDIRS/$workdir/suibase.yaml" ]; then
         echo "Setting up $workdir workdir..."
         "$SUIBASE_DIR/scripts/$workdir" create >/dev/null 2>&1 || true
     fi
-    
+
     # Ensure additional test directories exist
     mkdir -p "$WORKDIRS/$workdir/bin"
     mkdir -p "$WORKDIRS/$workdir/config-default"
@@ -131,16 +130,16 @@ setup_test_workdir() {
 backup_config_files() {
     local workdir="$1"
     local config_dir="$WORKDIRS/$workdir/config-default"
-    
+
     # Ensure TEMP_TEST_DIR is set
     if [ -z "$TEMP_TEST_DIR" ]; then
         TEMP_TEST_DIR="/tmp/suibase_walrus_relay_test_$$"
     fi
-    
+
     local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
-    
+
     mkdir -p "$backup_dir"
-    
+
     # Backup existing config files
     if [ -f "$config_dir/walrus-config.yaml" ]; then
         cp "$config_dir/walrus-config.yaml" "$backup_dir/" || echo "Warning: Failed to backup walrus-config.yaml"
@@ -153,14 +152,14 @@ backup_config_files() {
 restore_config_files() {
     local workdir="$1"
     local config_dir="$WORKDIRS/$workdir/config-default"
-    
+
     # Ensure TEMP_TEST_DIR is set
     if [ -z "$TEMP_TEST_DIR" ]; then
         TEMP_TEST_DIR="/tmp/suibase_walrus_relay_test_$$"
     fi
-    
+
     local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
-    
+
     # Restore backed up config files
     if [ -d "$backup_dir" ]; then
         [ -f "$backup_dir/walrus-config.yaml" ] && cp "$backup_dir/walrus-config.yaml" "$config_dir/"
@@ -182,11 +181,11 @@ cleanup_port_conflicts() {
     local test_port
     test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/__get-walrus-relay-local-port.sh" "$WORKDIR")
     echo "Checking for port conflicts on port $test_port..."
-    
+
     # Find processes using the port with more robust detection
     local pids
     pids=$(ss -tlnp 2>/dev/null | grep ":$test_port " | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u 2>/dev/null || true)
-    
+
     if [ -n "$pids" ]; then
         echo "Found processes using port $test_port: $pids"
         for pid in $pids; do
@@ -205,7 +204,7 @@ cleanup_port_conflicts() {
                 fi
             fi
         done
-        
+
         # Wait for port to be released
         wait_for_port_available "$test_port" 5
     else
@@ -217,7 +216,7 @@ wait_for_port_available() {
     local port="$1"
     local timeout="${2:-10}"
     local end=$((SECONDS + timeout))
-    
+
     while [ $SECONDS -lt $end ]; do
         if ! ss -tln 2>/dev/null | grep -q ":$port "; then
             echo "✓ Port $port is now available"
@@ -225,7 +224,7 @@ wait_for_port_available() {
         fi
         sleep 0.5
     done
-    
+
     echo "⚠ Port $port still in use after ${timeout}s timeout"
     return 1
 }
@@ -235,9 +234,9 @@ wait_for_process_ready() {
     local endpoint="${2:-/v1/tip-config}"
     local timeout="${3:-30}"
     local end=$((SECONDS + timeout))
-    
+
     echo "Waiting for process to be ready on port $port (endpoint: $endpoint, timeout: ${timeout}s)..."
-    
+
     while [ $SECONDS -lt $end ]; do
         # First check if port is listening
         if ss -tln 2>/dev/null | grep -q ":$port "; then
@@ -249,7 +248,7 @@ wait_for_process_ready() {
         fi
         sleep 0.5
     done
-    
+
     echo "✗ Process not ready after ${timeout}s timeout"
     return 1
 }
@@ -264,30 +263,30 @@ cleanup() {
 assert_binary_exists() {
     local workdir="$1"
     local binary_path="$WORKDIRS/$workdir/bin/walrus-upload-relay"
-    
+
     if [ ! -f "$binary_path" ]; then
         fail "walrus-upload-relay binary not found at $binary_path"
     fi
-    
+
     if [ ! -x "$binary_path" ]; then
         fail "walrus-upload-relay binary not executable at $binary_path"
     fi
-    
+
     echo "✓ walrus-upload-relay binary exists and is executable at $binary_path"
 }
 
 assert_process_running() {
     local pid="$1"
     local process_name="$2"
-    
+
     if [ -z "$pid" ]; then
         fail "$process_name PID is empty"
     fi
-    
+
     if ! kill -0 "$pid" 2>/dev/null; then
         fail "$process_name process (PID $pid) is not running"
     fi
-    
+
     echo "✓ $process_name process is running with PID $pid"
 }
 
@@ -295,11 +294,11 @@ assert_config_file_exists() {
     local workdir="$1"
     local config_file="$2"
     local config_path="$WORKDIRS/$workdir/config-default/$config_file"
-    
+
     if [ ! -f "$config_path" ]; then
         fail "$config_file not found at $config_path"
     fi
-    
+
     echo "✓ $config_file exists at $config_path"
 }
 
@@ -312,11 +311,11 @@ check_walrus_process_stopped() {
         "mainnet") workdir_prefix="m" ;;
         *) workdir_prefix="${workdir:0:1}" ;;
     esac
-    
+
     local workdir_binary="$WORKDIRS/$workdir/bin/${workdir_prefix}walrus-upload-relay"
     local pid
     pid=$(get_process_pid "$workdir_binary")
-    
+
     if [ "$pid" = "NULL" ]; then
         echo "✓ ${workdir_prefix}walrus-upload-relay process is stopped"
         return 0
@@ -334,11 +333,11 @@ check_walrus_process_running() {
         "mainnet") workdir_prefix="m" ;;
         *) workdir_prefix="${workdir:0:1}" ;;
     esac
-    
+
     local workdir_binary="$WORKDIRS/$workdir/bin/${workdir_prefix}walrus-upload-relay"
     local pid
     pid=$(get_process_pid "$workdir_binary")
-    
+
     if [ "$pid" != "NULL" ]; then
         echo "✓ ${workdir_prefix}walrus-upload-relay process is running (PID: $pid)"
         return 0
@@ -355,32 +354,32 @@ wait_for_service_status() {
     local status_label="$3"      # Label to look for in output (e.g., "Walrus Relay")
     local timeout_seconds="${4:-15}" # Optional timeout, default 15 seconds
     local verbose="${5:-false}"  # Optional verbose mode
-    
+
     local start_time=$SECONDS
     local end_time=$((start_time + timeout_seconds))
     local attempt=0
-    
+
     if [ "$verbose" = "true" ]; then
         echo "Waiting for $status_label status to be [$expected_status] (timeout: ${timeout_seconds}s)"
     fi
-    
+
     while [ $SECONDS -lt $end_time ]; do
         attempt=$((attempt + 1))
-        
+
         # Execute the command and capture output
         local output
         output=$($command 2>&1) || true
-        
+
         # Extract the line for the status label and check if any expected status is contained
         # Strip ANSI color codes before parsing
         local status_line
         status_line=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep "^$status_label" | head -n1)
-        
+
         if [ -n "$status_line" ]; then
             # Get everything after the first colon
             local status_part
             status_part=$(echo "$status_line" | sed 's/^[^:]*: *//')
-            
+
             # Check if any of the expected statuses is contained in the status part
             local found_match=false
             IFS='|' read -ra STATUS_LIST <<< "$expected_status"
@@ -390,14 +389,14 @@ wait_for_service_status() {
                     break
                 fi
             done
-            
+
             if [ "$found_match" = true ]; then
                 if [ "$verbose" = "true" ]; then
                     echo "✓ $status_label status line contains expected status after ${attempt} attempts ($(($SECONDS - start_time))s)"
                 fi
                 return 0
             fi
-            
+
             if [ "$verbose" = "true" ]; then
                 echo "  Attempt $attempt: $status_label status part is [$status_part], waiting..."
             fi
@@ -407,10 +406,10 @@ wait_for_service_status() {
                 echo "  Command output: $output"
             fi
         fi
-        
+
         sleep 1
     done
-    
+
     # Timeout reached
     local final_output
     final_output=$($command 2>&1) || true
@@ -422,12 +421,12 @@ wait_for_service_status() {
     else
         final_status_part="UNKNOWN"
     fi
-    
+
     echo "✗ Timeout: $status_label status did not reach [$expected_status] within ${timeout_seconds}s"
     echo "  Final status part: [${final_status_part}] after $attempt attempts"
     echo "  Final command output:"
     echo "$final_output" | sed 's/^/    /'
-    
+
     return 1
 }
 
@@ -437,7 +436,7 @@ wait_for_walrus_relay_status() {
     local expected_status="$2"   # Expected status (e.g., "OK", "INITIALIZING", "OK|INITIALIZING")
     local timeout_seconds="${3:-15}" # Optional timeout, default 15 seconds
     local verbose="${4:-false}"  # Optional verbose mode
-    
+
     local command="$workdir wal-relay status"
     wait_for_service_status "$command" "$expected_status" "Walrus Relay" "$timeout_seconds" "$verbose"
 }
@@ -446,66 +445,66 @@ wait_for_walrus_relay_status() {
 wait_for_daemon_running() {
     local timeout_seconds="${1:-15}" # Optional timeout, default 15 seconds
     local verbose="${2:-false}"      # Optional verbose mode
-    
+
     local start_time=$SECONDS
     local end_time=$((start_time + timeout_seconds))
     local attempt=0
-    
+
     if [ "$verbose" = "true" ]; then
         echo "Waiting for suibase-daemon to be running (timeout: ${timeout_seconds}s)"
     fi
-    
+
     while [ $SECONDS -lt $end_time ]; do
         attempt=$((attempt + 1))
-        
+
         if "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
             if [ "$verbose" = "true" ]; then
                 echo "✓ suibase-daemon is running after ${attempt} attempts ($(($SECONDS - start_time))s)"
             fi
             return 0
         fi
-        
+
         if [ "$verbose" = "true" ]; then
             echo "  Attempt $attempt: daemon not running yet, waiting..."
         fi
-        
+
         sleep 1
     done
-    
+
     echo "✗ Timeout: suibase-daemon not running within ${timeout_seconds}s after $attempt attempts"
     return 1
 }
 
 # Wait for daemon to be stopped
 wait_for_daemon_stopped() {
-    local timeout_seconds="${1:-10}" # Optional timeout, default 10 seconds
-    local verbose="${2:-false}"      # Optional verbose mode
-    
+    local timeout_seconds=100 # Fixed timeout of 100 seconds to account for 90s daemon shutdown timeout
+    local verbose="${1:-false}" # Optional verbose mode
+
     local start_time=$SECONDS
     local end_time=$((start_time + timeout_seconds))
     local attempt=0
-    
+
     if [ "$verbose" = "true" ]; then
         echo "Waiting for suibase-daemon to stop (timeout: ${timeout_seconds}s)"
     fi
-    
+
     while [ $SECONDS -lt $end_time ]; do
         attempt=$((attempt + 1))
-        
+
         if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
             if [ "$verbose" = "true" ]; then
                 echo "✓ suibase-daemon stopped after ${attempt} attempts ($(($SECONDS - start_time))s)"
             fi
             return 0
         fi
-        
+
         if [ "$verbose" = "true" ]; then
             echo "  Attempt $attempt: daemon still running, waiting..."
         fi
-        
+
         sleep 1
     done
-    
+
     echo "✗ Timeout: suibase-daemon still running after ${timeout_seconds}s and $attempt attempts"
     return 1
 }
@@ -515,32 +514,32 @@ wait_for_process_stopped() {
     local workdir="$1"               # testnet, mainnet, etc.
     local timeout_seconds="${2:-10}" # Optional timeout, default 10 seconds
     local verbose="${3:-false}"      # Optional verbose mode
-    
+
     local start_time=$SECONDS
     local end_time=$((start_time + timeout_seconds))
     local attempt=0
-    
+
     if [ "$verbose" = "true" ]; then
         echo "Waiting for ${workdir} walrus process to stop (timeout: ${timeout_seconds}s)"
     fi
-    
+
     while [ $SECONDS -lt $end_time ]; do
         attempt=$((attempt + 1))
-        
+
         if check_walrus_process_stopped "$workdir" >/dev/null 2>&1; then
             if [ "$verbose" = "true" ]; then
                 echo "✓ ${workdir} walrus process stopped after ${attempt} attempts ($(($SECONDS - start_time))s)"
             fi
             return 0
         fi
-        
+
         if [ "$verbose" = "true" ]; then
             echo "  Attempt $attempt: walrus process still running, waiting..."
         fi
-        
+
         sleep 1
     done
-    
+
     echo "✗ Timeout: ${workdir} walrus process still running after ${timeout_seconds}s and $attempt attempts"
     return 1
 }

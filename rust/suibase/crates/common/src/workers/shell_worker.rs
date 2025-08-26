@@ -98,7 +98,7 @@ impl ShellWorker {
                 resp = Some(error_msg);
             } else {
                 let child = child.unwrap();
-                let timeout = Duration::from_secs(if is_status_call { 30 } else { 60 });
+                let timeout = Duration::from_secs(if is_status_call { 15 } else { 50 });
                 let timeout_result = time::timeout(
                     timeout,
                     tokio::task::spawn_blocking(move || child.wait_with_output()),

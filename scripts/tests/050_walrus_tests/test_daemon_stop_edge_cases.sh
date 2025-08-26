@@ -30,24 +30,24 @@ fi
 
 test_daemon_running_baseline() {
     echo "--- Test: Baseline with daemon running ---"
-    
+
     # Ensure daemon is running
     if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
         echo "Starting suibase-daemon for baseline test..."
         safe_start_daemon
         wait_for_daemon_running 10 >/dev/null 2>&1 || true
     fi
-    
+
     # Enable walrus relay
     "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    
+
     # Test status with daemon running
     local status_output
     status_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
-    
+
     # Show initial status for debugging
     echo "✓ Initial walrus relay status: $status_output"
-    
+
     # Check that status.yaml exists and is written by daemon
     if [ -f "$WORKDIRS/testnet/walrus-relay/status.yaml" ]; then
         echo "✓ status.yaml exists when daemon is running"
@@ -57,27 +57,27 @@ test_daemon_running_baseline() {
     else
         echo "⚠ status.yaml not found when daemon is running"
     fi
-    
+
     echo "✓ Baseline test completed"
 }
 
 test_daemon_stopped() {
     echo "--- Test: Behavior when daemon is stopped ---"
-    
+
     # Stop the daemon
     echo "Stopping suibase-daemon..."
-    "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
-    
+    "$SUIBASE_DIR/scripts/dev/stop-daemon"
+
     # Wait for daemon to fully stop
-    if ! wait_for_daemon_stopped 10; then
+    if ! wait_for_daemon_stopped; then
         fail "Daemon failed to stop within timeout"
     fi
     echo "✓ suibase-daemon stopped"
-    
+
     # Test status command when daemon is stopped
     local status_output
     status_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
-    
+
     # CLI should fall back to "NOT RUNNING" when daemon is stopped (can't get real status)
     if echo "$status_output" | grep -q "NOT RUNNING"; then
         echo "✓ Shows NOT RUNNING when daemon stopped (correct fallback behavior)"
@@ -86,73 +86,73 @@ test_daemon_stopped() {
     else
         echo "⚠ Unexpected behavior when daemon stopped: $status_output"
     fi
-    
+
     # Test main status command too
     local main_status_output
     main_status_output=$("$SUIBASE_DIR/scripts/testnet" status 2>&1 | grep "Walrus Relay" || true)
-    
+
     if [ -n "$main_status_output" ]; then
         echo "✓ Main status includes walrus relay even when daemon stopped"
     else
         echo "⚠ Main status missing walrus relay when daemon stopped"
     fi
-    
+
     echo "✓ Daemon stopped test completed"
 }
 
 test_enable_disable_without_daemon() {
     echo "--- Test: Enable/disable commands without daemon ---"
-    
+
     # Ensure daemon is stopped
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
-    wait_for_daemon_stopped 5 >/dev/null 2>&1 || true
-    
+    wait_for_daemon_stopped >/dev/null 2>&1 || true
+
     # Test disable command
     local disable_output
     disable_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay disable 2>&1)
-    
+
     if echo "$disable_output" | grep -q "disabled"; then
         echo "✓ Disable command works without daemon"
     else
         echo "⚠ Disable command issue without daemon: $disable_output"
     fi
-    
+
     # Test enable command
     local enable_output
     enable_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay enable 2>&1)
-    
+
     if echo "$enable_output" | grep -q "enabled"; then
         echo "✓ Enable command works without daemon"
     else
         echo "⚠ Enable command issue without daemon: $enable_output"
     fi
-    
+
     echo "✓ Enable/disable without daemon test completed"
 }
 
 test_daemon_restart_recovery() {
     echo "--- Test: Daemon restart recovery ---"
-    
+
     # Start with daemon stopped and walrus relay enabled
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
-    wait_for_daemon_stopped 5 >/dev/null 2>&1 || true
+    wait_for_daemon_stopped >/dev/null 2>&1 || true
     "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    
+
     # Restart daemon
     echo "Restarting suibase-daemon..."
     safe_start_daemon
-    
+
     # Wait for daemon to start and walrus status to be ready
     wait_for_daemon_running 10 >/dev/null 2>&1
     wait_for_walrus_relay_status "testnet" "OK|DOWN|INITIALIZING" 8 >/dev/null 2>&1 || true
-    
+
     # Check if daemon properly recovers walrus relay status
     local recovery_status
     recovery_status=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
-    
+
     if echo "$recovery_status" | grep -q "DOWN\|OK"; then
         echo "✓ Daemon properly recovers walrus relay status after restart"
-        
+
         # Verify status.yaml is recreated
         if [ -f "$WORKDIRS/testnet/walrus-relay/status.yaml" ]; then
             echo "✓ status.yaml recreated after daemon restart"
@@ -162,39 +162,39 @@ test_daemon_restart_recovery() {
     else
         echo "⚠ Daemon recovery issue: $recovery_status"
     fi
-    
+
     echo "✓ Daemon restart recovery test completed"
 }
 
 test_config_change_without_daemon() {
     echo "--- Test: Config changes without daemon should take effect on restart ---"
-    
+
     # Stop daemon and make config change
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
     "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    
+
     # Modify suibase.yaml to set walrus_relay_local_port
     if ! grep -q "walrus_relay_local_port:" "$WORKDIRS/testnet/suibase.yaml"; then
         echo "walrus_relay_local_port: 45802" >> "$WORKDIRS/testnet/suibase.yaml"
     fi
-    
+
     # Start daemon
     safe_start_daemon
-    
+
     # Wait for daemon to start and walrus status to be ready
     wait_for_daemon_running 10 >/dev/null 2>&1
     wait_for_walrus_relay_status "testnet" "OK|DOWN|DISABLED|INITIALIZING" 8 >/dev/null 2>&1 || true
-    
+
     # Check that daemon picks up the config
     local status_after_config
     status_after_config=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
-    
+
     if echo "$status_after_config" | grep -q "DOWN\|OK"; then
         echo "✓ Daemon picks up config changes made while it was stopped"
     else
         echo "⚠ Daemon may not have picked up config changes: $status_after_config"
     fi
-    
+
     echo "✓ Config change without daemon test completed"
 }
 

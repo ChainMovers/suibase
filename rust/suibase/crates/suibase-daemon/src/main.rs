@@ -210,7 +210,7 @@ impl Command {
                     s.start(SubsystemBuilder::new("apiserver", |a| apiserver.run(a)));
                 })
                 .catch_signals()
-                .handle_shutdown_requests(Duration::from_secs(10))
+                .handle_shutdown_requests(Duration::from_secs(90))
                 .await;
 
                 if let Err(e) = &errors {
