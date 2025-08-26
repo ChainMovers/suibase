@@ -59,7 +59,18 @@ jobs:
       - name: Sui Prerequesites (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install curl cmake
+          # Only install curl if not already present
+          if ! command -v curl &>/dev/null; then
+            brew install curl
+          else
+            echo "curl already installed, skipping"
+          fi
+          # Only install cmake if not already present
+          if ! command -v cmake &>/dev/null; then
+            brew install cmake
+          else
+            echo "cmake already installed, skipping"
+          fi
 
       - name: Prepare environment
         run: |
