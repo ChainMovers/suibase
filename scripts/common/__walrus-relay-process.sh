@@ -412,7 +412,7 @@ EOF
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
   for _i in {1..3}; do
-    rm -f "$CONFIG_DATA_DIR/walrus-relay-process.log" >/dev/null 2>&1
+    rm -f "$WALRUS_RELAY_DIR/walrus-relay-process.log" >/dev/null 2>&1
 
     # Start walrus-upload-relay process using workdir-specific binary
     "$_WORKDIR_BINARY" \
@@ -420,7 +420,7 @@ EOF
       --walrus-config "$_WALRUS_CONFIG" \
       --server-address "0.0.0.0:$_RELAY_PORT" \
       --relay-config "$_RELAY_CONFIG" \
-      >"$CONFIG_DATA_DIR/walrus-relay-process.log" 2>&1 &
+      >"$WALRUS_RELAY_DIR/walrus-relay-process.log" 2>&1 &
 
     # Loop until confirms can connect, or exit if takes too much time.
     while [ $SECONDS -lt $end ]; do
@@ -436,8 +436,8 @@ EOF
       fi
 
       # Detect if should do a retry at starting it
-      if [ -f "$CONFIG_DATA_DIR/walrus-relay-process.log" ] && \
-         grep -q "Address already in use\|failed to load\|panicked" "$CONFIG_DATA_DIR/walrus-relay-process.log"; then
+      if [ -f "$WALRUS_RELAY_DIR/walrus-relay-process.log" ] && \
+         grep -q "Address already in use\|failed to load\|panicked" "$WALRUS_RELAY_DIR/walrus-relay-process.log"; then
         # Sleep 2 seconds before retrying.
         for _j in {1..2}; do
           echo -n "."
@@ -462,8 +462,8 @@ EOF
   # Act on success/failure of the process responding.
   if [ "$ALIVE" = false ]; then
     echo "walrus-upload-relay process not responding. Log contents:"
-    if [ -f "$CONFIG_DATA_DIR/walrus-relay-process.log" ]; then
-      tail -10 "$CONFIG_DATA_DIR/walrus-relay-process.log"
+    if [ -f "$WALRUS_RELAY_DIR/walrus-relay-process.log" ]; then
+      tail -10 "$WALRUS_RELAY_DIR/walrus-relay-process.log"
     fi
     setup_error "Failed to start walrus-upload-relay after 3 attempts"
   fi

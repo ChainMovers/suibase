@@ -29,12 +29,12 @@ Application → suibase-daemon:45853 → walrus-upload-relay:45803  # mainnet
 
 Following autocoins pattern:
 ```bash
-testnet walrus-relay status    # Show current status
-testnet walrus-relay enable    # Enable relay proxy
-testnet walrus-relay disable   # Disable relay proxy
-mainnet walrus-relay status    # Same for mainnet
-mainnet walrus-relay enable
-mainnet walrus-relay disable
+testnet wal-relay status    # Show current status
+testnet wal-relay enable    # Enable relay proxy
+testnet wal-relay disable   # Disable relay proxy
+mainnet wal-relay status    # Same for mainnet
+mainnet wal-relay enable
+mainnet wal-relay disable
 ```
 
 ## Status Hierarchy
@@ -86,9 +86,7 @@ Current status: Configuration and status reporting work. HTTP proxy forwarding n
 
 ### Phase 1: Binary Process Management ✅ COMPLETE
 **Process lifecycle setup:**
-- Extend `scripts/common/__walrus-binaries.sh`:
-  - Add walrus-upload-relay to binary management
-  - Download binary via existing walrus management
+- Binary managed via existing walrus binary management system
 - Create `scripts/common/__walrus-relay-process.sh` with:
   - `start_walrus_relay_process()` - Start walrus-upload-relay on configured port
   - `stop_walrus_relay_process()` - Graceful shutdown
@@ -102,7 +100,7 @@ Current status: Configuration and status reporting work. HTTP proxy forwarding n
 - Binary location: `~/suibase/workdirs/{testnet,mainnet}/bin/walrus-upload-relay`
 - Config location: `~/suibase/workdirs/{testnet,mainnet}/config-default/relay-config.yaml`
 - Walrus client config: `~/suibase/workdirs/{testnet,mainnet}/config-default/walrus-config.yaml`
-- Log location: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay-process.log`
+- Log location: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay/walrus-relay-process.log`
 - Hook into existing `testnet update` and `mainnet update` commands
 
 ### Phase 2: Bash Scripts and Command Integration ✅ COMPLETE
@@ -130,14 +128,13 @@ walrus_relay_local_port: 45802  # 45803 for mainnet
 - Configuration commands work without daemon running
 
 ### Phase 3: Suibase-daemon Status Monitoring 🔄 PARTIAL
-**Rust files to modify:**
-- Modify `rust/suibase/crates/suibase-daemon/src/admin_controller.rs`:
-  - Detect walrus_relay_enabled changes in suibase.yaml
-  - Configure existing ProxyServer instances for walrus relay endpoints
+**Rust files implemented:**
+- `rust/suibase/crates/suibase-daemon/src/walrus_monitor.rs`:
+  - Monitor walrus_relay_enabled configuration changes
+  - Track walrus-upload-relay process health
   - Write status to `workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
-- Extend `rust/suibase/crates/suibase-daemon/src/proxy_server.rs`:
-  - Add walrus relay route handling to existing HTTP forwarding logic
-  - Forward walrus requests to http://localhost:{local_port}
+- Integration with `rust/suibase/crates/suibase-daemon/src/admin_controller.rs`:
+  - WalrusMonitor integration for status monitoring
 
 **Status management:**
 - ✅ Daemon writes: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
