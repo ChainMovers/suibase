@@ -52,7 +52,7 @@ test_daemon_running_baseline() {
     if [ -f "$WORKDIRS/testnet/walrus-relay/status.yaml" ]; then
         echo "✓ status.yaml exists when daemon is running"
         local last_check
-        last_check=$(grep "last_check:" "$WORKDIRS/testnet/walrus-relay/status.yaml" | cut -d' ' -f2)
+        last_check=$(grep "last_check:" "$WORKDIRS/testnet/walrus-relay/status.yaml" | cut -d' ' -f2 || echo "unknown")
         echo "  Last check: $last_check"
     else
         echo "⚠ status.yaml not found when daemon is running"
@@ -170,15 +170,21 @@ test_config_change_without_daemon() {
     echo "--- Test: Config changes without daemon should take effect on restart ---"
 
     # Stop daemon and make config change
-    "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/dev/stop-daemon"
+
     "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Modify suibase.yaml to set walrus_relay_local_port
-    if ! grep -q "walrus_relay_local_port:" "$WORKDIRS/testnet/suibase.yaml"; then
+    echo "Checking if walrus_relay_local_port needs to be added..."
+    if ! grep -q "walrus_relay_local_port:" "$WORKDIRS/testnet/suibase.yaml" 2>/dev/null; then
+        echo "Adding walrus_relay_local_port to config..."
         echo "walrus_relay_local_port: 45802" >> "$WORKDIRS/testnet/suibase.yaml"
+    else
+        echo "walrus_relay_local_port already present in config"
     fi
 
     # Start daemon
+
     safe_start_daemon
 
     # Wait for daemon to start and walrus status to be ready
@@ -186,13 +192,20 @@ test_config_change_without_daemon() {
     wait_for_walrus_relay_status "testnet" "OK|DOWN|DISABLED|INITIALIZING" 8 >/dev/null 2>&1 || true
 
     # Check that daemon picks up the config
+
     local status_after_config
-    status_after_config=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
+    status_after_config=$("$SUIBASE_DIR/scripts/testnet" wal-relay status)
+
 
     if strip_ansi_colors "$status_after_config" | grep -q "DOWN\|OK"; then
         echo "✓ Daemon picks up config changes made while it was stopped"
     else
         echo "⚠ Daemon may not have picked up config changes: $status_after_config"
+        if [ -f "$WORKDIRS/testnet/suibase.yaml" ]; then
+            grep -E "walrus_relay" "$WORKDIRS/testnet/suibase.yaml" || echo "DEBUG: No walrus_relay settings found in config"
+        else
+            echo "Config file does not exist at $WORKDIRS/testnet/suibase.yaml"
+        fi
     fi
 
     echo "✓ Config change without daemon test completed"
@@ -209,14 +222,14 @@ test_config_change_without_daemon
 echo "--- Restoring original configuration ---"
 if [ -n "$ORIGINAL_CONFIG_STATE" ]; then
     # Remove any existing walrus_relay_enabled line and add the original
-    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
-    sed -i.bak '/^walrus_relay_local_port:/d' "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/testnet/suibase.yaml" && rm -f "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak '/^walrus_relay_local_port:/d' "$WORKDIRS/testnet/suibase.yaml" && rm -f "$WORKDIRS/testnet/suibase.yaml.bak"
     echo "$ORIGINAL_CONFIG_STATE" >> "$WORKDIRS/testnet/suibase.yaml"
     echo "✓ Restored original config: $ORIGINAL_CONFIG_STATE"
 else
     # Remove walrus_relay lines if they didn't exist originally
-    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
-    sed -i.bak '/^walrus_relay_local_port:/d' "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/testnet/suibase.yaml" && rm -f "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak '/^walrus_relay_local_port:/d' "$WORKDIRS/testnet/suibase.yaml" && rm -f "$WORKDIRS/testnet/suibase.yaml.bak"
     echo "✓ Removed walrus_relay config (wasn't present originally)"
 fi
 

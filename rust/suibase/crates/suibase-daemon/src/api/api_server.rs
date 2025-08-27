@@ -122,6 +122,7 @@ impl APIServerThread {
         {
             let api = ProxyApiImpl::new(
                 self.params.globals.proxy.clone(),
+                self.params.globals.clone(),
                 self.params.admctrl_tx.clone(),
             );
             let methods = api.into_rpc();

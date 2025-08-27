@@ -29,18 +29,40 @@ if ! rm -f "$SUIBASE_DIR/workdirs/common/bin/suibase-daemon"; then
     echo "Error: Failed to delete daemon binary"
     exit 1
 fi
-echo "Stopping daemon for rebuild..."
+
+# Run stop command in foreground to show detailed output
 _STOP_START_TIME=$SECONDS
 stop_suibase_daemon
 _STOP_END_TIME=$SECONDS
-echo "✓ Daemon stopped in $((_STOP_END_TIME - _STOP_START_TIME)) seconds"
+
+# Display precise timing
+_STOP_DURATION=$((_STOP_END_TIME - _STOP_START_TIME))
+if [ $_STOP_DURATION -eq 0 ]; then
+    echo "✓ Daemon stopped in <1 second"
+else
+    echo "✓ Daemon stopped in $_STOP_DURATION seconds"
+fi
 
 _START_START_TIME=$SECONDS
 start_suibase_daemon_as_needed --force-build
 _START_END_TIME=$SECONDS
-echo "✓ Daemon started in $((_START_END_TIME - _START_START_TIME)) seconds"
+
+# Display precise timing
+_START_DURATION=$((_START_END_TIME - _START_START_TIME))
+if [ $_START_DURATION -eq 0 ]; then
+    echo "✓ Daemon started in <1 second"
+else
+    echo "✓ Daemon started in $_START_DURATION seconds"
+fi
 
 _WAIT_START_TIME=$SECONDS
 wait_for_json_rpc_up "any"
 _WAIT_END_TIME=$SECONDS
-echo "✓ Daemon responding in $((_WAIT_END_TIME - _WAIT_START_TIME)) seconds"
+
+# Display precise timing
+_WAIT_DURATION=$((_WAIT_END_TIME - _WAIT_START_TIME))
+if [ $_WAIT_DURATION -eq 0 ]; then
+    echo "✓ Daemon responding in <1 second"
+else
+    echo "✓ Daemon responding in $_WAIT_DURATION seconds"
+fi

@@ -424,6 +424,82 @@ try_locked_command() {
 }
 export -f try_locked_command
 
+# Helper function to detect stale mutex locks
+_is_mutex_stale() {
+  local _LOCKFILE="$1"
+
+  # Must exist to be stale
+  if [ ! -d "$_LOCKFILE" ]; then
+    return 1  # Not stale if doesn't exist
+  fi
+
+  local _HOLDER_PID _HOLDER_CMD
+
+  # Check for holder.info file
+  if [ -f "$_LOCKFILE/holder.info" ]; then
+    # Parse YAML-like format
+    local _HOLDER_INFO
+    _HOLDER_INFO=$(cat "$_LOCKFILE/holder.info" 2>/dev/null || true)
+
+    if [ -z "$_HOLDER_INFO" ]; then
+      return 0  # Empty or unreadable holder file - stale
+    fi
+
+    # Parse YAML-like format with || true for set -e safety
+    _HOLDER_PID=$(echo "$_HOLDER_INFO" | grep "^pid=" | cut -d= -f2 || true)
+    _HOLDER_CMD=$(echo "$_HOLDER_INFO" | grep "^command=" | cut -d= -f2- || true)
+
+  elif [ -f "$_LOCKFILE/holder.pid" ]; then
+    # Backward compatibility: old multi-file format with || true for set -e safety
+    _HOLDER_PID=$(cat "$_LOCKFILE/holder.pid" 2>/dev/null || true)
+    _HOLDER_CMD=$(cat "$_LOCKFILE/holder.command" 2>/dev/null || true)
+  else
+    # Old-style lock without PID - assume stale after 10 minutes
+    local _OLD_COUNT
+    _OLD_COUNT=$(find "$_LOCKFILE" -mmin +10 2>/dev/null | wc -l || true)
+    if [ "$_OLD_COUNT" -gt 0 ]; then
+      return 0  # Stale
+    fi
+    return 1  # Not stale yet
+  fi
+
+  # Validate we got PID info
+  if [ -z "$_HOLDER_PID" ]; then
+    return 0  # No PID info - assume stale
+  fi
+
+  # Check if PID exists
+  if ! kill -0 "$_HOLDER_PID" 2>/dev/null; then
+    return 0  # PID is dead - definitely stale
+  fi
+
+  # PID exists, but is it the same command?
+  # Get current command for that PID with || true for set -e safety
+  local _CURRENT_CMD
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    _CURRENT_CMD=$(ps -p "$_HOLDER_PID" -o command= 2>/dev/null || true)
+  else
+    _CURRENT_CMD=$(ps -p "$_HOLDER_PID" -o cmd= 2>/dev/null || true)
+  fi
+
+  # If we can't get command info, assume stale
+  if [ -z "$_CURRENT_CMD" ]; then
+    return 0  # Can't get command - assume stale
+  fi
+
+  # If we have holder command, verify it matches
+  if [ -n "$_HOLDER_CMD" ]; then
+    local _HOLDER_BASENAME
+    _HOLDER_BASENAME=$(basename "$_HOLDER_CMD" 2>/dev/null || true)
+    if [ -n "$_HOLDER_BASENAME" ] && ! echo "$_CURRENT_CMD" | grep -q "$_HOLDER_BASENAME" 2>/dev/null; then
+      return 0  # Command changed - PID was recycled
+    fi
+  fi
+
+  return 1  # Lock appears to be held by active process
+}
+export -f _is_mutex_stale
+
 
 cli_mutex_lock() {
   # mutex is re-entrant (only first call to cli_mutex_lock will acquire the lock).
@@ -493,10 +569,42 @@ cli_mutex_lock() {
 
   local _LOCKFILE="$SUIBASE_TMP_DIR/cli-$_WORKDIR.lock"
 
-  # Block until getting the lock. The lock is released by the "trap cleanup EXIT".
+  # Enhanced mutex acquisition with stale lock cleanup
+  local _WAIT_COUNT=0
+  local _MAX_STALE_CHECK_ATTEMPTS=15  # Check for stale locks after 3 seconds (15 * 0.2=3s)
+  local _MAX_TOTAL_ATTEMPTS=600       # Fail after 10 minutes (300 * 0.2 * 15 = 600s)
+
   while ! mkdir "$_LOCKFILE" 2>/dev/null; do
+    _WAIT_COUNT=$((_WAIT_COUNT + 1))
+
+    # After waiting a reasonable time, check if lock is stale
+    if [ $_WAIT_COUNT -eq $_MAX_STALE_CHECK_ATTEMPTS ]; then
+      if _is_mutex_stale "$_LOCKFILE"; then
+        # Check again to verify that the mutex remains stale...
+        sleep 1
+        if _is_mutex_stale "$_LOCKFILE"; then
+          echo "Removing stale mutex: $_LOCKFILE"
+          rm -rf "$_LOCKFILE" 2>/dev/null
+          _WAIT_COUNT=0  # Reset counter and try again
+          continue
+        fi
+      fi
+    fi
+
+    # Prevent infinite loops - fail after excessive time
+    if [ $_WAIT_COUNT -gt $_MAX_TOTAL_ATTEMPTS ]; then
+      setup_error "Failed to acquire mutex $_LOCKFILE."
+    fi
+
     sleep 0.2
   done
+
+  # Store holder information for stale detection in single file
+  cat > "$_LOCKFILE/holder.info" 2>/dev/null << EOF || true
+pid=$$
+command=$0
+timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+EOF
 
   case $_WORKDIR in
   localnet)
@@ -575,7 +683,7 @@ cli_mutex_release()
   fi
 
   local _LOCKFILE="$SUIBASE_TMP_DIR/cli-$_WORKDIR.lock"
-  rmdir "$_LOCKFILE" >/dev/null 2>&1
+  rm -rf "$_LOCKFILE" >/dev/null 2>&1
 
   # Mark the lock as released
   case $_WORKDIR in

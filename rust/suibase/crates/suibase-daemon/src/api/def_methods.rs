@@ -291,6 +291,7 @@ pub struct SuccessResponse {
     pub info: Option<String>,
 }
 
+
 impl SuccessResponse {
     pub fn new() -> Self {
         Self {
@@ -304,6 +305,92 @@ impl SuccessResponse {
 impl Default for SuccessResponse {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// Walrus Relay Stats Types (similar to LinkStats but simpler)
+#[serde_as]
+#[derive(Clone, Default, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WalrusRelayStats {
+    // Network name (testnet, mainnet)
+    pub network: String,
+    
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub status: String, // "ENABLED", "DISABLED", "OK", "DOWN"
+    
+    // Simple request statistics
+    pub total_requests: u64,
+    pub successful_requests: u64,
+    pub failed_requests: u64,
+    
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub success_rate: String, // Formatted percentage (e.g. "95.2%")
+    
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub failure_rate: String, // Formatted percentage (e.g. "4.8%")
+    
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub last_activity: Option<String>, // ISO 8601 timestamp
+    
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub last_error: Option<String>, // Last error message
+    
+    // Config info
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub proxy_port: Option<u16>,
+    
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub local_port: Option<u16>,
+}
+
+impl WalrusRelayStats {
+    pub fn new(network: String) -> Self {
+        WalrusRelayStats {
+            network,
+            ..Default::default()
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WalrusRelayStatsResponse {
+    pub header: Header,
+    
+    pub status: String, // Overall status: "OK", "DISABLED", "DOWN"
+    
+    pub info: String, // Additional status information
+    
+    // List of stats per network (testnet, mainnet)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub networks: Option<Vec<WalrusRelayStats>>,
+    
+    // Combined stats across all networks
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<WalrusRelayStats>,
+    
+    // Human-readable display format
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+    
+    // Debug information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<String>,
+}
+
+impl WalrusRelayStatsResponse {
+    pub fn new() -> Self {
+        Self {
+            header: Header::default(),
+            status: "DISABLED".to_string(),
+            info: "Not enabled".to_string(),
+            networks: None,
+            summary: None,
+            display: None,
+            debug: None,
+        }
     }
 }
 
@@ -717,6 +804,21 @@ pub trait ProxyApi {
         display: Option<bool>,
         debug: Option<bool>,
     ) -> RpcResult<LinksResponse>;
+    
+/// Returns Walrus relay statistics for all networks.
+    ///
+    /// Similar to getLinks but for Walrus relay functionality.
+    /// Supports both JSON data and human-readable display formats.
+    #[method(name = "getWalrusRelayStats")]
+    async fn get_walrus_relay_stats(
+        &self,
+        workdir: String,
+        summary: Option<bool>,
+        links: Option<bool>,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<WalrusRelayStatsResponse>;
 
     #[method(name = "fsChange")]
     async fn fs_change(&self, path: String) -> RpcResult<InfoResponse>;
@@ -725,6 +827,14 @@ pub trait ProxyApi {
     /// This is primarily for testing purposes
     #[method(name = "resetServerStats")]
     async fn reset_server_stats(
+        &self,
+        workdir: String,
+    ) -> RpcResult<SuccessResponse>;
+    
+    /// Reset Walrus relay statistics for a specific workdir
+    /// This is primarily for testing purposes
+    #[method(name = "resetWalrusRelayStats")]
+    async fn reset_walrus_relay_stats(
         &self,
         workdir: String,
     ) -> RpcResult<SuccessResponse>;

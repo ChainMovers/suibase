@@ -191,7 +191,16 @@ stop_walrus_relay_process() {
 
 cleanup_port_conflicts() {
     local test_port
-    test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/__get-walrus-relay-local-port.sh" "$WORKDIR")
+    test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/__get-walrus-relay-local-port.sh" "$WORKDIR" 2>&1 || echo "UNKNOWN")
+    
+    if [ "$test_port" = "UNKNOWN" ]; then
+        echo "ERROR in cleanup_port_conflicts: Failed to get walrus relay port for workdir '$WORKDIR'"
+        echo "This likely means walrus_relay_local_port is not configured in suibase.yaml"
+        echo "Please ensure walrus_relay_local_port is set in $HOME/suibase/workdirs/$WORKDIR/suibase.yaml"
+        echo "Example: walrus_relay_local_port: 45802"
+        exit 1
+    fi
+    
     echo "Checking for port conflicts on port $test_port..."
 
     # Find processes using the port with more robust detection
@@ -207,7 +216,7 @@ cleanup_port_conflicts() {
                     echo "Stopping walrus-upload-relay process $pid using port $test_port"
                     kill "$pid" 2>/dev/null || true
                     # Wait for graceful shutdown
-                    sleep 2
+                    sleep 5
                     # Force kill if still running
                     if kill -0 "$pid" 2>/dev/null; then
                         echo "Force killing process $pid"

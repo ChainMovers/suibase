@@ -43,3 +43,24 @@
 **Walrus:**
 - Upload Relay: `crates/walrus-upload-relay/`
 - Contracts: `contracts/`
+
+## CRITICAL: Daemon Lifecycle Management
+
+### REQUIRED: Always use these scripts for daemon control:
+- `~/suibase/scripts/dev/start-daemon` - Start daemon
+- `~/suibase/scripts/dev/stop-daemon` - Stop daemon
+- `~/suibase/scripts/dev/update-daemon` - Rebuild and restart daemon
+- `~/suibase/scripts/dev/is-daemon-running` - Check daemon status
+
+### FORBIDDEN: Never directly:
+- Call internal functions like `progress_suibase_daemon_upgrading()`
+- Use `cargo build` + manual copy instead of `update-daemon`
+- Kill daemon processes without proper cleanup scripts
+- Bypass `cli_mutex_lock`/`cli_mutex_release` mechanisms
+- Use `kill -9` on suibase processes (breaks cleanup traps)
+
+## Why This Matters
+
+**Claude Code uses SIGKILL for both timeouts and user interruptions (ESC key).** SIGKILL completely bypasses all bash cleanup traps, leaving stale mutex files that block subsequent operations.
+
+The enhanced mutex system now includes automatic stale lock detection to recover from these interruptions, but proper script usage remains critical.

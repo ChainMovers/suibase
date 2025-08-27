@@ -1,6 +1,8 @@
 {
   "env": {
-    "SUI_REFERENCE_PATH": "~/repos/sui-reference-main"
+    "SUI_REFERENCE_PATH": "~/repos/sui-reference-main",
+    "BASH_DEFAULT_TIMEOUT_MS": "600000", // 10 minutes
+    "BASH_MAX_TIMEOUT_MS": "900000" // 15 minutes
   },
   "hooks": {
     "SessionStart": [
@@ -28,7 +30,7 @@
       {
         "hooks": [
           {
-            "type": "command", 
+            "type": "command",
             "command": "/home/olet/suibase/.claude/hooks/notification.sh"
           }
         ]

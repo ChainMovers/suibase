@@ -77,10 +77,10 @@ Walrus Relay     : INITIALIZING ( pid 1223131 ) http://localhost:45852
 
 **✅ Phase 1: COMPLETE** - Binary Process Management  
 **✅ Phase 2: COMPLETE** - Bash Scripts and Command Integration  
-**🔄 Phase 3: PARTIAL** - Suibase-daemon Integration (status monitoring only)
+**✅ Phase 3: COMPLETE** - Suibase-daemon Integration (status monitoring + simple request statistics)
 **❌ Phase 4: TODO** - HTTP Proxy Implementation  
 
-Current status: Configuration and status reporting work. HTTP proxy forwarding not yet implemented.
+Current status: Configuration, status reporting, and request statistics tracking work. HTTP proxy forwarding not yet implemented.
 
 ## Implementation Phases
 
@@ -127,19 +127,35 @@ walrus_relay_local_port: 45802  # 45803 for mainnet
 - `testnet wal-relay status` should show relay status and proxy URL
 - Configuration commands work without daemon running
 
-### Phase 3: Suibase-daemon Status Monitoring 🔄 PARTIAL
+### Phase 3: Suibase-daemon Status Monitoring ✅ COMPLETE
 **Rust files implemented:**
 - `rust/suibase/crates/suibase-daemon/src/walrus_monitor.rs`:
   - Monitor walrus_relay_enabled configuration changes
   - Track walrus-upload-relay process health
   - Write status to `workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
+  - Simple request statistics tracking (total, success, failure counts)
+  - API-accessible statistics (similar to JSON-RPC network stats)
 - Integration with `rust/suibase/crates/suibase-daemon/src/admin_controller.rs`:
-  - WalrusMonitor integration for status monitoring
+  - WalrusMonitor integration for status monitoring and stats collection
 
 **Status management:**
 - ✅ Daemon writes: `~/suibase/workdirs/{testnet,mainnet}/walrus-relay/status.yaml`
 - ✅ Status values: DISABLED, INITIALIZING, OK, DOWN
 - ✅ Include backend connectivity info
+
+**Request statistics (Phase 3):**
+- ✅ Simple WalrusStats structure: request/success/failure counts
+- ✅ Event-based statistics collection via message passing
+- ✅ API-accessible (not stored in status.yaml files)
+- ✅ WalrusStatsReporter interface for Phase 4 integration
+- ✅ Per-workdir and combined stats available
+- ✅ Success/failure rate calculations and convenience methods
+
+**Testing after Phase 3:**
+- `testnet wal-relay enable/disable/status` commands work correctly
+- Status.yaml files contain only status information (no statistics)
+- WalrusMonitor provides API access to request statistics
+- Request statistics ready for Phase 4 HTTP proxy integration
 
 ### Phase 4: HTTP Proxy Implementation ❌ TODO
 **Rust files to modify:**

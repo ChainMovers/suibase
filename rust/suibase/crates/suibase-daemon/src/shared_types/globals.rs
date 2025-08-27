@@ -199,6 +199,12 @@ pub struct Globals {
     pub status_testnet: GlobalsWorkdirStatusMT,
     pub status_mainnet: GlobalsWorkdirStatusMT,
 
+    // Walrus stats per workdir
+    pub walrus_stats_localnet: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
+    pub walrus_stats_devnet: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
+    pub walrus_stats_testnet: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
+    pub walrus_stats_mainnet: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
+
     // Configuration related to Sui Move modules, particularly for package monitoring.
     pub packages_localnet: GlobalsWorkdirPackagesMT,
     pub packages_devnet: GlobalsWorkdirPackagesMT,
@@ -241,6 +247,18 @@ impl Globals {
             status_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
             status_mainnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirStatusST::new())),
+            walrus_stats_localnet: Arc::new(tokio::sync::RwLock::new(
+                crate::walrus_monitor::WalrusStats::new(),
+            )),
+            walrus_stats_devnet: Arc::new(tokio::sync::RwLock::new(
+                crate::walrus_monitor::WalrusStats::new(),
+            )),
+            walrus_stats_testnet: Arc::new(tokio::sync::RwLock::new(
+                crate::walrus_monitor::WalrusStats::new(),
+            )),
+            walrus_stats_mainnet: Arc::new(tokio::sync::RwLock::new(
+                crate::walrus_monitor::WalrusStats::new(),
+            )),
             packages_localnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
             packages_devnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
             packages_testnet: Arc::new(tokio::sync::RwLock::new(GlobalsWorkdirPackagesST::new())),
@@ -296,6 +314,19 @@ impl Globals {
             _ => {
                 panic!("Invalid workdir_idx {}", workdir_idx)
             }
+        }
+    }
+
+    pub fn get_walrus_stats(
+        &self,
+        workdir_name: &str,
+    ) -> Option<&Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>> {
+        match workdir_name {
+            "localnet" => Some(&self.walrus_stats_localnet),
+            "devnet" => Some(&self.walrus_stats_devnet),
+            "testnet" => Some(&self.walrus_stats_testnet),
+            "mainnet" => Some(&self.walrus_stats_mainnet),
+            _ => None,
         }
     }
 

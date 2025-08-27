@@ -10,6 +10,7 @@ use common::shared_types::workdirs::Link;
 
 use super::{InfoResponse, ProxyApiServer, VersionedEq};
 use super::{LinkStats, LinksResponse, LinksSummary, RpcInputError};
+use super::{WalrusRelayStats, WalrusRelayStatsResponse};
 
 use super::def_header::Versioned;
 
@@ -47,16 +48,18 @@ impl VersionedEq for GetLinksInput {
 }
 
 pub struct ProxyApiImpl {
-    pub globals: GlobalsProxyMT,
+    pub globals_proxy: GlobalsProxyMT,
+    pub globals_full: crate::shared_types::Globals,
     pub admctrl_tx: AdminControllerTx,
     prev_get_links_input: Mutex<Versioned<GetLinksInput>>,
 }
 
 impl ProxyApiImpl {
-    pub fn new(globals: GlobalsProxyMT, admctrl_tx: AdminControllerTx) -> Self {
+    pub fn new(globals_proxy: GlobalsProxyMT, globals_full: crate::shared_types::Globals, admctrl_tx: AdminControllerTx) -> Self {
         let prev_get_links_input = Mutex::new(Versioned::new(GetLinksInput::new()));
         Self {
-            globals,
+            globals_proxy,
+            globals_full,
             admctrl_tx,
             prev_get_links_input,
         }
@@ -268,7 +271,7 @@ impl ProxyApiServer for ProxyApiImpl {
         {
             // Get read lock access to the globals and just quickly copy what is needed.
             // Most parsing and processing is done outside the lock.
-            let globals_read_guard = self.globals.read().await;
+            let globals_read_guard = self.globals_proxy.read().await;
             let globals = &*globals_read_guard;
 
             if let Some(input_port) = globals.find_input_port_by_name(&workdir) {
@@ -635,7 +638,6 @@ impl ProxyApiServer for ProxyApiImpl {
         resp.info = "Success".to_string();
         Ok(resp)
     }
-    
     async fn reset_server_stats(
         &self,
         workdir: String,
@@ -647,7 +649,7 @@ impl ProxyApiServer for ProxyApiImpl {
         
         // Validate workdir exists
         {
-            let globals = self.globals.read().await;
+            let globals = self.globals_proxy.read().await;
             if globals.find_input_port_by_name(&workdir).is_none() {
                 return Err(RpcInputError::InvalidParams(
                     "workdir".to_string(),
@@ -671,6 +673,165 @@ impl ProxyApiServer for ProxyApiImpl {
             Err(e) => {
                 resp.result = false;
                 resp.info = Some(format!("Failed to send reset request: {}", e));
+            }
+        }
+        
+        Ok(resp)
+    }
+    
+    async fn get_walrus_relay_stats(
+        &self,
+        workdir: String,
+        summary: Option<bool>,
+        links: Option<bool>,
+        data: Option<bool>,
+        display: Option<bool>,
+        debug: Option<bool>,
+    ) -> RpcResult<WalrusRelayStatsResponse> {
+        let mut resp = WalrusRelayStatsResponse::new();
+        
+        // Initialize header fields
+        resp.header.method = "getWalrusRelayStats".to_string();
+        resp.header.key = Some(workdir.clone());
+        
+        // "Unwrap" all the options to booleans (following getLinks pattern)
+        let summary = summary.unwrap_or(true);
+        let links = links.unwrap_or(true);
+        let debug = debug.unwrap_or(false);
+        let display = display.unwrap_or(debug);
+        let data = data.unwrap_or(!(debug || display));
+        
+        let mut debug_out = String::new();
+        
+        // Get walrus stats from globals (like how getLinks works)
+        let mut workdir_stats = WalrusRelayStats::new(workdir.clone());
+        
+        {
+            // Get walrus stats from full globals (not just proxy globals)
+            if let Some(walrus_stats_arc) = self.globals_full.get_walrus_stats(&workdir) {
+                let walrus_stats = walrus_stats_arc.read().await;
+                
+                // Copy actual stats from WalrusMonitor
+                workdir_stats.total_requests = walrus_stats.total_requests();
+                workdir_stats.successful_requests = walrus_stats.successful_requests();
+                workdir_stats.failed_requests = walrus_stats.failed_requests();
+                
+                // Calculate rates
+                if workdir_stats.total_requests > 0 {
+                    let success_rate = (workdir_stats.successful_requests as f64 * 100.0) / (workdir_stats.total_requests as f64);
+                    let failure_rate = (workdir_stats.failed_requests as f64 * 100.0) / (workdir_stats.total_requests as f64);
+                    workdir_stats.success_rate = Self::fmt_f64_pct(success_rate);
+                    workdir_stats.failure_rate = Self::fmt_f64_pct(failure_rate);
+                } else {
+                    workdir_stats.success_rate = Self::fmt_f64_pct(0.0);
+                    workdir_stats.failure_rate = Self::fmt_f64_pct(0.0);
+                }
+            }
+        }
+        
+        // Set workdir-specific configuration (ports and status)
+        match workdir.as_str() {
+            "testnet" => {
+                workdir_stats.status = "DOWN".to_string(); // TODO: Get from actual status
+                workdir_stats.proxy_port = Some(45852);
+                workdir_stats.local_port = Some(45802);
+            },
+            "mainnet" => {
+                workdir_stats.status = "DISABLED".to_string(); // TODO: Get from actual status
+                workdir_stats.proxy_port = Some(45853);
+                workdir_stats.local_port = Some(45803);
+            },
+            _ => {
+                workdir_stats.status = "DISABLED".to_string();
+            }
+        }
+        
+        // Set response status based on workdir stats
+        resp.status = workdir_stats.status.clone();
+        resp.info = match workdir_stats.status.as_str() {
+            "DISABLED" => "walrus relay not enabled".to_string(),
+            "DOWN" => "walrus relay service not available".to_string(),
+            "OK" => "walrus relay service running".to_string(),
+            _ => "unknown status".to_string(),
+        };
+        // Format response based on options
+        if data {
+            if summary {
+                resp.summary = Some(workdir_stats.clone());
+            }
+            if links {
+                // For "links", show the single server as a vector (for future expansion)
+                resp.networks = Some(vec![workdir_stats.clone()]);
+            }
+        }
+        
+        if display {
+            // Create human-readable display format
+            let mut display_out = String::new();
+            
+            if summary {
+                display_out.push_str(&format!(
+                    "Statistics\n\
+----------\n\
+Total Requests    {:>9}\n\
+Successful        {:>9}\n\
+Failed            {:>9}\n\
+Success Rate      {:>9}\n\n",
+                    workdir_stats.total_requests,
+                    workdir_stats.successful_requests,
+                    workdir_stats.failed_requests,
+                    workdir_stats.success_rate
+                ));
+            }
+            
+            if links {
+                display_out.push_str(
+                    "Server      Total Req  Success    Failed     Success Rate\n\
+---------------------------------------------------------\n"
+                );
+                display_out.push_str(&format!(
+                    "{:<12}{:<11}{:<11}{:<11}{}\n",
+                    workdir_stats.network,
+                    workdir_stats.total_requests,
+                    workdir_stats.successful_requests,
+                    workdir_stats.failed_requests,
+                    workdir_stats.success_rate
+                ));
+            }
+            
+            resp.display = Some(display_out);
+        }
+        
+        if debug {
+            debug_out.push_str(&format!("WalrusRelayStats Debug Info for {}:\n", workdir));
+            debug_out.push_str(&format!("Status: {}\n", workdir_stats.status));
+            debug_out.push_str(&format!("Requests: {}\n", workdir_stats.total_requests));
+            resp.debug = Some(debug_out);
+        }
+        
+        Ok(resp)
+    }
+    
+    async fn reset_walrus_relay_stats(
+        &self,
+        workdir: String,
+    ) -> RpcResult<super::SuccessResponse> {
+        use super::SuccessResponse;
+        
+        let mut resp = SuccessResponse::new();
+        resp.header.method = "resetWalrusRelayStats".to_string();
+        resp.header.key = Some(workdir.clone());
+        
+        // Reset walrus relay stats directly in globals (like network stats)
+        {
+            if let Some(walrus_stats_arc) = self.globals_full.get_walrus_stats(&workdir) {
+                let mut walrus_stats = walrus_stats_arc.write().await;
+                walrus_stats.reset();
+                resp.result = true;
+                resp.info = Some(format!("Successfully reset walrus relay statistics for {}", workdir));
+            } else {
+                resp.result = false;
+                resp.info = Some(format!("Unknown workdir: {}", workdir));
             }
         }
         

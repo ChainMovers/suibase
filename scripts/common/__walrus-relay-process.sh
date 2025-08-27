@@ -216,6 +216,27 @@ walrus_relay_status() {
 
   if [ "$verbosity" = "verbose" ]; then
     walrus_relay_echo_status_line "Walrus Relay" "$WALRUS_RELAY_SUPPORT_ENABLED" "$WALRUS_RELAY_BACKEND_PID" "$WALRUS_RELAY_STATUS" "$WALRUS_RELAY_INFO"
+    
+    # Show stats if daemon is running and stats are available
+    if [ -n "$suibase_daemon_pid" ] && [ "$WALRUS_RELAY_SUPPORT_ENABLED" = true ]; then
+      # Get stats from API in quiet mode and display them
+      local _stats_response
+      _stats_response=$(curl -s -X POST -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\",\"summary\":true},\"id\":1}" \
+        "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
+      
+      if [ -n "$_stats_response" ] && ! echo "$_stats_response" | jq -e '.error' >/dev/null 2>&1; then
+        local _total_requests _successful_requests _failed_requests
+        _total_requests=$(echo "$_stats_response" | jq -r '.result.summary.totalRequests // 0')
+        _successful_requests=$(echo "$_stats_response" | jq -r '.result.summary.successfulRequests // 0')
+        _failed_requests=$(echo "$_stats_response" | jq -r '.result.summary.failedRequests // 0')
+        
+        if [ "$_total_requests" -gt 0 ] || [ "$_successful_requests" -gt 0 ] || [ "$_failed_requests" -gt 0 ]; then
+          echo "                 : Stats: ${_total_requests} total, ${_successful_requests} success, ${_failed_requests} failed"
+        fi
+      fi
+    fi
+    
     # Show additional help/error info when needed
     if [ "$WALRUS_RELAY_SUPPORT_ENABLED" = true ] && [ -z "$suibase_daemon_pid" ]; then
       echo
@@ -529,3 +550,120 @@ update_WALRUS_RELAY_PROCESS_PID_var() {
   fi
 }
 export -f update_WALRUS_RELAY_PROCESS_PID_var
+
+walrus_relay_stats() {
+  # Display walrus relay statistics
+  # Can be either "verbose" or "quiet"
+  local verbosity=$1
+  
+  if ! is_walrus_supported_by_workdir; then
+    if [ "$verbosity" = "verbose" ]; then
+      echo "Walrus relay stats not supported for $WORKDIR"
+    fi
+    return
+  fi
+
+  # Check if daemon is running
+  update_SUIBASE_DAEMON_PID_var
+  if [ -z "$SUIBASE_DAEMON_PID" ]; then
+    if [ "$verbosity" = "verbose" ]; then
+      echo "Suibase daemon not running - cannot retrieve walrus relay stats"
+    fi
+    return
+  fi
+
+  # Call the API to get walrus relay stats with display format
+  local _API_RESPONSE
+  _API_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"getWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\",\"display\":true},\"id\":1}" \
+    "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
+  
+  if [ -z "$_API_RESPONSE" ]; then
+    if [ "$verbosity" = "verbose" ]; then
+      echo "Failed to retrieve walrus relay stats"
+    fi
+    return
+  fi
+
+  # Check for API errors
+  if echo "$_API_RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+    if [ "$verbosity" = "verbose" ]; then
+      local _ERROR_MSG
+      _ERROR_MSG=$(echo "$_API_RESPONSE" | jq -r '.error.message // "Unknown error"')
+      echo "Error retrieving walrus relay stats: $_ERROR_MSG"
+    fi
+    return
+  fi
+
+  # Extract and display the formatted output
+  if [ "$verbosity" = "verbose" ]; then
+    local _DISPLAY_TEXT
+    _DISPLAY_TEXT=$(echo "$_API_RESPONSE" | jq -r '.result.display // ""')
+    if [ -n "$_DISPLAY_TEXT" ]; then
+      echo "$_DISPLAY_TEXT"
+    else
+      echo "No display data available"
+    fi
+  fi
+}
+export -f walrus_relay_stats
+
+walrus_relay_clear_stats() {
+  # Clear walrus relay statistics
+  # Can be either "verbose" or "quiet"
+  local verbosity=$1
+  
+  if ! is_walrus_supported_by_workdir; then
+    if [ "$verbosity" = "verbose" ]; then
+      echo "Walrus relay stats not supported for $WORKDIR"
+    fi
+    return
+  fi
+
+  # Check if daemon is running
+  update_SUIBASE_DAEMON_PID_var
+  if [ -z "$SUIBASE_DAEMON_PID" ]; then
+    if [ "$verbosity" = "verbose" ]; then
+      echo "Suibase daemon not running - cannot clear walrus relay stats"
+    fi
+    return
+  fi
+
+  # Call the API to reset walrus relay stats
+  local _API_RESPONSE
+  _API_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"resetWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\"},\"id\":1}" \
+    "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
+  
+  if [ -z "$_API_RESPONSE" ]; then
+    if [ "$verbosity" = "verbose" ]; then
+      echo "Failed to clear walrus relay stats"
+    fi
+    return
+  fi
+
+  # Check for API errors
+  if echo "$_API_RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+    if [ "$verbosity" = "verbose" ]; then
+      local _ERROR_MSG
+      _ERROR_MSG=$(echo "$_API_RESPONSE" | jq -r '.error.message // "Unknown error"')
+      echo "Error clearing walrus relay stats: $_ERROR_MSG"
+    fi
+    return
+  fi
+
+  # Check if reset was successful
+  local _RESULT_STATUS
+  _RESULT_STATUS=$(echo "$_API_RESPONSE" | jq -r '.result.result // "false"')
+  
+  if [ "$verbosity" = "verbose" ]; then
+    if [ "$_RESULT_STATUS" = "true" ]; then
+      echo "Walrus relay stats cleared successfully"
+    else
+      local _INFO_MSG
+      _INFO_MSG=$(echo "$_API_RESPONSE" | jq -r '.result.info // "Unknown error"')
+      echo "Failed to clear walrus relay stats: $_INFO_MSG"
+    fi
+  fi
+}
+export -f walrus_relay_clear_stats

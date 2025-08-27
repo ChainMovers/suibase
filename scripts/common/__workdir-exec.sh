@@ -268,9 +268,9 @@ workdir_exec() {
       --precompiled | --nobinary)
         error_exit "Option '$1' not compatible with '$CMD_REQ' command"
         ;;
-      status|enable|disable)
+      status|enable|disable|stats|clear)
         if [ -n "$WALRUS_RELAY_SUBCOMMAND" ]; then
-          error_exit "Only one of 'status', 'enable', or 'disable' allowed."
+          error_exit "Only one of 'status', 'enable', 'disable', 'stats', or 'clear' allowed."
         fi
         WALRUS_RELAY_SUBCOMMAND="$1"
         ;;
@@ -452,7 +452,7 @@ workdir_exec() {
       setup_error "Command '$CMD_REQ' not supported for $WORKDIR"
     fi
     case "$WALRUS_RELAY_SUBCOMMAND" in
-    status|enable|disable)
+    status|enable|disable|stats|clear)
       ;;
     *)
       SHOW_HELP=true
@@ -536,6 +536,12 @@ workdir_exec() {
       echo
       echo_low_green "  disable"
       echo "  Disable the walrus relay proxy service."
+      echo
+      echo_low_green "  stats"
+      echo "  Display detailed walrus relay statistics."
+      echo
+      echo_low_green "  clear"
+      echo "  Reset walrus relay statistics to zero."
       echo
       echo " When enabled, applications can connect to http://localhost:${CFG_walrus_relay_proxy_port:?}"
       echo " to access Walrus storage with full API compatibility."
@@ -1043,6 +1049,10 @@ workdir_exec() {
 
       # Reload config to pick up the disable change
       update_suibase_yaml
+    elif [ "$WALRUS_RELAY_SUBCOMMAND" = "stats" ]; then
+      walrus_relay_stats "verbose"
+    elif [ "$WALRUS_RELAY_SUBCOMMAND" = "clear" ]; then
+      walrus_relay_clear_stats "verbose"
     fi
 
     exit 0

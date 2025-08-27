@@ -277,6 +277,8 @@ stop_suibase_daemon() {
     # Brief delay to allow run-daemon.sh supervisor loop to terminate
     # TODO: Consider verifying run-daemon.sh loop termination in the future
     sleep 1
+  else
+    echo "$SUIBASE_DAEMON_NAME already stopped"
   fi
 }
 export -f stop_suibase_daemon
