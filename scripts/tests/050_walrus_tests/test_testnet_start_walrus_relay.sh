@@ -25,7 +25,7 @@ ensure_build_daemon
 
 # Ensure clean state by stopping any running testnet services
 echo "Ensuring clean state..."
-"$SUIBASE_DIR/scripts/testnet" stop >/dev/null 2>&1 || true
+"$SUIBASE_DIR/scripts/testnet" stop || true
 
 # Store original config state
 ORIGINAL_CONFIG_STATE=""
@@ -37,10 +37,10 @@ test_testnet_start_with_walrus_enabled() {
     echo "--- Test: testnet start should start walrus relay when enabled ---"
     
     # Ensure walrus relay is enabled
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
     
     # Stop any existing processes first
-    "$SUIBASE_DIR/scripts/testnet" stop >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" stop
     
     # Verify walrus relay is enabled in config
     if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/testnet/suibase.yaml"; then
@@ -94,10 +94,10 @@ test_testnet_start_with_walrus_disabled() {
     echo "--- Test: testnet start should not start walrus relay when disabled ---"
     
     # Stop services first
-    "$SUIBASE_DIR/scripts/testnet" stop >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" stop
     
     # Disable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
     
     # Verify walrus relay is disabled in config
     if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/testnet/suibase.yaml"; then
@@ -140,7 +140,7 @@ test_config_variable_loading() {
     echo "--- Test: Configuration variables are properly loaded during start ---"
     
     # Enable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
     
     # Create a test script that sources globals and checks the config variable
     cat > /tmp/test_config_loading.sh << 'EOF'
@@ -184,7 +184,7 @@ test_testnet_start_with_walrus_disabled
 test_testnet_start_with_walrus_enabled
 
 # Stop services to cleanup
-"$SUIBASE_DIR/scripts/testnet" stop >/dev/null 2>&1
+"$SUIBASE_DIR/scripts/testnet" stop
 
 # Restore original config state
 echo "--- Restoring original configuration ---"

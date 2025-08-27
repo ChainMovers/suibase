@@ -32,10 +32,10 @@ test_status_in_main_status_when_disabled() {
     echo "--- Test: Status appears in 'testnet status' when disabled ---"
 
     # Ensure disabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
 
     # Ensure testnet services are started so status shows walrus relay line
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" start
 
     # Test main status output
     local output
@@ -59,10 +59,10 @@ test_status_in_main_status_when_enabled() {
     echo "--- Test: Status appears in 'testnet status' when enabled ---"
 
     # Ensure enabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Start testnet services to ensure status reflects actual state
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" start
 
     # Wait for main status to stabilize to OK or DOWN (max 10 seconds)
     if wait_for_service_status "testnet status" "OK|DOWN" "Walrus Relay" 10 true; then
@@ -86,7 +86,7 @@ test_detailed_status_still_works() {
     echo "--- Test: Detailed 'wal-relay status' still works ---"
 
     # Test when disabled
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
     local disabled_output
     disabled_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
 
@@ -99,8 +99,8 @@ test_detailed_status_still_works() {
     fi
 
     # Test when enabled
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/testnet" start
 
     local enabled_output
     enabled_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
@@ -121,11 +121,11 @@ test_mainnet_status_integration() {
     # Ensure mainnet is set up with binaries
     if [ ! -d "$WORKDIRS/mainnet" ] || ! "$SUIBASE_DIR/scripts/mainnet" status >/dev/null 2>&1; then
         echo "Setting up mainnet workdir..."
-        "$SUIBASE_DIR/scripts/mainnet" start >/dev/null 2>&1
+        "$SUIBASE_DIR/scripts/mainnet" start
     fi
 
     # Ensure mainnet is disabled
-    "$SUIBASE_DIR/scripts/mainnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/mainnet" wal-relay disable
 
     # Test main status output
     local output
@@ -149,7 +149,7 @@ test_devnet_status_no_walrus_relay() {
     echo "--- Test: Devnet status does NOT show walrus relay ---"
 
     # Ensure devnet is initialized and running so we test the actual status logic
-    "$SUIBASE_DIR/scripts/devnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/devnet" start
 
     # Test devnet status output
     local output
@@ -166,7 +166,7 @@ test_status_consistency() {
     echo "--- Test: Status consistency between main and detailed views ---"
 
     # Test disabled state consistency
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
 
     local main_status
     main_status=$("$SUIBASE_DIR/scripts/testnet" status 2>&1 | grep "Walrus Relay" || true)
@@ -184,8 +184,8 @@ test_status_consistency() {
     fi
 
     # Test OK state consistency (daemon running, process started)
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/testnet" start
 
     # Test consistency between main and detailed status (with daemon status.yaml)
     main_status=$("$SUIBASE_DIR/scripts/testnet" status 2>&1 | grep "Walrus Relay" || true)
@@ -225,8 +225,8 @@ test_status_format_requirements() {
     echo "--- Test: Status format requirements ---"
 
     # Test that main status is always one-liner
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/testnet" start
     local output
     output=$("$SUIBASE_DIR/scripts/testnet" status 2>&1)
 

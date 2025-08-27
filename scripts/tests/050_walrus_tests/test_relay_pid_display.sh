@@ -40,7 +40,7 @@ test_disabled_state() {
     echo "--- Test: DISABLED state ---"
     
     # Disable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
     
     # Test detailed status
     local detailed_output
@@ -79,7 +79,7 @@ test_enable_and_start_services() {
     echo "--- Test: Enable walrus relay and start services ---"
     
     # Start from disabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
     
     # Enable walrus relay
     echo "Enabling walrus relay..."
@@ -143,8 +143,8 @@ test_stop_services() {
     echo "--- Test: Stop services ---"
     
     # Ensure walrus relay is enabled and services are running
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/testnet" start
     
     # Wait for services to be ready
     wait_for_walrus_relay_status "testnet" "OK|DOWN" 10 >/dev/null 2>&1 || true
@@ -191,8 +191,8 @@ test_status_consistency() {
     echo "--- Test: Status consistency between verbose and main status ---"
     
     # Test disabled state consistency
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1  # Start services so status shows properly
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/testnet" start  # Start services so status shows properly
     
     local verbose_status
     verbose_status=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1 | grep "Walrus Relay" | head -1)
@@ -210,7 +210,7 @@ test_status_consistency() {
     fi
     
     # Test enabled state consistency
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
     
     verbose_status=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1 | grep "Walrus Relay" | head -1)
     main_status=$("$SUIBASE_DIR/scripts/testnet" status 2>&1 | grep "Walrus Relay" | head -1)
@@ -237,7 +237,7 @@ test_disabled_state() {
     echo "--- Test: DISABLED state ---"
     
     # Disable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
     
     # Test detailed status
     local detailed_output

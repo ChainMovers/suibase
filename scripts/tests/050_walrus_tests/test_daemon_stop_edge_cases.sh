@@ -39,7 +39,7 @@ test_daemon_running_baseline() {
     fi
 
     # Enable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Test status with daemon running
     local status_output
@@ -136,7 +136,7 @@ test_daemon_restart_recovery() {
     # Start with daemon stopped and walrus relay enabled
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
     wait_for_daemon_stopped >/dev/null 2>&1 || true
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Restart daemon
     echo "Restarting suibase-daemon..."
@@ -171,7 +171,7 @@ test_config_change_without_daemon() {
 
     # Stop daemon and make config change
     "$SUIBASE_DIR/scripts/dev/stop-daemon" >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Modify suibase.yaml to set walrus_relay_local_port
     if ! grep -q "walrus_relay_local_port:" "$WORKDIRS/testnet/suibase.yaml"; then

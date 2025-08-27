@@ -32,10 +32,10 @@ test_status_when_disabled() {
     echo "--- Test: Status when disabled ---"
 
     # Ensure disabled state  
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
     
     # Start services so CLI reads config state instead of showing STOPPED
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" start
 
     # Test status output - CLI detects DISABLED instantaneously from config
     local output
@@ -56,7 +56,7 @@ test_enable_command() {
     echo "--- Test: Enable command ---"
 
     # Ensure starting from disabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
 
     # Test enable command
     local output
@@ -82,8 +82,8 @@ test_status_when_enabled() {
     # status shows DOWN when process is not running, or OK when process is running
 
     # Ensure enabled state but stop services so process isn't running
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" stop >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/testnet" stop
 
     # Test status output
     local output
@@ -108,8 +108,8 @@ test_status_when_working() {
     # When enabled and services running, status should be OK or DOWN from daemon
 
     # Ensure enabled state and start services  
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
-    "$SUIBASE_DIR/scripts/testnet" start >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/testnet" start
 
     # Test status output 
     local output
@@ -151,7 +151,7 @@ test_disable_command() {
     echo "--- Test: Disable command ---"
 
     # Ensure starting from enabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Test disable command
     local output
@@ -173,7 +173,7 @@ test_enable_when_already_enabled() {
     echo "--- Test: Enable when already enabled ---"
 
     # Ensure enabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
 
     # Test enable command again
     local output
@@ -190,7 +190,7 @@ test_disable_when_already_disabled() {
     echo "--- Test: Disable when already disabled ---"
 
     # Ensure disabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable >/dev/null 2>&1
+    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
 
     # Test disable command again
     local output
