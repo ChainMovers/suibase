@@ -600,7 +600,7 @@ cli_mutex_lock() {
   done
 
   # Store holder information for stale detection in single file
-  cat > "$_LOCKFILE/holder.info" 2>/dev/null << EOF || true
+  cat > "$_LOCKFILE/holder.info" 2>/dev/null << EOF
 pid=$$
 command=$0
 timestamp=$(date '+%Y-%m-%d %H:%M:%S')

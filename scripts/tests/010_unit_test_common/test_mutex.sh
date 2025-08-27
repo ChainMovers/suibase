@@ -360,12 +360,17 @@ EOF
     local start_time=$SECONDS
     
     # This should wait at least a few seconds before checking stale
-    timeout 5 bash -c '
+    # Use a background process with timeout for cross-platform compatibility
+    (
         SUIBASE_DIR="$HOME/suibase"
         WORKDIR="localnet"
         source "$SUIBASE_DIR/scripts/common/__globals.sh" "$0" "$WORKDIR"
         cli_mutex_lock "testnet"
-    ' || true
+    ) &
+    local bg_pid=$!
+    sleep 5
+    kill $bg_pid 2>/dev/null || true
+    wait $bg_pid 2>/dev/null || true
     
     local end_time=$SECONDS
     local duration=$((end_time - start_time))
