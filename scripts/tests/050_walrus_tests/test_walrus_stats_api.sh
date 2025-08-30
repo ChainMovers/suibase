@@ -10,6 +10,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/__test_common.sh
 source "$script_dir/__test_common.sh"
 
+
 # Test configuration
 DAEMON_PORT="44399"
 DAEMON_URL="http://localhost:$DAEMON_PORT"

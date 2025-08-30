@@ -7,45 +7,52 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/__test_common.sh
 source "$SCRIPT_DIR/__test_common.sh"
 
+
 test_walrus_relay_disable_bug() {
     echo "Testing walrus relay disable bug reproduction..."
     
     # Sequence to test disable bug:
     # 1. Enable walrus relay
-    # 2. Start testnet services (walrus process should be running)
+    # 2. Start $WORKDIR services (walrus process should be running)
     # 3. Disable walrus relay and check if it stops the running process
     
     echo "Step 1: Enable walrus relay"
-    if ! testnet wal-relay enable; then
+    if ! "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable; then
         echo "ERROR: Failed to enable walrus relay"
         return 1
     fi
     
-    echo "Step 2: Start testnet services"
-    if ! testnet start; then
-        echo "ERROR: Failed to start testnet services"
+    echo "Step 2: Start $WORKDIR services"
+    if ! "$SUIBASE_DIR/scripts/$WORKDIR" start; then
+        echo "ERROR: Failed to start $WORKDIR services"
         return 1
     fi
     
     echo "Step 3: Wait for walrus relay to reach OK status"
     # Wait for walrus process to be running before testing disable
-    if ! wait_for_walrus_relay_status "testnet" "OK" 15 true; then
+    if ! wait_for_walrus_relay_status "$WORKDIR" "OK" 15 true; then
         echo "ERROR: Walrus relay did not reach OK status - cannot test disable functionality"
         return 1
     fi
     
     echo "Step 4: Disable walrus relay and check for process stop message"
-    disable_output=$(testnet wal-relay disable 2>&1)
+    disable_output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable 2>&1)
     echo "Disable output: $disable_output"
     
     echo "Step 5: Verify disable command stopped the running process"
-    # Should see "Stopping twalrus-upload-relay (PID [number])" in output
-    if echo "$disable_output" | grep -q "Stopping twalrus-upload-relay"; then
+    # Should see "Stopping [workdir]walrus-upload-relay (PID [number])" in output
+    local workdir_prefix
+    case "$WORKDIR" in
+        "testnet") workdir_prefix="t" ;;
+        "mainnet") workdir_prefix="m" ;;
+        *) workdir_prefix="${WORKDIR:0:1}" ;;
+    esac
+    if echo "$disable_output" | grep -q "Stopping ${workdir_prefix}walrus-upload-relay"; then
         echo "SUCCESS: Disable command properly stopped the running walrus process"
         return 0
     else
         echo "BUG REPRODUCED: Disable command did not stop the running walrus process"
-        echo "Expected: Output should contain 'Stopping twalrus-upload-relay'"
+        echo "Expected: Output should contain 'Stopping ${workdir_prefix}walrus-upload-relay'"
         echo "Actual output: $disable_output"
         return 1
     fi
@@ -56,32 +63,32 @@ test_walrus_relay_enable_bug() {
     
     # Sequence to reproduce the bug:
     echo "Step 1: Disable walrus relay"
-    testnet wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to disable walrus relay"
         return 1
     fi
     
-    echo "Step 2: Stop testnet services"
-    testnet stop
+    echo "Step 2: Stop $WORKDIR services"
+    "$SUIBASE_DIR/scripts/$WORKDIR" stop
     if [ $? -ne 0 ]; then
-        echo "ERROR: Failed to stop testnet services"
+        echo "ERROR: Failed to stop $WORKDIR services"
         return 1
     fi
     
-    echo "Step 2a: Verify walrus relay process is stopped after 'testnet stop'"
+    echo "Step 2a: Verify walrus relay process is stopped after '$WORKDIR stop'"
     # Wait for processes to terminate
-    if ! wait_for_process_stopped "testnet" 5; then
-        echo "BUG DETECTED: 'testnet stop' did not stop twalrus-upload-relay process"
+    if ! wait_for_process_stopped "$WORKDIR" 5; then
+        echo "BUG DETECTED: '$WORKDIR stop' did not stop ${workdir_prefix}walrus-upload-relay process"
         return 1
     fi
     
-    echo "Step 3: Start testnet services and check for stop/start anomaly"
-    start_output=$(testnet start 2>&1)
+    echo "Step 3: Start $WORKDIR services and check for stop/start anomaly"
+    start_output=$("$SUIBASE_DIR/scripts/$WORKDIR" start 2>&1)
     
     # Check for the anomaly: start saying "already running" after stop
     if echo "$start_output" | grep -q "already running"; then
-        echo "BUG DETECTED: 'testnet start' says 'already running' after 'testnet stop'"
+        echo "BUG DETECTED: '$WORKDIR start' says 'already running' after '$WORKDIR stop'"
         echo "This indicates stop/start detection logic is broken"
         echo "Start output: $start_output"
         return 1
@@ -89,17 +96,17 @@ test_walrus_relay_enable_bug() {
     
     # Check if start command succeeded
     if [ $? -ne 0 ]; then
-        echo "ERROR: Failed to start testnet services"
+        echo "ERROR: Failed to start $WORKDIR services"
         echo "Start output: $start_output"
         return 1
     fi
     echo "✓ Services properly detected as stopped and started correctly"
     
     # Wait for services to settle and be ready
-    wait_for_walrus_relay_status "testnet" "OK|DOWN|DISABLED|INITIALIZING" 5 >/dev/null 2>&1 || true
+    wait_for_walrus_relay_status "$WORKDIR" "OK|DOWN|DISABLED|INITIALIZING" 5 >/dev/null 2>&1 || true
     
     echo "Step 4: Enable walrus relay"
-    testnet wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
     if [ $? -ne 0 ]; then
         echo "ERROR: Failed to enable walrus relay"
         return 1
@@ -108,7 +115,7 @@ test_walrus_relay_enable_bug() {
     echo "Step 5: Wait for walrus relay to reach expected status"
     # Wait for status to be OK (not DOWN) within 15 seconds
     # Since services are already running, enabling should start the process and show OK
-    if wait_for_walrus_relay_status "testnet" "OK" 15 true; then
+    if wait_for_walrus_relay_status "$WORKDIR" "OK" 15 true; then
         echo "SUCCESS: Walrus relay reached expected status (OK)"
         return 0
     else

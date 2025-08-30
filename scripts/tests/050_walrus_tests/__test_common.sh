@@ -5,7 +5,49 @@
 
 SUIBASE_DIR="$HOME/suibase"
 WORKDIRS="$SUIBASE_DIR/workdirs"
-WORKDIR="testnet"  # Default to testnet for walrus relay tests
+WORKDIR="${CI_WORKDIR:-testnet}"  # Use CI_WORKDIR if set, default to testnet
+
+# Validate that WORKDIR is supported for walrus tests
+validate_workdir_support() {
+    case "$WORKDIR" in
+        "testnet"|"mainnet")
+            # Supported workdirs
+            return 0
+            ;;
+        *)
+            echo "SKIP: Walrus relay tests only support testnet and mainnet workdirs, got: $WORKDIR"
+            exit 2
+            ;;
+    esac
+}
+
+# Restore suibase.yaml from default template if different
+restore_suibase_yaml_from_default() {
+    local workdir="$1"
+    local workdir_config="$WORKDIRS/$workdir/suibase.yaml"
+    local default_config="$SUIBASE_DIR/scripts/defaults/$workdir/suibase.yaml"
+    
+    if [ ! -f "$default_config" ]; then
+        echo "ERROR: Default template not found at $default_config"
+        return 1
+    fi
+    
+    # Check if workdir config is different from default template
+    if [ ! -f "$workdir_config" ] || ! cmp -s "$workdir_config" "$default_config"; then
+        echo "Detected suibase.yaml differs from default template, restoring..."
+        cp "$default_config" "$workdir_config"
+        echo "✓ Restored $workdir suibase.yaml from $default_config"
+    else
+        echo "✓ $workdir suibase.yaml matches default template"
+    fi
+}
+
+# Call validation early
+validate_workdir_support
+
+# Restore suibase.yaml from default template if corrupted by previous tests
+# This is called automatically when __test_common.sh is sourced
+restore_suibase_yaml_from_default "$WORKDIR"
 
 # Portable process PID detection (copied from __globals.sh to avoid mutex issues)
 get_process_pid() {
@@ -133,6 +175,10 @@ setup_test_workdir() {
         echo "Setting up $workdir workdir..."
         "$SUIBASE_DIR/scripts/$workdir" create >/dev/null 2>&1 || true
     fi
+
+    # Initialize the workdir to ensure binaries are downloaded and setup is complete
+    echo "Initializing $workdir workdir..."
+    "$SUIBASE_DIR/scripts/$workdir" start >/dev/null 2>&1 || true
 
     # Ensure additional test directories exist
     mkdir -p "$WORKDIRS/$workdir/bin"
@@ -570,4 +616,5 @@ export -f setup_clean_environment ensure_build_daemon safe_start_daemon setup_te
 export -f cleanup_port_conflicts wait_for_port_available wait_for_process_ready
 export -f assert_binary_exists assert_process_running assert_config_file_exists
 export -f wait_for_service_status wait_for_walrus_relay_status wait_for_daemon_running wait_for_daemon_stopped wait_for_process_stopped
+export -f restore_suibase_yaml_from_default
 export -f fail strip_ansi_colors

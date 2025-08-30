@@ -9,6 +9,7 @@ cd "$( dirname "${BASH_SOURCE[0]}" )" || exit 1
 # Source the common test infrastructure
 source __test_common.sh
 
+
 # Source the walrus repair function for testing
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
@@ -27,7 +28,7 @@ test_rpc_urls_repair() {
     echo "Test 1: Adding rpc_urls to config without existing section..."
     cat > "$TEST_WALRUS_CONFIG" << EOF
 contexts:
-  testnet:
+  $WORKDIR:
     system_object: 0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af
     staking_object: 0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3
     exchange_objects:
@@ -37,8 +38,8 @@ contexts:
       - 0x8d63209cf8589ce7aef8f262437163c67577ed09f3e636a9d8e93bc1c26a3bc5
     wallet_config:
       path: config/client.yaml
-      active_env: testnet
-default_context: testnet
+      active_env: $WORKDIR
+default_context: $WORKDIR
 EOF
 
     # Call the repair function
@@ -50,7 +51,8 @@ EOF
             echo "✓ rpc_urls section was added"
             
             # Verify it contains both proxy and direct RPC
-            if grep -q "http://localhost:44342" "$TEST_WALRUS_CONFIG" && grep -q "https://fullnode.testnet.sui.io:443" "$TEST_WALRUS_CONFIG"; then
+            local expected_proxy_url="http://${CFG_proxy_host_ip}:${CFG_proxy_port_number}"
+            if grep -q "$expected_proxy_url" "$TEST_WALRUS_CONFIG" && grep -q "https://fullnode.$WORKDIR.sui.io:443" "$TEST_WALRUS_CONFIG"; then
                 echo "✓ Both proxy and direct RPC URLs are present"
             else
                 fail "rpc_urls section doesn't contain expected URLs"
@@ -66,17 +68,17 @@ EOF
     echo "Test 2: Replacing existing rpc_urls section..."
     cat > "$TEST_WALRUS_CONFIG" << EOF
 contexts:
-  testnet:
+  $WORKDIR:
     system_object: 0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af
     staking_object: 0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3
     exchange_objects:
       - 0xf4d164ea2def5fe07dc573992a029e010dba09b1a8dcbc44c5c2e79567f39073
     wallet_config:
       path: config/client.yaml
-      active_env: testnet
+      active_env: $WORKDIR
     rpc_urls:
       - http://old.example.com
-default_context: testnet
+default_context: $WORKDIR
 EOF
 
     # Call the repair function
@@ -90,7 +92,8 @@ EOF
             fail "Old RPC URL was not removed"
         fi
         
-        if grep -q "http://localhost:44342" "$TEST_WALRUS_CONFIG" && grep -q "https://fullnode.testnet.sui.io:443" "$TEST_WALRUS_CONFIG"; then
+        local expected_proxy_url="http://${CFG_proxy_host_ip}:${CFG_proxy_port_number}"
+        if grep -q "$expected_proxy_url" "$TEST_WALRUS_CONFIG" && grep -q "https://fullnode.$WORKDIR.sui.io:443" "$TEST_WALRUS_CONFIG"; then
             echo "✓ New smart RPC URLs are present"
         else
             fail "New smart RPC URLs are missing"

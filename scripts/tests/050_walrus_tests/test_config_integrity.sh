@@ -9,6 +9,7 @@ cd "$( dirname "${BASH_SOURCE[0]}" )" || exit 1
 # Source the common test infrastructure
 source __test_common.sh
 
+
 # Source the walrus repair function for testing
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
@@ -25,9 +26,9 @@ test_config_integrity() {
     
     # Test 1: Complete config without rpc_urls - ensure nothing is lost
     echo "Test 1: Adding rpc_urls to complete config without losing other lines..."
-    cat > "$TEST_WALRUS_CONFIG" << 'EOF'
+    cat > "$TEST_WALRUS_CONFIG" << EOF
 contexts:
-  testnet:
+  $WORKDIR:
     system_object: 0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af
     staking_object: 0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3
     exchange_objects:
@@ -37,8 +38,8 @@ contexts:
       - 0x8d63209cf8589ce7aef8f262437163c67577ed09f3e636a9d8e0813843fb8bf1
     wallet_config:
       path: config/client.yaml
-      active_env: testnet
-default_context: testnet
+      active_env: $WORKDIR
+default_context: $WORKDIR
 EOF
 
     # Remember original line count and specific lines
@@ -120,17 +121,17 @@ EOF
     echo "Test 2: Config ending exactly with default_context..."
     
     # Create config that ends with default_context
-    cat > "$TEST_WALRUS_CONFIG" << 'EOF'
+    cat > "$TEST_WALRUS_CONFIG" << EOF
 contexts:
-  testnet:
+  $WORKDIR:
     system_object: 0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af
     staking_object: 0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3
     exchange_objects:
       - 0xf4d164ea2def5fe07dc573992a029e010dba09b1a8dcbc44c5c2e79567f39073
     wallet_config:
       path: config/client.yaml
-      active_env: testnet
-default_context: testnet
+      active_env: $WORKDIR
+default_context: $WORKDIR
 EOF
     
     # Remove the final newline to test edge case
@@ -158,9 +159,9 @@ EOF
     # Test 3: Config with existing rpc_urls - ensure replacement doesn't break other lines
     echo "Test 3: Replacing existing rpc_urls without breaking other lines..."
     
-    cat > "$TEST_WALRUS_CONFIG" << 'EOF'
+    cat > "$TEST_WALRUS_CONFIG" << EOF
 contexts:
-  testnet:
+  $WORKDIR:
     system_object: 0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af
     staking_object: 0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3
     exchange_objects:
@@ -168,11 +169,11 @@ contexts:
       - 0x19825121c52080bb1073662231cfea5c0e4d905fd13e95f21e9a018f2ef41862
     wallet_config:
       path: config/client.yaml
-      active_env: testnet
+      active_env: $WORKDIR
     rpc_urls:
       - http://old.example.com:9999
       - http://another.old.url:8888
-default_context: testnet
+default_context: $WORKDIR
 EOF
 
     EXCHANGE_OBJECTS_COUNT_BEFORE=$(grep -c "0x" "$TEST_WALRUS_CONFIG")
@@ -204,10 +205,12 @@ EOF
             fail "Old rpc_urls not removed"
         fi
         
-        if grep -q "http://localhost:44342" "$TEST_WALRUS_CONFIG"; then
+        # Check for the expected proxy URL (dynamic based on workdir config)
+        local expected_proxy_url="http://${CFG_proxy_host_ip}:${CFG_proxy_port_number}"
+        if grep -q "$expected_proxy_url" "$TEST_WALRUS_CONFIG"; then
             echo "✓ New smart rpc_urls added"
         else
-            fail "New smart rpc_urls not added"
+            fail "New smart rpc_urls not added (expected: $expected_proxy_url)"
         fi
         
     else

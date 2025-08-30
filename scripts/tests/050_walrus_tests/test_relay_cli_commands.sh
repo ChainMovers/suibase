@@ -10,42 +10,43 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/__test_common.sh
 source "$script_dir/__test_common.sh"
 
+
 # Test plan
 echo "=== Testing Walrus Relay CLI Commands ==="
-echo "Testing: testnet wal-relay status/enable/disable"
+echo "Testing: $WORKDIR wal-relay status/enable/disable"
 echo
 
 # Setup test environment
-setup_test_workdir "testnet"
-backup_config_files "testnet"
+setup_test_workdir "$WORKDIR"
+backup_config_files "$WORKDIR"
 
 # Ensure we're using BUILD version of suibase-daemon for walrus relay features
 ensure_build_daemon
 
 # Store original config state
 ORIGINAL_CONFIG_STATE=""
-if grep -q "^walrus_relay_enabled:" "$WORKDIRS/testnet/suibase.yaml" 2>/dev/null; then
-    ORIGINAL_CONFIG_STATE=$(grep "^walrus_relay_enabled:" "$WORKDIRS/testnet/suibase.yaml")
+if grep -q "^walrus_relay_enabled:" "$WORKDIRS/$WORKDIR/suibase.yaml" 2>/dev/null; then
+    ORIGINAL_CONFIG_STATE=$(grep "^walrus_relay_enabled:" "$WORKDIRS/$WORKDIR/suibase.yaml")
 fi
 
 test_status_when_disabled() {
     echo "--- Test: Status when disabled ---"
 
     # Ensure disabled state  
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
     
     # Start services so CLI reads config state instead of showing STOPPED
-    "$SUIBASE_DIR/scripts/testnet" start
+    "$SUIBASE_DIR/scripts/$WORKDIR" start
 
     # Test status output - CLI detects DISABLED instantaneously from config
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
 
     if ! echo "$output" | grep -q "DISABLED"; then
         fail "Status should show DISABLED when relay is disabled. Got: $output"
     fi
 
-    if ! echo "$output" | grep -q "To enable do 'testnet wal-relay enable'"; then
+    if ! echo "$output" | grep -q "To enable do '$WORKDIR wal-relay enable'"; then
         fail "Status should show enable instruction when disabled. Got: $output"
     fi
 
@@ -56,18 +57,18 @@ test_enable_command() {
     echo "--- Test: Enable command ---"
 
     # Ensure starting from disabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
 
     # Test enable command
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay enable 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable 2>&1)
 
     if ! echo "$output" | grep -q "Walrus relay is now enabled"; then
         fail "Enable command should confirm enablement. Got: $output"
     fi
 
     # Verify config file was updated
-    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Config file should contain 'walrus_relay_enabled: true' after enable"
     fi
 
@@ -82,12 +83,12 @@ test_status_when_enabled() {
     # status shows DOWN when process is not running, or OK when process is running
 
     # Ensure enabled state but stop services so process isn't running
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
-    "$SUIBASE_DIR/scripts/testnet" stop
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" stop
 
     # Test status output
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
 
     # Should show DOWN, STOPPED, or OK depending on daemon and process state
     if echo "$output" | grep -q "DOWN"; then
@@ -108,26 +109,34 @@ test_status_when_working() {
     # When enabled and services running, status should be OK or DOWN from daemon
 
     # Ensure enabled state and start services  
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
-    "$SUIBASE_DIR/scripts/testnet" start
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" start
 
     # Test status output 
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
 
     # Wait for INITIALIZING to resolve to OK or DOWN (max 10 seconds)
-    if ! wait_for_walrus_relay_status "testnet" "OK|DOWN" 10 true; then
+    if ! wait_for_walrus_relay_status "$WORKDIR" "OK|DOWN" 10 true; then
         echo "⚠ Walrus relay status did not resolve from INITIALIZING within 10 seconds"
     fi
     
     # Get final status
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
     
     # Check final status after INITIALIZING resolved (or timeout)
     if echo "$output" | grep -q "OK"; then
         # Daemon implementation working - process running and healthy
-        if ! echo "$output" | grep -q "http://localhost:45852"; then
-            fail "Status should show proxy URL when OK. Got: $output"
+        # Check for proxy URL based on workdir
+        local expected_port
+        case "$WORKDIR" in
+            "testnet") expected_port="45852" ;;
+            "mainnet") expected_port="45853" ;;
+            *) expected_port="45852" ;; # fallback
+        esac
+        # Strip ANSI color codes before checking for URL pattern
+        if ! strip_ansi_colors "$output" | grep -q "http://localhost:$expected_port"; then
+            fail "Status should show proxy URL http://localhost:$expected_port when OK. Got: $output"
         fi
         if ! echo "$output" | grep -q "pid"; then
             fail "Status should show PID when OK and running. Got: $output"  
@@ -151,18 +160,18 @@ test_disable_command() {
     echo "--- Test: Disable command ---"
 
     # Ensure starting from enabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
     # Test disable command
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay disable 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable 2>&1)
 
     if ! echo "$output" | grep -q "Walrus relay is now disabled"; then
         fail "Disable command should confirm disablement. Got: $output"
     fi
 
     # Verify config file was updated
-    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Config file should contain 'walrus_relay_enabled: false' after disable"
     fi
 
@@ -173,11 +182,11 @@ test_enable_when_already_enabled() {
     echo "--- Test: Enable when already enabled ---"
 
     # Ensure enabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
     # Test enable command again
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay enable 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable 2>&1)
 
     if ! echo "$output" | grep -q "Walrus relay already enabled"; then
         fail "Enable command should detect already enabled state. Got: $output"
@@ -190,11 +199,11 @@ test_disable_when_already_disabled() {
     echo "--- Test: Disable when already disabled ---"
 
     # Ensure disabled state
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
 
     # Test disable command again
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay disable 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable 2>&1)
 
     if ! echo "$output" | grep -q "Walrus relay already disabled"; then
         fail "Disable command should detect already disabled state. Got: $output"
@@ -210,7 +219,8 @@ test_mainnet_support() {
     local output
     output=$("$SUIBASE_DIR/scripts/mainnet" wal-relay status 2>&1)
 
-    if ! echo "$output" | grep -q "DISABLED"; then
+    # Strip ANSI color codes and check for valid status (DISABLED, DOWN, OK, etc.)
+    if ! strip_ansi_colors "$output" | grep -Eq "DISABLED|DOWN|OK|STOPPED|NOT RUNNING"; then
         fail "Mainnet wal-relay status should work. Got: $output"
     fi
 
@@ -236,7 +246,7 @@ test_help_command() {
 
     # Test help output
     local output
-    output=$("$SUIBASE_DIR/scripts/testnet" wal-relay --help 2>&1)
+    output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay --help 2>&1)
 
     if ! echo "$output" | grep -q "USAGE:"; then
         fail "Help should show usage information. Got: $output"
@@ -269,12 +279,12 @@ test_help_command
 echo "--- Restoring original configuration ---"
 if [ -n "$ORIGINAL_CONFIG_STATE" ]; then
     # Remove any existing walrus_relay_enabled line and add the original
-    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
-    echo "$ORIGINAL_CONFIG_STATE" >> "$WORKDIRS/testnet/suibase.yaml"
+    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
+    echo "$ORIGINAL_CONFIG_STATE" >> "$WORKDIRS/$WORKDIR/suibase.yaml"
     echo "✓ Restored original config: $ORIGINAL_CONFIG_STATE"
 else
     # Remove walrus_relay_enabled line if it didn't exist originally
-    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
     echo "✓ Removed walrus_relay_enabled (wasn't present originally)"
 fi
 

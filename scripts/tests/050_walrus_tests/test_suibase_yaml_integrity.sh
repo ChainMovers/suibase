@@ -16,14 +16,43 @@ echo "Testing: Enable/disable preserves other suibase.yaml configurations"
 echo
 
 # Setup test environment
-setup_test_workdir "testnet"
-backup_config_files "testnet"
+setup_test_workdir "$WORKDIR"
+backup_config_files "$WORKDIR"
+
+# Ensure we're using BUILD version of suibase-daemon for walrus relay features
+ensure_build_daemon
 
 TEMP_CONFIG_FILE="/tmp/suibase_wal_relay_config_test_$$"
 
 create_test_config() {
     local config_file="$1"
     local walrus_setting="$2"  # "true", "false", or "" (omit)
+
+    # Set workdir-specific settings
+    local rpc_url proxy_port metrics_port local_port force_tag
+    case "$WORKDIR" in
+        "testnet")
+            rpc_url="https://fullnode.testnet.sui.io:443"
+            proxy_port="44342"
+            force_tag="testnet-v1.18.0"
+            metrics_port="45812"
+            local_port="45802"
+            ;;
+        "mainnet")
+            rpc_url="https://fullnode.mainnet.sui.io:443"
+            proxy_port="44343"
+            force_tag="mainnet-v1.18.0"
+            metrics_port="45813"
+            local_port="45803"
+            ;;
+        *)
+            rpc_url="https://fullnode.testnet.sui.io:443"
+            proxy_port="44342"
+            force_tag="testnet-v1.18.0"
+            metrics_port="45812"
+            local_port="45802"
+            ;;
+    esac
 
     cat > "$config_file" << EOF
 # Test configuration for walrus relay integrity testing
@@ -33,7 +62,7 @@ create_test_config() {
 # ========
 precompiled_bin: false
 default_repo_branch: "main"
-force_tag: "mainnet-v1.18.0"
+force_tag: "$force_tag"
 enable_local_repo: true
 
 # User addresses and keys
@@ -52,7 +81,7 @@ links:
     monitored: true
     selectable: true
   - alias: "sui.io"
-    rpc: "https://fullnode.testnet.sui.io:443"
+    rpc: "$rpc_url"
     priority: 20
     monitored: true
     selectable: true
@@ -60,7 +89,12 @@ links:
 # Proxy settings
 proxy_enabled: true
 proxy_host_ip: "localhost"
-proxy_port_number: 44342
+proxy_port_number: $proxy_port
+
+# Walrus relay settings
+walrus_relay_proxy_port: 45852
+walrus_relay_local_port: $local_port
+walrus_relay_metrics_port: $metrics_port
 
 EOF
 
@@ -149,7 +183,7 @@ get_walrus_relay_pid() {
     # Extract PID from "testnet wal-relay status" output
     # Returns empty string if no PID found
     local status_output
-    status_output=$("$SUIBASE_DIR/scripts/testnet" wal-relay status 2>/dev/null)
+    status_output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>/dev/null)
     # Remove ANSI color codes first, then extract PID
     strip_ansi_colors "$status_output" | grep -o "pid [0-9]\+" | grep -o "[0-9]\+" | head -1
 }
@@ -162,32 +196,37 @@ test_config_process_discrepancy() {
     # Scenario 1: Process enabled → Config disabled → wal-relay enable
     echo "=== Scenario 1: enabled->disabled config, then wal-relay enable ==="
 
-    # Start with enabled state
+    # Start with enabled state - need both config enabled AND services running
     echo "Starting with wal-relay enable..."
-    if ! "$SUIBASE_DIR/scripts/testnet" wal-relay enable; then
+    if ! "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable; then
         fail "Initial wal-relay enable failed"
+    fi
+
+    echo "Starting $WORKDIR services to actually run the walrus-upload-relay process..."
+    if ! "$SUIBASE_DIR/scripts/$WORKDIR" start; then
+        fail "Failed to start $WORKDIR services"
     fi
 
     # Get the PID of running process
     local pid1
     pid1=$(get_walrus_relay_pid)
-    echo "Process PID after enable: $pid1"
+    echo "Process PID after enable and start: $pid1"
 
     if [ -z "$pid1" ]; then
-        fail "No PID found after wal-relay enable - process should be running"
+        fail "No PID found after wal-relay enable and start - process should be running"
     fi
 
     # Directly modify config to create discrepancy
     echo "Creating discrepancy: setting config to disabled while process runs..."
-    if grep -q "^walrus_relay_enabled:" "$WORKDIRS/testnet/suibase.yaml"; then
-        sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: false/" "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    if grep -q "^walrus_relay_enabled:" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
+        sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: false/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
     else
-        echo "walrus_relay_enabled: false" >> "$WORKDIRS/testnet/suibase.yaml"
+        echo "walrus_relay_enabled: false" >> "$WORKDIRS/$WORKDIR/suibase.yaml"
     fi
 
     # Call wal-relay enable (should handle discrepancy gracefully)
     echo "Calling wal-relay enable to resolve discrepancy..."
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
     local exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
@@ -195,7 +234,7 @@ test_config_process_discrepancy() {
     fi
 
     # Verify config is now enabled
-    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Scenario 1: Config should show enabled after wal-relay enable"
     fi
 
@@ -212,11 +251,11 @@ test_config_process_discrepancy() {
 
     # Directly modify config to disabled
     echo "Creating discrepancy: setting config to disabled while process runs..."
-    sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: false/" "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: false/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
 
     # Call wal-relay disable (should handle discrepancy gracefully)
     echo "Calling wal-relay disable to resolve discrepancy..."
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
     exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
@@ -224,7 +263,7 @@ test_config_process_discrepancy() {
     fi
 
     # Verify config shows disabled and process stopped
-    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Scenario 2: Config should show disabled after wal-relay disable"
     fi
 
@@ -235,7 +274,7 @@ test_config_process_discrepancy() {
     else
         echo "✓ Process stopped as expected"
     fi
-    
+
     echo "✓ Scenario 2 passed: discrepancy resolved without exit code 1"
     echo
 
@@ -249,11 +288,11 @@ test_config_process_discrepancy() {
 
     # Directly modify config to enabled
     echo "Creating discrepancy: setting config to enabled while process stopped..."
-    sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: true/" "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: true/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
 
     # Call wal-relay enable (should handle discrepancy gracefully)
     echo "Calling wal-relay enable to resolve discrepancy..."
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
     exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
@@ -261,7 +300,7 @@ test_config_process_discrepancy() {
     fi
 
     # Verify config shows enabled and process started
-    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Scenario 3: Config should show enabled after wal-relay enable"
     fi
 
@@ -285,7 +324,7 @@ test_config_process_discrepancy() {
     echo "=== Scenario 4: disabled->enabled config, then wal-relay disable ==="
 
     # First ensure we have disabled state - disable the process
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable > /dev/null 2>&1
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable > /dev/null 2>&1
 
     local pid6
     pid6=$(get_walrus_relay_pid)
@@ -293,11 +332,11 @@ test_config_process_discrepancy() {
 
     # Directly modify config to enabled
     echo "Creating discrepancy: setting config to enabled while process stopped..."
-    sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: true/" "$WORKDIRS/testnet/suibase.yaml" && rm "$WORKDIRS/testnet/suibase.yaml.bak"
+    sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: true/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
 
     # Call wal-relay disable (should handle discrepancy gracefully)
     echo "Calling wal-relay disable to resolve discrepancy..."
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
     exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
@@ -305,7 +344,7 @@ test_config_process_discrepancy() {
     fi
 
     # Verify config shows disabled and no process running
-    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Scenario 4: Config should show disabled after wal-relay disable"
     fi
 
@@ -326,15 +365,18 @@ test_config_process_discrepancy() {
 test_enable_from_missing() {
     echo "--- Test: Enable when walrus_relay_enabled is missing ---"
 
+    # Clean up any running processes first
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable >/dev/null 2>&1 || true
+
     # Create config without walrus_relay_enabled
     create_test_config "$TEMP_CONFIG_FILE" ""
-    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/testnet/suibase.yaml"
+    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/$WORKDIR/suibase.yaml"
 
     # Enable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
     # Verify integrity
-    verify_config_integrity "$WORKDIRS/testnet/suibase.yaml" "true" "enable from missing"
+    verify_config_integrity "$WORKDIRS/$WORKDIR/suibase.yaml" "true" "enable from missing"
 
     echo "✓ Enable from missing preserves config integrity"
 }
@@ -342,15 +384,18 @@ test_enable_from_missing() {
 test_enable_from_false() {
     echo "--- Test: Enable when walrus_relay_enabled is false ---"
 
+    # Clean up any running processes first
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable >/dev/null 2>&1 || true
+
     # Create config with walrus_relay_enabled: false
     create_test_config "$TEMP_CONFIG_FILE" "false"
-    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/testnet/suibase.yaml"
+    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/$WORKDIR/suibase.yaml"
 
     # Enable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
     # Verify integrity
-    verify_config_integrity "$WORKDIRS/testnet/suibase.yaml" "true" "enable from false"
+    verify_config_integrity "$WORKDIRS/$WORKDIR/suibase.yaml" "true" "enable from false"
 
     echo "✓ Enable from false preserves config integrity"
 }
@@ -358,15 +403,18 @@ test_enable_from_false() {
 test_disable_from_true() {
     echo "--- Test: Disable when walrus_relay_enabled is true ---"
 
+    # Clean up any running processes first
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable >/dev/null 2>&1 || true
+
     # Create config with walrus_relay_enabled: true
     create_test_config "$TEMP_CONFIG_FILE" "true"
-    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/testnet/suibase.yaml"
+    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/$WORKDIR/suibase.yaml"
 
     # Disable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
 
     # Verify integrity
-    verify_config_integrity "$WORKDIRS/testnet/suibase.yaml" "false" "disable from true"
+    verify_config_integrity "$WORKDIRS/$WORKDIR/suibase.yaml" "false" "disable from true"
 
     echo "✓ Disable from true preserves config integrity"
 }
@@ -374,44 +422,52 @@ test_disable_from_true() {
 test_config_with_surrounding_walrus_settings() {
     echo "--- Test: Config with other walrus-related settings ---"
 
+    # Set workdir-specific port numbers
+    local proxy_port local_port
+    case "$WORKDIR" in
+        "testnet") proxy_port="45852"; local_port="45802" ;;
+        "mainnet") proxy_port="45853"; local_port="45803" ;;
+        *) proxy_port="45852"; local_port="45802" ;;
+    esac
+
     # Create config with walrus-related settings around walrus_relay_enabled
     cat > "$TEMP_CONFIG_FILE" << EOF
 # Config with various walrus settings
 walrus_bin_url: "https://github.com/MystenLabs/walrus"
-walrus_network: "testnet"
+walrus_network: "$WORKDIR"
 walrus_relay_enabled: false
-walrus_relay_proxy_port: 45852
-walrus_relay_local_port: 45802
+walrus_relay_proxy_port: $proxy_port
+walrus_relay_local_port: $local_port
 walrus_config_file: "config/walrus-config.yaml"
 EOF
 
-    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/testnet/suibase.yaml"
+    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/$WORKDIR/suibase.yaml"
 
     # Enable walrus relay
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
     # Verify all walrus settings are preserved
-    if ! grep -q "^walrus_bin_url: \"https://github.com/MystenLabs/walrus\"" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_bin_url: \"https://github.com/MystenLabs/walrus\"" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "walrus_bin_url was lost or modified"
     fi
 
-    if ! grep -q "^walrus_network: \"testnet\"" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_network: \"$WORKDIR\"" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "walrus_network was lost or modified"
     fi
 
-    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "walrus_relay_enabled was not updated correctly"
     fi
 
-    if ! grep -q "^walrus_relay_proxy_port: 45852" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_proxy_port: $proxy_port" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "walrus_relay_proxy_port was lost or modified"
     fi
 
-    if ! grep -q "^walrus_relay_local_port: 45802" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_local_port: $local_port" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "walrus_relay_local_port was lost or modified"
     fi
 
-    if ! grep -q "^walrus_config_file: \"config/walrus-config.yaml\"" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_config_file: \"config/walrus-config.yaml\"" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "walrus_config_file was lost or modified"
     fi
 
@@ -422,20 +478,20 @@ test_edge_case_line_positions() {
     echo "--- Test: Edge case line positions ---"
 
     # Just to help knowing the initial state before the enable/disable tests.
-    testnet status
+    "$SUIBASE_DIR/scripts/$WORKDIR" status
 
     # Test when walrus_relay_enabled is first line
     echo "walrus_relay_enabled: false" > "$TEMP_CONFIG_FILE"
     echo "other_setting: value" >> "$TEMP_CONFIG_FILE"
-    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/testnet/suibase.yaml"
+    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/$WORKDIR/suibase.yaml"
 
-    "$SUIBASE_DIR/scripts/testnet" wal-relay enable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
-    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: true" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Failed to update walrus_relay_enabled when it's the first line"
     fi
 
-    if ! grep -q "^other_setting: value" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^other_setting: value" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "other_setting was lost when walrus_relay_enabled was first line"
     fi
     echo "✓ First line test passed"
@@ -444,41 +500,39 @@ test_edge_case_line_positions() {
     echo "Testing: walrus_relay_enabled as last line"
     echo "other_setting: value" > "$TEMP_CONFIG_FILE"
     echo "walrus_relay_enabled: true" >> "$TEMP_CONFIG_FILE"
-    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/testnet/suibase.yaml"
+    cp "$TEMP_CONFIG_FILE" "$WORKDIRS/$WORKDIR/suibase.yaml"
 
-    "$SUIBASE_DIR/scripts/testnet" wal-relay disable
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
 
-    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^walrus_relay_enabled: false" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "Failed to update walrus_relay_enabled when it's the last line"
     fi
 
-    if ! grep -q "^other_setting: value" "$WORKDIRS/testnet/suibase.yaml"; then
+    if ! grep -q "^other_setting: value" "$WORKDIRS/$WORKDIR/suibase.yaml"; then
         fail "other_setting was lost when walrus_relay_enabled was last line"
     fi
 
     echo "✓ Edge case line positions handled correctly"
 }
 
-# Store original configs
-ORIGINAL_TESTNET_CONFIG=""
-if [ -f "$WORKDIRS/testnet/suibase.yaml" ]; then
-    ORIGINAL_TESTNET_CONFIG=$(cat "$WORKDIRS/testnet/suibase.yaml")
-fi
+# Run tests. Stop suibase-daemon while doing these fist set of tests that
+# modify suibase.yaml "wildly".
 
-# Run tests
-test_config_process_discrepancy
+"$SUIBASE_DIR/scripts/dev/stop-daemon"
+
 test_enable_from_missing
 test_enable_from_false
 test_disable_from_true
 test_config_with_surrounding_walrus_settings
 test_edge_case_line_positions
 
-# Restore original configs
-echo "--- Restoring original configurations ---"
-if [ -n "$ORIGINAL_TESTNET_CONFIG" ]; then
-    echo "$ORIGINAL_TESTNET_CONFIG" > "$WORKDIRS/testnet/suibase.yaml"
-    echo "✓ Restored original testnet config"
-fi
+# Restore suibase.yaml from default template (handles both testnet and mainnet)
+restore_suibase_yaml_from_default "$WORKDIR"
+"$SUIBASE_DIR/scripts/dev/update-daemon"
+
+test_config_process_discrepancy
+
+restore_suibase_yaml_from_default "$WORKDIR"
 
 # Cleanup
 rm -f "$TEMP_CONFIG_FILE"

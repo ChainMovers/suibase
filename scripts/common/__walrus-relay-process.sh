@@ -170,7 +170,12 @@ walrus_relay_status() {
     _status_for_display="NOT RUNNING"
     # Get expected port from config
     local _config_port="${CFG_walrus_relay_proxy_port:?}"
-    _info_for_display="http://localhost:$_config_port"
+    _info_for_display=$(
+      echo -n "http://"
+      echo_blue "localhost"
+      echo -n ":"
+      echo_blue "$_config_port"
+    )
   else
     # Daemon is running and walrus relay is enabled
     _local_backend_pid="$WALRUS_RELAY_PROCESS_PID"  # May be empty if not started yet
@@ -197,10 +202,20 @@ walrus_relay_status() {
         if [ -n "${WRELAY_proxy_port:-}" ] && [ "$WRELAY_proxy_port" != "$_config_port" ]; then
           _info_for_display="http://localhost:? (transitioning from: $WRELAY_proxy_port to $_config_port)"
         elif [ -n "${WRELAY_proxy_port:-}" ]; then
-          _info_for_display="http://localhost:$WRELAY_proxy_port"
+          _info_for_display=$(
+            echo -n "http://"
+            echo_blue "localhost"
+            echo -n ":"
+            echo_blue "$WRELAY_proxy_port"
+          )
         else
           # Daemon doesn't provide port info yet, use config port
-          _info_for_display="http://localhost:$_config_port"
+          _info_for_display=$(
+            echo -n "http://"
+            echo_blue "localhost"
+            echo -n ":"
+            echo_blue "$_config_port"
+          )
         fi
       else
         _info_for_display=""
@@ -216,7 +231,7 @@ walrus_relay_status() {
 
   if [ "$verbosity" = "verbose" ]; then
     walrus_relay_echo_status_line "Walrus Relay" "$WALRUS_RELAY_SUPPORT_ENABLED" "$WALRUS_RELAY_BACKEND_PID" "$WALRUS_RELAY_STATUS" "$WALRUS_RELAY_INFO"
-    
+
     # Show stats if daemon is running and stats are available
     if [ -n "$suibase_daemon_pid" ] && [ "$WALRUS_RELAY_SUPPORT_ENABLED" = true ]; then
       # Get stats from API in quiet mode and display them
@@ -224,19 +239,19 @@ walrus_relay_status() {
       _stats_response=$(curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"jsonrpc\":\"2.0\",\"method\":\"getWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\",\"summary\":true},\"id\":1}" \
         "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
-      
+
       if [ -n "$_stats_response" ] && ! echo "$_stats_response" | jq -e '.error' >/dev/null 2>&1; then
         local _total_requests _successful_requests _failed_requests
         _total_requests=$(echo "$_stats_response" | jq -r '.result.summary.totalRequests // 0')
         _successful_requests=$(echo "$_stats_response" | jq -r '.result.summary.successfulRequests // 0')
         _failed_requests=$(echo "$_stats_response" | jq -r '.result.summary.failedRequests // 0')
-        
+
         if [ "$_total_requests" -gt 0 ] || [ "$_successful_requests" -gt 0 ] || [ "$_failed_requests" -gt 0 ]; then
           echo "                 : Stats: ${_total_requests} total, ${_successful_requests} success, ${_failed_requests} failed"
         fi
       fi
     fi
-    
+
     # Show additional help/error info when needed
     if [ "$WALRUS_RELAY_SUPPORT_ENABLED" = true ] && [ -z "$suibase_daemon_pid" ]; then
       echo
@@ -391,6 +406,7 @@ start_walrus_relay_process() {
 
   # Get configuration values
   local _RELAY_PORT="${CFG_walrus_relay_local_port:?}"
+  local _METRICS_PORT="${CFG_walrus_relay_metrics_port:?}"
   local _WALRUS_CONFIG="$CONFIG_DATA_DIR_DEFAULT/walrus-config.yaml"
   local _RELAY_CONFIG="$CONFIG_DATA_DIR_DEFAULT/relay-config.yaml"
 
@@ -440,6 +456,7 @@ EOF
       --context "$WORKDIR" \
       --walrus-config "$_WALRUS_CONFIG" \
       --server-address "0.0.0.0:$_RELAY_PORT" \
+      --metrics-address "127.0.0.1:$_METRICS_PORT" \
       --relay-config "$_RELAY_CONFIG" \
       >"$WALRUS_RELAY_DIR/walrus-relay-process.log" 2>&1 &
 
@@ -456,15 +473,17 @@ EOF
         AT_LEAST_ONE_SECOND=true
       fi
 
-      # Detect if should do a retry at starting it
+      # Detect if should do a retry at starting it. Should retry only if hints in the logs
+      # that the process failed to start.
       if [ -f "$WALRUS_RELAY_DIR/walrus-relay-process.log" ] && \
-         grep -q "Address already in use\|failed to load\|panicked" "$WALRUS_RELAY_DIR/walrus-relay-process.log"; then
+         grep -q "Address already in use\|panicked" "$WALRUS_RELAY_DIR/walrus-relay-process.log"; then
         # Sleep 2 seconds before retrying.
         for _j in {1..2}; do
           echo -n "."
           sleep 1
           AT_LEAST_ONE_SECOND=true
         done
+        echo "process failed to start"
         break
       fi
     done
@@ -555,7 +574,7 @@ walrus_relay_stats() {
   # Display walrus relay statistics
   # Can be either "verbose" or "quiet"
   local verbosity=$1
-  
+
   if ! is_walrus_supported_by_workdir; then
     if [ "$verbosity" = "verbose" ]; then
       echo "Walrus relay stats not supported for $WORKDIR"
@@ -577,7 +596,7 @@ walrus_relay_stats() {
   _API_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"method\":\"getWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\",\"display\":true},\"id\":1}" \
     "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
-  
+
   if [ -z "$_API_RESPONSE" ]; then
     if [ "$verbosity" = "verbose" ]; then
       echo "Failed to retrieve walrus relay stats"
@@ -612,7 +631,7 @@ walrus_relay_clear_stats() {
   # Clear walrus relay statistics
   # Can be either "verbose" or "quiet"
   local verbosity=$1
-  
+
   if ! is_walrus_supported_by_workdir; then
     if [ "$verbosity" = "verbose" ]; then
       echo "Walrus relay stats not supported for $WORKDIR"
@@ -634,7 +653,7 @@ walrus_relay_clear_stats() {
   _API_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"method\":\"resetWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\"},\"id\":1}" \
     "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
-  
+
   if [ -z "$_API_RESPONSE" ]; then
     if [ "$verbosity" = "verbose" ]; then
       echo "Failed to clear walrus relay stats"
@@ -655,7 +674,7 @@ walrus_relay_clear_stats() {
   # Check if reset was successful
   local _RESULT_STATUS
   _RESULT_STATUS=$(echo "$_API_RESPONSE" | jq -r '.result.result // "false"')
-  
+
   if [ "$verbosity" = "verbose" ]; then
     if [ "$_RESULT_STATUS" = "true" ]; then
       echo "Walrus relay stats cleared successfully"

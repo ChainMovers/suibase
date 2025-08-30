@@ -273,7 +273,7 @@ stop_suibase_daemon() {
     if [ -n "$SUIBASE_DAEMON_PID" ]; then
       setup_error " $SUIBASE_DAEMON_NAME pid=$SUIBASE_DAEMON_PID still running. Try again, or stop (kill) the process yourself before proceeding."
     fi
-    
+
     # Brief delay to allow run-daemon.sh supervisor loop to terminate
     # TODO: Consider verifying run-daemon.sh loop termination in the future
     sleep 1
@@ -350,40 +350,20 @@ start_suibase_daemon_as_needed() {
     local _PERFORM_INSTALL=false
 
     # Check SUIBASE_DAEMON_UPGRADING to prevent multiple attempts to upgrade
-    # within the same CLI call.
-
+    # within the *same* CLI call.
     if [ "$SUIBASE_DAEMON_UPGRADING" = "false" ]; then
-      _PERFORM_INSTALL=true
-
-      # To try to minimize race conditions, wait until a concurrent script
-      # is done doing the same. Not perfect... good enough.
-      #
-      # This also hint the VSCode extension to step back from using the
-      # backend while this is on-going.
-      local _CHECK_IF_NEEDED_AGAIN=false
-      local _FIRST_ITERATION=true
-      while [ -f /tmp/.suibase/suibase-daemon-upgrading ]; do
-        if $_FIRST_ITERATION; then
-          echo "Waiting for concurrent script to finish upgrading suibase daemon..."
-          _FIRST_ITERATION=false
-        fi
-        sleep 1
-        _PERFORM_INSTALL=false
-      done
-
       # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
       cli_mutex_lock "$app_obj"
 
-      if [ "$_PERFORM_INSTALL" = false ]; then
-        # Was block by another script... check again if the upgrade is still needed.
-        app_call "$app_obj" "set_local_vars"
+      # Re-check while holding the lock.
+      app_call "$app_obj" "set_local_vars"
+      get_app_var "$app_obj" "is_installed"
+      _IS_INSTALLED=$APP_VAR
 
-        get_app_var "$app_obj" "is_installed"
-        _IS_INSTALLED=$APP_VAR
-
-        if [ "$_IS_INSTALLED" != "true" ]; then
-          _PERFORM_INSTALL=true
-        fi
+      if [ "$_IS_INSTALLED" = "true" ]; then
+        _PERFORM_INSTALL=false
+      else
+        _PERFORM_INSTALL=true
       fi
     fi
 

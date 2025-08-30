@@ -6,18 +6,19 @@
 # shellcheck source=SCRIPTDIR/__test_common.sh
 source "$(dirname "$0")/__test_common.sh"
 
+
 test_binary_installation() {
     echo "Testing walrus binary installation..."
     
-    setup_test_workdir "testnet"
-    backup_config_files "testnet"
+    setup_test_workdir "$WORKDIR"
+    backup_config_files "$WORKDIR"
     
     # Test updating via proper script (should download walrus-upload-relay)
-    echo "Calling testnet update to install walrus binaries..."
-    "$SUIBASE_DIR/scripts/testnet" update >/dev/null 2>&1
+    echo "Calling $WORKDIR update to install walrus binaries..."
+    "$SUIBASE_DIR/scripts/$WORKDIR" update >/dev/null 2>&1
     
     # Check if binary was installed
-    assert_binary_exists "testnet"
+    assert_binary_exists "$WORKDIR"
     
     echo "✓ Binary installation test passed"
 }
@@ -25,7 +26,7 @@ test_binary_installation() {
 test_binary_execution() {
     echo "Testing walrus-upload-relay binary execution..."
     
-    RELAY_BINARY="$WORKDIRS/testnet/bin/walrus-upload-relay"
+    RELAY_BINARY="$WORKDIRS/$WORKDIR/bin/walrus-upload-relay"
     if [ -f "$RELAY_BINARY" ]; then
         # Test help command to verify binary works
         echo "Testing walrus-upload-relay --help..."
@@ -45,7 +46,7 @@ test_configuration_files() {
     echo "Testing configuration files exist..."
     
     # Verify walrus-config.yaml exists
-    assert_config_file_exists "testnet" "walrus-config.yaml"
+    assert_config_file_exists "$WORKDIR" "walrus-config.yaml"
     
     echo "✓ Configuration files test passed"
 }
@@ -54,8 +55,8 @@ test_walrus_integration() {
     echo "Testing integration with existing walrus system..."
     
     # Test that both walrus and walrus-upload-relay binaries coexist
-    WALRUS_BINARY="$WORKDIRS/testnet/bin/walrus"
-    RELAY_BINARY="$WORKDIRS/testnet/bin/walrus-upload-relay"
+    WALRUS_BINARY="$WORKDIRS/$WORKDIR/bin/walrus"
+    RELAY_BINARY="$WORKDIRS/$WORKDIR/bin/walrus-upload-relay"
     
     if [ -f "$WALRUS_BINARY" ]; then
         echo "✓ Standard walrus binary available"

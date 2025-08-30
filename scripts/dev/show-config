@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Show configuration values for a workdir with proper YAML merging
+
+SUIBASE_DIR="$HOME/suibase"
+WORKDIR="$1"
+SCRIPT_COMMON_CALLER="$0"
+
+# Validate param.
+if [[ ! "$WORKDIR" =~ ^(testnet|mainnet|devnet|localnet)$ ]]; then
+  echo "Invalid workdir: $WORKDIR"
+  echo "Usage: $0 [workdir]"
+  echo "  workdir: testnet, mainnet, devnet, localnet"
+  exit 1
+fi
+
+# shellcheck source=SCRIPTDIR/../common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
+echo "Configuration for workdir: $WORKDIR"
+echo "=================================="
+set | grep '^CFG_' | sort

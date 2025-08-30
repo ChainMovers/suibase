@@ -10,6 +10,7 @@ cd "$( dirname "${BASH_SOURCE[0]}" )" || exit 1
 # Source the common test infrastructure
 source __test_common.sh
 
+
 # Source the walrus repair function for testing
 SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
 source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
@@ -28,9 +29,9 @@ test_exchange_objects_preservation() {
     echo "Creating config that might trigger bug during full walrus config repair..."
     
     # Create a config with outdated system_object to trigger repair_yaml_root_field_as_needed
-    cat > "$TEST_WALRUS_CONFIG" << 'EOF'
+    cat > "$TEST_WALRUS_CONFIG" << EOF
 contexts:
-  testnet:
+  $WORKDIR:
     system_object: 0x0000000000000000000000000000000000000000000000000000000000000000
     staking_object: 0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3
     exchange_objects:
@@ -40,12 +41,12 @@ contexts:
       - 0x8d63209cf8589ce7aef8f262437163c67577ed09f3e636a9d8e0813843fb8bf1
     wallet_config:
       path: config/client.yaml
-      active_env: testnet
+      active_env: $WORKDIR
     rpc_urls:
       - http://old-url-1.example.com:9999
       - http://old-url-2.example.com:8888
       - http://old-url-3.example.com:7777
-default_context: testnet
+default_context: $WORKDIR
 EOF
 
     echo "Original config created. Counting exchange_objects..."
@@ -89,7 +90,8 @@ EOF
         fi
         
         # Verify that rpc_urls were actually updated
-        if grep -q "http://localhost:44342" "$TEST_WALRUS_CONFIG"; then
+        local expected_proxy_url="http://${CFG_proxy_host_ip}:${CFG_proxy_port_number}"
+        if grep -q "$expected_proxy_url" "$TEST_WALRUS_CONFIG"; then
             echo "✓ rpc_urls were correctly updated"
         else
             fail "rpc_urls were not updated as expected"

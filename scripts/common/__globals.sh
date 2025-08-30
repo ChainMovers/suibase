@@ -4115,18 +4115,18 @@ start_all_services() {
     fi
   fi
 
-  if [ "${CFG_network_type:?}" = "remote" ]; then
-    if ! is_walrus_supported_by_workdir; then
-      _SUPPORT_WALRUS_RELAY=false
-    elif [ "${CFG_walrus_relay_enabled:-false}" != "true" ]; then
-      _SUPPORT_WALRUS_RELAY=false
-    else
-      _SUPPORT_WALRUS_RELAY=true
-    fi
+  if ! is_walrus_supported_by_workdir; then
+    _SUPPORT_WALRUS_RELAY=false
+  elif [ "${CFG_walrus_relay_enabled:-false}" != "true" ]; then
+    _SUPPORT_WALRUS_RELAY=false
+  else
+    _SUPPORT_WALRUS_RELAY=true
+  fi
 
+  if [ "$_SUPPORT_WALRUS_RELAY" = true ]; then
     update_WALRUS_RELAY_PROCESS_PID_var
 
-    if [ "$_SUPPORT_WALRUS_RELAY" = true ] && [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
+    if [ -z "$WALRUS_RELAY_PROCESS_PID" ]; then
       _WERE_ALL_RUNNING=false
     fi
   fi

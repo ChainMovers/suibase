@@ -58,6 +58,7 @@ enable_default_links: true
 walrus_relay_enabled: false
 walrus_relay_proxy_port: 45853
 walrus_relay_local_port: 45803
+walrus_relay_metrics_port: 45813
 
 links:
   - alias: "sui.io"
