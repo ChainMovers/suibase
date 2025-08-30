@@ -97,12 +97,8 @@ jobs:
           else
             echo "curl already installed, skipping"
           fi
-          # Only install cmake if not already present
-          if ! command -v cmake &>/dev/null; then
-            brew install cmake
-          else
-            echo "cmake already installed, skipping"
-          fi
+          # Use brew reinstall to handle tap conflicts
+          brew reinstall cmake
 
       - name: Prepare environment
         run: |
