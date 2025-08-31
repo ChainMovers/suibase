@@ -3,6 +3,11 @@
 # Test walrus relay CLI commands (status, enable, disable)
 # Tests the bash-level functionality without requiring Rust daemon support
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Exit on any error
 
 # Load common test functions

@@ -3,6 +3,11 @@
 # Test that '$WORKDIR start' properly starts walrus-upload-relay when walrus_relay_enabled: true
 # This test reproduces the bug where $WORKDIR start doesn't start walrus relay despite being enabled
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Exit on any error
 
 # Load common test functions

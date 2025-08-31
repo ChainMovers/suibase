@@ -3,6 +3,11 @@
 # Test walrus relay status integration in both '$WORKDIR status' and '$WORKDIR wal-relay status'
 # This ensures wal-relay status appears correctly in the main status output
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Exit on any error
 
 # Load common test functions

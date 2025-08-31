@@ -218,11 +218,14 @@ restore_config_files() {
 
     local backup_dir="$TEMP_TEST_DIR/backup_$workdir"
 
-    # Restore backed up config files
+    # Restore backed up config files (ignore errors to avoid failing cleanup)
     if [ -d "$backup_dir" ]; then
-        [ -f "$backup_dir/walrus-config.yaml" ] && cp "$backup_dir/walrus-config.yaml" "$config_dir/"
-        [ -f "$backup_dir/relay-config.yaml" ] && cp "$backup_dir/relay-config.yaml" "$config_dir/"
+        [ -f "$backup_dir/walrus-config.yaml" ] && cp "$backup_dir/walrus-config.yaml" "$config_dir/" 2>/dev/null || true
+        [ -f "$backup_dir/relay-config.yaml" ] && cp "$backup_dir/relay-config.yaml" "$config_dir/" 2>/dev/null || true
     fi
+    
+    # Clean up temp directory
+    rm -rf "$TEMP_TEST_DIR" 2>/dev/null || true
 }
 
 # Stop any walrus relay process that might be running

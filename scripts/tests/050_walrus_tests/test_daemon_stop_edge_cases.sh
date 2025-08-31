@@ -3,6 +3,11 @@
 # Test edge cases when suibase-daemon is stopped
 # This ensures CLI handles daemon unavailability gracefully and falls back appropriately
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Exit on any error
 
 # Load common test functions

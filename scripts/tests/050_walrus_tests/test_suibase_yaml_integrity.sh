@@ -3,6 +3,11 @@
 # Test that walrus relay enable/disable operations preserve all other config integrity
 # This ensures no collateral damage to other settings in suibase.yaml
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Exit on any error
 
 # Load common test functions

@@ -3,6 +3,11 @@
 # Test walrus relay PID display scenarios using real enable/start/stop/disable commands
 # Tests that PID is shown when walrus-upload-relay process is running
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Exit on any error
 
 # Load common test functions

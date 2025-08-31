@@ -3,6 +3,11 @@
 # Test script to verify that our exit 1 fixes work correctly
 # This script intentionally tests edge cases that could cause exit 1
 
+# Ignore SIGPIPE on macOS to prevent test failures
+if [[ "$(uname)" == "Darwin" ]]; then
+    trap '' SIGPIPE
+    echo "SIGPIPE trap installed"
+fi
 set -e  # Enable exit on error to test our fixes
 
 echo "=== Testing Exit 1 Fixes ==="
