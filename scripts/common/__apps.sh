@@ -321,11 +321,11 @@ sb_app_init_PRECOMP_REMOTE_vars() {
       _OUT=$(curl -s --request GET \
         --url "$_REPO_URL/releases" \
         --header "X-GitHub-Api-Version: 2022-11-28" \
-        --header "Authorization: Bearer $USER_GITHUB_TOKEN")
+        --header "Authorization: Bearer $USER_GITHUB_TOKEN" || true)
     else
       _OUT=$(curl -s --request GET \
         --url "$_REPO_URL/releases" \
-        --header "X-GitHub-Api-Version: 2022-11-28")
+        --header "X-GitHub-Api-Version: 2022-11-28" || true)
     fi
 
     # Extract all tag_name lines from _OUT.
@@ -559,8 +559,8 @@ sb_app_download_PRECOMP_REMOTE() {
       # If extraction is not valid, then delete the downloaded file so it can be tried again.
       _USE_VERSION=""
       if [ $i -lt 2 ]; then
-        warn_user "Failed to extract binary. Trying to re-download again"
-        exit
+        warn_user "Failed to extract binary. Try again."
+        exit 1
       fi
       rm -rf "$_EXTRACT_DIR" >/dev/null 2>&1
       rm -rf "$_DOWNLOAD_FILEPATH" >/dev/null 2>&1

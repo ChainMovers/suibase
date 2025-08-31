@@ -135,7 +135,7 @@ start_dtp_daemon() {
   if [ "${CFG_dtp_enabled:?}" = "dev" ]; then
     # Run it in the foreground and just exit when done.
     "$HOME"/suibase/scripts/common/run-daemon.sh dtp foreground
-    exit
+    exit $?
   fi
 
   # Try until can confirm the dtp-services is running healthy, or exit
@@ -380,7 +380,7 @@ get_dtp_daemon_status() {
   local _JSON_PARAMS="{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"getLinks\",\"params\":{\"workdir\":\"$WORKDIR_NAME\",\"$_DISP\":true}}"
 
   export JSON_RESP
-  JSON_RESP=$(curl -x "" -s --location -X POST "http://${CFG_dtp_host_ip:?}:${CFG_dtp_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS")
+  JSON_RESP=$(curl -x "" -s --location -X POST "http://${CFG_dtp_host_ip:?}:${CFG_dtp_api_port_number:?}" -H "$_HEADERS" -d "$_JSON_PARAMS" || true)
 }
 export -f get_dtp_daemon_status
 

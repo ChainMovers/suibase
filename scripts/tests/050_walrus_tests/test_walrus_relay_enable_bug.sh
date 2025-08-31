@@ -37,7 +37,6 @@ test_walrus_relay_disable_bug() {
     
     echo "Step 4: Disable walrus relay and check for process stop message"
     disable_output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable 2>&1)
-    echo "Disable output: $disable_output"
     
     echo "Step 5: Verify disable command stopped the running process"
     # Should see "Stopping [workdir]walrus-upload-relay (PID [number])" in output

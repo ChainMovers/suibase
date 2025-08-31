@@ -43,11 +43,8 @@ test_daemon_running_baseline() {
     "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
 
     # Test status with daemon running
-    local status_output
-    status_output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
-
-    # Show initial status for debugging
-    echo "✓ Initial walrus relay status: $status_output"
+    echo "✓ Initial walrus relay status:"
+    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status
 
     # Check that status.yaml exists and is written by daemon
     if [ -f "$WORKDIRS/$WORKDIR/walrus-relay/status.yaml" ]; then
@@ -228,6 +225,13 @@ test_config_change_without_daemon
 
 # Restore original config state
 echo "--- Restoring original configuration ---"
+
+# Check if suibase.yaml file exists before attempting to modify it
+if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+    echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+    exit 1
+fi
+
 if [ -n "$ORIGINAL_CONFIG_STATE" ]; then
     # Remove any existing walrus_relay_enabled line and add the original
     sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/$WORKDIR/suibase.yaml" && rm -f "$WORKDIRS/$WORKDIR/suibase.yaml.bak"

@@ -52,9 +52,8 @@ test_start_with_walrus_enabled() {
     echo "  Config shows walrus_relay_enabled: true"
 
     # Start $WORKDIR services
-    local start_output
-    start_output=$("$SUIBASE_DIR/scripts/$WORKDIR" start 2>&1)
-    echo "  Start output: $start_output"
+    echo "  Starting $WORKDIR services..."
+    "$SUIBASE_DIR/scripts/$WORKDIR" start
 
     # Wait for walrus relay process to be running or status to be ready
     wait_for_walrus_relay_status "$WORKDIR" "OK|DOWN|INITIALIZING" 10 >/dev/null 2>&1 || true
@@ -62,9 +61,7 @@ test_start_with_walrus_enabled() {
     # Check if walrus-upload-relay process is running
     if ! check_walrus_process_running "$WORKDIR" >/dev/null 2>&1; then
         # Get status to see what happened
-        local status_output
-        status_output=$("$SUIBASE_DIR/scripts/$WORKDIR" status 2>&1)
-        echo "  Status output: $status_output"
+        "$SUIBASE_DIR/scripts/$WORKDIR" status
 
         # Check status.yaml for debugging
         if [ -f "$WORKDIRS/$WORKDIR/walrus-relay/status.yaml" ]; then
@@ -106,9 +103,8 @@ test_start_with_walrus_disabled() {
     echo "  Config shows walrus_relay_enabled: false"
 
     # Start $WORKDIR services
-    local start_output
-    start_output=$("$SUIBASE_DIR/scripts/$WORKDIR" start 2>&1)
-    echo "  Start output: $start_output"
+    echo "  Starting $WORKDIR services..."
+    "$SUIBASE_DIR/scripts/$WORKDIR" start
 
     # Wait for services to settle - process should stay stopped when disabled
     wait_for_process_stopped "$WORKDIR" 5 >/dev/null 2>&1 || true
@@ -184,6 +180,13 @@ test_start_with_walrus_enabled
 
 # Restore original config state
 echo "--- Restoring original configuration ---"
+
+# Check if suibase.yaml file exists before attempting to modify it
+if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+    echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+    exit 1
+fi
+
 if [ -n "$ORIGINAL_CONFIG_STATE" ]; then
     # Remove any existing walrus_relay_enabled line and add the original
     sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"

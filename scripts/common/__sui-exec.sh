@@ -197,7 +197,7 @@ sui_exec() {
       fi
     fi
 
-    exit
+    exit 0
   fi
 
   # Make sure 'move' subcommand have always a -p or --path parameter.
@@ -235,7 +235,7 @@ sui_exec() {
 
     # shellcheck disable=SC2086,SC2068
     $SUI_BIN "$SUI_SUBCOMMAND" $_OPT_DEFAULT_PATH $_OPT_DEFAULT_INSTALLDIR ${CANONICAL_ARGS[@]}
-    exit
+    exit $?
   fi
 
   if [ $is_local = true ]; then

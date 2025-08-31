@@ -238,16 +238,27 @@ walrus_relay_status() {
       local _stats_response
       _stats_response=$(curl -s -X POST -H "Content-Type: application/json" \
         -d "{\"jsonrpc\":\"2.0\",\"method\":\"getWalrusRelayStats\",\"params\":{\"workdir\":\"$WORKDIR\",\"summary\":true},\"id\":1}" \
-        "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null)
+        "http://localhost:${CFG_daemon_port:-44399}" 2>/dev/null || true)
 
-      if [ -n "$_stats_response" ] && ! echo "$_stats_response" | jq -e '.error' >/dev/null 2>&1; then
-        local _total_requests _successful_requests _failed_requests
-        _total_requests=$(echo "$_stats_response" | jq -r '.result.summary.totalRequests // 0')
-        _successful_requests=$(echo "$_stats_response" | jq -r '.result.summary.successfulRequests // 0')
-        _failed_requests=$(echo "$_stats_response" | jq -r '.result.summary.failedRequests // 0')
+      if [ -n "$_stats_response" ]; then
+        # Check for API error using portable JSON parsing
+        update_JSON_VALUE "error" "$_stats_response"
+        if [ -z "$JSON_VALUE" ]; then
+          local _total_requests _successful_requests _failed_requests
+          
+          # Extract stats using portable JSON parsing
+          update_JSON_VALUE "totalRequests" "$_stats_response"
+          _total_requests="${JSON_VALUE:-0}"
+          
+          update_JSON_VALUE "successfulRequests" "$_stats_response"  
+          _successful_requests="${JSON_VALUE:-0}"
+          
+          update_JSON_VALUE "failedRequests" "$_stats_response"
+          _failed_requests="${JSON_VALUE:-0}"
 
-        if [ "$_total_requests" -gt 0 ] || [ "$_successful_requests" -gt 0 ] || [ "$_failed_requests" -gt 0 ]; then
-          echo "                 : Stats: ${_total_requests} total, ${_successful_requests} success, ${_failed_requests} failed"
+          if [ "$_total_requests" -gt 0 ] || [ "$_successful_requests" -gt 0 ] || [ "$_failed_requests" -gt 0 ]; then
+            echo "                 : Stats: ${_total_requests} total, ${_successful_requests} success, ${_failed_requests} failed"
+          fi
         fi
       fi
     fi
@@ -463,7 +474,7 @@ EOF
     # Loop until confirms can connect, or exit if takes too much time.
     while [ $SECONDS -lt $end ]; do
       # Health check via tip-config endpoint
-      CHECK_ALIVE=$(curl -s "http://localhost:$_RELAY_PORT/v1/tip-config" 2>/dev/null)
+      CHECK_ALIVE=$(curl -s "http://localhost:$_RELAY_PORT/v1/tip-config" 2>/dev/null || true)
       if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
         break
@@ -604,12 +615,14 @@ walrus_relay_stats() {
     return
   fi
 
-  # Check for API errors
-  if echo "$_API_RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+  # Check for API errors using portable JSON parsing
+  update_JSON_VALUE "error" "$_API_RESPONSE"
+  if [ -n "$JSON_VALUE" ]; then
     if [ "$verbosity" = "verbose" ]; then
       local _ERROR_MSG
-      _ERROR_MSG=$(echo "$_API_RESPONSE" | jq -r '.error.message // "Unknown error"')
-      echo "Error retrieving walrus relay stats: $_ERROR_MSG"
+      update_JSON_VALUE "message" "$JSON_VALUE"
+      _ERROR_MSG="${JSON_VALUE:-Unknown error}"
+      echo -e "Error retrieving walrus relay stats: $_ERROR_MSG"
     fi
     return
   fi
@@ -617,9 +630,10 @@ walrus_relay_stats() {
   # Extract and display the formatted output
   if [ "$verbosity" = "verbose" ]; then
     local _DISPLAY_TEXT
-    _DISPLAY_TEXT=$(echo "$_API_RESPONSE" | jq -r '.result.display // ""')
+    update_JSON_VALUE "display" "$_API_RESPONSE"
+    _DISPLAY_TEXT="$JSON_VALUE"
     if [ -n "$_DISPLAY_TEXT" ]; then
-      echo "$_DISPLAY_TEXT"
+      echo -e "$_DISPLAY_TEXT"
     else
       echo "No display data available"
     fi
@@ -661,27 +675,31 @@ walrus_relay_clear_stats() {
     return
   fi
 
-  # Check for API errors
-  if echo "$_API_RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+  # Check for API errors using portable JSON parsing
+  update_JSON_VALUE "error" "$_API_RESPONSE"
+  if [ -n "$JSON_VALUE" ]; then
     if [ "$verbosity" = "verbose" ]; then
       local _ERROR_MSG
-      _ERROR_MSG=$(echo "$_API_RESPONSE" | jq -r '.error.message // "Unknown error"')
-      echo "Error clearing walrus relay stats: $_ERROR_MSG"
+      update_JSON_VALUE "message" "$JSON_VALUE"
+      _ERROR_MSG="${JSON_VALUE:-Unknown error}"
+      echo -e "Error clearing walrus relay stats: $_ERROR_MSG"
     fi
     return
   fi
 
-  # Check if reset was successful
+  # Check if reset was successful using portable JSON parsing
   local _RESULT_STATUS
-  _RESULT_STATUS=$(echo "$_API_RESPONSE" | jq -r '.result.result // "false"')
+  update_JSON_VALUE "result" "$_API_RESPONSE"
+  _RESULT_STATUS="${JSON_VALUE:-false}"
 
   if [ "$verbosity" = "verbose" ]; then
     if [ "$_RESULT_STATUS" = "true" ]; then
       echo "Walrus relay stats cleared successfully"
     else
       local _INFO_MSG
-      _INFO_MSG=$(echo "$_API_RESPONSE" | jq -r '.result.info // "Unknown error"')
-      echo "Failed to clear walrus relay stats: $_INFO_MSG"
+      update_JSON_VALUE "info" "$_API_RESPONSE"
+      _INFO_MSG="${JSON_VALUE:-Unknown error}"
+      echo -e "Failed to clear walrus relay stats: $_INFO_MSG"
     fi
   fi
 }

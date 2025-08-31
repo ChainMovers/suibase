@@ -222,7 +222,7 @@ workdir_init_local() {
   if [ "$DEBUG_PARAM" = true ]; then
     echo "Starting localnet process (foreground for debug)"
     $SUI_BIN_ENV "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG"
-    exit
+    exit $?
   fi
 }
 export -f workdir_init_local

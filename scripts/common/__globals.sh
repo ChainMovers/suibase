@@ -950,7 +950,7 @@ build_sui_repo_branch() {
         echo "Error: repo not found at [$RESOLVED_SUI_REPO_DIR]"
         echo "Either create this repo, or revert $WORKDIR_NAME to work with"
         echo "the default repo by typing \"$WORKDIR_NAME set-sui-repo\"".
-        exit
+        exit 1
       fi
     else
       # At least one of ALLOW_DOWNLOAD, USE_PRECOMPILED or set-sui-repos must be true,
@@ -3488,11 +3488,11 @@ update_PRECOMP_REMOTE_var() {
       _OUT=$(curl -s --request GET \
         --url "$_REPO_URL/releases" \
         --header "X-GitHub-Api-Version: 2022-11-28" \
-        --header "Authorization: Bearer $USER_GITHUB_TOKEN")
+        --header "Authorization: Bearer $USER_GITHUB_TOKEN" || true)
     else
       _OUT=$(curl -s --request GET \
         --url "$_REPO_URL/releases" \
-        --header "X-GitHub-Api-Version: 2022-11-28")
+        --header "X-GitHub-Api-Version: 2022-11-28" || true)
     fi
 
     if [ -z "$_OUT" ]; then

@@ -76,6 +76,6 @@ site_builder_exec() {
   # shellcheck disable=SC2086,SC2068
   $_BIN $_OPT_DEFAULT_CONFIG $_OPT_DEFAULT_CONTEXT "$@"
 
-  exit
+  exit $?
 }
 export -f site_builder_exec

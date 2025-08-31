@@ -10,7 +10,7 @@ publish_all() {
 
   if [ -z "$MOVE_TOML_PACKAGE_NAME" ]; then
     echo "suibase: Package name could not be found"
-    exit
+    exit 1
   fi
 
   # Add default --gas-budget if not specified.

@@ -230,6 +230,13 @@ test_status_format_requirements
 
 # Restore original config state
 echo "--- Restoring original configuration ---"
+
+# Check if suibase.yaml file exists before attempting to modify it
+if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+    echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+    exit 1
+fi
+
 if [ -n "$ORIGINAL_CONFIG_STATE" ]; then
     # Remove any existing walrus_relay_enabled line and add the original
     sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"

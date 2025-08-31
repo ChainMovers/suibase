@@ -92,8 +92,19 @@ jobs:
           else
             echo "curl already installed, skipping"
           fi
-          # Use brew reinstall to handle tap conflicts
-          brew reinstall cmake
+          # Handle cmake with tap conflict resolution
+          if ! command -v cmake &>/dev/null; then
+            brew install cmake
+          else
+            echo "cmake already installed, checking for tap conflicts"
+            if brew reinstall cmake 2>/dev/null; then
+              echo "cmake reinstalled successfully"
+            else
+              echo "cmake reinstall failed, trying uninstall/install approach"
+              brew uninstall cmake
+              brew install cmake
+            fi
+          fi
 
       - name: Prepare environment
         run: |

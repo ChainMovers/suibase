@@ -251,6 +251,13 @@ test_config_process_discrepancy() {
 
     # Directly modify config to disabled
     echo "Creating discrepancy: setting config to disabled while process runs..."
+    
+    # Check if suibase.yaml file exists before attempting to modify it
+    if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+        echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+        exit 1
+    fi
+    
     sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: false/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
 
     # Call wal-relay disable (should handle discrepancy gracefully)
@@ -288,6 +295,13 @@ test_config_process_discrepancy() {
 
     # Directly modify config to enabled
     echo "Creating discrepancy: setting config to enabled while process stopped..."
+    
+    # Check if suibase.yaml file exists before attempting to modify it
+    if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+        echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+        exit 1
+    fi
+    
     sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: true/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
 
     # Call wal-relay enable (should handle discrepancy gracefully)
@@ -332,6 +346,13 @@ test_config_process_discrepancy() {
 
     # Directly modify config to enabled
     echo "Creating discrepancy: setting config to enabled while process stopped..."
+    
+    # Check if suibase.yaml file exists before attempting to modify it
+    if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+        echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+        exit 1
+    fi
+    
     sed -i.bak "s/^walrus_relay_enabled:.*/walrus_relay_enabled: true/" "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"
 
     # Call wal-relay disable (should handle discrepancy gracefully)

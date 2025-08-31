@@ -64,6 +64,6 @@ walrus_exec() {
   # shellcheck disable=SC2086,SC2068
   $WALRUS_BIN $_OPT_DEFAULT_CONFIG $_OPT_DEFAULT_CONTEXT "$@"
 
-  exit
+  exit $?
 }
 export -f walrus_exec

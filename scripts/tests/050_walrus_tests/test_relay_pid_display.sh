@@ -98,8 +98,7 @@ test_enable_and_start_services() {
     
     # Start all services
     echo "Starting $WORKDIR services..."
-    local start_output
-    start_output=$("$SUIBASE_DIR/scripts/$WORKDIR" start 2>&1)
+    "$SUIBASE_DIR/scripts/$WORKDIR" start
     echo "Start command completed"
     
     # Wait for services to reach OK or DOWN status (not INITIALIZING)
@@ -157,8 +156,7 @@ test_stop_services() {
     
     # Stop all services
     echo "Stopping $WORKDIR services..."
-    local stop_output
-    stop_output=$("$SUIBASE_DIR/scripts/$WORKDIR" stop 2>&1)
+    "$SUIBASE_DIR/scripts/$WORKDIR" stop
     echo "Stop command completed"
     
     # Wait for services to show STOPPED, DOWN, or DISABLED status
@@ -282,6 +280,13 @@ test_status_consistency
 
 # Restore original config state
 echo "--- Restoring original configuration ---"
+
+# Check if suibase.yaml file exists before attempting to modify it
+if [ ! -f "$WORKDIRS/$WORKDIR/suibase.yaml" ]; then
+    echo "ERROR: suibase.yaml file not found at $WORKDIRS/$WORKDIR/suibase.yaml"
+    exit 1
+fi
+
 if [ -n "$ORIGINAL_CONFIG_STATE" ]; then
     # Remove any existing walrus_relay_enabled line and add the original
     sed -i.bak '/^walrus_relay_enabled:/d' "$WORKDIRS/$WORKDIR/suibase.yaml" && rm "$WORKDIRS/$WORKDIR/suibase.yaml.bak"

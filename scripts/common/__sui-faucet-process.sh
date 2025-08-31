@@ -51,7 +51,7 @@ start_sui_faucet_process() {
       else
         CHECK_ALIVE=$(curl -x "" -s --location \
           --request POST "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/gas" \
-          --header 'Content-Type: application/json' --data-raw '{Bad Request}' | grep "JSON")
+          --header 'Content-Type: application/json' --data-raw '{Bad Request}' | grep "JSON" || true)
       fi
       if [ -n "$CHECK_ALIVE" ]; then
         ALIVE=true
@@ -88,7 +88,7 @@ start_sui_faucet_process() {
   # Act on success/failure of the process responding.
   if [ "$ALIVE" = false ]; then
     echo "sui-faucet process not responding. Try again? (may be the host is too slow?)."
-    exit
+    exit 1
   fi
 
   update_SUI_FAUCET_PROCESS_PID_var
@@ -227,7 +227,7 @@ faucet_command() {
     fi
     echo
     echo "Usage: $WORKDIR faucet <ADDRESS 1> ... <ADDRESS n> | all"
-    exit
+    exit 0
   fi
 
   if $_OPT_ALL; then
@@ -260,7 +260,7 @@ faucet_command() {
     _RESP=$(curl -x "" -s --location \
       --request POST "http://${CFG_sui_faucet_host_ip:?}:${CFG_sui_faucet_port:?}/gas" \
       --header "Content-Type: application/json" \
-      --data-raw "{ \"FixedAmountRequest\": {\"recipient\": \"$_addr\"}}")
+      --data-raw "{ \"FixedAmountRequest\": {\"recipient\": \"$_addr\"}}" || true)
 
     _RESP_CLEAN=$(echo "$_RESP" | tr '[:upper:]' '[:lower:]' | tr -d '[:blank:]' | tr -d '_')
     # Check for 3 confirmations of success.
