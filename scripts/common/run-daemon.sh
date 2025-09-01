@@ -178,14 +178,18 @@ main() {
 
     # shellcheck disable=SC2086,SC2016
     try_locked_command "$_LOCKFILE" /bin/sh -uec '
+    ts=$(date "+%Y-%m-%d %H:%M:%S")
+    log_loop="${0%.*}-loop.${0##*.}"
+    echo "$ts Entering loop" > $log_loop 2>&1
     while true; do
       "$@" > $0 2>&1
       exit_status=$?
+      ts=$(date "+%Y-%m-%d %H:%M:%S")
       if [ $exit_status -eq 13 ]; then
-        echo "Process exited with status 13. Exiting loop." > $0 2>&1
+        echo "$ts Process exited with status 13. Exiting loop." > $log_loop 2>&1
         break
       fi
-      echo "Restarting process" > $0 2>&1
+      echo "$ts Restarting process (exit=$exit_status)" > $log_loop 2>&1
       sleep 1
     done' "$_LOG" $_CMD_LINE
   fi
