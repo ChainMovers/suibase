@@ -66,6 +66,7 @@ mod proxy_server;
 mod rate_limiter;
 mod shared_types;
 mod walrus_monitor;
+mod walrus_relay_proxy_server;
 mod workdirs_watcher;
 mod workers;
 
@@ -174,8 +175,8 @@ impl Command {
                 let walrusmon = WalrusMonitor::new(
                     globals.config_testnet.clone(),
                     globals.config_mainnet.clone(),
-                    globals.status_testnet.clone(),
-                    globals.status_mainnet.clone(),
+                    globals.walrus_stats_testnet.clone(),
+                    globals.walrus_stats_mainnet.clone(),
                     walrusmon_rx,
                 );
 

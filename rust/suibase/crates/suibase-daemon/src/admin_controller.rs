@@ -1,13 +1,14 @@
 use std::error::Error;
 use std::time::Duration;
 
-use common::shared_types::{WorkdirUserConfig, WORKDIRS_KEYS, WORKDIR_IDX_LOCALNET};
+use common::shared_types::{WorkdirUserConfig, WORKDIRS_KEYS, WORKDIR_IDX_LOCALNET, WORKDIR_IDX_TESTNET, WORKDIR_IDX_MAINNET};
 use common::{basic_types::*, log_safe};
 
 use crate::acoins_monitor::ACoinsMonTx;
 use crate::network_monitor::NetMonTx;
 use crate::walrus_monitor::WalrusMonTx;
 use crate::proxy_server::ProxyServer;
+use crate::walrus_relay_proxy_server::WalrusRelayProxyServer;
 use crate::shared_types::{Globals, InputPort};
 use crate::mock_server_manager::MockServerTx;
 use crate::workdirs_watcher::WorkdirsWatcher;
@@ -71,6 +72,9 @@ struct WorkdirTracking {
 
     process_watchdog_last_check_timestamp: Option<tokio::time::Instant>,
     process_watchdog_last_recovery_timestamp: Option<tokio::time::Instant>,
+
+    walrus_relay_proxy_handle: Option<NestedSubsystem<Box<dyn Error + Send + Sync>>>, // Set when the WalrusRelayProxyServer is started.
+    walrus_relay_proxy_port: u16, // Port number used when the walrus relay proxy was started.
 }
 
 impl std::fmt::Debug for WorkdirTracking {
@@ -699,6 +703,44 @@ impl AdminController {
                     // Sleep a bit in case of a "restart loop" bug.
                     tokio::time::sleep(std::time::Duration::from_secs(4)).await;
                     subsys.request_shutdown();
+                }
+            }
+        }
+
+        // Start WalrusRelayProxyServer for workdirs that support it (testnet/mainnet only)
+        // Like ProxyServer, keep it running even when disabled for fast recovery
+        if workdir_idx == WORKDIR_IDX_TESTNET || workdir_idx == WORKDIR_IDX_MAINNET {
+            let (proxy_port, local_port) = {
+                let config_guard = self.globals.get_config(workdir_idx).read().await;
+                let user_config = &config_guard.user_config;
+                (
+                    user_config.walrus_relay_proxy_port(),
+                    user_config.walrus_relay_local_port(),
+                )
+            };
+
+            if proxy_port != 0 && local_port != 0 {
+                // Start walrus relay proxy server if not already running
+                if wd_tracking.walrus_relay_proxy_handle.is_none() {
+                    let walrus_relay_proxy = WalrusRelayProxyServer::new();
+                    let walrus_tx = self.walrusmon_tx.clone();
+                    let nested = subsys.start(SubsystemBuilder::new("walrus-relay-proxy", move |a| {
+                        walrus_relay_proxy.run(a, workdir_idx, proxy_port, local_port, walrus_tx)
+                    }));
+                    wd_tracking.walrus_relay_proxy_handle = Some(nested);
+                    wd_tracking.walrus_relay_proxy_port = proxy_port;
+                } else {
+                    // Check for port changes - this is a fundamental config change requiring restart
+                    if proxy_port != wd_tracking.walrus_relay_proxy_port {
+                        log::info!(
+                            "Walrus relay proxy port changed from {} to {} for workdir {}",
+                            wd_tracking.walrus_relay_proxy_port,
+                            proxy_port,
+                            workdir_name
+                        );
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        subsys.request_shutdown();
+                    }
                 }
             }
         }

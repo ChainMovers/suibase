@@ -1,10 +1,11 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use common::{basic_types::*, log_safe_err, shared_types::get_workdir_paths};
+use common::{basic_types::*, log_safe_err, shared_types::{get_workdir_paths, WORKDIR_IDX_TESTNET, WORKDIR_IDX_MAINNET}};
 
 use tokio::time::Instant;
 
-use crate::shared_types::{GlobalsWorkdirConfigMT, GlobalsWorkdirStatusMT};
+use crate::shared_types::GlobalsWorkdirConfigMT;
 
 use anyhow::{anyhow, Result};
 use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
@@ -27,6 +28,7 @@ use tokio_graceful_shutdown::{FutureExt, SubsystemHandle};
 pub struct WalrusMonMsg {
     event_id: WalrusMonEvents,
     timestamp: EpochTimestamp,
+    workdir_idx: WorkdirIdx,
     // Simple parameters for request reporting
     error_message: Option<String>,
 }
@@ -36,22 +38,25 @@ impl WalrusMonMsg {
         Self { 
             event_id: 0,
             timestamp: Instant::now(),
+            workdir_idx: WORKDIR_IDX_TESTNET, // Default fallback
             error_message: None,
         }
     }
     
-    pub fn new_with_event(event_id: WalrusMonEvents) -> Self {
+    pub fn new_with_event(event_id: WalrusMonEvents, workdir_idx: WorkdirIdx) -> Self {
         Self {
             event_id,
             timestamp: Instant::now(),
+            workdir_idx,
             error_message: None,
         }
     }
     
-    pub fn new_failure(error: String) -> Self {
+    pub fn new_failure(error: String, workdir_idx: WorkdirIdx) -> Self {
         Self {
             event_id: EVENT_REPORT_REQ_FAILED,
             timestamp: Instant::now(),
+            workdir_idx,
             error_message: Some(error),
         }
     }
@@ -75,23 +80,24 @@ pub type WalrusMonRx = tokio::sync::mpsc::Receiver<WalrusMonMsg>;
 
 // Public interface for Phase 4 HTTP proxy integration
 // This allows the proxy server to report request statistics to WalrusMonitor
-pub struct WalrusStatsReporter {
-    tx_channel: WalrusMonTx,
+pub struct WalrusStatsReporter<'a> {
+    tx_channel: &'a WalrusMonTx,
+    workdir_idx: WorkdirIdx,
 }
 
-impl WalrusStatsReporter {
-    pub fn new(tx_channel: WalrusMonTx) -> Self {
-        Self { tx_channel }
+impl<'a> WalrusStatsReporter<'a> {
+    pub fn new(tx_channel: &'a WalrusMonTx, workdir_idx: WorkdirIdx) -> Self {
+        Self { tx_channel, workdir_idx }
     }
     
     // Report a successful request processed by the HTTP proxy
     pub async fn report_success(&self) -> Result<()> {
-        WalrusMonitor::send_request_success(&self.tx_channel).await
+        WalrusMonitor::send_request_success(self.tx_channel, self.workdir_idx).await
     }
     
     // Report a failed request processed by the HTTP proxy
     pub async fn report_failure(&self, error: String) -> Result<()> {
-        WalrusMonitor::send_request_failure(&self.tx_channel, error).await
+        WalrusMonitor::send_request_failure(self.tx_channel, error, self.workdir_idx).await
     }
     
     // For future use: report success with additional context (workdir, latency, etc.)
@@ -112,33 +118,36 @@ impl WalrusStatsReporter {
 // Public API methods for accessing walrus stats (similar to JSON-RPC network stats)
 impl WalrusMonitor {
     // Get testnet walrus relay statistics
-    pub fn get_testnet_stats(&self) -> &WalrusStats {
-        &self.testnet_stats
+    pub async fn get_testnet_stats(&self) -> WalrusStats {
+        self.globals_testnet_walrus_stats.read().await.clone()
     }
     
     // Get mainnet walrus relay statistics  
-    pub fn get_mainnet_stats(&self) -> &WalrusStats {
-        &self.mainnet_stats
+    pub async fn get_mainnet_stats(&self) -> WalrusStats {
+        self.globals_mainnet_walrus_stats.read().await.clone()
     }
     
     // Reset statistics (for testing or maintenance)
-    pub fn reset_testnet_stats(&mut self) {
-        self.testnet_stats.reset();
+    pub async fn reset_testnet_stats(&self) {
+        self.globals_testnet_walrus_stats.write().await.reset();
     }
     
-    pub fn reset_mainnet_stats(&mut self) {
-        self.mainnet_stats.reset();
+    pub async fn reset_mainnet_stats(&self) {
+        self.globals_mainnet_walrus_stats.write().await.reset();
     }
     
     // Get combined stats for all workdirs
-    pub fn get_combined_stats(&self) -> WalrusStats {
+    pub async fn get_combined_stats(&self) -> WalrusStats {
+        let testnet_stats = self.globals_testnet_walrus_stats.read().await;
+        let mainnet_stats = self.globals_mainnet_walrus_stats.read().await;
+        
         let mut combined = WalrusStats::new();
-        combined.total_requests = self.testnet_stats.total_requests + self.mainnet_stats.total_requests;
-        combined.successful_requests = self.testnet_stats.successful_requests + self.mainnet_stats.successful_requests;
-        combined.failed_requests = self.testnet_stats.failed_requests + self.mainnet_stats.failed_requests;
+        combined.total_requests = testnet_stats.total_requests() + mainnet_stats.total_requests();
+        combined.successful_requests = testnet_stats.successful_requests() + mainnet_stats.successful_requests();
+        combined.failed_requests = testnet_stats.failed_requests() + mainnet_stats.failed_requests();
         combined.last_activity = [
-            self.testnet_stats.last_activity,
-            self.mainnet_stats.last_activity
+            testnet_stats.last_activity(),
+            mainnet_stats.last_activity()
         ].into_iter()
          .flatten()
          .max();
@@ -227,13 +236,10 @@ impl WalrusStats {
 pub struct WalrusMonitor {
     globals_testnet_config: GlobalsWorkdirConfigMT,
     globals_mainnet_config: GlobalsWorkdirConfigMT,
-    globals_testnet_status: GlobalsWorkdirStatusMT,
-    globals_mainnet_status: GlobalsWorkdirStatusMT,
+    globals_testnet_walrus_stats: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
+    globals_mainnet_walrus_stats: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
     walrusmon_rx: WalrusMonRx,
     http_client: reqwest::Client,
-    // Simple stats tracking per workdir
-    testnet_stats: WalrusStats,
-    mainnet_stats: WalrusStats,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -292,19 +298,17 @@ impl WalrusMonitor {
     pub fn new(
         globals_testnet_config: GlobalsWorkdirConfigMT,
         globals_mainnet_config: GlobalsWorkdirConfigMT,
-        globals_testnet_status: GlobalsWorkdirStatusMT,
-        globals_mainnet_status: GlobalsWorkdirStatusMT,
+        globals_testnet_walrus_stats: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
+        globals_mainnet_walrus_stats: Arc<tokio::sync::RwLock<crate::walrus_monitor::WalrusStats>>,
         walrusmon_rx: WalrusMonRx,
     ) -> Self {
         Self {
             globals_testnet_config,
             globals_mainnet_config,
-            globals_testnet_status,
-            globals_mainnet_status,
+            globals_testnet_walrus_stats,
+            globals_mainnet_walrus_stats,
             walrusmon_rx,
             http_client: reqwest::Client::new(),
-            testnet_stats: WalrusStats::new(),
-            mainnet_stats: WalrusStats::new(),
         }
     }
 
@@ -327,8 +331,8 @@ impl WalrusMonitor {
     }
     
     // Report a successful request (for Phase 4 HTTP proxy integration)
-    pub async fn send_request_success(tx_channel: &WalrusMonTx) -> Result<()> {
-        let msg = WalrusMonMsg::new_with_event(EVENT_REPORT_REQ_SUCCESS);
+    pub async fn send_request_success(tx_channel: &WalrusMonTx, workdir_idx: WorkdirIdx) -> Result<()> {
+        let msg = WalrusMonMsg::new_with_event(EVENT_REPORT_REQ_SUCCESS, workdir_idx);
         tx_channel.send(msg).await.map_err(|e| {
             log::debug!("Failed to send success report: {}", e);
             anyhow!("failed {}", e)
@@ -336,8 +340,8 @@ impl WalrusMonitor {
     }
     
     // Report a failed request (for Phase 4 HTTP proxy integration)
-    pub async fn send_request_failure(tx_channel: &WalrusMonTx, error: String) -> Result<()> {
-        let msg = WalrusMonMsg::new_failure(error);
+    pub async fn send_request_failure(tx_channel: &WalrusMonTx, error: String, workdir_idx: WorkdirIdx) -> Result<()> {
+        let msg = WalrusMonMsg::new_failure(error, workdir_idx);
         tx_channel.send(msg).await.map_err(|e| {
             log::debug!("Failed to send failure report: {}", e);
             anyhow!("failed {}", e)
@@ -550,13 +554,10 @@ impl WalrusMonitor {
         log::debug!("WalrusMonitor audit starting");
 
         // Monitor testnet
-        let testnet_status = self.monitor_workdir("testnet", &self.globals_testnet_config, &self.testnet_stats).await;
+        let testnet_stats = self.globals_testnet_walrus_stats.read().await.clone();
+        let testnet_status = self.monitor_workdir("testnet", &self.globals_testnet_config, &testnet_stats).await;
         
-        // Update global testnet status
-        {
-            let mut _status_guard = self.globals_testnet_status.write().await;
-            // TODO: Update the status fields as needed
-        }
+        // Global testnet status is updated via YAML file writes
         
         let testnet_path = {
             let config_guard = self.globals_testnet_config.read().await;
@@ -568,13 +569,10 @@ impl WalrusMonitor {
         }
 
         // Monitor mainnet
-        let mainnet_status = self.monitor_workdir("mainnet", &self.globals_mainnet_config, &self.mainnet_stats).await;
+        let mainnet_stats = self.globals_mainnet_walrus_stats.read().await.clone();
+        let mainnet_status = self.monitor_workdir("mainnet", &self.globals_mainnet_config, &mainnet_stats).await;
         
-        // Update global mainnet status
-        {
-            let mut _status_guard = self.globals_mainnet_status.write().await;
-            // TODO: Update the status fields as needed
-        }
+        // Global mainnet status is updated via YAML file writes
         
         let mainnet_path = {
             let config_guard = self.globals_mainnet_config.read().await;
@@ -597,18 +595,42 @@ impl WalrusMonitor {
                 self.audit().await; // Immediate status update on config changes
             }
             EVENT_REPORT_REQ_SUCCESS => {
-                // For now, record success for both workdirs since we don't differentiate
-                // In Phase 4, we'll determine which workdir based on port or other context
-                log::debug!("Recording successful walrus relay request");
-                self.testnet_stats.record_success(msg.timestamp);
-                self.mainnet_stats.record_success(msg.timestamp);
+                log::debug!("Recording successful walrus relay request for workdir {}", msg.workdir_idx);
+                
+                // Update only the specific workdir's statistics
+                match msg.workdir_idx {
+                    WORKDIR_IDX_TESTNET => {
+                        let mut testnet_stats = self.globals_testnet_walrus_stats.write().await;
+                        testnet_stats.record_success(msg.timestamp);
+                    }
+                    WORKDIR_IDX_MAINNET => {
+                        let mut mainnet_stats = self.globals_mainnet_walrus_stats.write().await;
+                        mainnet_stats.record_success(msg.timestamp);
+                    }
+                    _ => {
+                        log::debug!("Unknown workdir_idx {} for success report, ignoring", msg.workdir_idx);
+                    }
+                }
             }
             EVENT_REPORT_REQ_FAILED => {
-                // For now, record failure for both workdirs since we don't differentiate
-                // In Phase 4, we'll determine which workdir based on port or other context
-                log::debug!("Recording failed walrus relay request: {:?}", msg.error_message);
-                self.testnet_stats.record_failure(msg.timestamp, msg.error_message.clone());
-                self.mainnet_stats.record_failure(msg.timestamp, msg.error_message);
+                log::debug!("WalrusMonitor: Recording failed walrus relay request for workdir {}: {:?}", msg.workdir_idx, msg.error_message);
+                
+                // Update only the specific workdir's statistics
+                match msg.workdir_idx {
+                    WORKDIR_IDX_TESTNET => {
+                        let mut testnet_stats = self.globals_testnet_walrus_stats.write().await;
+                        testnet_stats.record_failure(msg.timestamp, msg.error_message.clone());
+                        log::debug!("WalrusMonitor: Updated testnet stats - total: {}, failed: {}", testnet_stats.total_requests(), testnet_stats.failed_requests());
+                    }
+                    WORKDIR_IDX_MAINNET => {
+                        let mut mainnet_stats = self.globals_mainnet_walrus_stats.write().await;
+                        mainnet_stats.record_failure(msg.timestamp, msg.error_message.clone());
+                        log::debug!("WalrusMonitor: Updated mainnet stats - total: {}, failed: {}", mainnet_stats.total_requests(), mainnet_stats.failed_requests());
+                    }
+                    _ => {
+                        log::debug!("Unknown workdir_idx {} for failure report, ignoring", msg.workdir_idx);
+                    }
+                }
             }
             _ => {
                 log::debug!("process_msg unexpected event id {}", msg.event_id);
