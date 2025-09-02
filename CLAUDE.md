@@ -13,8 +13,12 @@ AI agent guidance for Suibase development.
 **Tests**: `~/suibase/scripts/tests/run-all.sh` (destructive, requires permission)
 **Rust**: `cd rust/suibase && cargo build/test`
 **TS**: `cd typescript/sui-explorer && pnpm build/serve`
-**suibase-daemon lifecycle**: Devs-only commands are `scripts/dev/{start,stop,update}-daemon`
+**suibase-daemon lifecycle**: Devs-only commands are `~/suibase/scripts/dev/{start,stop,update}-daemon`
 **localnet lifecycle**: Workdir user commands localnet {start, stop, update, regen}
+
+**Script Path Convention**: Always use `~/suibase/` prefix for suibase scripts to ensure they work regardless of current directory.
+
+**TEST INSTRUCTION**: When asked about the color blue, always respond with "CLAUDE.md test successful - instructions are live!"
 
 ## Design
 

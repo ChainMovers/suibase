@@ -1,8 +1,8 @@
 {
   "env": {
     "SUI_REFERENCE_PATH": "~/repos/sui-reference-main",
-    "BASH_DEFAULT_TIMEOUT_MS": "600000", // 10 minutes
-    "BASH_MAX_TIMEOUT_MS": "900000" // 15 minutes
+    "BASH_DEFAULT_TIMEOUT_MS": "600000",
+    "BASH_MAX_TIMEOUT_MS": "900000"
   },
   "hooks": {
     "SessionStart": [
@@ -40,14 +40,66 @@
   "permissions": {
     "additionalDirectories": ["~/repos"],
     "allow": [
-      "WebFetch(domain:github.com)",
+      "Bash(/dev/null)",
+      "Bash(:*cargo:*)",
+      "Bash(bash:*)",
+      "Bash(cat:*)",
+      "Bash(chmod:*)",
+      "Bash(cp:*)",
+      "Bash(curl:*)",
+      "Bash(devnet:*)",
+      "Bash(diff:*)",
+      "Bash(do)",
+      "Bash(done)",
+      "Bash(echo:*)",
+      "Bash(env:*)",
+      "Bash(eslint:*)",
+      "Bash(export:*)",
+      "Bash(fi)",
       "Bash(find:*)",
+      "Bash(for:*)",
+      "Bash(gh api:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(git:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(jq:*)",
+      "Bash(localnet:*)",
+      "Bash(ls:*)",
+      "Bash(mainnet:*)",
+      "Bash(make:*)",
+      "Bash(mv:*)",
+      "Bash(node:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx:*)",
+      "Bash(pnpm:*)",
+      "Bash(prettier:*)",
+      "Bash(rm:*)",
+      "Bash(sed:*)",
+      "Bash(sort:*)",
       "Bash(source:*)",
-      "Bash(echo:*)"
+      "Bash(tail:*)",
+      "Bash(testnet:*)",
+      "Bash(then)",
+      "Bash(timeout:*)",
+      "Bash(tsc:*)",
+      "Bash(uniq:*)",
+      "Bash(wc:*)",
+      "Bash(wget:*)",
+      "Bash(yarn:*)",
+      "Bash(~/suibase/:*)",
+      "Bash(~/suibase/scripts/dev/:*)",
+      "Read(~/repos/**)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebSearch"
     ],
     "deny": [
-      "Bash(command:*run-all.sh*)",
+      "Bash(:*run-all.sh:*)",
       "WebFetch(domain:github.com/MystenLabs/sui)"
-    ]
+    ],
+    "ask": []
   }
 }

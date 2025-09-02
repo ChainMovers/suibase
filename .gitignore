@@ -105,6 +105,7 @@ pip-selfcheck.json
 
 # Node.js
 node_modules
+dist/
 .tsbuildinfo
 *.tsbuildinfo
 .turbo

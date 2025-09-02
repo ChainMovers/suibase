@@ -29,7 +29,7 @@ declare -A REPO_ENV_VARS=(
 declare -A REPO_SPARSE_PATHS=(
     ["sui"]="crates/,external-crates/,consensus/,sui-execution/,sdk/,bridge/,docs/,*.md,*.toml,*.lock"
     ["sui-rust-sdk"]="crates/,*.md,*.toml,*.lock,*.proto"
-    ["walrus"]="crates/walrus-upload-relay/,crates/walrus-core/,crates/walrus-sui/,crates/walrus-storage-node-client/,contracts/,*.md,*.toml,*.lock"
+    ["walrus"]="crates/,contracts/,*.md,*.toml,*.lock"
 )
 
 readonly CLONE_DEPTH=100
