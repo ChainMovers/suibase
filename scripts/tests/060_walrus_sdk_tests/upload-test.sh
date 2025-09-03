@@ -13,6 +13,8 @@ set -e  # Exit on any error
 
 # Load common test functions (which includes validation and setup)
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Export SCRIPT_DIR globally for reliable cleanup
+export SCRIPT_DIR="$script_dir"
 # shellcheck source=SCRIPTDIR/__test_common.sh
 source "$script_dir/__test_common.sh"
 
@@ -20,7 +22,7 @@ source "$script_dir/__test_common.sh"
 echo "=== Testing Walrus SDK Upload Integration ==="
 echo "Testing: Walrus SDK blob upload through Suibase upload relay"
 echo "Workdir: $WORKDIR"
-echo "Secret Account: ${SECRET_TESTNET_ACCOUNT:+[SET]}${SECRET_TESTNET_ACCOUNT:-[NOT SET]}"
+echo "Using active address from Suibase keystore"
 echo
 
 # Main test function
@@ -51,6 +53,9 @@ run_walrus_sdk_test() {
     if [ $test_exit_code -eq 0 ]; then
         echo "✓ Walrus SDK upload test PASSED"
         return 0
+    elif [ $test_exit_code -eq 2 ]; then
+        echo "○ Walrus SDK upload test SKIPPED (exit code: $test_exit_code)"
+        return 2
     else
         echo "✗ Walrus SDK upload test FAILED (exit code: $test_exit_code)"
         return 1
@@ -61,12 +66,11 @@ run_walrus_sdk_test() {
 
 # Main execution
 main() {
-    local exit_code=0
+    local exit_code
     
-    # Run the test
-    if ! run_walrus_sdk_test; then
-        exit_code=1
-    fi
+    # Run the test and capture its exit code
+    run_walrus_sdk_test
+    exit_code=$?
     
     # Test completed
     if [ $exit_code -eq 0 ]; then
@@ -74,6 +78,11 @@ main() {
         echo "=== Walrus SDK Test Summary ==="
         echo "✓ SUCCESS: All tests passed"
         echo "The Walrus SDK successfully uploaded a blob through the Suibase upload relay"
+    elif [ $exit_code -eq 2 ]; then
+        echo
+        echo "=== Walrus SDK Test Summary ==="
+        echo "○ SKIPPED: Test was skipped"
+        echo "Check the output above for skip reason (insufficient balance, missing active address, etc.)"
     else
         echo
         echo "=== Walrus SDK Test Summary ==="

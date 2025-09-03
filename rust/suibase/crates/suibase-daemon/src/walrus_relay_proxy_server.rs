@@ -10,7 +10,7 @@ use anyhow::{anyhow, Result};
 use axum::{
     body::Body,
     extract::State,
-    http::{Request, Response},
+    http::{header, Request, Response},
     routing::any,
     Router,
 };
@@ -99,8 +99,15 @@ impl WalrusRelayProxyServer {
 
         // Build response
         let mut resp_builder = Response::builder().status(status);
+        
+        // Copy headers from original response, but exclude Content-Encoding 
+        // since reqwest has already decompressed the body
         if let Some(headers_map) = resp_builder.headers_mut() {
-            headers_map.extend(headers);
+            for (name, value) in headers.iter() {
+                if name != header::CONTENT_ENCODING {
+                    headers_map.insert(name, value.clone());
+                }
+            }
         }
 
         let response = match resp_builder.body(Body::from(response_bytes)) {

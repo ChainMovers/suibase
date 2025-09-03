@@ -46,6 +46,7 @@ pub struct SharedStates {
 
 pub struct ProxyServer {}
 
+
 impl ProxyServer {
     pub fn new() -> Self {
         Self {}
@@ -209,6 +210,10 @@ impl ProxyServer {
         //
         // TODO Optimize (eliminate clone) when there is no retry possible?
         let method = req.method().clone();
+
+        // Capture the original headers and client's Accept-Encoding preference
+        let original_headers = req.headers().clone();
+        let client_accept_encoding = original_headers.get(header::ACCEPT_ENCODING).cloned();
         /* This code on hold until deciding to move to hyper v1.0, which is a dependency of reqwest >= 0.11
          * Last time I tried, it just "does not work"... most servers respond with 400-level errors.
         let reqwest_method: reqwest::Method = method.as_str().parse().unwrap();
@@ -249,10 +254,11 @@ impl ProxyServer {
             server_index = (server_index + 1) % targets.len(); // Advance to next server (for next iteration if any).
 
             // Build the request toward the current target server.
+            // Forward all original headers including Accept-Encoding
             let req_builder = states
                 .client
                 .request(method.clone(), target_uri)
-                .headers(headers.clone())
+                .headers(original_headers.clone())
                 .body(bytes.clone());
 
             // Following works also (if one day bytes and cloning won't be needed):
@@ -332,9 +338,13 @@ impl ProxyServer {
                 }
             };
 
-            let resp_bytes = resp.bytes().await;
+            // Capture response headers before consuming the body
+            let response_headers = resp.headers().clone();
+            let response_status = resp.status();
 
-            let resp_bytes = match resp_bytes {
+            // Note: reqwest automatically decompresses gzip/deflate/brotli responses
+
+            let resp_bytes = match resp.bytes().await {
                 Ok(resp_bytes) => resp_bytes,
                 Err(err) => {
                     let _ = report
@@ -396,11 +406,25 @@ impl ProxyServer {
                 }
             }
 
-            let builder = if let Some(modified_resp_bytes) = modified_resp_bytes {
-                Response::builder().body(Body::from(modified_resp_bytes))
+            // Determine the final response body - reqwest has automatically decompressed it
+            let final_body_bytes = if let Some(modified_resp_bytes) = modified_resp_bytes {
+                modified_resp_bytes
             } else {
-                Response::builder().body(Body::from(resp_bytes))
+                resp_bytes
             };
+
+            let mut builder = Response::builder()
+                .status(response_status);
+
+            // Copy headers from original response, but exclude Content-Encoding
+            // Content-Encoding is excluded since responses are uncompressed
+            for (name, value) in response_headers.iter() {
+                if name != header::CONTENT_ENCODING {
+                    builder = builder.header(name, value);
+                }
+            }
+
+            let builder = builder.body(Body::from(final_body_bytes));
 
             let resp = match builder {
                 Ok(resp) => resp,

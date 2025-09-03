@@ -22,15 +22,6 @@ validate_sdk_workdir_support() {
     esac
 }
 
-# Validate that SECRET_TESTNET_ACCOUNT environment variable is set
-validate_secret_account() {
-    if [ -z "${SECRET_TESTNET_ACCOUNT:-}" ]; then
-        echo "SKIP: SECRET_TESTNET_ACCOUNT environment variable is not set"
-        echo "This environment variable should contain a testnet private key or mnemonic"
-        exit 2
-    fi
-    echo "✓ SECRET_TESTNET_ACCOUNT environment variable is set"
-}
 
 # Get the walrus relay port for the current workdir
 get_walrus_relay_port() {
@@ -143,7 +134,6 @@ run_typescript_test() {
 
     # Export environment variables needed by the TypeScript test
     export WORKDIR
-    export SECRET_TESTNET_ACCOUNT
     # WALRUS_RELAY_PORT and WALRUS_RELAY_PROXY_PORT are already exported globally
 
     # Run the test and capture output
@@ -165,7 +155,6 @@ setup_sdk_test_environment() {
 
     # Run all validation checks
     validate_sdk_workdir_support
-    validate_secret_account
     check_node_version
     check_npm
 
@@ -224,7 +213,6 @@ cleanup_sdk_test_environment() {
 
 # Call SDK validation early
 validate_sdk_workdir_support
-validate_secret_account
 
 # Get and export both walrus relay ports for all tests to use
 WALRUS_RELAY_PORT=$(get_walrus_relay_port "$WORKDIR")
@@ -249,14 +237,8 @@ auto_setup_sdk_test_environment() {
 # Generic cleanup function that can be used as EXIT trap  
 cleanup_sdk_test() {
     echo "Cleaning up test environment..."
-    # Find the script directory by looking for the calling script
-    local script_dir
-    if [ -n "${BASH_SOURCE[1]}" ]; then
-        script_dir="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
-    else
-        # Fallback: use current directory
-        script_dir="$(pwd)"
-    fi
+    # Use the global SCRIPT_DIR variable set by the main test script
+    local script_dir="${SCRIPT_DIR:-$(pwd)}"
     cleanup_sdk_test_environment "$script_dir"
 }
 
@@ -264,7 +246,7 @@ cleanup_sdk_test() {
 trap cleanup_sdk_test EXIT
 
 # Export new functions
-export -f validate_sdk_workdir_support validate_secret_account get_walrus_relay_port get_walrus_relay_proxy_port
+export -f validate_sdk_workdir_support get_walrus_relay_port get_walrus_relay_proxy_port
 export -f check_node_version check_npm install_node_dependencies build_typescript run_typescript_test
 export -f auto_setup_sdk_test_environment cleanup_sdk_test
 export -f setup_sdk_test_environment cleanup_sdk_test_environment
