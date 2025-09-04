@@ -11,4 +11,10 @@ Steps to release a new version of suibase-daemon
 5. Run scripts/dev/merge. Verify CI passes on main.
 6. Run a ~/suibase/update on another setup to verify it works for users.
 
+Steps to release a new version of suibase
+=========================================
+1. Update CHANGELOG.md
+2. Bump version in 'scripts/common/__globals.sh'
+
+
 

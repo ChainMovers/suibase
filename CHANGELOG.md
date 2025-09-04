@@ -8,10 +8,17 @@ Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.10] TBD
+## [0.1.11] TBD
+
+
+## [0.1.10] 2025-09-04
 ### Fixed
 
 - suibase-daemon more portable on linux (static link MUSL libc instead of dynamic link glibc)
+
+### Added
+
+- (#122) Support for walrus upload proxy. See online docs for details.
 
 ## [0.1.9] 2025-05-03
 ### Fixed
