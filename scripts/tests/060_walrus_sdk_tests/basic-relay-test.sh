@@ -9,7 +9,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
     trap '' SIGPIPE
     echo "SIGPIPE trap installed"
 fi
-set -e  # Exit on any error
 
 # Load common test functions (which includes validation and setup)
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

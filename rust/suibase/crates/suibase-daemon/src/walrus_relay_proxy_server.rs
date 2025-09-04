@@ -164,13 +164,20 @@ impl WalrusRelayProxyServer {
         tokio::spawn(graceful_shutdown(subsys, handle.clone()));
 
         // Start the server
-        axum_server::bind(bind_address)
+        match axum_server::bind(bind_address)
             .handle(handle)
             .serve(app.into_make_service())
             .await
-            .unwrap();
+        {
+            Ok(_) => {
+                log::info!("Walrus relay proxy stopped for {}", bind_address);
+            }
+            Err(e) => {
+                log::error!("Failed to bind walrus relay proxy server to {}: {}", bind_address, e);
+                return Err(anyhow!("Failed to bind to {}: {}", bind_address, e));
+            }
+        }
 
-        log::info!("Walrus relay proxy stopped for {}", bind_address);
         Ok(())
     }
 }

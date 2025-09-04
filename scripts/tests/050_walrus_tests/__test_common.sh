@@ -26,12 +26,12 @@ restore_suibase_yaml_from_default() {
     local workdir="$1"
     local workdir_config="$WORKDIRS/$workdir/suibase.yaml"
     local default_config="$SUIBASE_DIR/scripts/defaults/$workdir/suibase.yaml"
-    
+
     if [ ! -f "$default_config" ]; then
         echo "ERROR: Default template not found at $default_config"
         return 1
     fi
-    
+
     # Check if workdir config is different from default template
     if [ ! -f "$workdir_config" ] || ! cmp -s "$workdir_config" "$default_config"; then
         echo "Detected suibase.yaml differs from default template, restoring..."
@@ -134,7 +134,7 @@ ensure_build_daemon() {
 
     if [ -f "$version_file" ] && grep -q 'origin: "precompiled"' "$version_file"; then
         # Rebuild daemon for walrus relay features
-        "$SUIBASE_DIR/scripts/dev/update-daemon" >/dev/null 2>&1
+        "$SUIBASE_DIR/scripts/dev/update-daemon"
 
         # Wait for rebuild to complete with shorter timeout
         local wait_count=0
@@ -158,9 +158,9 @@ safe_start_daemon() {
     ensure_build_daemon
 
     # Start the daemon using proper script
-    if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+    if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running"; then
         echo "Starting suibase-daemon..."
-        "$SUIBASE_DIR/scripts/dev/start-daemon" >/dev/null 2>&1
+        "$SUIBASE_DIR/scripts/dev/start-daemon"
     else
         echo "✓ suibase-daemon is already running"
     fi
@@ -173,16 +173,16 @@ setup_test_workdir() {
     # Use the existing workdir create script if workdir doesn't exist
     if [ ! -d "$WORKDIRS/$workdir" ] || [ ! -f "$WORKDIRS/$workdir/suibase.yaml" ]; then
         echo "Setting up $workdir workdir..."
-        "$SUIBASE_DIR/scripts/$workdir" create >/dev/null 2>&1 || true
+        "$SUIBASE_DIR/scripts/$workdir" create || true
     fi
 
     # Initialize the workdir to ensure binaries are downloaded and setup is complete
     echo "Initializing $workdir workdir..."
-    "$SUIBASE_DIR/scripts/$workdir" start >/dev/null 2>&1 || true
+    "$SUIBASE_DIR/scripts/$workdir" start || true
 
     # Ensure additional test directories exist
-    mkdir -p "$WORKDIRS/$workdir/bin"
-    mkdir -p "$WORKDIRS/$workdir/config-default"
+    mkdir -p "$WORKDIRS/$workdir/bin" || true
+    mkdir -p "$WORKDIRS/$workdir/config-default" || true
 }
 
 backup_config_files() {
@@ -223,7 +223,7 @@ restore_config_files() {
         [ -f "$backup_dir/walrus-config.yaml" ] && cp "$backup_dir/walrus-config.yaml" "$config_dir/" 2>/dev/null || true
         [ -f "$backup_dir/relay-config.yaml" ] && cp "$backup_dir/relay-config.yaml" "$config_dir/" 2>/dev/null || true
     fi
-    
+
     # Clean up temp directory
     rm -rf "$TEMP_TEST_DIR" 2>/dev/null || true
 }
@@ -241,7 +241,7 @@ stop_walrus_relay_process() {
 cleanup_port_conflicts() {
     local test_port
     test_port=$("$(dirname "${BASH_SOURCE[0]}")/utils/__get-walrus-relay-local-port.sh" "$WORKDIR" 2>&1 || echo "UNKNOWN")
-    
+
     if [ "$test_port" = "UNKNOWN" ]; then
         echo "ERROR in cleanup_port_conflicts: Failed to get walrus relay port for workdir '$WORKDIR'"
         echo "This likely means walrus_relay_local_port is not configured in suibase.yaml"
@@ -249,7 +249,7 @@ cleanup_port_conflicts() {
         echo "Example: walrus_relay_local_port: 45802"
         exit 1
     fi
-    
+
     echo "Checking for port conflicts on port $test_port..."
 
     # Find processes using the port with more robust detection
@@ -527,7 +527,7 @@ wait_for_daemon_running() {
     while [ $SECONDS -lt $end_time ]; do
         attempt=$((attempt + 1))
 
-        if "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+        if "$SUIBASE_DIR/scripts/dev/is-daemon-running"; then
             if [ "$verbose" = "true" ]; then
                 echo "✓ suibase-daemon is running after ${attempt} attempts ($(($SECONDS - start_time))s)"
             fi
@@ -561,7 +561,7 @@ wait_for_daemon_stopped() {
     while [ $SECONDS -lt $end_time ]; do
         attempt=$((attempt + 1))
 
-        if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running" >/dev/null 2>&1; then
+        if ! "$SUIBASE_DIR/scripts/dev/is-daemon-running"; then
             if [ "$verbose" = "true" ]; then
                 echo "✓ suibase-daemon stopped after ${attempt} attempts ($(($SECONDS - start_time))s)"
             fi
