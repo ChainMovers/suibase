@@ -1,30 +1,77 @@
 # Walrus Relay
 
-Walrus Relay provides a local HTTP proxy for Walrus upload services, enabling transparent access to Walrus upload endpoints through suibase-daemon.
+Walrus Relay delegates high-bandwidth operations to a backend server, enabling mobile and web apps to store data on Walrus without the burden of uploading to multiple storage nodes directly.
 
-Unlike the publisher service which stores data directly to Walrus, the relay service acts as a proxy that forwards requests to remote Walrus upload endpoints while providing local request statistics and configuration management.
+Suibase provides a local relay process for testing your applications before using production services. The binary used are downloaded from Mysten Lab, and are therefore compatible with the official networks.
 
-## Enabling
+**Resources:**
+- [Walrus SDK](https://sdk.mystenlabs.com/walrus)
+- [Upload relay docs](https://docs.wal.app/operator-guide/upload-relay.html)
+- [TypeScript SDK upgrade blog](https://www.walrus.xyz/blog/typescript-sdk-upload-relay-upgrade)
 
-Enable Walrus Relay for a specific network:
+**Examples:**
+- [Full web app](https://github.com/MystenLabs/walrus-sdk-example-app) ([live demo](https://relay.wal.app/))
+- [Single blob upload](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/upload-relay/write-blob.ts)
+
+
+## Enabling / Starting
+
+Enable Walrus Relay for the network you intend to use. Only testnet and mainnet are supported:
 
 ```bash
 testnet wal-relay enable
 mainnet wal-relay enable
 ```
 
-This updates the `walrus_relay_enabled: true` setting in your workdir's `suibase.yaml` configuration.
-
-## Starting
-
-The relay starts automatically when you start the workdir services:
+The relay starts/stops automatically alongside the workdir services:
 
 ```bash
 testnet start
-mainnet start
+testnet stop
 ```
 
-The relay process runs alongside the suibase-daemon and requires the daemon to be running.
+You can monitor the relay status:
+
+```bash
+testnet wal-relay status
+mainnet wal-relay status
+```
+
+## How to connect?
+
+Connect your applications to these local ports:
+
+**Testnet**: `http://localhost:45852`
+**Mainnet**: `http://localhost:45853`
+
+Specify these in the host field of the Mysten SDK:
+
+Example:
+```typescript
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
+	network: 'testnet',
+}).$extend(
+	WalrusClient.experimental_asClientExtension({
+		uploadRelay: {
+			host: 'http://localhost:45852',
+		},
+	}),
+);
+```
+## Statistics
+
+View request statistics for a given workdir with:
+
+```bash
+testnet wal-relay stats
+```
+
+You can clear all stats with:
+
+```bash
+testnet wal-relay clear
+```
 
 ## Disabling
 
@@ -35,40 +82,13 @@ testnet wal-relay disable
 mainnet wal-relay disable
 ```
 
-This updates the `walrus_relay_enabled: false` setting in your workdir's `suibase.yaml` configuration.
+## Upgrading
 
-## Statistics
-
-View request statistics:
+It is recommended to regularly upgrade the binaries to match the latest networks:
 
 ```bash
-testnet wal-relay stats
-mainnet wal-relay stats
+testnet update
+mainnet update
 ```
 
-Clear accumulated statistics:
-
-```bash
-testnet wal-relay clear
-mainnet wal-relay clear
-```
-
-## How to connect?
-
-Connect your applications to these suibase-daemon proxy ports:
-
-**Testnet**: `http://localhost:45852`
-**Mainnet**: `http://localhost:45853`
-
-All HTTP requests are forwarded transparently to the underlying Walrus upload relay service while maintaining full API compatibility.
-
-## Status
-
-Check the current relay status:
-
-```bash
-testnet wal-relay status
-mainnet wal-relay status
-```
-
-Status can be: OK, DOWN, DISABLED, STOPPED, NOT RUNNING, or INITIALIZING.
+You might want to regularly update suibase itself with ```~/suibase/update```
