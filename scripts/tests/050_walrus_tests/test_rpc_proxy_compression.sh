@@ -8,8 +8,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source the common test utilities
-. "$SCRIPT_DIR/../__test_common.sh"
+# Source the walrus test common utilities (which includes build daemon functionality)
+. "$SCRIPT_DIR/__test_common.sh"
 
 TEST_NAME="RPC Proxy Compression Fix"
 TEST_DESCRIPTION="Verify suibase RPC proxy properly handles compressed responses from upstream servers"
@@ -30,30 +30,34 @@ declare -a TEST_QUERIES=(
 )
 
 setup_test_environment() {
-    print_step "Setting up test environment"
+    echo "--- Setting up test environment"
     
-    # Ensure testnet workdir is initialized
-    if ! "$HOME/suibase/scripts/testnet" init-check >/dev/null 2>&1; then
-        print_step "Initializing testnet workdir..."
-        "$HOME/suibase/scripts/testnet" init >/dev/null
-    fi
+    # Setup clean environment and ensure BUILD version of daemon
+    setup_clean_environment
+    setup_test_workdir "$WORKDIR"
+    backup_config_files "$WORKDIR"
     
-    # Start suibase daemon if not running
-    print_step "Ensuring suibase daemon is running..."
-    "$HOME/suibase/scripts/testnet" start >/dev/null
+    # Ensure BUILD version of suibase-daemon is used (not precompiled)
+    ensure_build_daemon
     
-    # Wait for proxy to be ready
+    # Start daemon using safe method that ensures BUILD version
+    safe_start_daemon
+    
+    # Wait for daemon to be ready
+    wait_for_daemon_running 15 true
+    
+    # Wait for proxy to be ready on the specific port
     local attempts=0
     while [ $attempts -lt 10 ]; do
         if curl -s --max-time 2 "http://localhost:$PROXY_PORT" >/dev/null 2>&1; then
-            print_success "RPC proxy is responding"
+            echo "✓ RPC proxy is responding"
             return 0
         fi
         ((attempts++))
         sleep 1
     done
     
-    print_error "RPC proxy failed to start within timeout"
+    echo "✗ RPC proxy failed to start within timeout"
     return 1
 }
 
@@ -83,10 +87,10 @@ is_binary_response() {
 test_compression_decompression() {
     local query='{"jsonrpc":"2.0","id":1,"method":"sui_getLatestCheckpointSequenceNumber","params":[]}'
     
-    print_step "Testing explicit compression/decompression verification"
+    echo "Testing explicit compression/decompression verification"
     
     # First, test direct upstream server with compression
-    print_step "1/3: Testing direct upstream server with compression request"
+    echo "1/3: Testing direct upstream server with compression request"
     local upstream_response
     upstream_response=$(curl -s --max-time 10 \
         -H "Content-Type: application/json" \
@@ -95,20 +99,20 @@ test_compression_decompression() {
         "https://fullnode.testnet.sui.io:443" 2>/dev/null)
     
     if [ $? -ne 0 ] || [ -z "$upstream_response" ]; then
-        print_warning "Could not test upstream server directly, skipping compression verification"
+        echo "⚠ Could not test upstream server directly, skipping compression verification"
         return 0  # Not a failure, just can't verify
     fi
     
     # Verify upstream gives us valid JSON
     if ! echo "$upstream_response" | jq . >/dev/null 2>&1; then
-        print_warning "Upstream server not returning valid JSON, skipping compression verification"
+        echo "⚠ Upstream server not returning valid JSON, skipping compression verification"
         return 0
     fi
     
-    print_success "Upstream server responding with valid JSON"
+    echo "✓ Upstream server responding with valid JSON"
     
     # Now test our proxy with explicit compression request
-    print_step "2/3: Testing suibase proxy with compression request"
+    echo "2/3: Testing suibase proxy with compression request"
     local proxy_response
     proxy_response=$(curl -s --max-time 10 \
         -H "Content-Type: application/json" \
@@ -117,36 +121,36 @@ test_compression_decompression() {
         "http://localhost:$PROXY_PORT" 2>/dev/null)
     
     if [ $? -ne 0 ] || [ -z "$proxy_response" ]; then
-        print_error "Proxy compression test failed - no response"
+        echo "✗ Proxy compression test failed - no response"
         return 1
     fi
     
     # Verify proxy response is uncompressed JSON
     if is_binary_response "$proxy_response"; then
-        print_error "CRITICAL: Proxy returned compressed binary data!"
+        echo "✗ CRITICAL: Proxy returned compressed binary data!"
         echo "This means our decompression fix is not working"
         return 2
     fi
     
     if ! echo "$proxy_response" | jq . >/dev/null 2>&1; then
-        print_error "Proxy returned invalid JSON"
+        echo "✗ Proxy returned invalid JSON"
         return 1
     fi
     
-    print_success "Proxy correctly returned uncompressed JSON"
+    echo "✓ Proxy correctly returned uncompressed JSON"
     
     # Compare content to ensure proxy is working correctly
-    print_step "3/3: Verifying proxy and upstream return equivalent data"
+    echo "3/3: Verifying proxy and upstream return equivalent data"
     local upstream_id=$(echo "$upstream_response" | jq -r '.result // empty')
     local proxy_id=$(echo "$proxy_response" | jq -r '.result // empty')
     
     if [ "$upstream_id" = "$proxy_id" ] && [ -n "$upstream_id" ]; then
-        print_success "Proxy and upstream return equivalent data"
-        print_success "✓ Compression/decompression test PASSED"
+        echo "✓ Proxy and upstream return equivalent data"
+        echo "✓ Compression/decompression test PASSED"
         return 0
     else
-        print_warning "Proxy and upstream returned different results (acceptable for changing blockchain state)"
-        print_success "✓ Compression/decompression test PASSED"
+        echo "⚠ Proxy and upstream returned different results (acceptable for changing blockchain state)"
+        echo "✓ Compression/decompression test PASSED"
         return 0
     fi
 }
@@ -156,7 +160,7 @@ test_rpc_query() {
     local query="$1"
     local attempt="$2"
     
-    print_step "Test $attempt/$MAX_ATTEMPTS: Testing RPC query"
+    echo "--- Test $attempt/$MAX_ATTEMPTS: Testing RPC query"
     
     # Make the request and capture both response and curl exit code
     local response
@@ -170,18 +174,18 @@ test_rpc_query() {
     curl_exit_code=$?
     
     if [ $curl_exit_code -ne 0 ]; then
-        print_warning "Query $attempt failed - curl error $curl_exit_code"
+        echo "⚠ Query $attempt failed - curl error $curl_exit_code"
         return 1
     fi
     
     if [ -z "$response" ]; then
-        print_warning "Query $attempt failed - empty response"
+        echo "⚠ Query $attempt failed - empty response"
         return 1
     fi
     
     # Check if response is binary/compressed
     if is_binary_response "$response"; then
-        print_error "Query $attempt FAILED - received binary/compressed response!"
+        echo "✗ Query $attempt FAILED - received binary/compressed response!"
         echo "First 100 chars of response: $(echo "$response" | head -c 100)"
         echo "Response contains binary data - this indicates the compression bug is present"
         return 2  # Special return code for compression bug
@@ -189,17 +193,17 @@ test_rpc_query() {
     
     # Try to parse as JSON to verify it's valid
     if ! echo "$response" | jq . >/dev/null 2>&1; then
-        print_warning "Query $attempt failed - invalid JSON response"
+        echo "⚠ Query $attempt failed - invalid JSON response"
         echo "Response: $response"
         return 1
     fi
     
-    print_success "Query $attempt passed - received valid JSON response"
+    echo "✓ Query $attempt passed - received valid JSON response"
     return 0
 }
 
 run_compression_tests() {
-    print_step "Running RPC proxy compression tests"
+    echo "--- Running RPC proxy compression tests"
     
     local total_tests=${#TEST_QUERIES[@]}
     local passed_tests=0
@@ -229,14 +233,14 @@ run_compression_tests() {
         sleep 0.5
     done
     
-    print_step "Test Results Summary"
+    echo "--- Test Results Summary"
     echo "  Total tests: $total_tests"
     echo "  Passed: $passed_tests"
     echo "  Failed (network/other): $failed_tests"
     echo "  Failed (compression bug): $compression_bugs"
     
     if [ $compression_bugs -gt 0 ]; then
-        print_error "CRITICAL: RPC proxy compression bug detected!"
+        echo "✗ CRITICAL: RPC proxy compression bug detected!"
         echo "The suibase RPC proxy is returning compressed binary data instead of JSON."
         echo "This breaks SuiClient and other JSON-RPC clients."
         echo "This test will FAIL to ensure the bug gets fixed."
@@ -244,22 +248,30 @@ run_compression_tests() {
     fi
     
     if [ $passed_tests -eq 0 ]; then
-        print_error "All tests failed - RPC proxy appears to be non-functional"
+        echo "✗ All tests failed - RPC proxy appears to be non-functional"
         return 1
     fi
     
-    print_success "No compression bugs detected - all responses are proper JSON"
+    echo "✓ No compression bugs detected - all responses are proper JSON"
     return 0
 }
 
 cleanup_test_environment() {
-    print_step "Cleaning up test environment"
-    # Nothing specific to clean up for this test
+    echo "--- Cleaning up test environment"
+    
+    # Restore config files
+    restore_config_files "$WORKDIR"
+    
+    # Clean up any port conflicts (stop processes using our ports)
+    cleanup_port_conflicts
+    
     return 0
 }
 
 main() {
-    print_header "$TEST_NAME"
+    echo "================================"
+    echo "$TEST_NAME"
+    echo "================================"
     echo "Description: $TEST_DESCRIPTION"
     echo "Workdir: $WORKDIR"
     echo "Proxy Port: $PROXY_PORT"
@@ -271,16 +283,16 @@ main() {
     
     # Run the test sequence
     if ! setup_test_environment; then
-        print_error "Test environment setup failed"
+        echo "✗ Test environment setup failed"
         exit 1
     fi
     
     if ! run_compression_tests; then
-        print_error "$TEST_NAME FAILED"
+        echo "✗ $TEST_NAME FAILED"
         exit 1
     fi
     
-    print_success "$TEST_NAME PASSED"
+    echo "✓ $TEST_NAME PASSED"
     exit 0
 }
 

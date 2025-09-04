@@ -213,7 +213,7 @@ impl ProxyServer {
 
         // Capture the original headers and client's Accept-Encoding preference
         let original_headers = req.headers().clone();
-        let client_accept_encoding = original_headers.get(header::ACCEPT_ENCODING).cloned();
+        let _client_accept_encoding = original_headers.get(header::ACCEPT_ENCODING).cloned();
         /* This code on hold until deciding to move to hyper v1.0, which is a dependency of reqwest >= 0.11
          * Last time I tried, it just "does not work"... most servers respond with 400-level errors.
         let reqwest_method: reqwest::Method = method.as_str().parse().unwrap();

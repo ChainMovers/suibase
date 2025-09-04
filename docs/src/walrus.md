@@ -49,3 +49,7 @@ testnet: `~/suibase/workdirs/testnet/bin/`
 mainnet: `~/suibase/workdirs/mainnet/bin/`
 
 Keep in mind that if you call the binaries directly (instead of using the scripts), you will have to specify your own config, context and wallets.
+
+## Walrus Relay
+
+For advanced HTTP proxy functionality with request statistics and transparent forwarding, see [Walrus Relay](how-to/walrus-relay.md).

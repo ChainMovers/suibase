@@ -80,6 +80,10 @@ export const enSidebar = sidebar({
           ],
         },
         {
+          text: "Walrus Relay",
+          link: "how-to/walrus-relay.md",
+        },
+        {
           text: "Workdir Config",
           link: "how-to/configure-suibase-yaml.md",
         },
