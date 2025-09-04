@@ -45,6 +45,7 @@ test_status_when_disabled() {
     # Test status output - CLI detects DISABLED instantaneously from config
     local output
     output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
+    echo "$output"
 
     if ! echo "$output" | grep -q "DISABLED"; then
         fail "Status should show DISABLED when relay is disabled. Got: $output"
@@ -63,10 +64,12 @@ test_enable_command() {
     # Ensure starting from disabled state
     "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable
 
-    # Test enable command
+    # Test enable command (should change from disabled to enabled)
     local output
     output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable 2>&1)
+    echo "$output"
 
+    # The enable command should report that it enabled walrus relay
     if ! echo "$output" | grep -q "Walrus relay is now enabled"; then
         fail "Enable command should confirm enablement. Got: $output"
     fi
@@ -93,6 +96,7 @@ test_status_when_enabled() {
     # Test status output
     local output
     output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
+    echo "$output"
 
     # Should show DOWN, STOPPED, or OK depending on daemon and process state
     if echo "$output" | grep -q "DOWN"; then
@@ -142,10 +146,30 @@ test_status_when_working() {
         if ! strip_ansi_colors "$output" | grep -q "http://localhost:$expected_port"; then
             fail "Status should show proxy URL http://localhost:$expected_port when OK. Got: $output"
         fi
-        if ! echo "$output" | grep -q "pid"; then
-            fail "Status should show PID when OK and running. Got: $output"  
+        # Wait for PID to show up (handle race condition where process is OK but PID not yet detected)
+        local pid_found=false
+        local pid_retry_count=0
+        local max_pid_retries=10
+        
+        while [ $pid_retry_count -lt $max_pid_retries ]; do
+            if echo "$output" | grep -q "pid"; then
+                pid_found=true
+                break
+            fi
+            echo "⚠ PID not found in status output, retrying ($((pid_retry_count + 1))/$max_pid_retries)..."
+            sleep 1
+            output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1)
+            pid_retry_count=$((pid_retry_count + 1))
+        done
+        
+        if [ "$pid_found" = false ]; then
+            fail "Status should show PID when OK and running after $max_pid_retries retries. Got: $output"  
         fi
-        echo "✓ Status correctly shows OK state with proxy URL and PID"
+        # Extract PID from output for display (format is "( pid 12345 )")
+        local displayed_pid
+        # First strip ANSI color codes, then extract PID
+        displayed_pid=$(strip_ansi_colors "$output" | grep -o "( pid [0-9]* )" | grep -o "[0-9]*")
+        echo "✓ Status correctly shows OK state with proxy URL and PID ($displayed_pid)"
     elif echo "$output" | grep -q "DOWN"; then
         # Daemon detects process not running or unhealthy
         echo "✓ Status correctly shows DOWN state (daemon detects process issue)"
@@ -169,6 +193,7 @@ test_disable_command() {
     # Test disable command
     local output
     output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable 2>&1)
+    echo "$output"
 
     if ! echo "$output" | grep -q "Walrus relay is now disabled"; then
         fail "Disable command should confirm disablement. Got: $output"
@@ -191,6 +216,7 @@ test_enable_when_already_enabled() {
     # Test enable command again
     local output
     output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable 2>&1)
+    echo "$output"
 
     if ! echo "$output" | grep -q "Walrus relay already enabled"; then
         fail "Enable command should detect already enabled state. Got: $output"
@@ -208,6 +234,7 @@ test_disable_when_already_disabled() {
     # Test disable command again
     local output
     output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay disable 2>&1)
+    echo "$output"
 
     if ! echo "$output" | grep -q "Walrus relay already disabled"; then
         fail "Disable command should detect already disabled state. Got: $output"
@@ -222,6 +249,7 @@ test_mainnet_support() {
     # Test mainnet status (should work)
     local output
     output=$("$SUIBASE_DIR/scripts/mainnet" wal-relay status 2>&1)
+    echo "$output"
 
     # Strip ANSI color codes and check for valid status (DISABLED, DOWN, OK, etc.)
     if ! strip_ansi_colors "$output" | grep -Eq "DISABLED|DOWN|OK|STOPPED|NOT RUNNING"; then

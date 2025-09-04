@@ -2474,7 +2474,7 @@ get_process_pid() {
     _PID=$(ps x -o pid,comm | grep "$_PROC$" | grep -v -e grep | { head -n 1; cat >/dev/null 2>&1; } | sed -e 's/^[[:space:]]*//' | sed 's/ /\n/g' | { head -n 1; cat >/dev/null 2>&1; })
   else
     local _TARGET_CMD
-    if [ -n "$ARGS" ]; then
+    if [ -n "$_ARGS" ]; then
       _TARGET_CMD="$_PROC $_ARGS"
     else
       _TARGET_CMD="$_PROC"
