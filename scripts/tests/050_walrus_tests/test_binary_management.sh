@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Test for walrus-upload-relay binary management
-# Tests binary download, installation, and basic functionality
+# Test for Walrus binary management (walrus-upload-relay and site-builder)
+# Tests binary download, installation, version validation, and basic functionality
 
 # shellcheck source=SCRIPTDIR/__test_common.sh
 source "$(dirname "$0")/__test_common.sh"
@@ -13,18 +13,19 @@ test_binary_installation() {
     setup_test_workdir "$WORKDIR"
     backup_config_files "$WORKDIR"
     
-    # Test updating via proper script (should download walrus-upload-relay)
+    # Test updating via proper script (should download walrus-upload-relay and site-builder)
     echo "Calling $WORKDIR update to install walrus binaries..."
     "$SUIBASE_DIR/scripts/$WORKDIR" update >/dev/null 2>&1
     
-    # Check if binary was installed
+    # Check if binaries were installed
     assert_binary_exists "$WORKDIR"
+    assert_site_builder_installed "$WORKDIR"
     
     echo "✓ Binary installation test passed"
 }
 
 test_binary_execution() {
-    echo "Testing walrus-upload-relay binary execution..."
+    echo "Testing walrus binaries execution..."
     
     RELAY_BINARY="$WORKDIRS/$WORKDIR/bin/walrus-upload-relay"
     if [ -f "$RELAY_BINARY" ]; then
@@ -39,6 +40,9 @@ test_binary_execution() {
         fail "walrus-upload-relay binary not found after installation"
     fi
     
+    # site-builder execution test is now handled by assert_site_builder_installed()
+    echo "✓ site-builder execution validated in installation test"
+    
     echo "✓ Binary execution test passed"
 }
 
@@ -47,6 +51,9 @@ test_configuration_files() {
     
     # Verify walrus-config.yaml exists
     assert_config_file_exists "$WORKDIR" "walrus-config.yaml"
+    
+    # Verify sites-config.yaml exists
+    assert_config_file_exists "$WORKDIR" "sites-config.yaml"
     
     echo "✓ Configuration files test passed"
 }
@@ -79,8 +86,18 @@ test_walrus_integration() {
     echo "✓ Integration test passed"
 }
 
+test_site_builder_features() {
+    echo "Testing site-builder specific features..."
+    
+    # Comprehensive site-builder installation check (already done in installation test, 
+    # but this ensures future tests can depend on site-builder being properly validated)
+    assert_site_builder_installed "$WORKDIR"
+    
+    echo "✓ Site-builder features test passed"
+}
+
 tests() {
-    echo "Starting walrus-upload-relay binary management tests..."
+    echo "Starting walrus binary management tests..."
     
     # Setup temp directory
     mkdir -p "$TEMP_TEST_DIR"
@@ -90,10 +107,11 @@ tests() {
     test_binary_execution  
     test_configuration_files
     test_walrus_integration
+    test_site_builder_features
     
     # Cleanup happens automatically on test setup, not at end
     
-    echo "All walrus-upload-relay binary management tests passed!"
+    echo "All walrus binary management tests passed!"
 }
 
 # Run the tests

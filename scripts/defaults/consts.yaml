@@ -15,6 +15,7 @@ suibase_daemon_src_path: "rust/suibase"
 suibase_daemon_repo_url: "https://github.com/chainmovers/sui-binaries.git"
 suibase_daemon_repo_branch: "main"
 suibase_daemon_force_tag: ~
+suibase_daemon_asset_name_filter: "branch"
 suibase_daemon_build_type: "rust"
 suibase_daemon_run_type: "daemon"
 suibase_daemon_precompiled_bin: true
@@ -31,6 +32,7 @@ sui_src_path: ~
 sui_repo_url: ~
 sui_repo_branch: ~
 sui_force_tag: ~
+sui_asset_name_filter: "branch"
 sui_build_type: "rust"
 sui_run_type: "cli"
 sui_precompiled_bin: ~
@@ -45,6 +47,7 @@ walrus_src_path: ~
 walrus_repo_url: "https://github.com/MystenLabs/walrus.git"
 walrus_repo_branch: ~
 walrus_force_tag: ~
+walrus_asset_name_filter: "branch"
 walrus_build_type: ~
 walrus_run_type: "cli"
 walrus_precompiled_bin: true
@@ -56,9 +59,10 @@ site_builder_bin_names: "site-builder"
 site_builder_install_type: "workdir"
 site_builder_src_type: ~
 site_builder_src_path: ~
-site_builder_repo_url: "https://github.com/chainmovers/sui-binaries.git"
+site_builder_repo_url: "https://github.com/MystenLabs/walrus-sites.git"
 site_builder_repo_branch: ~
 site_builder_force_tag: ~
+site_builder_asset_name_filter: "mainnet"
 site_builder_build_type: ~
 site_builder_run_type: "cli"
 site_builder_precompiled_bin: true

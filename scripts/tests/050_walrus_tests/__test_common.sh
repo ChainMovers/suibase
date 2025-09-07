@@ -372,6 +372,84 @@ assert_config_file_exists() {
     echo "✓ $config_file exists at $config_path"
 }
 
+assert_site_builder_installed() {
+    local workdir="$1"
+    local binary_path="$WORKDIRS/$workdir/bin/site-builder"
+    local version_file="$WORKDIRS/$workdir/bin/site-builder-version.yaml"
+    local min_version="1.0.2"
+
+    # Check binary existence and executability
+    if [ ! -f "$binary_path" ]; then
+        fail "site-builder binary not found at $binary_path"
+    fi
+
+    if [ ! -x "$binary_path" ]; then
+        fail "site-builder binary not executable at $binary_path"
+    fi
+
+    # Check version file and validate version
+    if [ ! -f "$version_file" ]; then
+        fail "site-builder version file not found at $version_file"
+    fi
+
+    # Extract version from YAML file
+    local current_version
+    current_version=$(grep '^version:' "$version_file" | sed 's/version: *"\(.*\)"/\1/')
+    
+    if [ -z "$current_version" ]; then
+        fail "Could not extract version from $version_file"
+    fi
+
+    # Simple version comparison (assumes semantic versioning x.y.z)
+    local current_major current_minor current_patch
+    local min_major min_minor min_patch
+    
+    IFS='.' read -r current_major current_minor current_patch <<< "$current_version"
+    IFS='.' read -r min_major min_minor min_patch <<< "$min_version"
+    
+    # Convert to comparable numbers (supports up to 3 digits per component: 999.999.999)
+    local current_num=$((current_major * 1000000 + current_minor * 1000 + current_patch))
+    local min_num=$((min_major * 1000000 + min_minor * 1000 + min_patch))
+    
+    if [ "$current_num" -lt "$min_num" ]; then
+        fail "site-builder version $current_version must be >= $min_version"
+    fi
+
+    # Test basic binary functionality
+    if ! "$binary_path" --help >/dev/null 2>&1; then
+        fail "site-builder binary failed basic execution test"
+    fi
+
+    # Check wrapper script
+    local script_name script_path
+    case "$workdir" in
+        "testnet")
+            script_name="tsite"
+            ;;
+        "mainnet")
+            script_name="msite"
+            ;;
+        *)
+            fail "Unsupported workdir for site wrapper script: $workdir"
+            ;;
+    esac
+    
+    script_path="$SUIBASE_DIR/scripts/$script_name"
+    
+    if [ ! -f "$script_path" ]; then
+        fail "$script_name wrapper script not found at $script_path"
+    fi
+
+    if [ ! -x "$script_path" ]; then
+        fail "$script_name wrapper script not executable at $script_path"
+    fi
+    
+    # Test wrapper script functionality (should show help or at least not error)
+    if ! "$script_path" --help >/dev/null 2>&1; then
+        fail "$script_name wrapper script failed basic execution test"
+    fi
+}
+
 # Portable walrus relay process checking
 check_walrus_process_stopped() {
     local workdir="$1"
@@ -617,7 +695,7 @@ wait_for_process_stopped() {
 export -f get_process_pid check_walrus_process_stopped check_walrus_process_running
 export -f setup_clean_environment ensure_build_daemon safe_start_daemon setup_test_workdir backup_config_files restore_config_files stop_walrus_relay_process
 export -f cleanup_port_conflicts wait_for_port_available wait_for_process_ready
-export -f assert_binary_exists assert_process_running assert_config_file_exists
+export -f assert_binary_exists assert_process_running assert_config_file_exists assert_site_builder_installed
 export -f wait_for_service_status wait_for_walrus_relay_status wait_for_daemon_running wait_for_daemon_stopped wait_for_process_stopped
 export -f restore_suibase_yaml_from_default
 export -f fail strip_ansi_colors

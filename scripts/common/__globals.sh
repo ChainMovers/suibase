@@ -45,6 +45,10 @@ fi
 export SUIBASE_DIR="$HOME/suibase"
 export WORKDIRS="$SUIBASE_DIR/workdirs"
 
+# Source portable functions after SUIBASE_DIR is defined, so they're available to all scripts
+# shellcheck source=SCRIPTDIR/__portable.sh
+source "$SUIBASE_DIR/scripts/common/__portable.sh"
+
 # Some other commonly used locations.
 export LOCAL_BIN_DIR="$HOME/.local/bin"
 export SCRIPTS_DIR="$SUIBASE_DIR/scripts"
@@ -327,9 +331,8 @@ version_greater_equal() {
   _arg1=$(echo "$1" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
   # shellcheck disable=SC2001
   _arg2=$(echo "$2" | sed 's/^[^0-9]*//; s/-.*//; s/\(.*\)\.\(.*\)\..*/\1.\2/')
-  # With --check=quiet, sort will return 0 if no sort needed. In other word,
-  # the first argument is already greater or equal to the second.
-  printf '%s\n%s\n' "$_arg2" "$_arg1" | sort --check=quiet --version-sort
+  # Use portable version comparison instead of sort --version-sort
+  version_gte "$_arg1" "$_arg2"
 }
 export -f version_greater_equal
 
@@ -3543,7 +3546,7 @@ update_PRECOMP_REMOTE_var() {
           echo "Warn: Skipping invalid Mysten Labs assets $_TAG_NAME"
         fi
       fi
-    done <<<"$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -rV)"
+    done <<<"$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort_rv)"
 
     # Stop looping for retry if _DOWNLOAD_URL looks valid.
     # TODO Refactor this to avoid duplicate logic done in above loop.

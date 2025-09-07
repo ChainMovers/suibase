@@ -35,6 +35,7 @@ app_obj_cfg=(
   "repo_url"
   "repo_branch"
   "force_tag"
+  "asset_name_filter" # Filter for tag names containing this string (use "branch" for branch filtering)
   "build_type"  # For now, supports only "rust"
   "run_type"    # daemon|cli
   "precompiled_bin" # true|false
@@ -333,9 +334,40 @@ sb_app_init_PRECOMP_REMOTE_vars() {
     get_app_var "$self" "install_type"
     local _INSTALL_TYPE=$APP_VAR
     if [[ $_INSTALL_TYPE == "workdir" ]]; then
-      _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort -rV)
+      # Check asset_name_filter configuration
+      get_app_var "$self" "asset_name_filter"
+      local _ASSET_NAME_FILTER=$APP_VAR
+      if [ -z "$_ASSET_NAME_FILTER" ]; then
+        # Empty/null: no filtering beyond tag_name
+        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort_rv)
+      elif [ "$_ASSET_NAME_FILTER" = "branch" ]; then
+        # "branch": use branch filtering (current behavior)
+        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort_rv)
+      else
+        # Specific filter: filter tag names containing this string, then extract semantic versions for proper sorting
+        # Extract semantic version (x.y.z, x.y, or x) from each tag for version-aware sorting
+        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_ASSET_NAME_FILTER" | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' | \
+          awk '{
+            # Extract first x.y.z pattern
+            if (match($0, /[0-9]+\.[0-9]+\.[0-9]+/)) {
+              version = substr($0, RSTART, RLENGTH)
+            }
+            # If no x.y.z, extract first x.y pattern
+            else if (match($0, /[0-9]+\.[0-9]+/)) {
+              version = substr($0, RSTART, RLENGTH)
+            }
+            # If no x.y, extract first x pattern
+            else if (match($0, /[0-9]+/)) {
+              version = substr($0, RSTART, RLENGTH)
+            }
+            else {
+              version = $0
+            }
+            print version "|" $0
+          }' | sort_rv | cut -d'|' -f2)
+      fi
     else
-      _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort -rV)
+      _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort_rv)
     fi
 
     if [ -z "$_OUT" ]; then
@@ -482,9 +514,21 @@ sb_app_download_PRECOMP_REMOTE() {
   local _DOWNLOAD_DIR=$APP_VAR
   mkdir -p "$_DOWNLOAD_DIR"
   local _DOWNLOAD_FILENAME="${_PRECOMP_REMOTE_DOWNLOAD_URL##*/}"
-  local _DOWNLOAD_FILENAME_WITHOUT_TGZ="${_DOWNLOAD_FILENAME%.tgz}"
+  # Detect and store the file extension type
+  local _ARCHIVE_TYPE=""
+  local _DOWNLOAD_FILENAME_WITHOUT_EXT=""
+  if [[ "$_DOWNLOAD_FILENAME" == *.tgz ]]; then
+    _ARCHIVE_TYPE="tgz"
+    _DOWNLOAD_FILENAME_WITHOUT_EXT="${_DOWNLOAD_FILENAME%.tgz}"
+  elif [[ "$_DOWNLOAD_FILENAME" == *.tar ]]; then
+    _ARCHIVE_TYPE="tar"
+    _DOWNLOAD_FILENAME_WITHOUT_EXT="${_DOWNLOAD_FILENAME%.tar}"
+  else
+    setup_error "Unsupported archive format '$_DOWNLOAD_FILENAME'. Expected .tar or .tgz extension."
+  fi
+
   local _DOWNLOAD_FILEPATH="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME"
-  local _EXTRACT_DIR="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME_WITHOUT_TGZ" # Where the .tgz content will be placed.
+  local _EXTRACT_DIR="$_DOWNLOAD_DIR/$_DOWNLOAD_FILENAME_WITHOUT_EXT" # Where the archive content will be placed.
 
   local _USE_VERSION=""
 
@@ -543,7 +587,14 @@ sb_app_download_PRECOMP_REMOTE() {
       rm -rf "$_EXTRACT_DIR" >/dev/null 2>&1
       mkdir -p "$_EXTRACT_DIR"
       #echo "Extracting $_DOWNLOAD_FILEPATH into $_EXTRACT_DIR"
-      tar -xzf "$_DOWNLOAD_FILEPATH" -C "$_EXTRACT_DIR"
+      # Use appropriate extraction based on archive type
+      if [ "$_ARCHIVE_TYPE" = "tgz" ]; then
+        tar -x -z -f "$_DOWNLOAD_FILEPATH" -C "$_EXTRACT_DIR"  # gzipped
+      elif [ "$_ARCHIVE_TYPE" = "tar" ]; then
+        tar -x -f "$_DOWNLOAD_FILEPATH" -C "$_EXTRACT_DIR"   # uncompressed
+      else
+        setup_error "Unknown archive type '$_ARCHIVE_TYPE' during extraction"
+      fi
     fi
 
     # Identify if the extracted file match one of the expected archive version (V1, V2 ...)
@@ -556,14 +607,23 @@ sb_app_download_PRECOMP_REMOTE() {
       _EXTRACTED_DIR="$_EXTRACTED_DIR_V1"
       _EXTRACTED_TEST_FILEDIR="$_EXTRACTED_TEST_FILEDIR_V1"
     else
-      # If extraction is not valid, then delete the downloaded file so it can be tried again.
-      _USE_VERSION=""
-      if [ $i -lt 2 ]; then
-        warn_user "Failed to extract binary. Try again."
-        exit 1
+      # Fallback: search for binary anywhere in archive
+      local found_binary
+      found_binary=$(find "$_EXTRACT_DIR" -name "$_FIRST_BIN_NAME" -type f 2>/dev/null | head -n 1)
+      if [ -n "$found_binary" ]; then
+        _USE_VERSION="found"
+        _EXTRACTED_DIR=$(dirname "$found_binary")
+        _EXTRACTED_TEST_FILEDIR="$found_binary"
+      else
+        # If extraction is not valid, then delete the downloaded file so it can be tried again.
+        _USE_VERSION=""
+        if [ $i -lt 2 ]; then
+          warn_user "Failed to extract binary. Try again."
+          exit 1
+        fi
+        rm -rf "$_EXTRACT_DIR" >/dev/null 2>&1
+        rm -rf "$_DOWNLOAD_FILEPATH" >/dev/null 2>&1
       fi
-      rm -rf "$_EXTRACT_DIR" >/dev/null 2>&1
-      rm -rf "$_DOWNLOAD_FILEPATH" >/dev/null 2>&1
     fi
 
     if [ -n "$_USE_VERSION" ]; then
@@ -713,6 +773,13 @@ sb_app_install_on_bin_diff() {
   if [ "$_DO_COPY" = "true" ]; then
     mkdir -p "$_DST"
     \cp -f "$_SRC/$_BIN" "$_DST/$_BIN"
+
+    # Set execute permissions only on expected binaries (from bin_names config)
+    get_app_var "$self" "bin_names"
+    local _BIN_NAMES_STRING=$APP_VAR
+    if [[ ",$_BIN_NAMES_STRING," == *",$_BIN,"* ]]; then
+      chmod +x "$_DST/$_BIN"
+    fi
   fi
 }
 export -f sb_app_install_on_bin_diff
