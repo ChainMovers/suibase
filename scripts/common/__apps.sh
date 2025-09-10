@@ -36,11 +36,13 @@ app_obj_cfg=(
   "repo_branch"
   "force_tag"
   "asset_name_filter" # Filter for tag names containing this string (use "branch" for branch filtering)
+  "asset_name_exclude" # Regex pattern to exclude tag names (e.g. "_ci|walrus-sites")
   "build_type"  # For now, supports only "rust"
   "run_type"    # daemon|cli
   "precompiled_bin" # true|false
   "precompiled_type" # suibase|mystenlabs
   "precompiled_path" # path to binaries within the assets.
+  "support_version_check" # true|false - whether asset supports --version validation
 )
 
 # Initialized with defaults on init_app(), can be modified.
@@ -242,6 +244,28 @@ init_app_obj() {
 }
 export -f init_app_obj
 
+sb_app_apply_exclusions() {
+  # Apply asset_name_exclude pattern to filter out unwanted tag names
+  # Usage: sb_app_apply_exclusions "$self" "$input_stream"
+  # Returns: filtered stream with exclusions applied
+
+  local self=$1
+  local input_stream="$2"
+
+  get_app_var "$self" "asset_name_exclude"
+  local _EXCLUDE_PATTERN=$APP_VAR
+
+  if [ -n "$_EXCLUDE_PATTERN" ] && [ "$_EXCLUDE_PATTERN" != "~" ]; then
+    # Use grep -E for extended regex and -v for invert match
+    # This is portable across Linux and macOS
+    echo "$input_stream" | grep -E -v "$_EXCLUDE_PATTERN"
+  else
+    # No exclusions configured, return input as-is
+    echo "$input_stream"
+  fi
+}
+export -f sb_app_apply_exclusions
+
 sb_app_init_PRECOMP_REMOTE_vars() {
   # Create the "self" reference.
   local self=$1
@@ -344,31 +368,14 @@ sb_app_init_PRECOMP_REMOTE_vars() {
         # "branch": use branch filtering (current behavior)
         _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort_rv)
       else
-        # Specific filter: filter tag names containing this string, then extract semantic versions for proper sorting
-        # Extract semantic version (x.y.z, x.y, or x) from each tag for version-aware sorting
-        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_ASSET_NAME_FILTER" | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' | \
-          awk '{
-            # Extract first x.y.z pattern
-            if (match($0, /[0-9]+\.[0-9]+\.[0-9]+/)) {
-              version = substr($0, RSTART, RLENGTH)
-            }
-            # If no x.y.z, extract first x.y pattern
-            else if (match($0, /[0-9]+\.[0-9]+/)) {
-              version = substr($0, RSTART, RLENGTH)
-            }
-            # If no x.y, extract first x pattern
-            else if (match($0, /[0-9]+/)) {
-              version = substr($0, RSTART, RLENGTH)
-            }
-            else {
-              version = $0
-            }
-            print version "|" $0
-          }' | sort_rv | cut -d'|' -f2)
+        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_ASSET_NAME_FILTER" | sort_rv)
       fi
     else
       _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort_rv)
     fi
+
+    # Apply exclusions configured in asset_name_exclude
+    _TAG_NAMES=$(sb_app_apply_exclusions "$self" "$_TAG_NAMES")
 
     if [ -z "$_OUT" ]; then
       if [ $_retry_curl -lt 3 ]; then
@@ -665,6 +672,86 @@ sb_app_download_PRECOMP_REMOTE() {
   set_app_var "$self" "PRECOMP_REMOTE_FILE_NAME_VERSION" "$_USE_VERSION"
 }
 export -f sb_app_download_PRECOMP_REMOTE
+
+sb_app_validate_downloaded_binary() {
+  # Validate that the downloaded binary version matches the expected version
+  # BEFORE installation proceeds.
+  #
+  # Returns:
+  #   0 - Version matches or validation not applicable
+  #   1 - Version mismatch detected (should abort installation)
+
+  local self=$1
+
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
+
+  # Check if version validation is supported for this asset
+  get_app_var "$self" "support_version_check"
+  local _SUPPORT_VERSION_CHECK=$APP_VAR
+
+  if [ "$_SUPPORT_VERSION_CHECK" = "false" ]; then
+    return 0
+  fi
+
+  get_app_var "$self" "first_bin_name"
+  local _FIRST_BIN_NAME=$APP_VAR
+
+  get_app_var "$self" "PRECOMP_REMOTE_VERSION"
+  local _EXPECTED_VERSION=$APP_VAR
+
+  get_app_var "$self" "PRECOMP_REMOTE_DOWNLOAD_DIR"
+  local _DOWNLOAD_DIR=$APP_VAR
+
+  # Skip validation if no expected version or download dir
+  if [ -z "$_EXPECTED_VERSION" ] || [ -z "$_DOWNLOAD_DIR" ]; then
+    return 0
+  fi
+
+  # Skip validation if downloaded binary doesn't exist
+  local _DOWNLOADED_BINARY_PATH="$_DOWNLOAD_DIR/$_FIRST_BIN_NAME"
+  if [ ! -f "$_DOWNLOADED_BINARY_PATH" ]; then
+    warn_user "Downloaded binary not found at: $_DOWNLOADED_BINARY_PATH"
+    return 0
+  fi
+
+  # Make sure the downloaded binary is executable
+  chmod +x "$_DOWNLOADED_BINARY_PATH"
+
+  # Get the actual version from the downloaded binary
+  local _ACTUAL_VERSION_OUTPUT
+  _ACTUAL_VERSION_OUTPUT=$("$_DOWNLOADED_BINARY_PATH" --version 2>/dev/null) || {
+    warn_user "Downloaded $_ASSETS_NAME binary exists but --version command failed"
+    return 0
+  }
+
+  # Extract version number from the output
+  # For site-builder: "site-builder 1.0.1-3567838a78f9" -> "1.0.1"
+  # For walrus: "walrus 1.32.0" -> "1.32.0"
+  local _ACTUAL_VERSION
+  if [[ "$_ACTUAL_VERSION_OUTPUT" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+    _ACTUAL_VERSION="${BASH_REMATCH[1]}"
+  else
+    warn_user "Could not parse version from downloaded '$_ASSETS_NAME --version' output: $_ACTUAL_VERSION_OUTPUT"
+    return 0
+  fi
+
+  # Compare versions
+  if [ "$_EXPECTED_VERSION" != "$_ACTUAL_VERSION" ]; then
+    echo "======================================="
+    echo "WARNING: VERSION MISMATCH DETECTED"
+    echo "======================================="
+    echo "Asset: $_ASSETS_NAME"
+    echo "Expected version: $_EXPECTED_VERSION"
+    echo "Downloaded version: $_ACTUAL_VERSION"
+    echo "Downloaded binary: $_DOWNLOADED_BINARY_PATH"
+    echo "======================================="
+    return 1
+  fi
+
+  return 0
+}
+export -f sb_app_validate_downloaded_binary
 
 sb_app_install_PRECOMP_REMOTE() {
 
@@ -1229,6 +1316,18 @@ sb_app_install() {
 
       if [ "$_DO_INSTALL" = "true" ]; then
         sb_app_download_PRECOMP_REMOTE "$self"
+
+        # Validate downloaded binary version before proceeding with installation
+        if ! sb_app_validate_downloaded_binary "$self"; then
+          # Fail if there is no valid local installation.
+          if [ "$_IS_INSTALLED" != "true" ]; then
+            setup_error "Downloaded binary validation failed and no local installation exists. Installation cancelled."
+          fi
+          # If there is a valid local installation, just warn and skip the installation.
+          warn_user "Downloaded binary version validation failed. Installation skipped."
+          return
+        fi
+
         sb_app_install_PRECOMP_REMOTE "$self"
       fi
     fi
