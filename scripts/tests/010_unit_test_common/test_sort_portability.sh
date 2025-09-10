@@ -36,11 +36,18 @@ test_case() {
     echo "Test $TEST_COUNT: $1"
 }
 
-# Test if GNU sort -V is available (Ubuntu should have it)
+# Test if GNU sort -V is available (Ubuntu should have it, macOS should not)
 has_gnu_sort_v() {
-    local test_result
-    test_result=$(echo -e "1.2\n1.10" | sort -V 2>/dev/null | head -n1)
-    [ "$test_result" = "1.2" ]
+    # First check if sort --version shows GNU coreutils
+    if sort --version 2>/dev/null | grep -q "GNU coreutils"; then
+        # Double-check with a basic -V test
+        local test_result
+        test_result=$(echo -e "1.2\n1.10" | sort -V 2>/dev/null | head -n1)
+        [ "$test_result" = "1.2" ]
+    else
+        # Not GNU sort (likely BSD on macOS)
+        return 1
+    fi
 }
 
 test_sort_v_basic() {
