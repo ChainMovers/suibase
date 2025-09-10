@@ -1,3 +1,4 @@
+#!/bin/bash
 # shellcheck shell=bash
 
 # Portable sorting functions for cross-platform compatibility
@@ -5,21 +6,31 @@
 #
 # Known limitations compared to GNU sort -V:
 # - Space handling: Our algorithm trims leading/trailing spaces, GNU preserves them with complex tie-breaking
-# - Negative version numbers: GNU uses 3-tier priority system (valid > non-version > invalid patterns)
+# - Negative version numbers: GNU uses 3-tier priority system (valid > non-version > invalid patterns)  
 # - These edge cases don't affect common patterns like app-1.0-linux or release-1.2
 # - Our trimming approach is simpler and more predictable for practical usage
-
+#
 # sort_v: Portable version sort (replacement for sort -V)
 # Sorts input lines by version number, supporting semantic versioning with prefix robustness
 # Usage: sort_v < input_file
 #        echo -e "1.2.3\n1.2.10\n1.2.2" | sort_v
 sort_v() {
-  # GNU sort -V compatible sorting with version specificity handling - pure POSIX
-  awk '
+  # GNU sort -V compatible sorting with version specificity handling - enhanced error handling
+  awk 'BEGIN {
+    # Initialize variables to prevent undefined behavior in different awk implementations
+    RSTART = 0; RLENGTH = 0
+  }
   {
     line = $0
+    original = $0
     # Trim leading and trailing spaces for better compatibility
     gsub(/^[ \t]+|[ \t]+$/, "", line)
+    
+    # Handle empty lines - they should sort first like GNU sort -V
+    if (length(line) == 0) {
+      print " |" original  # space sorts before all numbers/letters
+      next
+    }
     
     # GNU sort -V algorithm: iterate through string, extend all incomplete numbers
     # 1 -> 1.0, x.y -> x.y.0 (if not followed by .z)
@@ -69,9 +80,15 @@ sort_v() {
     }
     result = result line
     
+    # Base versions (1.2.3) should sort before pre-release versions (1.2.3-alpha)
+    original = $0
+    if (match(original, /^[^0-9]*[0-9]+([.][0-9]+)*$/)) {
+      result = result "#"  # hash sorts before hyphen
+    }
+    
     print result "|" $0
   }
-  ' | sort | cut -d'|' -f2-
+  ' | LC_ALL=C sort | cut -d'|' -f2-
 }
 export -f sort_v
 
@@ -84,8 +101,15 @@ sort_rv() {
   awk '
   {
     line = $0
+    original = $0
     # Trim leading and trailing spaces for better compatibility
     gsub(/^[ \t]+|[ \t]+$/, "", line)
+    
+    # Handle empty lines - they should sort first like GNU sort -V (last in reverse)
+    if (length(line) == 0) {
+      print " |" original  # space sorts before all numbers/letters
+      next
+    }
     
     # GNU sort -V algorithm: iterate through string, extend all incomplete numbers
     # 1 -> 1.0, x.y -> x.y.0 (if not followed by .z)
@@ -135,9 +159,15 @@ sort_rv() {
     }
     result = result line
     
+    # Base versions (1.2.3) should sort before pre-release versions (1.2.3-alpha)
+    original = $0
+    if (match(original, /^[^0-9]*[0-9]+([.][0-9]+)*$/)) {
+      result = result "#"  # hash sorts before hyphen
+    }
+    
     print result "|" $0
   }
-  ' | sort -r | cut -d'|' -f2-
+  ' | LC_ALL=C sort -r | cut -d'|' -f2-
 }
 export -f sort_rv
 

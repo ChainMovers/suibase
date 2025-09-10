@@ -716,6 +716,154 @@ test_real_world_scenarios() {
     fi
 }
 
+test_locale_independence() {
+    test_case "Locale independence - function should behave consistently regardless of LC_ALL"
+    
+    # Test critical version cases that were failing in CI/CD
+    local test_cases=(
+        "1.2.3-alpha\n1.2.3-beta\n1.2.3\n1.2.4"
+        "1.9\n1.10\n1.2"
+        "v1.0.0\nv1.0.0-alpha\nv1.0.0-beta"
+        "release-1.2.0\nrelease-1.9.0\nrelease-1.10.0"
+    )
+    
+    local expected_results=(
+        "1.2.3\n1.2.3-alpha\n1.2.3-beta\n1.2.4"
+        "1.2\n1.9\n1.10"
+        "v1.0.0\nv1.0.0-alpha\nv1.0.0-beta"
+        "release-1.2.0\nrelease-1.9.0\nrelease-1.10.0"
+    )
+    
+    # Test with various locales commonly found in CI/CD and different systems
+    local locales_to_test=(
+        "C"
+        "POSIX" 
+        "en_US.UTF-8"
+        "en_GB.UTF-8"
+        ""  # Default/unset
+    )
+    
+    echo "Testing locale independence across multiple LC_ALL settings..."
+    
+    for i in "${!test_cases[@]}"; do
+        local input="${test_cases[$i]}"
+        local expected="${expected_results[$i]}"
+        
+        echo "Test case $((i+1)): $(echo -e "$input" | tr '\n' ' ')"
+        
+        # Store the reference result (from default locale)
+        local reference_result
+        reference_result=$(echo -e "$input" | sort_v)
+        
+        # Test each locale
+        local locale_failures=0
+        for locale in "${locales_to_test[@]}"; do
+            local result
+            
+            if [ -z "$locale" ]; then
+                # Test with unset LC_ALL (default behavior)
+                result=$(unset LC_ALL; echo -e "$input" | sort_v)
+                locale="(unset)"
+            else
+                # Test with specific locale  
+                result=$(LC_ALL="$locale" bash -c "source $(dirname "$0")/../../common/__portable.sh; echo -e \"$input\" | sort_v" 2>/dev/null)
+                if [ $? -ne 0 ]; then
+                    echo "  ⚠️  Locale $locale not available, skipping"
+                    continue
+                fi
+            fi
+            
+            if [ "$result" = "$reference_result" ]; then
+                echo "  ✅ LC_ALL=$locale: matches reference"
+            else
+                echo "  ❌ LC_ALL=$locale: differs from reference"
+                echo "    Reference: $(echo "$reference_result" | tr '\n' ' ')"
+                echo "    Got:       $(echo "$result" | tr '\n' ' ')"
+                locale_failures=$((locale_failures + 1))
+            fi
+            
+            # Also verify it matches the expected result
+            if [ "$result" = "$(echo -e "$expected")" ]; then
+                echo "  ✅ LC_ALL=$locale: matches expected result"
+            else
+                echo "  ❌ LC_ALL=$locale: differs from expected result"
+                echo "    Expected:  $(echo -e "$expected" | tr '\n' ' ')"
+                echo "    Got:       $(echo "$result" | tr '\n' ' ')"
+                locale_failures=$((locale_failures + 1))
+            fi
+        done
+        
+        if [ $locale_failures -eq 0 ]; then
+            pass "Locale independence for test case $((i+1))"
+        else
+            fail "Locale independence for test case $((i+1)) - $locale_failures locale(s) failed"
+        fi
+        echo
+    done
+    
+    # Test reverse sorting locale independence
+    echo "Testing reverse sort locale independence..."
+    local reverse_test="1.2.3-alpha\n1.2.3\n1.2.4"
+    local reverse_expected="1.2.4\n1.2.3\n1.2.3-alpha"
+    
+    local reference_reverse
+    reference_reverse=$(echo -e "$reverse_test" | sort_rv)
+    
+    local reverse_failures=0
+    for locale in "C" "POSIX" "en_US.UTF-8"; do
+        local result
+        result=$(LC_ALL="$locale" bash -c "source $(dirname "$0")/../../common/__portable.sh; echo -e \"$reverse_test\" | sort_rv" 2>/dev/null)
+        if [ $? -ne 0 ]; then
+            echo "  ⚠️  Locale $locale not available for reverse test, skipping"
+            continue
+        fi
+        
+        if [ "$result" = "$reference_reverse" ]; then
+            echo "  ✅ Reverse sort LC_ALL=$locale: matches reference"
+        else
+            echo "  ❌ Reverse sort LC_ALL=$locale: differs from reference"
+            echo "    Reference: $(echo "$reference_reverse" | tr '\n' ' ')"
+            echo "    Got:       $(echo "$result" | tr '\n' ' ')"
+            reverse_failures=$((reverse_failures + 1))
+        fi
+    done
+    
+    if [ $reverse_failures -eq 0 ]; then
+        pass "Reverse sort locale independence"
+    else
+        fail "Reverse sort locale independence - $reverse_failures locale(s) failed"
+    fi
+    
+    # Test version comparison functions with different locales
+    echo "Testing version comparison functions locale independence..."
+    local comparison_failures=0
+    
+    for locale in "C" "POSIX" "en_US.UTF-8"; do
+        local result1 result2 result3
+        
+        # Test in specific locale
+        result1=$(LC_ALL="$locale" bash -c "source $(dirname "$0")/../../common/__portable.sh; version_gte '1.2.3' '1.2.1' && echo true || echo false" 2>/dev/null)
+        result2=$(LC_ALL="$locale" bash -c "source $(dirname "$0")/../../common/__portable.sh; version_gte '1.2.1' '1.2.3' && echo true || echo false" 2>/dev/null) 
+        result3=$(LC_ALL="$locale" bash -c "source $(dirname "$0")/../../common/__portable.sh; version_gte '1.2.3' '1.2.3' && echo true || echo false" 2>/dev/null)
+        
+        if [ "$result1" = "true" ] && [ "$result2" = "false" ] && [ "$result3" = "true" ]; then
+            echo "  ✅ Version comparisons LC_ALL=$locale: correct"
+        else
+            echo "  ❌ Version comparisons LC_ALL=$locale: incorrect"
+            echo "    1.2.3 >= 1.2.1: $result1 (expected: true)"  
+            echo "    1.2.1 >= 1.2.3: $result2 (expected: false)"
+            echo "    1.2.3 >= 1.2.3: $result3 (expected: true)"
+            comparison_failures=$((comparison_failures + 1))
+        fi
+    done
+    
+    if [ $comparison_failures -eq 0 ]; then
+        pass "Version comparison locale independence"
+    else
+        fail "Version comparison locale independence - $comparison_failures locale(s) failed"
+    fi
+}
+
 
 run_all_tests() {
     echo "Starting comprehensive sort portability tests..."
@@ -736,6 +884,7 @@ run_all_tests() {
     test_nine_vs_ten_scenarios
     test_pipeline_compatibility
     test_real_world_scenarios
+    test_locale_independence
     
     cleanup_test_env
     
