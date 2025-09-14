@@ -2594,7 +2594,7 @@ start_sui_process() {
     if $SUI_BASE_NET_MOCK; then
       SUI_PROCESS_PID=$SUI_BASE_NET_MOCK_PID
     else
-      nohup env SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE=1 SUI_PROTOCOL_CONFIG_OVERRIDE_min_checkpoint_interval_ms=1000 RUST_LOG="error" "$SUI_BIN_DIR/sui" start --network.config "$NETWORK_CONFIG" >"$CONFIG_DATA_DIR/sui-process.log" 2>&1 &
+      nohup env SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE=1 SUI_PROTOCOL_CONFIG_OVERRIDE_min_checkpoint_interval_ms=1000 RUST_LOG="error" "$SUI_BIN_DIR/sui" start --with-indexer --with-graphql --network.config "$NETWORK_CONFIG" >"$CONFIG_DATA_DIR/sui-process.log" 2>&1 &
     fi
     #NEW_PID=$!
 
