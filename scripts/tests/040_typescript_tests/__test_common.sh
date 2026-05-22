@@ -33,11 +33,6 @@ if [ "$WORKDIR" != "localnet" ]; then
   return 2
 fi
 
-if [ "$RELEASE_TESTS_OPTION" = "true" ]; then
-  echo "Skipping $NPM_DIR (not done on release tests)"
-  return 2
-fi
-
 # Skip if Node.js is not available. The TypeScript helper is opt-in:
 # suibase end-users do not need Node.js installed.
 if ! command -v node >/dev/null 2>&1; then

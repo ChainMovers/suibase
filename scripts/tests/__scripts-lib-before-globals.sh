@@ -19,6 +19,7 @@ export MAIN_BRANCH_OPTION=false
 export SCRIPTS_TESTS_OPTION=false
 export SUIBASE_DAEMON_TESTS_OPTION=false
 export RUST_TESTS_OPTION=false
+export TYPESCRIPT_TESTS_OPTION=false
 export RELEASE_TESTS_OPTION=false
 export MAIN_MERGE_CHECK_OPTION=false
 
@@ -102,6 +103,7 @@ init_tests_set_vars() {
   SCRIPTS_TESTS_OPTION=$1
   SUIBASE_DAEMON_TESTS_OPTION=$1
   RUST_TESTS_OPTION=$1
+  TYPESCRIPT_TESTS_OPTION=$1
   RELEASE_TESTS_OPTION=$1
 }
 
@@ -123,6 +125,7 @@ test_setup_on_sourcing() {
     --scripts-tests) SCRIPTS_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
     --suibase-daemon-tests) SUIBASE_DAEMON_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
     --rust-tests) RUST_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
+    --typescript-tests) TYPESCRIPT_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
     --release-tests) RELEASE_TESTS_OPTION=true; _ONE_TEST_SET=true ;;
 
     --main-merge-check) MAIN_MERGE_CHECK_OPTION=true ;;
