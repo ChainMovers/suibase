@@ -82,6 +82,16 @@ bitflags! {
         const NEED_GLOBAL_READ_MUTEX = 0x02;
         const HEADER_SBSD_SERVER_IDX_SET = 0x04;
         const HEADER_SBSD_SERVER_HC_SET = 0x08;
+        // Set on per-attempt error reports inside a retry loop. The
+        // network_monitor handler skips the all_servers update so one user
+        // request never inflates port-level failure counters by retry-count.
+        // Target-server stats are still updated (preserving force_down etc).
+        const PER_ATTEMPT_REPORT = 0x10;
+        // Set when the report refers to gRPC traffic. On a successful gRPC
+        // response the netmon handler marks the upstream gRPC-capable; the
+        // gRPC dispatch then unblocks selection of this upstream for future
+        // gRPC requests.
+        const GRPC_TRAFFIC = 0x20;
     }
 }
 
@@ -197,6 +207,39 @@ impl<'a> ProxyHandlerReport<'a> {
         msg.para8[1] = reason;
 
         // Send the message.
+        self.tx_channel.send(msg).await.map_err(|e| {
+            log::debug!("failed {}", e);
+            anyhow!("failed {}", e)
+        })
+    }
+
+    /// Per-attempt variant used inside multi-upstream retry loops. Updates
+    /// only the target server's stats (e.g. force_down on NOT_GRPC_CAPABLE);
+    /// the all_servers (port-level) stats are NOT touched. Callers should
+    /// still emit a final `req_fail` or `req_resp_err` for the user-visible
+    /// outcome so port-level counters increment exactly once per request.
+    pub async fn req_resp_err_per_attempt(
+        &mut self,
+        server_idx: TargetServerIdx,
+        req_initiation_time: EpochTimestamp,
+        resp_received: EpochTimestamp,
+        retry_count: u8,
+        reason: RequestFailedReason,
+    ) -> Result<()> {
+        let mut msg = NetmonMsg::new();
+        msg.event_id = EVENT_REPORT_TGT_REQ_RESP_ERR;
+        let mut flags = self.flags;
+        flags.insert(NetmonFlags::NEED_GLOBAL_WRITE_MUTEX);
+        flags.insert(NetmonFlags::PER_ATTEMPT_REPORT);
+        msg.flags = flags;
+        msg.port_idx = self.port_idx;
+        msg.server_idx = server_idx;
+        msg.timestamp = req_initiation_time;
+        msg.para32[0] = duration_to_micros(req_initiation_time - self.handler_start);
+        msg.para32[1] = duration_to_micros(resp_received - req_initiation_time);
+        msg.para8[0] = retry_count;
+        msg.para8[1] = reason;
+
         self.tx_channel.send(msg).await.map_err(|e| {
             log::debug!("failed {}", e);
             anyhow!("failed {}", e)
@@ -573,6 +616,16 @@ impl NetworkMonitor {
                                     cur_msg.para32[0],
                                     cur_msg.para32[1],
                                 );
+                                // gRPC success → mark upstream gRPC-capable
+                                // (re-enables it for future gRPC selection).
+                                if cur_msg
+                                    .flags
+                                    .intersects(NetmonFlags::GRPC_TRAFFIC)
+                                {
+                                    target_server
+                                        .stats
+                                        .mark_grpc_capable(cur_msg.timestamp);
+                                }
                             }
                         }
                     }
@@ -604,17 +657,27 @@ impl NetworkMonitor {
                             }
                         } else {
                             // An error in the response for the user traffic.
-                            if let Some(stats) = Self::get_mut_all_servers_stats(
-                                input_ports,
-                                &cur_msg,
-                            ) {
-                                stats.handle_resp_err(
-                                    cur_msg.timestamp,
-                                    cur_msg.para8[0],
-                                    cur_msg.para32[0],
-                                    cur_msg.para32[1],
-                                    cur_msg.para8[1],
-                                );
+                            // PER_ATTEMPT_REPORT means "this is one attempt in
+                            // a retry loop, not the final user-visible
+                            // outcome" — skip the all_servers update so we
+                            // don't inflate port-level counters by retry-count
+                            // for one user request.
+                            let per_attempt = cur_msg
+                                .flags
+                                .intersects(NetmonFlags::PER_ATTEMPT_REPORT);
+                            if !per_attempt {
+                                if let Some(stats) = Self::get_mut_all_servers_stats(
+                                    input_ports,
+                                    &cur_msg,
+                                ) {
+                                    stats.handle_resp_err(
+                                        cur_msg.timestamp,
+                                        cur_msg.para8[0],
+                                        cur_msg.para32[0],
+                                        cur_msg.para32[1],
+                                        cur_msg.para8[1],
+                                    );
+                                }
                             }
 
                             if let Some(target_server) =

@@ -15,6 +15,51 @@
 
 SUIBASE_DIR="$HOME/suibase"
 
+# Verify external tools the test scripts depend on are installed. Without
+# this gate, missing tools cause confusing per-test failures (e.g. a missing
+# `jq` makes every `jq . >/dev/null 2>&1` silently succeed-as-error, so a
+# perfectly-functional proxy response gets classified "invalid JSON").
+check_test_dependencies() {
+  local _missing=()
+  # jq, curl, xxd, nc (netcat), base64 are all used by various test scripts
+  # or by scripts/common helpers the tests source.
+  local _required=(jq curl xxd nc base64)
+  for _cmd in "${_required[@]}"; do
+    if ! command -v "$_cmd" >/dev/null 2>&1; then
+      _missing+=("$_cmd")
+    fi
+  done
+  if [ "${#_missing[@]}" -gt 0 ]; then
+    printf "\033[1;31mError\033[0m: Missing required test dependencies:\n"
+    for _cmd in "${_missing[@]}"; do
+      printf "  - %s\n" "$_cmd"
+    done
+    printf "\nInstall on Debian/Ubuntu with:\n"
+    printf "  sudo apt-get update && sudo apt-get install -y"
+    for _cmd in "${_missing[@]}"; do
+      # Package names happen to match command names for jq/curl/xxd/base64.
+      # netcat is provided by netcat-openbsd on recent Ubuntu.
+      case "$_cmd" in
+        nc)     printf " netcat-openbsd" ;;
+        xxd)    printf " xxd" ;;
+        base64) printf " coreutils" ;;
+        *)      printf " %s" "$_cmd" ;;
+      esac
+    done
+    printf "\n\n"
+    printf "On macOS with Homebrew:\n  brew install"
+    for _cmd in "${_missing[@]}"; do
+      case "$_cmd" in
+        nc|xxd|base64) ;;  # part of base macOS
+        *) printf " %s" "$_cmd" ;;
+      esac
+    done
+    printf "\n"
+    exit 3
+  fi
+}
+check_test_dependencies
+
 # shellcheck source=SCRIPTDIR/__scripts-lib-before-globals.sh
 source "$SUIBASE_DIR/scripts/tests/__scripts-lib-before-globals.sh"
 test_init

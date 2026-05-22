@@ -8,6 +8,7 @@ pub mod api;
 pub mod app_error;
 pub mod mock_server_manager;
 pub mod network_monitor;
+pub mod proxy_grpc;
 pub mod proxy_server;
 pub mod rate_limiter;
 pub mod shared_types;

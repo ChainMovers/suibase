@@ -153,7 +153,14 @@ export SUI_BASE_NET_MOCK_PID="999999"
 
 # Utility macro specific to calling the keytool in a safer manner
 # such that no "key" information gets actually log.
-export NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF $SUI_BIN_DIR/sui keytool"
+#
+# Set SUI_CONFIG_DIR so recent sui releases (>= 1.7x) don't reject the call
+# with "Cannot open wallet config file at ~/.sui/sui_config/client.yaml" —
+# they probe the wallet config even for keystore-only subcommands like
+# `convert`. Same fix as scripts/common/__sui-exec.sh applies to the
+# keytool invocations dispatched directly via NOLOG_KEYTOOL_BIN (e.g.
+# copy_private_keys_yaml_to_keystore).
+export NOLOG_KEYTOOL_BIN="env RUST_LOG=OFF SUI_CONFIG_DIR=$CONFIG_DATA_DIR $SUI_BIN_DIR/sui keytool"
 
 # Cleanup should be always called on outer script exit.
 #
@@ -3489,12 +3496,12 @@ update_PRECOMP_REMOTE_var() {
     _TAG_NAME=""
     if [ -n "$USER_GITHUB_TOKEN" ]; then
       _OUT=$(curl -s --request GET \
-        --url "$_REPO_URL/releases" \
+        --url "$_REPO_URL/releases?per_page=100" \
         --header "X-GitHub-Api-Version: 2022-11-28" \
         --header "Authorization: Bearer $USER_GITHUB_TOKEN" || true)
     else
       _OUT=$(curl -s --request GET \
-        --url "$_REPO_URL/releases" \
+        --url "$_REPO_URL/releases?per_page=100" \
         --header "X-GitHub-Api-Version: 2022-11-28" || true)
     fi
 

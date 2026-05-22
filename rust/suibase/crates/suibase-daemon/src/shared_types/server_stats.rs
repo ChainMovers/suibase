@@ -22,9 +22,13 @@ pub const REQUEST_FAILED_NETWORK_DOWN: u8 = 5; // Not implemented yet.
 pub const REQUEST_FAILED_BAD_REQUEST_HTTP: u8 = 6; // Got HTTP Bad Request (400), Bad Method (405), etc.
 pub const REQUEST_FAILED_CONFIG_DISABLED: u8 = 7;
 pub const REQUEST_FAILED_NOT_STARTED: u8 = 8;
+// Upstream answered, but it doesn't speak gRPC (e.g. JSON-RPC-only public
+// gateway returning HTML/JSON). Used by the gRPC forwarder to permanently
+// demote the server: scoring treats this reason as a hard down signal.
+pub const REQUEST_FAILED_NOT_GRPC_CAPABLE: u8 = 9;
 
 // !!! Update the following whenever you append a new reason above.
-pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_NOT_STARTED;
+pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_NOT_GRPC_CAPABLE;
 
 // Do not touch this.
 pub const REQUEST_FAILED_VEC_SIZE: usize = REQUEST_FAILED_LAST_REASON as usize + 1;
@@ -56,6 +60,23 @@ pub struct ServerStats {
     //
     is_healthy: bool,
     most_recent_initiated_timestamp: EpochTimestamp,
+
+    // gRPC-capability dimension, independent of `is_healthy`.
+    //
+    // `is_healthy` reflects general health (JSON-RPC traffic, connectivity).
+    // `is_grpc_capable` reflects whether the upstream is known to speak gRPC.
+    // Set false on a definitive NOT_GRPC_CAPABLE sample (e.g. upstream answers
+    // a gRPC request with JSON). Set true on any successful gRPC response.
+    //
+    // Keeping these separate prevents the gRPC probe from demoting an
+    // otherwise-healthy JSON-RPC-only upstream out of the JSON-RPC selection
+    // vectors. Default `true` so we don't preemptively skip an upstream we
+    // haven't yet seen fail at gRPC.
+    is_grpc_capable: bool,
+    // Stamp of the most recent report that touched is_grpc_capable. Gates
+    // out-of-order updates the same way `most_recent_initiated_timestamp`
+    // does for is_healthy.
+    grpc_capability_timestamp: EpochTimestamp,
 
     // Window avg for successful response that are also intended to be used
     // for latency measurements.
@@ -109,6 +130,9 @@ impl ServerStats {
 
             is_healthy: false,
             most_recent_initiated_timestamp: now,
+
+            is_grpc_capable: true,
+            grpc_capability_timestamp: now,
 
             latency_report_avg: f64::MAX,
             latency_report_most_recent: None,
@@ -172,6 +196,13 @@ impl ServerStats {
 
     pub fn is_healthy(&self) -> bool {
         self.is_healthy
+    }
+
+    /// Whether the upstream is known to speak gRPC. Default true (we assume
+    /// gRPC-capable until proven otherwise on a sample). Set false on a
+    /// definitive NOT_GRPC_CAPABLE sample. Independent of `is_healthy`.
+    pub fn is_grpc_capable(&self) -> bool {
+        self.is_grpc_capable
     }
 
     pub fn avg_latency_ms(&self) -> f64 {
@@ -270,7 +301,13 @@ impl ServerStats {
         initiation_time: EpochTimestamp,
         reason: RequestFailedReason,
     ) {
-        if !Self::is_client_fault(reason) {
+        if reason == REQUEST_FAILED_NOT_GRPC_CAPABLE {
+            // gRPC-capability demotion ONLY — do not flip is_healthy. The
+            // upstream may still be perfectly healthy for JSON-RPC traffic;
+            // the gRPC dispatch path filters on `is_grpc_capable` separately
+            // so a non-gRPC upstream stays in the JSON-RPC selection.
+            self.set_grpc_capable(initiation_time, false);
+        } else if !Self::is_client_fault(reason) {
             self.inc_down_score(initiation_time);
         }
 
@@ -282,16 +319,36 @@ impl ServerStats {
         }
     }
 
+    /// Update `is_grpc_capable` with the same freshness-ordering guarantee
+    /// as `inc_up_score` / `inc_down_score` / `force_down`: stale samples
+    /// can't overwrite a newer verdict.
+    fn set_grpc_capable(&mut self, initiation_time: EpochTimestamp, capable: bool) {
+        if initiation_time > self.grpc_capability_timestamp {
+            self.grpc_capability_timestamp = initiation_time;
+            self.is_grpc_capable = capable;
+        }
+    }
+
+    /// Public accessor for the gRPC dispatch path to mark an upstream as
+    /// gRPC-capable when it sees a real gRPC response come back. This
+    /// re-enables an upstream that was previously demoted.
+    pub fn mark_grpc_capable(&mut self, initiation_time: EpochTimestamp) {
+        self.set_grpc_capable(initiation_time, true);
+    }
+
     pub fn handle_req_failed_internal(
         &mut self,
         initiation_time: EpochTimestamp,
         reason: RequestFailedReason,
     ) {
         // An example of internal request is the health check.
-        //
-        // A failure of it would end up here and transition
-        // the server to unhealthy.
-        if !Self::is_client_fault(reason) {
+        if reason == REQUEST_FAILED_NOT_GRPC_CAPABLE {
+            // Probe saw a non-gRPC response — flip the gRPC-capability flag
+            // only. is_healthy / up_score / down_score are unaffected so the
+            // JSON-RPC selection is not disturbed (a JSON-RPC-only upstream
+            // remains in selection_vectors for JSON-RPC traffic).
+            self.set_grpc_capable(initiation_time, false);
+        } else if !Self::is_client_fault(reason) {
             self.inc_down_score(initiation_time);
         }
 
@@ -470,5 +527,128 @@ impl ServerStats {
 impl Default for ServerStats {
     fn default() -> Self {
         Self::new(String::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn make_stats() -> ServerStats {
+        ServerStats::new("test".to_string())
+    }
+
+    /// F2: stale NOT_GRPC_CAPABLE must not clobber a newer gRPC-capable
+    /// verdict. (Updated semantics: NOT_GRPC_CAPABLE now flips
+    /// `is_grpc_capable` only, not `is_healthy`.)
+    #[test]
+    fn grpc_capable_respects_freshness() {
+        let mut s = make_stats();
+        let t0 = EpochTimestamp::now();
+        let t1 = t0 + Duration::from_millis(10);
+
+        // Newer "is gRPC capable" verdict arrives first.
+        s.mark_grpc_capable(t1);
+        assert!(s.is_grpc_capable());
+
+        // Older NOT_GRPC_CAPABLE arrives after — must NOT clobber.
+        s.handle_req_failed(t0, REQUEST_FAILED_NOT_GRPC_CAPABLE);
+        assert!(
+            s.is_grpc_capable(),
+            "stale NOT_GRPC_CAPABLE must not flip is_grpc_capable back"
+        );
+    }
+
+    /// F2/F4: NOT_GRPC_CAPABLE on a healthy upstream must NOT flip is_healthy
+    /// or touch the health scores — only is_grpc_capable. This keeps a
+    /// JSON-RPC-only upstream in the JSON-RPC selection_vectors.
+    #[test]
+    fn not_grpc_capable_leaves_health_untouched() {
+        let mut s = make_stats();
+        let t0 = EpochTimestamp::now();
+        let t1 = t0 + Duration::from_millis(10);
+
+        s.handle_resp_ok(t0, 0, 0, 1000);
+        assert!(s.is_healthy());
+        let up_before = s.up_score;
+        let down_before = s.down_score;
+
+        s.handle_req_failed(t1, REQUEST_FAILED_NOT_GRPC_CAPABLE);
+
+        assert!(
+            s.is_healthy(),
+            "NOT_GRPC_CAPABLE must not flip is_healthy (JSON-RPC may still work)"
+        );
+        assert_eq!(s.up_score, up_before, "up_score must not change");
+        assert_eq!(s.down_score, down_before, "down_score must not change");
+        assert!(
+            !s.is_grpc_capable(),
+            "is_grpc_capable should be false after NOT_GRPC_CAPABLE"
+        );
+    }
+
+    /// F7: probe path's NOT_GRPC_CAPABLE flips is_grpc_capable (one-shot)
+    /// but does NOT affect is_healthy / scores. Probes only signal
+    /// capability, not general health.
+    #[test]
+    fn probe_not_grpc_capable_flips_capability_only() {
+        let mut s = make_stats();
+        let t0 = EpochTimestamp::now();
+        let t1 = t0 + Duration::from_millis(10);
+
+        s.handle_resp_ok(t0, 0, 0, 1000);
+        assert!(s.is_healthy());
+        assert!(s.is_grpc_capable());
+
+        s.handle_req_failed_internal(t1, REQUEST_FAILED_NOT_GRPC_CAPABLE);
+
+        assert!(
+            !s.is_grpc_capable(),
+            "probe NOT_GRPC_CAPABLE must flip is_grpc_capable"
+        );
+        assert!(
+            s.is_healthy(),
+            "probe NOT_GRPC_CAPABLE must not flip is_healthy (F4)"
+        );
+    }
+
+    /// F7: probe with a non-capability reason still uses inc_down_score
+    /// (gradual), not force_down.
+    #[test]
+    fn probe_generic_failure_does_not_force_down() {
+        let mut s = make_stats();
+        let t0 = EpochTimestamp::now();
+        let t1 = t0 + Duration::from_millis(10);
+
+        s.handle_resp_ok(t0, 0, 0, 1000);
+        s.handle_req_failed_internal(t1, REQUEST_FAILED_RESP_BUILDER);
+        assert!(!s.is_healthy());
+        assert!(
+            s.down_score < 100.0,
+            "non-capability probe failure should not set down_score=100; got {}",
+            s.down_score
+        );
+        assert!(
+            s.is_grpc_capable(),
+            "non-capability failures must not touch is_grpc_capable"
+        );
+    }
+
+    /// Recovery: once `mark_grpc_capable` is called on a fresh sample, the
+    /// upstream returns to gRPC selection.
+    #[test]
+    fn mark_grpc_capable_recovers() {
+        let mut s = make_stats();
+        let t0 = EpochTimestamp::now();
+        let t1 = t0 + Duration::from_millis(10);
+        let t2 = t1 + Duration::from_millis(10);
+
+        s.handle_resp_ok(t0, 0, 0, 1000);
+        s.handle_req_failed(t1, REQUEST_FAILED_NOT_GRPC_CAPABLE);
+        assert!(!s.is_grpc_capable());
+
+        s.mark_grpc_capable(t2);
+        assert!(s.is_grpc_capable(), "fresh success should restore capability");
     }
 }

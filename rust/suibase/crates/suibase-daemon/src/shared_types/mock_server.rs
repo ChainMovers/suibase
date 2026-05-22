@@ -40,6 +40,12 @@ pub struct MockServerBehavior {
     /// Cache TTL in seconds (default 5 minutes)
     #[serde(default = "default_cache_ttl")]
     pub cache_ttl_secs: u64,
+
+    /// When true, answer gRPC requests with a JSON body and
+    /// `content-type: application/json`. Used to simulate a JSON-RPC-only
+    /// upstream so the proxy classifies it as NOT_GRPC_CAPABLE.
+    #[serde(default)]
+    pub respond_non_grpc: bool,
 }
 
 impl Default for MockServerBehavior {
@@ -52,6 +58,7 @@ impl Default for MockServerBehavior {
             response_body: None,
             proxy_enabled: true,  // Enable proxy by default
             cache_ttl_secs: 300,  // 5 minutes default
+            respond_non_grpc: false,
         }
     }
 }
@@ -594,6 +601,7 @@ mod tests {
             response_body: None,
             proxy_enabled: false,
             cache_ttl_secs: 60,
+            respond_non_grpc: false,
         };
         
         state.set_behavior(new_behavior.clone());
@@ -622,6 +630,7 @@ mod tests {
             response_body: Some(serde_json::json!({"error": "rate limited"})),
             proxy_enabled: true,
             cache_ttl_secs: 300,
+            respond_non_grpc: false,
         };
         
         // Test serialization/deserialization

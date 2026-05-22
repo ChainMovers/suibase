@@ -1356,6 +1356,12 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+
+[[package]]
+name = "hashbrown"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
@@ -3339,6 +3345,7 @@ dependencies = [
  "axum",
  "axum-server",
  "bitflags 2.9.0",
+ "bytes",
  "chrono",
  "clap",
  "colored",
@@ -3348,9 +3355,12 @@ dependencies = [
  "fastcrypto",
  "futures",
  "home",
+ "http",
  "http-body",
  "http-body-util",
  "hyper",
+ "hyper-rustls",
+ "hyper-util",
  "jsonrpsee",
  "jsonrpsee-proc-macros",
  "jsonrpsee-types",
@@ -3362,6 +3372,7 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "reqwest",
+ "rustls 0.23.23",
  "schemars",
  "serde",
  "serde_json",
@@ -3372,9 +3383,11 @@ dependencies = [
  "tokio",
  "tokio-graceful-shutdown",
  "tokio-tungstenite 0.21.0",
+ "tokio-util",
  "toml_edit 0.20.7",
  "tower 0.4.13",
  "tower-http",
+ "tower-service",
  "tracing",
  "tracing-log",
  "tracing-subscriber",
@@ -3679,6 +3692,8 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-sink",
+ "futures-util",
+ "hashbrown 0.14.5",
  "pin-project-lite",
  "tokio",
 ]
