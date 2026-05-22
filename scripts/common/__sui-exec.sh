@@ -243,10 +243,15 @@ sui_exec() {
     "keytool")
       shift 1
       # Append default --keystore-path, unless specified by the caller.
+      # Recent sui releases (>= 1.7x) also probe SUI_CONFIG_DIR for the wallet
+      # config even when the subcommand only needs the keystore (e.g. `list`);
+      # without it, keytool fails with "Cannot open wallet config file at
+      # /home/<user>/.sui/sui_config/client.yaml". SUI_BIN is intentionally
+      # unquoted (it expands to "env VAR=val /path/to/sui").
       if ! has_param "" "--keystore-path" "$@"; then
-        $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+        SUI_CONFIG_DIR="$CONFIG_DATA_DIR" $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
       else
-        $SUI_BIN "$SUI_SUBCOMMAND" "$@"
+        SUI_CONFIG_DIR="$CONFIG_DATA_DIR" $SUI_BIN "$SUI_SUBCOMMAND" "$@"
       fi
       ;;
     "genesis" | "genesis-ceremony" | "start")
@@ -271,10 +276,11 @@ sui_exec() {
     "keytool")
       shift 1
       # Append default --keystore-path, unless specified by the caller.
+      # See note in the localnet branch above on SUI_CONFIG_DIR.
       if ! has_param "" "--keystore-path" "$@"; then
-        $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
+        SUI_CONFIG_DIR="$CONFIG_DATA_DIR" $SUI_BIN "$SUI_SUBCOMMAND" --keystore-path "$CONFIG_DATA_DIR/sui.keystore" "$@"
       else
-        $SUI_BIN "$SUI_SUBCOMMAND" "$@"
+        SUI_CONFIG_DIR="$CONFIG_DATA_DIR" $SUI_BIN "$SUI_SUBCOMMAND" "$@"
       fi
       ;;
     "genesis" | "genesis-ceremony" | "start" | "network")

@@ -10,10 +10,11 @@ use crate::shared_types::{MockServerState, MockErrorType};
 
 use anyhow::Result;
 use axum::{
+    body::{Body, Bytes},
     extract::State,
-    http::StatusCode,
-    response::Json,
-    routing::post,
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Json, Response},
+    routing::any,
     Router,
 };
 use axum::async_trait;
@@ -83,10 +84,13 @@ impl Runnable<MockServerParams> for MockServerTask {
 
 impl MockServerTask {
     async fn event_loop(&mut self, _subsys: &SubsystemHandle) -> Result<()> {
-        // Create the axum router with our JSON-RPC handler
+        // Single route that handles every method/path. We dispatch by
+        // content-type so the same mock can answer JSON-RPC (existing tests)
+        // and gRPC (suibase-daemon's primary protocol post-refactor).
+        let state = self.params.state.clone();
         let app = Router::new()
-            .route("/", post(handle_jsonrpc_request))
-            .with_state(self.params.state.clone());
+            .fallback(any(unified_handler))
+            .with_state(state);
 
         // Define the address to serve on
         let addr = std::net::SocketAddr::from(([127, 0, 0, 1], self.params.state.port));
@@ -115,10 +119,134 @@ impl MockServerTask {
     }
 }
 
-/// Handler for JSON-RPC requests
-async fn handle_jsonrpc_request(
+/// Single entry point — dispatches by `content-type`.
+///
+/// - `application/grpc*` → answer like sui-node would (or like a non-gRPC
+///   upstream, per `MockServerBehavior::respond_non_grpc`).
+/// - anything else (default JSON-RPC) → existing JSON-RPC handler logic.
+async fn unified_handler(
     State(state): State<Arc<MockServerState>>,
-    Json(request): Json<Value>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let is_grpc = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.starts_with("application/grpc"))
+        .unwrap_or(false);
+
+    if is_grpc {
+        handle_grpc_request(state).await
+    } else {
+        // JSON path: parse the already-buffered body and hand off.
+        let parsed: Value = match serde_json::from_slice(&body) {
+            Ok(v) => v,
+            Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        };
+        match handle_jsonrpc_request_inner(state, parsed).await {
+            Ok(json) => json.into_response(),
+            Err(status) => status.into_response(),
+        }
+    }
+}
+
+/// Mock a sui-node gRPC unary response.
+///
+/// Honors `MockServerBehavior::respond_non_grpc`: when set, answer as a
+/// JSON-RPC-only gateway would (HTTP 200 + content-type: application/json),
+/// which is what the suibase-daemon proxy treats as `NOT_GRPC_CAPABLE`.
+async fn handle_grpc_request(state: Arc<MockServerState>) -> Response {
+    // Record the request in statistics so gRPC traffic flows through the
+    // same counters as JSON-RPC in mock stats.
+    {
+        let mut stats = state.stats.write().unwrap();
+        stats.inc_request();
+    }
+
+    // Behavior knobs we honor for gRPC (kept minimal — the rich JSON behavior
+    // set isn't needed for capability tests).
+    let behavior = state.get_behavior();
+
+    // Rate limit check FIRST (match the JSON-RPC handler order) — rate-limited
+    // requests must short-circuit before the artificial latency sleep.
+    // Otherwise a (latency_ms=2000, rate_limit=1qps) configuration burns the
+    // full latency on every rejected request, distorting timing-sensitive
+    // tests that compare protocols.
+    if state.check_rate_limit() {
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
+
+    // Latency simulation.
+    if behavior.latency_ms > 0 {
+        sleep(Duration::from_millis(behavior.latency_ms as u64)).await;
+        let mut stats = state.stats.write().unwrap();
+        stats.inc_delay(behavior.latency_ms);
+    }
+
+    // Simulate failure (mirrors the JSON-RPC handler so existing
+    // proxy/rate-limit tests that drive a server "down" by setting
+    // failure_rate = 1.0 keep working now that the probe is gRPC).
+    if behavior.failure_rate > 0.0 {
+        let r: f64 = rand::random();
+        if r < behavior.failure_rate {
+            // Increment failure stats in a tight scope; explicit drop so the
+            // RwLock guard never crosses the await below (which would make
+            // the future !Send and reject the axum handler).
+            {
+                let mut stats = state.stats.write().unwrap();
+                stats.inc_failure();
+                if matches!(behavior.error_type, Some(MockErrorType::RateLimited)) {
+                    stats.inc_rate_limit();
+                }
+            }
+            return match behavior.error_type.as_ref() {
+                Some(MockErrorType::Timeout) => {
+                    sleep(Duration::from_secs(5)).await;
+                    StatusCode::REQUEST_TIMEOUT.into_response()
+                }
+                Some(MockErrorType::ConnectionRefused) => {
+                    StatusCode::SERVICE_UNAVAILABLE.into_response()
+                }
+                Some(MockErrorType::InternalError) | None => {
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+                Some(MockErrorType::RateLimited) => StatusCode::TOO_MANY_REQUESTS.into_response(),
+            };
+        }
+    }
+
+    // Capability flip — simulate a non-gRPC upstream.
+    if behavior.respond_non_grpc {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"result":"ok"}"#))
+            .unwrap();
+    }
+
+    // Minimal valid gRPC unary response:
+    //   * status 200
+    //   * content-type: application/grpc
+    //   * one 5-byte length-prefixed data frame containing an empty message
+    //     (compression flag=0, length=0). Real services follow with trailers
+    //     carrying grpc-status; we use the "trailers-as-headers" shortcut
+    //     (header-only trailers): grpc-status: 0 in regular headers. The
+    //     proxy's check is just (200 + content-type starts with application/
+    //     grpc), so this is enough for capability/health tests.
+    let empty_frame: Bytes = Bytes::from_static(&[0u8, 0, 0, 0, 0]);
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("application/grpc"))
+        .header("grpc-status", "0")
+        .body(Body::from(empty_frame))
+        .unwrap()
+}
+
+/// Handler for JSON-RPC requests. The body parse moved up to `unified_handler`;
+/// this function now takes the already-parsed JSON.
+async fn handle_jsonrpc_request_inner(
+    state: Arc<MockServerState>,
+    request: Value,
 ) -> Result<Json<Value>, StatusCode> {
     // Record the request in statistics
     {

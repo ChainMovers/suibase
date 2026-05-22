@@ -972,6 +972,55 @@ impl MockServerTestHarness {
         Ok(responses)
     }
 
+    /// Send one gRPC unary request (HTTP/2 prior knowledge) through the proxy.
+    /// Returns the raw reqwest response so callers can inspect status, headers,
+    /// and trailers.
+    pub async fn send_grpc_request(
+        &self,
+        grpc_path: &str,
+    ) -> Result<reqwest::Response> {
+        let proxy_url = format!("http://localhost:44340{}", grpc_path);
+        // Empty gRPC frame: compression(0) + length(0) + 0 bytes of payload.
+        let body: &[u8] = &[0, 0, 0, 0, 0];
+        let response = grpc_client()
+            .post(&proxy_url)
+            .header(reqwest::header::CONTENT_TYPE, "application/grpc")
+            .header("te", "trailers")
+            .body(body.to_vec())
+            .send()
+            .await?;
+        Ok(response)
+    }
+
+    /// Send `count` gRPC unary requests in parallel through the proxy.
+    pub async fn send_grpc_burst(
+        &self,
+        count: usize,
+        grpc_path: &str,
+    ) -> Result<Vec<reqwest::Response>> {
+        let mut tasks = Vec::new();
+        for _ in 0..count {
+            let grpc_path = grpc_path.to_string();
+            let task = tokio::spawn(async move {
+                let proxy_url = format!("http://localhost:44340{}", grpc_path);
+                let body: &[u8] = &[0, 0, 0, 0, 0];
+                grpc_client()
+                    .post(&proxy_url)
+                    .header(reqwest::header::CONTENT_TYPE, "application/grpc")
+                    .header("te", "trailers")
+                    .body(body.to_vec())
+                    .send()
+                    .await
+            });
+            tasks.push(task);
+        }
+        let mut responses = Vec::new();
+        for task in tasks {
+            responses.push(task.await??);
+        }
+        Ok(responses)
+    }
+
     /// Wait for servers to be included in the load balancing subset
     /// Returns the list of servers that are marked for load distribution
     pub async fn wait_for_load_balanced_servers(
@@ -1452,6 +1501,28 @@ pub async fn configure_rate_limits(
 }
 
 /// Create a mock server behavior with failure rate
+/// Lazy-initialized gRPC client. `http2_prior_knowledge` is required to
+/// skip the HTTP/1.1 upgrade dance (the proxy speaks h2c on the test port).
+fn grpc_client() -> &'static Client {
+    static C: Lazy<Client> = Lazy::new(|| {
+        Client::builder()
+            .http2_prior_knowledge()
+            .build()
+            .expect("grpc test client")
+    });
+    &C
+}
+
+/// Behavior knob: make the mock answer gRPC requests with JSON (and
+/// content-type: application/json). Used to verify the proxy classifies
+/// such an upstream as NOT_GRPC_CAPABLE.
+pub fn non_grpc_behavior() -> MockServerBehavior {
+    MockServerBehavior {
+        respond_non_grpc: true,
+        ..Default::default()
+    }
+}
+
 pub fn failing_behavior(failure_rate: f64) -> MockServerBehavior {
     MockServerBehavior {
         failure_rate,
@@ -1461,6 +1532,7 @@ pub fn failing_behavior(failure_rate: f64) -> MockServerBehavior {
         response_body: None,
         proxy_enabled: true,
         cache_ttl_secs: 300,
+        respond_non_grpc: false,
     }
 }
 
@@ -1474,6 +1546,7 @@ pub fn slow_behavior(latency_ms: u32) -> MockServerBehavior {
         response_body: None,
         proxy_enabled: true,
         cache_ttl_secs: 300,
+        respond_non_grpc: false,
     }
 }
 
@@ -1487,5 +1560,6 @@ pub fn error_response_behavior(error_response: serde_json::Value) -> MockServerB
         response_body: Some(error_response),
         proxy_enabled: true,
         cache_ttl_secs: 300,
+        respond_non_grpc: false,
     }
 }
