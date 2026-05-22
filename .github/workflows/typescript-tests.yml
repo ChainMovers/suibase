@@ -1,0 +1,92 @@
+name: TypeScript Tests
+# Tests for the suibase TypeScript helper (typescript/helper/).
+#
+# Mirrors rust-tests.yml at a smaller scale: this is opt-in for projects that
+# install the helper from a relative path, so we only test against localnet
+# (the workdir against which the 'demo' package is published).
+
+on:
+  push:
+    branches: ["dev"]
+
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isChanged: ${{ steps.diff.outputs.isScript == 'true' || steps.diff.outputs.isRust == 'true' || steps.diff.outputs.isTypeScriptHelper == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  test:
+    name: Test ${{ matrix.os }}
+    needs: diff
+    if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        # The TS helper only has a localnet integration story (demo package),
+        # so unlike rust-tests we do not need a per-workdir matrix.
+
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false"
+
+      - name: Rust caching (demo-app + helper for publish)
+        uses: Swatinem/rust-cache@v2
+        env:
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.os }}-typescript-helper
+        with:
+          workspaces: |
+            rust/demo-app
+            rust/helper
+          cache-provider: github
+          cache-all-crates: false
+
+      - name: Sui Prerequesites (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+
+      - name: Prepare environment
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
+
+      - name: Run TypeScript helper tests
+        env:
+          CI_WORKDIR: localnet
+          CI_BRANCH: testnet
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash "$HOME/suibase/scripts/tests/040_typescript_tests/npm_test_suibase_helper.sh"
