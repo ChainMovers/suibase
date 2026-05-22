@@ -57,18 +57,27 @@ localnet set-active
 # Helper integration tests require the 'demo' package to be published.
 if [ ! -d "$HOME/suibase/workdirs/localnet/published-data/demo" ]; then
   cd "$HOME/suibase/rust/demo-app" || fail "'cd $HOME/suibase/rust/demo-app' failed"
-  localnet publish
+  localnet publish || fail "'localnet publish' failed for demo"
+fi
+# Confirm demo really got published (localnet publish can return 0 even on
+# protocol errors). The integration test needs the 'most-recent' symlink.
+if [ ! -L "$HOME/suibase/workdirs/localnet/published-data/demo/most-recent" ]; then
+  fail "'localnet publish' did not create demo/most-recent symlink"
 fi
 
 do_tests() {
   update_HOST_vars
 
+  # Run npm commands in a subshell, but capture its exit code so we
+  # do not silently swallow failures. `fail` inside a (...) only exits
+  # the subshell.
   (
-    cd "$NPM_DIR" || fail "'cd $NPM_DIR' failed"
-    npm install --no-audit --no-fund || fail "'npm install' failed in $NPM_DIR"
-    npm run typecheck || fail "'npm run typecheck' failed in $NPM_DIR"
-    npm test || fail "'npm test' failed in $NPM_DIR"
-  )
+    set -e
+    cd "$NPM_DIR"
+    npm install --no-audit --no-fund
+    npm run typecheck
+    npm test
+  ) || fail "'npm test' failed in $NPM_DIR"
 
   assert_workdir_ok "$WORKDIR"
 }
