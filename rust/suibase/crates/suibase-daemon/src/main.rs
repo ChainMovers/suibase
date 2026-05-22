@@ -62,6 +62,7 @@ mod acoins_monitor;
 mod clock_trigger;
 mod mock_server_manager;
 mod network_monitor;
+mod proxy_grpc;
 mod proxy_server;
 mod rate_limiter;
 mod shared_types;

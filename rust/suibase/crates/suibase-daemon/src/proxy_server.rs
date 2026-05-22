@@ -26,9 +26,15 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ServerBuilder;
 use memchr::memmem;
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 use tokio_graceful_shutdown::SubsystemHandle;
+use tower_service::Service as TowerService;
+
+use crate::proxy_grpc::{forward_unary, is_grpc_request, GrpcProxyClient};
 
 // An application target the localhost:port
 //
@@ -467,6 +473,54 @@ impl ProxyServer {
         .into())
     }
 
+    /// Dispatch an inbound gRPC request to an upstream target server.
+    ///
+    /// For now we pick the first healthy target server's RPC URL. This is
+    /// adequate for localnet (single upstream). Multi-upstream selection,
+    /// retries, and stats reporting will be folded in as a follow-up so the
+    /// gRPC path participates in the same health-monitoring as JSON-RPC.
+    async fn grpc_dispatch(
+        req: hyper::Request<hyper::body::Incoming>,
+        shared: Arc<SharedStates>,
+        grpc_client: Arc<GrpcProxyClient>,
+    ) -> hyper::Response<crate::proxy_grpc::ProxyBody> {
+        let handler_start = EpochTimestamp::now();
+        let upstream_url: Option<String> = {
+            let globals_read = shared.globals.read().await;
+            let globals = &*globals_read;
+            globals.input_ports.get(shared.port_idx).and_then(|input_port| {
+                if !input_port.is_proxy_enabled() {
+                    return None;
+                }
+                let mut targets: Vec<(u8, String)> = Vec::new();
+                input_port.get_best_target_servers(&mut targets, &handler_start);
+                targets.into_iter().next().map(|(_idx, url)| url)
+            })
+        };
+
+        let upstream_url = match upstream_url {
+            Some(u) => u,
+            None => {
+                log::warn!("grpc: no target server available for port {}", shared.port_idx);
+                return crate::proxy_grpc::error_proxy_response(
+                    hyper::StatusCode::SERVICE_UNAVAILABLE,
+                    "no upstream available",
+                );
+            }
+        };
+
+        match forward_unary(req, &upstream_url, grpc_client).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                log::warn!("grpc: forward failed: {}", e);
+                crate::proxy_grpc::error_proxy_response(
+                    hyper::StatusCode::BAD_GATEWAY,
+                    "grpc forward failed",
+                )
+            }
+        }
+    }
+
     pub async fn run(
         self,
         subsys: SubsystemHandle,
@@ -503,24 +557,106 @@ impl ProxyServer {
             }
         };
 
-        let app = Router::new()
+        let app: Router = Router::new()
             .fallback(get(Self::proxy_handler).post(Self::proxy_handler))
             .with_state(shared_states.clone());
 
         let bind_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port_number);
         log::info!("listening on {}", bind_address);
 
-        let handle = axum_server::Handle::new();
+        // Build the gRPC client once and share it via Arc.
+        let grpc_client: Arc<GrpcProxyClient> = match GrpcProxyClient::new() {
+            Ok(c) => Arc::new(c),
+            Err(e) => {
+                log::error!("failed to construct grpc client: {}", e);
+                return Err(anyhow!("grpc client init failed: {}", e));
+            }
+        };
 
-        // Spawn a task to shutdown axum server (on process exit or signal).
-        tokio::spawn(graceful_shutdown(subsys, handle.clone()));
-
-        //let listener = tokio::net::TcpListener::bind(&bind_address).await.unwrap();
-        axum_server::bind(bind_address)
-            .handle(handle)
-            .serve(app.into_make_service())
+        let listener = TcpListener::bind(&bind_address)
             .await
-            .unwrap();
+            .map_err(|e| anyhow!("bind {} failed: {}", bind_address, e))?;
+
+        // Accept loop. For each connection we let hyper-util's `auto::Builder`
+        // negotiate HTTP/1.1 vs HTTP/2 from the client's preface. Inside the
+        // per-request `service_fn` we dispatch by content-type:
+        //   - `application/grpc*`  -> gRPC unary forwarder (preserves trailers)
+        //   - anything else        -> existing axum-based JSON-RPC handler
+        let app_for_loop = app.clone();
+        let grpc_client_for_loop = grpc_client.clone();
+        let shared_for_loop = shared_states.clone();
+
+        let accept_loop = async move {
+            loop {
+                let (stream, _peer) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::warn!("accept error on {}: {}", bind_address, e);
+                        continue;
+                    }
+                };
+                let io = TokioIo::new(stream);
+                let app_clone = app_for_loop.clone();
+                let grpc_client_conn = grpc_client_for_loop.clone();
+                let shared_conn = shared_for_loop.clone();
+
+                tokio::spawn(async move {
+                    let svc = hyper::service::service_fn(
+                        move |req: hyper::Request<hyper::body::Incoming>| {
+                            let mut app = app_clone.clone();
+                            let grpc_client = grpc_client_conn.clone();
+                            let shared = shared_conn.clone();
+                            async move {
+                                let response: hyper::Response<crate::proxy_grpc::ProxyBody> =
+                                    if is_grpc_request(&req) {
+                                        Self::grpc_dispatch(req, shared, grpc_client).await
+                                    } else {
+                                        // Hand off to the existing axum router.
+                                        // axum's Router is a `tower::Service`; we
+                                        // convert hyper's request body into
+                                        // `axum::body::Body` and back.
+                                        let (parts, body) = req.into_parts();
+                                        let axum_req = axum::http::Request::from_parts(
+                                            parts,
+                                            axum::body::Body::new(body),
+                                        );
+                                        let resp = match app.call(axum_req).await {
+                                            Ok(r) => r,
+                                            Err(infallible) => match infallible {},
+                                        };
+                                        let (parts, body) = resp.into_parts();
+                                        // Re-box axum's body into our shared
+                                        // error type so both arms return the
+                                        // same `Response<ProxyBody>`.
+                                        let boxed: crate::proxy_grpc::ProxyBody = body
+                                            .map_err(|e| -> crate::proxy_grpc::ProxyError {
+                                                Box::new(e)
+                                            })
+                                            .boxed_unsync();
+                                        hyper::Response::from_parts(parts, boxed)
+                                    };
+                                Ok::<_, std::convert::Infallible>(response)
+                            }
+                        },
+                    );
+
+                    let builder = ServerBuilder::new(TokioExecutor::new());
+                    if let Err(e) = builder.serve_connection(io, svc).await {
+                        log::debug!("connection closed with error: {}", e);
+                    }
+                });
+            }
+        };
+
+        // Spawn the existing graceful-shutdown bridge. axum_server::Handle is
+        // no longer needed (we run our own accept loop), but we keep
+        // subsystem cancellation by racing the accept loop with shutdown.
+        tokio::select! {
+            _ = accept_loop => {},
+            _ = subsys.on_shutdown_requested() => {
+                log::info!("shutdown requested for {}", bind_address);
+            }
+        }
 
         log::info!("stopped for {}", bind_address);
 
@@ -597,13 +733,6 @@ impl ProxyServer {
 
         Ok(false)
     }
-}
-
-async fn graceful_shutdown(subsys: SubsystemHandle, axum_handle: axum_server::Handle) {
-    // Run as a thread. Block until shutdown requested.
-    subsys.on_shutdown_requested().await;
-    // Signal the axum server to shutdown.
-    axum_handle.graceful_shutdown(Some(Duration::from_secs(60)));
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

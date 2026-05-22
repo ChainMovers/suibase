@@ -23,12 +23,19 @@ notify = { version = "6.1.0", default-features = false, features = [
 ] }
 
 axum.workspace = true
+http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
+hyper-util = { workspace = true, features = ["server-auto", "client-legacy", "http1", "http2", "tokio"] }
+hyper-rustls.workspace = true
 mime.workspace = true
 reqwest.workspace = true
 axum-server.workspace = true
+bytes = "1"
+rustls.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+tower-service = "0.3"
 
 anyhow.workspace = true
 chrono.workspace = true
