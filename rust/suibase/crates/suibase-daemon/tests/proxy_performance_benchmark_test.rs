@@ -122,7 +122,7 @@ async fn test_proxy_server_performance_benchmark() -> Result<()> {
 
             let total_duration = start_time.elapsed();
             let total_successful = successful_requests.load(Ordering::Relaxed);
-            let total_failed = failed_requests.load(Ordering::Relaxed);
+            let _total_failed = failed_requests.load(Ordering::Relaxed);
             let avg_latency_ms = if total_successful > 0 {
                 total_latency_ms.load(Ordering::Relaxed) as f64 / total_successful as f64
             } else {

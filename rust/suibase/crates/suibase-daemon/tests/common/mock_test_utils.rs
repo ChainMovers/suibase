@@ -1041,7 +1041,7 @@ impl MockServerTestHarness {
                 .await?;
 
             // Check debug output for selection information
-            if let Some(debug_info) = &stats.debug {
+            if let Some(_debug_info) = &stats.debug {
                 // The debug info should contain information about selection_vectors
                 // which determines the load balancing subset
 
