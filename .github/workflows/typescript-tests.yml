@@ -83,6 +83,10 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
+      - name: Install suibase (creates ~/.local/bin symlinks)
+        run: |
+          "$HOME/suibase/install"
+
       - name: Run TypeScript helper tests
         env:
           CI_WORKDIR: localnet
