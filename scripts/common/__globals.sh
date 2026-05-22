@@ -3489,12 +3489,12 @@ update_PRECOMP_REMOTE_var() {
     _TAG_NAME=""
     if [ -n "$USER_GITHUB_TOKEN" ]; then
       _OUT=$(curl -s --request GET \
-        --url "$_REPO_URL/releases" \
+        --url "$_REPO_URL/releases?per_page=100" \
         --header "X-GitHub-Api-Version: 2022-11-28" \
         --header "Authorization: Bearer $USER_GITHUB_TOKEN" || true)
     else
       _OUT=$(curl -s --request GET \
-        --url "$_REPO_URL/releases" \
+        --url "$_REPO_URL/releases?per_page=100" \
         --header "X-GitHub-Api-Version: 2022-11-28" || true)
     fi
 
