@@ -121,10 +121,38 @@ setup_clean_environment() {
     rm -rf /tmp/suibase_walrus_relay_test_* 2>/dev/null || true
 }
 
-# Ensure BUILD version of suibase-daemon is used (not precompiled)
+# Ensure a usable suibase-daemon is present for walrus relay tests.
+#
+# Historically this always rebuilt from source ("BUILD version") because
+# walrus relay features were not yet in the published precompiled. Now
+# that walrus relay is shipped in release binaries, force-rebuilding on
+# main/staging actively defeats the purpose of those branches — they
+# are supposed to validate the END-USER EXPERIENCE against the same
+# precompiled the user installs. Forcing source build there:
+#   - hides regressions where the release binary diverges from source
+#   - adds ~6 min per release-tests run for a no-value rebuild
+#
+# Branch policy:
+#   * main / staging — use whatever is installed (should be precompiled).
+#     If a test needs a feature the precompiled lacks, the test fails,
+#     which is the correct signal: the release is missing that feature.
+#   * dev / pre-staging — keep the rebuild. Source on these branches
+#     can be ahead of the published precompiled (by design), so we must
+#     test against source.
+#   * detached HEAD or unknown — keep the rebuild (safer default).
 ensure_build_daemon() {
     local version_file="$WORKDIRS/common/bin/suibase-daemon-version.yaml"
     local daemon_binary="$WORKDIRS/common/bin/suibase-daemon"
+
+    local _BRANCH
+    _BRANCH=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [ "$_BRANCH" = "main" ] || [ "$_BRANCH" = "staging" ]; then
+        if [ -f "$daemon_binary" ] && [ -f "$version_file" ]; then
+            echo "✓ Using installed suibase-daemon as-is on $_BRANCH (validating release binary)"
+            return 0
+        fi
+        # Nothing installed — fall through to install path below.
+    fi
 
     # Check if both BUILD version file exists AND binary exists
     if [ -f "$version_file" ] && [ -f "$daemon_binary" ] && grep -q 'origin: "built"' "$version_file"; then

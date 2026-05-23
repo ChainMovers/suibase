@@ -27,10 +27,6 @@ export const enSidebar = sidebar({
           text: "Walrus",
           link: "walrus.md",
         },
-        {
-          text: "Autocoins",
-          link: "autocoins.md",
-        },
       ],
     },
     {
