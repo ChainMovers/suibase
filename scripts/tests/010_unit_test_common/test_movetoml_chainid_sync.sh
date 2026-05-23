@@ -263,6 +263,247 @@ EOF
   teardown_tmp
 }
 
+# ----- should_auto_sync_chainid (workdir-scope gate) -----
+#
+# Auto-rewriting Move.toml only makes sense for `localnet` because its
+# genesis chain_id changes on every `regen`. testnet/mainnet/devnet
+# have stable chain_ids: any mismatch there is a real user error that
+# should not be silently rewritten away by every publish.
+
+test_should_auto_sync_chainid_yes_for_localnet() {
+  should_auto_sync_chainid "localnet" \
+    || fail "localnet must be auto-synced"
+}
+
+test_should_auto_sync_chainid_no_for_other_workdirs() {
+  for w in testnet mainnet devnet active some_custom; do
+    if should_auto_sync_chainid "$w"; then
+      fail "$w must NOT be auto-synced"
+    fi
+  done
+}
+
+# ----- extract_chain_id_from_response (response validation) -----
+#
+# JSON-RPC parser must validate that the result looks like a hex chain
+# identifier — port collisions or proxy error envelopes can produce
+# arbitrary "result" strings that would otherwise be written into
+# Move.toml unchecked.
+
+test_extract_chain_id_from_response_accepts_hex() {
+  local _r
+  _r=$(extract_chain_id_from_response '{"jsonrpc":"2.0","id":1,"result":"9754208c"}')
+  [ "$_r" = "9754208c" ] || fail "expected '9754208c', got '$_r'"
+}
+
+test_extract_chain_id_from_response_rejects_non_hex() {
+  local _r
+  # Non-hex characters in result.
+  _r=$(extract_chain_id_from_response '{"jsonrpc":"2.0","id":1,"result":"not-a-hex-string"}')
+  [ -z "$_r" ] || fail "non-hex result must be rejected; got '$_r'"
+  # Mixed alpha + special chars (typical of error pages).
+  _r=$(extract_chain_id_from_response '{"jsonrpc":"2.0","id":1,"result":"<html>oops</html>"}')
+  [ -z "$_r" ] || fail "HTML-shaped result must be rejected; got '$_r'"
+}
+
+test_extract_chain_id_from_response_rejects_jsonrpc_error() {
+  local _r
+  # A JSON-RPC error envelope has no "result" field.
+  _r=$(extract_chain_id_from_response '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}')
+  [ -z "$_r" ] || fail "error envelope must yield empty; got '$_r'"
+}
+
+test_extract_chain_id_from_response_rejects_empty_input() {
+  local _r
+  _r=$(extract_chain_id_from_response "")
+  [ -z "$_r" ] || fail "empty input must yield empty; got '$_r'"
+}
+
+# ----- sync_local_deps_chainids: transitive + dev-dependencies -----
+#
+# Real Sui packages have multi-level dep graphs. A one-level walk
+# leaves transitive deps with stale chain_ids → publish fails on the
+# transitive package the developer wasn't editing. The walker must
+# recurse and also include [dev-dependencies] when present.
+
+test_sync_local_deps_chainids_walks_transitive_deps() {
+  setup_tmp
+  # Chain: demo -> log -> util  (util is transitive)
+  local _DEMO="$TEST_TMPDIR/demo/Move.toml"
+  local _LOG="$TEST_TMPDIR/log/Move.toml"
+  local _UTIL="$TEST_TMPDIR/util/Move.toml"
+  write_fixture_movetoml "$_DEMO" "aaaaaaaa" "aaaaaaaa"
+  mkdir -p "$(dirname "$_LOG")" "$(dirname "$_UTIL")"
+  cat >"$_LOG" <<EOF
+[package]
+name = "log"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+
+[dependencies]
+util = { local = "../util" }
+EOF
+  cat >"$_UTIL" <<EOF
+[package]
+name = "util"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+EOF
+
+  sync_movetoml_workdir_chainids "$_DEMO" "localnet" "ddddeeee" 2>/dev/null
+  sync_local_deps_chainids "$_DEMO" "localnet" "ddddeeee" 2>/dev/null
+
+  local _v
+  _v=$(get_movetoml_env_chainid "$_UTIL" "localnet")
+  [ "$_v" = "ddddeeee" ] || fail "transitive dep util/Move.toml not synced; got '$_v'"
+  _v=$(get_movetoml_env_chainid "$_UTIL" "localnet_proxy")
+  [ "$_v" = "ddddeeee" ] || fail "transitive dep util/Move.toml localnet_proxy not synced; got '$_v'"
+  teardown_tmp
+}
+
+test_sync_local_deps_chainids_walks_dev_dependencies() {
+  setup_tmp
+  local _DEMO="$TEST_TMPDIR/demo/Move.toml"
+  local _DEVDEP="$TEST_TMPDIR/devdep/Move.toml"
+  mkdir -p "$(dirname "$_DEMO")" "$(dirname "$_DEVDEP")"
+  cat >"$_DEMO" <<EOF
+[package]
+name = "demo"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+
+[dev-dependencies]
+testkit = { local = "../devdep" }
+EOF
+  cat >"$_DEVDEP" <<EOF
+[package]
+name = "testkit"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+EOF
+
+  sync_local_deps_chainids "$_DEMO" "localnet" "cccc0000" 2>/dev/null
+
+  local _v
+  _v=$(get_movetoml_env_chainid "$_DEVDEP" "localnet")
+  [ "$_v" = "cccc0000" ] || fail "[dev-dependencies] entry not walked; got '$_v'"
+  teardown_tmp
+}
+
+# Robustness against a future bidirectional dep declaration (or an
+# accidental self-cycle): walk must terminate.
+test_sync_local_deps_chainids_handles_cycle() {
+  setup_tmp
+  local _A="$TEST_TMPDIR/a/Move.toml"
+  local _B="$TEST_TMPDIR/b/Move.toml"
+  mkdir -p "$(dirname "$_A")" "$(dirname "$_B")"
+  cat >"$_A" <<EOF
+[package]
+name = "a"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+
+[dependencies]
+b = { local = "../b" }
+EOF
+  cat >"$_B" <<EOF
+[package]
+name = "b"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+
+[dependencies]
+a = { local = "../a" }
+EOF
+
+  # Must terminate (under whatever timeout the test harness has).
+  # The fail() function is invoked if the walk doesn't return.
+  sync_local_deps_chainids "$_A" "localnet" "f00fc0fc" 2>/dev/null \
+    || fail "walk did not terminate on cycle"
+
+  local _v
+  _v=$(get_movetoml_env_chainid "$_B" "localnet")
+  [ "$_v" = "f00fc0fc" ] || fail "cycle dep b not synced; got '$_v'"
+  teardown_tmp
+}
+
+# Defensive: a single line may contain MULTIPLE `local = "..."`
+# entries (inline-table form with nested dep specs). The walker must
+# emit BOTH paths, not just the last (greedy regex bug).
+test_sync_local_deps_chainids_handles_multiple_local_on_one_line() {
+  setup_tmp
+  local _ROOT="$TEST_TMPDIR/root/Move.toml"
+  local _ONE="$TEST_TMPDIR/one/Move.toml"
+  local _TWO="$TEST_TMPDIR/two/Move.toml"
+  mkdir -p "$(dirname "$_ROOT")" "$(dirname "$_ONE")" "$(dirname "$_TWO")"
+  # A single dep line with two `local = "..."` substrings (nested
+  # inline table, valid TOML).
+  cat >"$_ROOT" <<'EOF'
+[package]
+name = "root"
+
+[dependencies]
+multi = { local = "../one", extra = { local = "../two" } }
+EOF
+  for _f in "$_ONE" "$_TWO"; do
+    cat >"$_f" <<EOF
+[package]
+name = "x"
+
+[environments]
+localnet = "aaaaaaaa"
+localnet_proxy = "aaaaaaaa"
+EOF
+  done
+
+  sync_local_deps_chainids "$_ROOT" "localnet" "12345678" 2>/dev/null
+
+  local _v
+  _v=$(get_movetoml_env_chainid "$_ONE" "localnet")
+  [ "$_v" = "12345678" ] || fail "first inline local not synced; got '$_v'"
+  _v=$(get_movetoml_env_chainid "$_TWO" "localnet")
+  [ "$_v" = "12345678" ] || fail "second inline local not synced (greedy regex bug); got '$_v'"
+  teardown_tmp
+}
+
+# ----- get_current_chain_id: fail-soft on unset proxy config -----
+#
+# When CFG_proxy_host_ip / CFG_proxy_port_number are unset (workdir
+# without proxy config), get_current_chain_id must return empty
+# without writing "parameter null or not set" to stderr and without
+# aborting the parent shell.
+
+test_get_current_chain_id_fail_soft_on_unset_proxy_config() {
+  local _out _err _rc
+  # Run in a subshell with proxy vars unset; capture stderr separately.
+  _err=$(
+    {
+      unset CFG_proxy_host_ip
+      unset CFG_proxy_port_number
+      _out=$(get_current_chain_id)
+      _rc=$?
+      echo "RC=$_rc OUT=[$_out]" >&3
+    } 2>&1 >/dev/null
+  ) 3>&1
+  # stdout from inside the subshell was redirected; we captured stderr
+  # in $_err. Just assert no "parameter null or not set" leaked.
+  if echo "$_err" | grep -q "parameter null or not set"; then
+    fail "get_current_chain_id leaked parameter-expansion error: $_err"
+  fi
+}
+
 # ----- driver -----
 
 tests() {
@@ -277,6 +518,17 @@ tests() {
   test_sync_movetoml_workdir_chainids_updates_both_envs
   test_sync_local_deps_chainids_walks_local_deps
   test_sync_local_deps_chainids_skips_dep_with_no_environments
+  test_should_auto_sync_chainid_yes_for_localnet
+  test_should_auto_sync_chainid_no_for_other_workdirs
+  test_extract_chain_id_from_response_accepts_hex
+  test_extract_chain_id_from_response_rejects_non_hex
+  test_extract_chain_id_from_response_rejects_jsonrpc_error
+  test_extract_chain_id_from_response_rejects_empty_input
+  test_sync_local_deps_chainids_walks_transitive_deps
+  test_sync_local_deps_chainids_walks_dev_dependencies
+  test_sync_local_deps_chainids_handles_cycle
+  test_sync_local_deps_chainids_handles_multiple_local_on_one_line
+  test_get_current_chain_id_fail_soft_on_unset_proxy_config
 }
 
 tests

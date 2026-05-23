@@ -37,7 +37,9 @@ The same listener port (e.g. `44340` for localnet) accepts both HTTP/1.1
 JSON-RPC and HTTP/2 gRPC. `hyper-util`'s `auto::Builder` negotiates protocol
 from the client preface. The request handler:
 
-- `application/grpc*` → `proxy_grpc::forward_unary` (HTTP/2, preserves trailers)
+- `application/grpc*` → `ProxyServer::grpc_dispatch` (which iterates the
+  prioritized upstream list and calls `proxy_grpc::forward_to_upstream`
+  per attempt). HTTP/2, preserves trailers.
 - anything else      → existing axum JSON-RPC handler
 
 **What works**:
