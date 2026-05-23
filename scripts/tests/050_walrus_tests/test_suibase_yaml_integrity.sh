@@ -553,7 +553,17 @@ test_edge_case_line_positions
 
 # Restore suibase.yaml from default template (handles both testnet and mainnet)
 restore_suibase_yaml_from_default "$WORKDIR"
-"$SUIBASE_DIR/scripts/dev/update-daemon"
+# On main/staging, skip the rebuild — those branches validate the
+# released binary as end users see it. dev/pre-staging keep the
+# rebuild because source can be ahead of the published precompiled.
+# See ensure_build_daemon() in __test_common.sh for the same rationale.
+_BRANCH_FOR_DAEMON=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$_BRANCH_FOR_DAEMON" = "main" ] || [ "$_BRANCH_FOR_DAEMON" = "staging" ]; then
+    "$SUIBASE_DIR/scripts/dev/start-daemon"
+else
+    "$SUIBASE_DIR/scripts/dev/update-daemon"
+fi
+unset _BRANCH_FOR_DAEMON
 
 test_config_process_discrepancy
 
