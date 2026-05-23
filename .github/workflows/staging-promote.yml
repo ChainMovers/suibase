@@ -39,6 +39,12 @@ jobs:
       # does not fire on PRs opened by GITHUB_TOKEN (GitHub security
       # feature against infinite loops).
       statuses: write
+      # `actions: write` lets this workflow trigger `staging.yml` via
+      # workflow_dispatch after the bot auto-merges to staging. Pushes
+      # by GITHUB_TOKEN do NOT fire downstream workflows (same
+      # anti-loop feature) — without the dispatch, `staging.yml` never
+      # runs and the pipeline stalls at this stage.
+      actions: write
     steps:
       - name: Checkout pre-staging
         uses: actions/checkout@v4
@@ -171,3 +177,33 @@ jobs:
           number=$(gh pr list --base staging --head pre-staging --state open --json number --jq '.[0].number')
           gh pr merge "$number" --auto --merge
           echo "::notice::Opened auto-merge PR #$number pre-staging → staging."
+
+      - name: Trigger staging.yml after bot auto-merge
+        if: steps.diff.outputs.ahead == 'true' && steps.tag_check.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # GitHub does NOT trigger workflows on pushes made by
+          # GITHUB_TOKEN (anti-loop security). The auto-merge above
+          # would push to `staging` as the bot — staging.yml's `on:
+          # push: branches: [staging]` would not fire. Manually
+          # dispatch it so the pipeline continues end-to-end.
+          #
+          # Poll for the merge to actually complete first, so we
+          # dispatch staging.yml against the merged staging tip.
+          number=$(gh pr list --base staging --head pre-staging --state all --limit 1 --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            echo "::warning::No pre-staging→staging PR found to track; skipping dispatch."
+            exit 0
+          fi
+          for i in $(seq 1 60); do
+            state=$(gh pr view "$number" --json state --jq .state)
+            if [ "$state" = "MERGED" ]; then
+              echo "PR #$number merged — dispatching staging.yml."
+              gh workflow run staging.yml --ref staging
+              echo "::notice::Dispatched staging.yml after PR #$number auto-merge."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::PR #$number did not reach MERGED within 5 min; not dispatching."
