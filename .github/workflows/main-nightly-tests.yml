@@ -52,7 +52,6 @@ jobs:
             rust/demo-app
             rust/helper-uniffi
             rust/helper
-            rust/suibase
           cache-provider: ${{ matrix.ci_cache_provider }}
           cache-all-crates: ${{ matrix.ci_cache_all_crates }}
 
