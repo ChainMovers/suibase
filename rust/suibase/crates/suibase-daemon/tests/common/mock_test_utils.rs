@@ -1523,6 +1523,17 @@ pub fn non_grpc_behavior() -> MockServerBehavior {
     }
 }
 
+/// Behavior knob: make the mock answer gRPC requests with a
+/// server-streaming response that never sends END_STREAM. Used to verify
+/// that the proxy passes streaming responses through (rather than
+/// buffering the body and hanging).
+pub fn grpc_streaming_behavior() -> MockServerBehavior {
+    MockServerBehavior {
+        grpc_stream_forever: true,
+        ..Default::default()
+    }
+}
+
 pub fn failing_behavior(failure_rate: f64) -> MockServerBehavior {
     MockServerBehavior {
         failure_rate,
@@ -1533,6 +1544,7 @@ pub fn failing_behavior(failure_rate: f64) -> MockServerBehavior {
         proxy_enabled: true,
         cache_ttl_secs: 300,
         respond_non_grpc: false,
+            grpc_stream_forever: false,
     }
 }
 
@@ -1547,6 +1559,7 @@ pub fn slow_behavior(latency_ms: u32) -> MockServerBehavior {
         proxy_enabled: true,
         cache_ttl_secs: 300,
         respond_non_grpc: false,
+            grpc_stream_forever: false,
     }
 }
 
@@ -1561,5 +1574,6 @@ pub fn error_response_behavior(error_response: serde_json::Value) -> MockServerB
         proxy_enabled: true,
         cache_ttl_secs: 300,
         respond_non_grpc: false,
+            grpc_stream_forever: false,
     }
 }
