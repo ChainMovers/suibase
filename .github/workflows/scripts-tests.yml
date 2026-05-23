@@ -51,6 +51,16 @@ jobs:
         with:
           cache: "false" # Control cache in "Rust Caching" step instead.
 
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Cache key includes the daemon's Cargo.lock so dep-only
+          # rebuilds are skipped on warm cache. The walrus tests
+          # invoke ensure_build_daemon multiple times — without
+          # caching each invocation full-rebuilt (~80s × 5).
+          workspaces: "rust/suibase -> target"
+          cache-on-failure: "true"
+
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
         run: |

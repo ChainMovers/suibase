@@ -1148,8 +1148,21 @@ sb_app_rust_build_and_install() {
 
   rm -f "$SUIBASE_DAEMON_VERSION_FILE" >/dev/null 2>&1
 
-  # Clean the build directory.
-  rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
+  # Intentionally NOT wiping `target/` here. Cargo's incremental
+  # compile is correct: it tracks source mtimes, Cargo.lock, rustc
+  # version, and feature flags, and rebuilds exactly what changed.
+  # Wiping target/ on every invocation:
+  #   * defeats the actions/cache restore in CI (every job paid full
+  #     dep-compile cost — ~80s × 5 calls per walrus-tests run)
+  #   * makes dev-box `update-daemon` iteration slow (single-file edit
+  #     was a 80s rebuild instead of ~10s incremental)
+  # The "always rebuild" semantics that this command guarantees are
+  # preserved — cargo still runs every time, and its output still
+  # reflects current source. Set SUIBASE_CLEAN_BUILD=true to opt back
+  # into a clean rebuild if you ever suspect stale-artifact issues.
+  if [ "${SUIBASE_CLEAN_BUILD:-false}" = "true" ]; then
+    rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
+  fi
 
   # Helper function to filter cargo output
   filter_cargo_output() {
