@@ -54,29 +54,30 @@ fi
 # shellcheck source=./sync
 source "$HOME/suibase/scripts/dev/sync"
 
-# Switch to pre-staging.
-echo "Switching to pre-staging branch"
+# Promote dev → pre-staging via auto-merge PR.
+#
+# Branch protection on pre-staging requires PRs (no direct push), so we
+# open one and immediately enable auto-merge. With matching tips this is
+# essentially instant; with the pr-gate check it's also instant
+# (head_ref == dev satisfies the gate). Required: `gh` CLI authenticated.
 git fetch origin pre-staging
-git checkout pre-staging
-git pull --ff-only origin pre-staging
-
-# Find the common ancestor of dev and pre-staging.
-merge_base=$(git merge-base dev pre-staging)
 
 # Check if there are any changes from dev that are not in pre-staging.
-if git diff --quiet "$merge_base" dev; then
+if git merge-base --is-ancestor dev origin/pre-staging; then
   echo "No changes to merge from dev to pre-staging."
-else
-  # Fast-forward only — pre-staging is downstream of dev, never ahead.
-  if git merge --ff-only dev; then
-    echo "Merged dev into pre-staging."
-    git push origin pre-staging
-    # Stay on dev for the next iteration.
-    git checkout dev
-  else
-    echo "Fast-forward merge failed. pre-staging has diverged from dev,"
-    echo "which should not happen under the release pipeline. Run"
-    echo "'~/suibase/scripts/dev/sync' to reconcile."
-    exit 1
-  fi
+  exit 0
 fi
+
+# Reuse an open PR if one exists; otherwise open one.
+existing=$(gh pr list --base pre-staging --head dev --state open --json number --jq '.[0].number')
+if [ -z "$existing" ]; then
+  version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml 2>/dev/null)
+  title="Promote dev to pre-staging"
+  [ -n "$version" ] && title="$title (suibase-daemon v$version)"
+  gh pr create --base pre-staging --head dev \
+    --title "$title" \
+    --body "Auto-opened by \`scripts/dev/merge\`. The pipeline (pre-staging.yml → cron → staging.yml) carries it through to main. See CONTRIBUTING.md."
+  existing=$(gh pr list --base pre-staging --head dev --state open --json number --jq '.[0].number')
+fi
+echo "Auto-merging PR #$existing dev → pre-staging..."
+gh pr merge "$existing" --auto --merge
