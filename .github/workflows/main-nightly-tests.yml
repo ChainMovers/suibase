@@ -91,6 +91,43 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
+      - name: Verify suibase-daemon precompiled matches main's source version
+        # On main, rust/suibase/Cargo.toml is authoritative for the daemon
+        # version end users receive. If chainmovers/sui-binaries has not yet
+        # published a precompiled at that version, end users are protected
+        # by the sb_app_install gate (they stay on their existing binary
+        # with a warning), but this nightly is supposed to validate the
+        # released pair. A mismatch means the dev → main merge happened
+        # before sui-binaries finished publishing — fail fast with a clear
+        # message instead of letting the rest of the suite fail diffusely.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # Install suibase symlinks + trigger daemon precompiled download.
+          # start-daemon calls start_suibase_daemon_as_needed → sb_app_install.
+          "$HOME/suibase/install"
+          "$HOME/suibase/scripts/dev/start-daemon"
+
+          src_version=$(grep "^version" "$GITHUB_WORKSPACE/rust/suibase/Cargo.toml" \
+            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          bin_version=$("$HOME/suibase/workdirs/common/bin/suibase-daemon" --version 2>/dev/null \
+            | awk '{print $2}')
+
+          echo "main source version:      $src_version"
+          echo "installed binary version: $bin_version"
+
+          if [ -z "$src_version" ] || [ -z "$bin_version" ]; then
+            echo "::error::Could not read versions (src='$src_version', bin='$bin_version')"
+            exit 1
+          fi
+
+          if [ "$src_version" != "$bin_version" ]; then
+            echo "::error::main's rust/suibase/Cargo.toml is at suibase-daemon v$src_version but the precompiled available on chainmovers/sui-binaries is v$bin_version. The release-coordination handshake is incomplete — main was likely bumped before sui-binaries published the matching release. Check https://github.com/chainmovers/sui-binaries/releases and re-run this workflow once the new tag is available."
+            exit 1
+          fi
+          echo "Version match confirmed: $src_version"
+
       - name: Exhaustive Tests of Suibase main branch (the only release branch).
         env:
           CI_BRANCH: ${{ matrix.ci_branch }}
