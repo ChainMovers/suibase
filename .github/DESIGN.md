@@ -1,73 +1,77 @@
-## Documentation Workflows
+# CI / Workflows
 
-All documentation, including suibase.io site, are done with Markdown files (.md).
+## Release pipeline
 
-Changes can be done on either main or dev with push or PR.
+```
+dev ──merge script──► pre-staging ──cron auto──► staging ──auto-PR──► main
+```
 
-Only the docs on main are published/visible.
+| Branch | Pushes from | Tests | Failure means |
+| --- | --- | --- | --- |
+| `dev` | direct or PR | full suite, source-built daemon (`actions/diffs` gates each leg) | real bug |
+| `pre-staging` | `~/suibase/scripts/dev/merge` only | **none** (intentional) | not meaningful — branch is never alarm-red |
+| `staging` | `staging-promote.yml` cron (auto-merge PR) | release-tests style against the published precompiled | real bug in binary or scripts |
+| `main` | `staging.yml` (auto-merge PR) | defense-in-depth smoke test | should never happen — investigate the pipeline |
 
-Changes are detected by actions/diffs and triggers these workflows:
-(1) deploy-docs.yml
-build/publish the suibase.io site (hosted by GitHub pages).
-The generated site is in the gh-pages branch.
+**main / staging / pre-staging are branch-protected**: no direct push, PR head_ref must come from the immediately-upstream branch (enforced by `pr-gate.yml`).
 
-(2) trig-rust-api-docs.yml
-push a file to ChainMovers/suibase-api-docs repo to remotely trig the rustdoc build/publish
-The resulting docs are hosted by GitHub pages at https://chainmovers.github.io/suibase-api-docs/suibase
+### Workflow files (per branch)
 
-## Source code changes workflows
-Push/PR only on the **dev branch**.
+| File | Fires on | Does |
+| --- | --- | --- |
+| `.github/workflows/scripts-tests.yml` | push to dev | bash script tests via `run-all.sh --scripts-tests` |
+| `.github/workflows/suibase-daemon-tests.yml` | push to dev | daemon source-build tests via `run-all.sh --suibase-daemon-tests` |
+| `.github/workflows/rust-tests.yml` | push to dev | rust API/demo tests via `run-all.sh --rust-tests` |
+| `.github/workflows/typescript-tests.yml` | push to dev | helper + integration tests |
+| `.github/workflows/lint.yml` | any push / PR | lint |
+| `.github/workflows/pre-staging.yml` | push to pre-staging | push `Cargo.toml` to `chainmovers/sui-binaries` IF the matching daemon release tag isn't published yet |
+| `.github/workflows/staging-promote.yml` | cron every 15 min on **main** | poll sui-binaries; once `suibase-daemon-v<ver>` is published with assets, open auto-merge PR pre-staging → staging |
+| `.github/workflows/staging.yml` | push to staging | download published precompiled, validate, open auto-merge PR staging → main |
+| `.github/workflows/release-tests.yml` | push to main | defense-in-depth post-merge smoke test |
+| `.github/workflows/main-nightly-tests.yml` | cron | extensive nightly regressions on main |
+| `.github/workflows/dev-nightly-tests.yml` | cron | extensive nightly regressions on dev |
+| `.github/workflows/pr-gate.yml` | PR to main / staging / pre-staging | required check: head_ref must be the immediately-upstream branch |
 
-The dev branch have various quick tests with multiple OS. Intended to catch errors early after every change. These tests (and more) are also included in the daily extensive tests.
+### Cross-repo coupling
 
-actions/diffs detect changes and triggers these workflows:
+`chainmovers/sui-binaries` publishes the daemon precompiled. `pre-staging.yml` writes `triggers/suibase-daemon/Cargo.toml` over there (auth: `SUI_BINARIES_TOKEN` org secret); that repo's `Build Suibase Daemon` workflow then builds + publishes `suibase-daemon-v<ver>`.
 
-(1) scripts-tests.yml
-Done on bash script changes
+Daemon currently builds for `ubuntu-x86_64` and `macos-arm64` only. **macOS x86_64 (Intel) is not supported** — `sb_app_install` fails with a clear message if attempted.
 
-(2) suibase-daemon-tests.yml
-Tests on code changes related to suibase-daemon. Upon success, will send a file to ChainMovers/suibase-binaries repo to trig potentially further build/publish a new version.
-This test force the building of the suibase-daemon (does not use pre-build binaries).
+## How to ship a change
 
-(3) rust-tests.yml
-Done on code changes that might affect the rust API, demos and other rust projects (excluding rust suibase-daemon backend)
+```bash
+# from dev with whatever commits you want to release
+~/suibase/scripts/dev/merge
+```
 
+That's it. The script merges dev → pre-staging; the workflows above carry it the rest of the way (typical wall-clock: 5-30 min depending on whether sui-binaries needs to build a new binary).
 
-## Merge Check Workflows
-(1) main-merge-check.yml
-Does a few quick sanity checks (not involving lengthy building), for VSCode/daemon/scripts version compatibility.
-In particular, verifies that suibase-daemon binaries were built and released successfully prior to merging code requiring a new
-version on main.
+## How a developer reads CI status
 
-## Other QA Workflows
-(1) main-nithgly-tests.yml/dev-nightly-tests.yml
-**Extensive** branch tests done once a day, even when no Suibase changes (in case a dependency breaks something).
-Results are published as passed/failed "badges" on GitHub.
+- **Red on `dev`**: real test failure. Look at the failing workflow log.
+- **Red on `pre-staging`**: shouldn't happen by design (no tests). If it does (e.g. SUI_BINARIES_TOKEN expired), the trigger to sui-binaries didn't fire — fix the secret/credentials and re-trigger.
+- **Red on `staging`**: precompiled is broken OR scripts don't handle it. Fix on dev → `merge` again → pipeline replaces.
+- **Red on `main`**: pipeline invariant violated. Should be impossible if `staging` was green — investigate.
 
-(2) release-check.yml
-Done on any script/code changes on main.
+## Other QA workflows
 
-Simulate someone updating to latest Suibase version. Verifies that binaries can properly be downloaded/installed.
+- `release-tests.yml`: simulates a user updating to latest. Verifies the published precompiled is downloadable and matches main's Cargo.toml. Already green by the time it runs (staging.yml validated the same thing pre-merge).
+- `*-nightly-tests.yml`: extensive periodic regression check. Catches dependency drift even when no Suibase change happens.
 
-The goal is not to test extensively all features, but rather just validation that the continuous integration itself is working as expected (e.g. if something depend on a backend version, make sure that version is indeed still published).
+## `run-all.sh` selectors
 
+Many workflows just call `scripts/tests/run-all.sh` with one of:
+- `--scripts-tests`
+- `--suibase-daemon-tests`
+- `--rust-tests`
+- `--release-tests`
+- `--main-merge-check`
+- `--dev-push-check`
 
-## About run-all.sh
-Many GitHub Actions simply call "scripts/tests/run-all.sh".
+No selector = full extensive suite.
 
-A subset of tests can be selected with a combination of:
-  --scripts-tests
-  --suibase-daemon-tests
-  --rust-tests
-  --release-tests
-  --main-merge-check
-  --dev-push-check
+## See also
 
-**Extensive** tests happen when there are no skip parameters.
-
-
-
-
-
-
-
+- `CONTRIBUTING.md` — narrative for the same pipeline, plus version-source policy and branch-aware install routing.
+- `CLAUDE.md` — short AI-agent guidance pointing here.
