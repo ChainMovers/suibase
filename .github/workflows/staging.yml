@@ -162,9 +162,14 @@ jobs:
       # `contents: write` is needed by `gh pr merge --auto` to enable
       # auto-merge on a branch-protected base (main). `pull-requests:
       # write` alone is enough to OPEN the PR but not to flip the
-      # auto-merge bit when main is protected.
+      # auto-merge bit when main is protected. `statuses: write` is
+      # required to set the `enforce-pipeline-order` commit status
+      # (the workflow can't satisfy the required check via the normal
+      # pull_request workflow because PRs opened by GITHUB_TOKEN don't
+      # trigger pull_request events — security feature).
       contents: write
       pull-requests: write
+      statuses: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4

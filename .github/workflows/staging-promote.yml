@@ -33,6 +33,12 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # `statuses: write` lets this workflow set the
+      # `enforce-pipeline-order` commit status directly on the PR's
+      # head — needed because pr-gate.yml's pull_request workflow
+      # does not fire on PRs opened by GITHUB_TOKEN (GitHub security
+      # feature against infinite loops).
+      statuses: write
     steps:
       - name: Checkout pre-staging
         uses: actions/checkout@v4
@@ -43,8 +49,10 @@ jobs:
       - name: Read daemon version from pre-staging
         id: ver
         run: |
-          version=$(grep "^version" rust/suibase/Cargo.toml \
-            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          # awk for portability — the GNU sed `\+` regex used previously
+          # is not supported by BSD sed and silently no-ops on macOS.
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' \
+            rust/suibase/Cargo.toml)
           if [ -z "$version" ]; then
             echo "::error::Could not parse daemon version from pre-staging's rust/suibase/Cargo.toml"
             exit 1
