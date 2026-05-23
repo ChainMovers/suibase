@@ -46,6 +46,37 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
+      - name: Verify suibase-daemon precompiled matches main's source version
+        # See main-nightly-tests.yml for full rationale. Same fast-fail
+        # check here: a main push that arrives before sui-binaries has
+        # published the matching precompiled is a release-coordination
+        # bug, not something later tests should slowly discover.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          "$HOME/suibase/install"
+          "$HOME/suibase/scripts/dev/start-daemon"
+
+          src_version=$(grep "^version" "$GITHUB_WORKSPACE/rust/suibase/Cargo.toml" \
+            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          bin_version=$("$HOME/suibase/workdirs/common/bin/suibase-daemon" --version 2>/dev/null \
+            | awk '{print $2}')
+
+          echo "main source version:      $src_version"
+          echo "installed binary version: $bin_version"
+
+          if [ -z "$src_version" ] || [ -z "$bin_version" ]; then
+            echo "::error::Could not read versions (src='$src_version', bin='$bin_version')"
+            exit 1
+          fi
+
+          if [ "$src_version" != "$bin_version" ]; then
+            echo "::error::main's rust/suibase/Cargo.toml is at suibase-daemon v$src_version but the precompiled available on chainmovers/sui-binaries is v$bin_version. The release-coordination handshake is incomplete — main was likely pushed before sui-binaries published the matching release. Check https://github.com/chainmovers/sui-binaries/releases and re-run this workflow once the new tag is available."
+            exit 1
+          fi
+          echo "Version match confirmed: $src_version"
+
       - name: Only sanity tests the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
