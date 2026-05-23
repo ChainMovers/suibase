@@ -224,6 +224,26 @@ async fn handle_grpc_request(state: Arc<MockServerState>) -> Response {
             .unwrap();
     }
 
+    // Simulate a server-streaming gRPC method (e.g. SubscribeCheckpoints):
+    // emit an empty DATA frame every 100 ms and NEVER send END_STREAM.
+    // A correctly-implemented proxy must stream this body through to the
+    // client; a proxy that calls BodyExt::collect on the response will hang.
+    if behavior.grpc_stream_forever {
+        let body_stream = futures::stream::unfold((), |()| async {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            // 5-byte empty gRPC frame (compression flag=0, length=0).
+            Some((
+                Ok::<_, std::io::Error>(Bytes::from_static(&[0u8, 0, 0, 0, 0])),
+                (),
+            ))
+        });
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("application/grpc"))
+            .body(Body::from_stream(body_stream))
+            .unwrap();
+    }
+
     // Minimal valid gRPC unary response:
     //   * status 200
     //   * content-type: application/grpc

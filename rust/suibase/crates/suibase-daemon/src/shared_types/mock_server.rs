@@ -46,6 +46,14 @@ pub struct MockServerBehavior {
     /// upstream so the proxy classifies it as NOT_GRPC_CAPABLE.
     #[serde(default)]
     pub respond_non_grpc: bool,
+
+    /// When true, answer gRPC requests with a server-streaming response
+    /// that emits an empty DATA frame every 100 ms and never sends
+    /// END_STREAM. Used to verify the proxy passes server-streaming bodies
+    /// through instead of buffering them (which would hang on the
+    /// never-ending body).
+    #[serde(default)]
+    pub grpc_stream_forever: bool,
 }
 
 impl Default for MockServerBehavior {
@@ -59,6 +67,7 @@ impl Default for MockServerBehavior {
             proxy_enabled: true,  // Enable proxy by default
             cache_ttl_secs: 300,  // 5 minutes default
             respond_non_grpc: false,
+            grpc_stream_forever: false,
         }
     }
 }
@@ -602,6 +611,7 @@ mod tests {
             proxy_enabled: false,
             cache_ttl_secs: 60,
             respond_non_grpc: false,
+            grpc_stream_forever: false,
         };
         
         state.set_behavior(new_behavior.clone());
@@ -631,6 +641,7 @@ mod tests {
             proxy_enabled: true,
             cache_ttl_secs: 300,
             respond_non_grpc: false,
+            grpc_stream_forever: false,
         };
         
         // Test serialization/deserialization

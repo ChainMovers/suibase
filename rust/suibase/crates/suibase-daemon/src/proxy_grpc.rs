@@ -1,22 +1,30 @@
 // gRPC reverse-proxy support for ProxyServer.
 //
-// Forwards inbound HTTP/2 gRPC unary requests to an upstream sui-node,
-// preserving headers, body, and trailers. Modeled on the patterns in
-// ~/sui-proxy/crates/sui-proxy (HTTP/2 reverse proxy for Sui gRPC).
+// Forwards inbound HTTP/2 gRPC requests to an upstream sui-node, preserving
+// headers, body, and trailers. Both unary AND server-streaming responses are
+// passed through: the response body is wrapped (not collected) so frames flow
+// from upstream → proxy → client as they arrive. Client-streaming and
+// bidi-streaming remain unsupported (the inbound body is still buffered up
+// to MAX_BODY_SIZE before forwarding).
 //
-// Streaming RPCs are not yet supported — they short-circuit to an error
-// response. That's tracked separately; see the project notes.
+// Modeled on the patterns in ~/sui-proxy/crates/sui-proxy (HTTP/2 reverse
+// proxy for Sui gRPC).
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
 use http::header;
 use http::{Request, Response, StatusCode, Uri};
+use http_body::{Body, Frame, SizeHint};
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full, Limited};
 use hyper::body::Incoming;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
+use tokio::time::{Instant, Sleep};
 
 /// Body type returned by the proxy.
 ///
@@ -34,10 +42,28 @@ type HttpsConnector = hyper_rustls::HttpsConnector<HttpConnector>;
 /// this guards against adversarial payloads without limiting legitimate use.
 const MAX_BODY_SIZE: usize = 4 * 1024 * 1024;
 
-/// Timeout for a single forwarded upstream request. Long enough for legitimate
-/// long-running unary calls; short enough that a dead upstream isn't held open
-/// forever.
-const UPSTREAM_TIMEOUT: Duration = Duration::from_secs(30);
+/// Timeout for the upstream HEADERS response (until the proxy knows whether
+/// the upstream answered at all). Applied only to the request → response-
+/// headers leg; the response body has its own per-frame idle deadline
+/// (`STREAM_IDLE_TIMEOUT`) instead of a total-body cap, so legitimate
+/// server-streaming RPCs (e.g. SubscribeCheckpoints) can run as long as the
+/// upstream keeps emitting frames.
+const UPSTREAM_HEADER_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Per-frame idle deadline on the streamed response body. If no DATA or
+/// TRAILERS frame arrives from the upstream within this window the proxy
+/// terminates the body with an error (which surfaces as an HTTP/2 stream
+/// reset to the client). This bounds the failure mode for a half-closed
+/// upstream that sent valid headers but then went silent — without it, a
+/// stuck upstream pins the client + proxy task for the full lifetime of
+/// the client's own timeout (often hours).
+///
+/// Picked larger than typical inter-frame gaps for legitimate streams
+/// (e.g. SubscribeCheckpoints emits a frame per checkpoint; localnet
+/// checkpoint interval is ~1s, mainnet ~2s). 60s is comfortably above
+/// that while still catching adversarial silence within a reasonable
+/// budget.
+const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Inbound body read budget. Unary gRPC clients send their (small) message
 /// then END_STREAM immediately; this only fires if the client opens a
@@ -117,11 +143,15 @@ impl BufferedGrpcRequest {
     /// usable `BufferedGrpcRequest` or an early-response variant
     /// (e.g. body too large).
     ///
-    /// Imposes `INBOUND_BODY_TIMEOUT` on the collect — without it, a client
-    /// that opens a streaming RPC (which never sends end-of-stream on its own)
-    /// would hang the proxy connection task indefinitely. Streaming is not
-    /// yet supported; this timeout converts the hang into a parseable gRPC
-    /// status the client can react to.
+    /// Imposes `INBOUND_BODY_TIMEOUT` on the collect — without it a client
+    /// that opens a *client-streaming* or *bidi-streaming* RPC (where the
+    /// request body stays open while the client streams messages) would
+    /// hang this connection task indefinitely. Server-streaming and unary
+    /// RPCs both send their (small) request message followed immediately
+    /// by END_STREAM, so this timeout fires only for inbound-streaming
+    /// shapes we do not support yet. Note: this is asymmetric with the
+    /// response body, which is wrapped in `IdleTimeoutBody` and streamed
+    /// through verbatim — see the module header.
     pub async fn from_request(
         req: Request<Incoming>,
     ) -> Result<Self, Response<ProxyBody>> {
@@ -238,6 +268,13 @@ async fn try_forward_one(
     body_bytes: Bytes,
     client: Arc<GrpcProxyClient>,
 ) -> ForwardOutcome {
+    log::debug!(
+        "grpc: forwarding {} {} → {} ({} bytes)",
+        method,
+        path_and_query,
+        base_url,
+        body_bytes.len()
+    );
     let upstream_uri = match build_upstream_uri(base_url, path_and_query) {
         Ok(u) => u,
         Err(e) => {
@@ -272,7 +309,7 @@ async fn try_forward_one(
     };
 
     let header_result =
-        tokio::time::timeout(UPSTREAM_TIMEOUT, client.inner.request(upstream_req)).await;
+        tokio::time::timeout(UPSTREAM_HEADER_TIMEOUT, client.inner.request(upstream_req)).await;
 
     let resp = match header_result {
         Ok(Ok(r)) => r,
@@ -288,6 +325,13 @@ async fn try_forward_one(
         .unwrap_or("")
         .to_string();
     let ct_is_grpc = content_type_is_grpc(&content_type);
+    log::debug!(
+        "grpc: upstream response {} for {} (status={}, content-type={})",
+        path_and_query,
+        base_url,
+        status,
+        content_type
+    );
 
     // Three buckets:
     //   * 200 + application/grpc           → real gRPC response (forward)
@@ -306,20 +350,130 @@ async fn try_forward_one(
         };
     }
 
-    // Buffer the response body. `BodyExt::collect` preserves HTTP/2 trailers,
-    // which is how gRPC delivers its status code (`grpc-status`).
+    // Stream the response body through to the client. We deliberately do NOT
+    // collect/buffer it: server-streaming RPCs (e.g. SubscribeCheckpoints)
+    // have bodies that may run for hours. Hyper's body type carries frames
+    // (DATA and TRAILERS) verbatim, so grpc-status arrives at the client
+    // naturally as part of the trailing HEADERS frame.
+    //
+    // The body is wrapped in `IdleTimeoutBody` so a half-closed upstream
+    // (sent valid headers, then went silent) is detected within
+    // STREAM_IDLE_TIMEOUT and the body terminates with an error instead
+    // of pinning the client + proxy task indefinitely. Upstream body
+    // errors are also logged at debug from the wrapper so operators
+    // running with RUST_LOG=debug can see mid-stream failures.
     let (resp_parts, resp_body) = resp.into_parts();
-    let body_result = tokio::time::timeout(UPSTREAM_TIMEOUT, BodyExt::collect(resp_body)).await;
+    let log_target = format!("{} for {}", path_and_query, base_url);
+    let wrapped = IdleTimeoutBody::new(resp_body, STREAM_IDLE_TIMEOUT, log_target);
+    let boxed: ProxyBody = wrapped.boxed_unsync();
+    ForwardOutcome::GrpcResponse(Response::from_parts(resp_parts, boxed))
+}
 
-    match body_result {
-        Ok(Ok(collected)) => {
-            let boxed: ProxyBody = collected
-                .map_err(|never| -> ProxyError { match never {} })
-                .boxed_unsync();
-            ForwardOutcome::GrpcResponse(Response::from_parts(resp_parts, boxed))
+/// `Body` adapter that imposes a per-frame idle deadline on the wrapped
+/// upstream body. If no frame (DATA or TRAILERS) arrives within
+/// `timeout` the wrapper terminates the body with an error; otherwise
+/// it forwards each frame verbatim. The idle timer is reset on each
+/// frame so legitimate streaming RPCs whose inter-frame gaps are
+/// shorter than `timeout` are never interrupted.
+///
+/// Upstream body errors are logged at debug level (with the originating
+/// path + upstream as context) so operators running with
+/// `RUST_LOG=debug` can observe mid-stream failures — these errors
+/// can't be reported back through `req_resp_ok` (which has already
+/// fired by the time the body starts streaming) but the log entry is
+/// the per-stream signal NetworkMonitor can't currently capture.
+struct IdleTimeoutBody<B> {
+    inner: B,
+    timeout: Duration,
+    // `Sleep` is `!Unpin`; we keep it on the heap to make `IdleTimeoutBody`
+    // itself easy to manually pin-project.
+    timer: Pin<Box<Sleep>>,
+    log_target: String,
+    failed: bool,
+}
+
+impl<B> IdleTimeoutBody<B> {
+    fn new(inner: B, timeout: Duration, log_target: String) -> Self {
+        Self {
+            inner,
+            timeout,
+            timer: Box::pin(tokio::time::sleep(timeout)),
+            log_target,
+            failed: false,
         }
-        Ok(Err(e)) => ForwardOutcome::Error(format!("response body: {}", e)),
-        Err(_) => ForwardOutcome::Error("body timeout".to_string()),
+    }
+}
+
+impl<B> Body for IdleTimeoutBody<B>
+where
+    B: Body<Data = Bytes>,
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
+    type Data = Bytes;
+    type Error = ProxyError;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        // SAFETY: `inner` (Incoming), `timeout`, `log_target`, and
+        // `failed` are never moved through this projection. The only
+        // `!Unpin` field, `Sleep`, is already heap-pinned in
+        // `Pin<Box<Sleep>>` so we can poll it through a mutable
+        // borrow on the Box without violating the pin contract.
+        let this = unsafe { self.get_unchecked_mut() };
+
+        if this.failed {
+            // Already errored once; do not poll further (avoids
+            // emitting multiple error frames or polling a hyper body
+            // after it surfaced an error).
+            return Poll::Ready(None);
+        }
+
+        if this.timer.as_mut().poll(cx).is_ready() {
+            log::debug!(
+                "grpc: response body idle for {:?} on {} — terminating stream",
+                this.timeout,
+                this.log_target
+            );
+            this.failed = true;
+            return Poll::Ready(Some(Err(format!(
+                "upstream body idle for {:?}",
+                this.timeout
+            )
+            .into())));
+        }
+
+        // SAFETY: `inner` is structurally pinned via this projection
+        // and never moved out of `self`.
+        let inner_pin = unsafe { Pin::new_unchecked(&mut this.inner) };
+        match inner_pin.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                // Reset the idle timer on each frame received.
+                let new_deadline = Instant::now() + this.timeout;
+                this.timer.as_mut().reset(new_deadline);
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Ready(Some(Err(e))) => {
+                log::debug!(
+                    "grpc: response body error on {}: {}",
+                    this.log_target,
+                    e
+                );
+                this.failed = true;
+                Poll::Ready(Some(Err(Box::new(e))))
+            }
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.failed || self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.inner.size_hint()
     }
 }
 
@@ -471,5 +625,187 @@ mod tests {
     fn builds_upstream_uri_rejects_no_authority() {
         // bare path has no authority -> error
         assert!(build_upstream_uri("/just/a/path", "/x").is_err());
+    }
+
+    // ----- IdleTimeoutBody tests -----
+    //
+    // The wrapper is generic over its inner body so we can plug in a
+    // controlled test body without needing a real hyper Incoming.
+
+    use futures::stream;
+    use http_body_util::StreamBody;
+    use std::convert::Infallible;
+
+    /// Build a test body that emits `n` empty DATA frames, each
+    /// `delay` apart. After the n-th frame the body ends (poll_frame
+    /// → Ready(None)). The body type is `StreamBody` over a
+    /// `futures::Stream` so it has a stable type that satisfies
+    /// `Body<Data = Bytes>` with `Error = Infallible`.
+    fn pulsing_body(
+        n: usize,
+        delay: Duration,
+    ) -> StreamBody<impl futures::Stream<Item = Result<Frame<Bytes>, Infallible>>> {
+        let s = stream::unfold(0usize, move |i| async move {
+            if i >= n {
+                None
+            } else {
+                tokio::time::sleep(delay).await;
+                Some((
+                    Ok::<_, Infallible>(Frame::data(Bytes::from_static(&[0u8, 0, 0, 0, 0]))),
+                    i + 1,
+                ))
+            }
+        });
+        StreamBody::new(s)
+    }
+
+    /// Drain a body to completion (or its first error) and return
+    /// (frames_received, terminating_error_if_any).
+    async fn drain_body<B>(body: B) -> (usize, Option<String>)
+    where
+        B: Body<Data = Bytes>,
+        B::Error: std::fmt::Display,
+    {
+        let mut pinned = Box::pin(body);
+        let mut count = 0usize;
+        loop {
+            match pinned.as_mut().frame().await {
+                Some(Ok(_frame)) => count += 1,
+                Some(Err(e)) => return (count, Some(e.to_string())),
+                None => return (count, None),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn idle_timeout_fires_when_inter_frame_gap_exceeds_budget() {
+        // Inner emits 2 frames with a 300ms gap; idle timeout 100ms.
+        // The idle timer MUST fire before the first frame arrives,
+        // terminating the body with an error. We allow up to 1 frame
+        // through in case the runtime polls the inner future before
+        // the timer (depends on tokio's queue order).
+        let inner = pulsing_body(2, Duration::from_millis(300));
+        let wrapper = IdleTimeoutBody::new(
+            inner,
+            Duration::from_millis(100),
+            "test-target".to_string(),
+        );
+        let (frames, err) = drain_body(wrapper).await;
+        assert!(
+            err.is_some(),
+            "expected idle-timeout error, got frames={} err=None",
+            frames
+        );
+        let msg = err.unwrap();
+        assert!(
+            msg.contains("idle"),
+            "error message should mention 'idle', got: {}",
+            msg
+        );
+        assert!(
+            frames <= 1,
+            "expected at most 1 frame before timeout, got {}",
+            frames
+        );
+    }
+
+    #[tokio::test]
+    async fn idle_timer_resets_on_each_frame() {
+        // Inner emits 5 frames at a 50ms cadence; idle timeout 300ms.
+        // Each frame should reset the timer, so all 5 must pass
+        // through without error. This is the legitimate-streaming
+        // case the timeout is calibrated NOT to interfere with.
+        let inner = pulsing_body(5, Duration::from_millis(50));
+        let wrapper = IdleTimeoutBody::new(
+            inner,
+            Duration::from_millis(300),
+            "test-target".to_string(),
+        );
+        let (frames, err) = drain_body(wrapper).await;
+        assert_eq!(
+            frames, 5,
+            "all 5 frames must pass through (timer resets per frame); err={:?}",
+            err
+        );
+        assert!(
+            err.is_none(),
+            "legitimate streaming must not produce an error; got: {:?}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn body_completing_cleanly_is_not_misclassified_as_timeout() {
+        // Inner emits 2 frames quickly then ends. Idle timeout
+        // generous (300ms). Wrapper must return frames + clean end,
+        // never producing a spurious timeout error.
+        let inner = pulsing_body(2, Duration::from_millis(20));
+        let wrapper = IdleTimeoutBody::new(
+            inner,
+            Duration::from_millis(300),
+            "test-target".to_string(),
+        );
+        let (frames, err) = drain_body(wrapper).await;
+        assert_eq!(frames, 2, "both frames must pass through");
+        assert!(
+            err.is_none(),
+            "clean stream end must not be mis-reported as timeout: {:?}",
+            err
+        );
+    }
+
+    /// Build a test body that emits one DATA frame then a TRAILERS
+    /// frame carrying `grpc-status: 0`. Used to verify that the
+    /// wrapper preserves HTTP/2 TRAILERS (where gRPC delivers its
+    /// status code). Without this test, a regression that strips
+    /// trailers (e.g. re-introducing a `body.collect()` style
+    /// buffering layer that ignores trailer frames) would not be
+    /// caught — tonic clients hang on `recv()` waiting for a
+    /// terminating status that never arrives.
+    fn body_with_trailers(
+    ) -> StreamBody<impl futures::Stream<Item = Result<Frame<Bytes>, Infallible>>> {
+        use http::HeaderMap;
+        let frames: Vec<Result<Frame<Bytes>, Infallible>> = {
+            let mut trailers = HeaderMap::new();
+            trailers.insert("grpc-status", "0".parse().unwrap());
+            vec![
+                Ok(Frame::data(Bytes::from_static(&[0u8, 0, 0, 0, 0]))),
+                Ok(Frame::trailers(trailers)),
+            ]
+        };
+        StreamBody::new(stream::iter(frames))
+    }
+
+    #[tokio::test]
+    async fn trailers_are_forwarded_verbatim_through_the_wrapper() {
+        // The wrapper must pass HTTP/2 TRAILERS frames through
+        // verbatim — gRPC delivers `grpc-status` in trailers, so a
+        // proxy that drops trailer frames leaves real clients
+        // hanging on recv().
+        let wrapper = IdleTimeoutBody::new(
+            body_with_trailers(),
+            Duration::from_secs(5),
+            "test-target".to_string(),
+        );
+        let mut pinned = Box::pin(wrapper);
+        let mut data_frames = 0usize;
+        let mut grpc_status: Option<String> = None;
+        while let Some(frame_result) = pinned.as_mut().frame().await {
+            let frame = frame_result.expect("frame should not error");
+            if frame.is_data() {
+                data_frames += 1;
+            } else if frame.is_trailers() {
+                let trailers = frame.into_trailers().ok().expect("trailers");
+                if let Some(v) = trailers.get("grpc-status") {
+                    grpc_status = Some(v.to_str().unwrap().to_string());
+                }
+            }
+        }
+        assert_eq!(data_frames, 1, "DATA frame must pass through");
+        assert_eq!(
+            grpc_status.as_deref(),
+            Some("0"),
+            "TRAILERS frame with grpc-status must pass through"
+        );
     }
 }
