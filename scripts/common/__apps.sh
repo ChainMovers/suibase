@@ -1063,23 +1063,24 @@ sb_app_set_local_vars() {
       # Source version ahead of installed binary — typical right after
       # "~/suibase/update" pulls a new release.
       #
-      # On main: trigger a re-install pass so sb_app_install picks up a
-      # newer precompiled from sui-binaries (if published). The pass is a
-      # no-op when the precompiled hasn't caught up yet (see local_src
-      # gate inside sb_app_install).
-      #
-      # On non-main: source typically leads released precompiled, by
-      # design. Stay on the released binary; developers who want the
-      # source build can run ~/suibase/scripts/dev/update-daemon.
+      # Either branch: trigger a re-install pass. `sb_app_install` then
+      # decides:
+      #   * main → check sui-binaries for a matching precompiled and
+      #     download it. No-op when the precompiled hasn't caught up.
+      #   * non-main → build from source. Released precompiled lags the
+      #     dev source by design (sui-binaries publishes on main only),
+      #     so the only correct artifact for a dev/feature branch is
+      #     the source build. Routing detail lives inside
+      #     sb_app_install; see the corresponding block there.
       if [ "$_ALL_INSTALLED" = "true" ] && [ -n "$_LOCAL_SRC_VERSION" ] && [ -n "$_LOCAL_BIN_version" ] && [ "$_SRC_TYPE" = "suibase" ]; then
         local _LOCAL_BRANCH
         _LOCAL_BRANCH=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD)
         if version_less_than "$_LOCAL_BIN_version" "$_LOCAL_SRC_VERSION"; then
+          _ALL_INSTALLED="false"
           if [ "$_LOCAL_BRANCH" = "main" ]; then
-            _ALL_INSTALLED="false"
             echo "$_ASSETS_NAME source is at $_LOCAL_SRC_VERSION but installed binary is $_LOCAL_BIN_version; checking sui-binaries for a matching release"
           else
-            echo "$_ASSETS_NAME source ($_LOCAL_SRC_VERSION) is ahead of installed binary ($_LOCAL_BIN_version); staying on $_LOCAL_BIN_version (run ~/suibase/scripts/dev/update-daemon to build from source)"
+            echo "$_ASSETS_NAME source ($_LOCAL_SRC_VERSION) is ahead of installed binary ($_LOCAL_BIN_version) on branch $_LOCAL_BRANCH; rebuilding from source"
           fi
         fi
       fi
@@ -1278,6 +1279,26 @@ sb_app_install() {
   get_app_var "$self" "assets_name"
   local _ASSETS_NAME=$APP_VAR
 
+  # suibase-daemon does NOT support macOS on Intel (x86_64). Apple stopped
+  # selling Intel Macs in 2023 and macOS 15 (Sequoia, 2024) onward is
+  # arm64-only. The Intel-macOS slot represented a small fraction of the
+  # Sui-developer user base, and keeping it added ~10 min of queue time
+  # to every release build via the slow GitHub Intel-macOS runner pool.
+  #
+  # Fail fast here — both for the precompiled-download path AND for the
+  # source-build path — so the user gets one consistent message instead
+  # of two different ways to discover the same fact. The gate is
+  # suibase-daemon-specific; Mysten Labs assets (sui, walrus, ...) have
+  # their own policies for x86_64-macos and are not affected.
+  if [ "$_ASSETS_NAME" = "suibase-daemon" ]; then
+    local _UNAME_S _UNAME_M
+    _UNAME_S=$(uname -s 2>/dev/null)
+    _UNAME_M=$(uname -m 2>/dev/null)
+    if [ "$_UNAME_S" = "Darwin" ] && [ "$_UNAME_M" = "x86_64" ]; then
+      setup_error "macOS for x86_64 not supported. suibase-daemon requires macOS on Apple Silicon (arm64) or Linux. (Apple stopped selling Intel Macs in 2023.)"
+    fi
+  fi
+
   # First check if precompiled binaries is allowed to be done.
   get_app_var "$self" "precompiled_bin"
   local _PRECOMP_ALLOWED=$APP_VAR
@@ -1285,6 +1306,30 @@ sb_app_install() {
     _PRECOMP_ALLOWED=${CFG_precompiled_bin:?}
   fi
 
+  # Non-main branches force a source build for suibase-managed assets.
+  # The chainmovers/sui-binaries precompiled artifacts are published
+  # only on main releases, so the precompiled lags the dev source by
+  # design. Routing non-main + src_type=suibase through the source
+  # build path is the ONLY way the binary in CI / on a dev checkout
+  # reflects the branch's code; any other choice gives the misleading
+  # "staying on <stale>" message that left CI silently testing the
+  # old daemon (and surfacing as inscrutable client-side errors when
+  # a newer sui client talked to an older proxy).
+  #
+  # Mysten Labs assets (sui, walrus, site-builder) have src_type != "suibase"
+  # so this branch is a no-op for them.
+  if [ "$_PRECOMP_ALLOWED" = "true" ]; then
+    get_app_var "$self" "src_type"
+    local _SRC_TYPE_FOR_PRECOMP=$APP_VAR
+    if [ "$_SRC_TYPE_FOR_PRECOMP" = "suibase" ]; then
+      local _LOCAL_BRANCH_FOR_PRECOMP
+      _LOCAL_BRANCH_FOR_PRECOMP=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+      if [ -n "$_LOCAL_BRANCH_FOR_PRECOMP" ] && [ "$_LOCAL_BRANCH_FOR_PRECOMP" != "main" ]; then
+        echo "$_ASSETS_NAME: building from source (non-main branch: $_LOCAL_BRANCH_FOR_PRECOMP — precompiled is published on main only)"
+        _PRECOMP_ALLOWED="false"
+      fi
+    fi
+  fi
 
   if [ "$_PRECOMP_ALLOWED" = "true" ]; then
     # Attempt a precompiled installation.

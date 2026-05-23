@@ -18,4 +18,11 @@ exit_if_deps_missing
 
 cli_mutex_lock "suibase_daemon"
 
-start_suibase_daemon
+# Bootstrap the binary if missing — `start_suibase_daemon_as_needed`
+# routes through `sb_app_install` which downloads the precompiled from
+# chainmovers/sui-binaries (gated against leapfrogging the local source
+# version). When the binary is already present, the function is a thin
+# no-op then defers to `start_suibase_daemon` exactly like before, so
+# this preserves behavior for developers who manage their own binary.
+# Force-build is still available via `dev/update-daemon`.
+start_suibase_daemon_as_needed

@@ -1,12 +1,34 @@
 #!/bin/bash
 
-# Merge dev into main branch
+# Merge `dev` into `pre-staging` — the entry point of the release pipeline.
 #
-# Exit immediately if a command exits with a non-zero status
+#   dev ──(this script)──► pre-staging ──cron→ staging → main
+#
+# This is the DX command that turns work on `dev` into a release.
+# Everything past `pre-staging` is automated:
+#
+#   * pre-staging.yml — pushes Cargo.toml to chainmovers/sui-binaries if
+#     a matching daemon release tag doesn't already exist; no tests.
+#   * staging-promote.yml (cron) — opens auto-merge PR pre-staging →
+#     staging once the binary tag is published.
+#   * staging.yml — validates precompiled, then auto-PRs to main.
+#
+# So the only manual step in normal operation is running this script.
+#
+# The fastidious merge-hook from the previous (single-branch-to-main)
+# model is intentionally NOT invoked here. The pipeline now enforces
+# the binary-vs-source version match via the staging.yml validation
+# stage; the merge-hook's role of "do not merge without a published
+# precompiled" is now performed by staging-promote.yml's cron-poll
+# (which only promotes when the tag exists). Re-invoking the hook
+# here would block every pre-staging merge whose Cargo.toml version
+# is ahead of sui-binaries — which is the EXPECTED state.
+#
+# Exit immediately if a command exits with a non-zero status.
+
 set -e
 
-
-# Switch to dev branch if not already on it
+# Switch to dev branch if not already on it.
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$current_branch" != "dev" ]; then
   echo "Switching to dev branch"
@@ -26,51 +48,35 @@ if [ "$(git rev-parse dev)" != "$(git rev-parse origin/dev)" ]; then
   exit 1
 fi
 
-# Call sync to verify that dev is up-to-date with main.
-# This is to avoid conflicts when merging dev into main.
-
+# Call sync to verify dev is current with main/pre-staging/staging.
+# Catches any back-merges (which should be rare under the pipeline
+# model but are possible in emergencies).
 # shellcheck source=./sync
 source "$HOME/suibase/scripts/dev/sync"
 
-# Run merge hook, exit if status code is not 0.
-if ! "$HOME/suibase/scripts/dev/merge-hook"; then
-  exit 1
-fi
+# Switch to pre-staging.
+echo "Switching to pre-staging branch"
+git fetch origin pre-staging
+git checkout pre-staging
+git pull --ff-only origin pre-staging
 
-# Switch to main branch
-echo "Switching to main branch"
-git checkout main
+# Find the common ancestor of dev and pre-staging.
+merge_base=$(git merge-base dev pre-staging)
 
-# Make sure locally you have the latest about remote main.
-git fetch origin main
-
-# Proceed to merge dev into main. Detect if there are conflicts, if yes
-# give instruction to resolve them.
-
-# Find the common ancestor of dev and main
-merge_base=$(git merge-base dev main)
-
-# Check if there are any changes from dev that are not in main
+# Check if there are any changes from dev that are not in pre-staging.
 if git diff --quiet "$merge_base" dev; then
-  echo "No changes to merge from dev to main."
+  echo "No changes to merge from dev to pre-staging."
 else
-  # Perform the actual merge
+  # Fast-forward only — pre-staging is downstream of dev, never ahead.
   if git merge --ff-only dev; then
-    echo "Merged dev into main."
-
-    # Rebase dev to keep on same last commit (that merge that was just done).
+    echo "Merged dev into pre-staging."
+    git push origin pre-staging
+    # Stay on dev for the next iteration.
     git checkout dev
-    git rebase main
-    git push origin dev
-    git push origin main
   else
-    echo "Merge failed due to conflicts."
-    echo "To resolve the conflicts, follow these steps:"
-    echo "1. Identify conflicted files using 'git status'."
-    echo "2. Resolve manually by editing conflicted files."
-    echo "3. Mark conflicts as resolved using 'git add <file>'."
-    echo "4. Complete merge with 'git commit' and 'push'."
+    echo "Fast-forward merge failed. pre-staging has diverged from dev,"
+    echo "which should not happen under the release pipeline. Run"
+    echo "'~/suibase/scripts/dev/sync' to reconcile."
     exit 1
   fi
 fi
-

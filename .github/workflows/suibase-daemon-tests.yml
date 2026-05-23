@@ -20,15 +20,6 @@ jobs:
         uses: "./.github/actions/diffs"
         id: diff
 
-      - name: Upload Trigger Artifact
-        if: ${{ steps.diff.outputs.isSuibaseDaemon == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: Cargo.toml
-          path: ./rust/suibase/Cargo.toml
-          if-no-files-found: error
-          retention-days: 1
-
   test:
     name: Test ${{ matrix.os }}
     needs: diff
@@ -146,27 +137,7 @@ jobs:
             fi
           fi
 
-  trig:
-    needs: test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Create directory for artifact
-        run: mkdir -p ./rust/suibase
-
-      - name: Download Trigger Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Cargo.toml
-          path: ./rust/suibase
-
-      - name: Push Cargo.toml to trigger other repos
-        uses: dmnemec/copy_file_to_another_repo_action@main
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.SUI_BINARIES_TOKEN }}
-        with:
-          source_file: "rust/suibase/Cargo.toml"
-          destination_repo: "chainmovers/sui-binaries"
-          destination_folder: "triggers/suibase-daemon"
-          user_email: "4542410+mario4tier@users.noreply.github.com"
-          user_name: "Mario Fortier"
+# Note: the "push Cargo.toml to chainmovers/sui-binaries" step that used to
+# live here moved to .github/workflows/pre-staging.yml. It now fires only
+# when a commit reaches the `pre-staging` branch (the release-pipeline
+# gate), not on every `dev` push. See CONTRIBUTING.md for the full flow.

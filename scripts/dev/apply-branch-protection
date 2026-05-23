@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# One-time setup: apply branch protection rules on main / staging / pre-staging
+# to enforce the release pipeline. Idempotent — safe to re-run.
+#
+# Pre-requisites:
+#   * The branches pre-staging and staging must already exist on origin.
+#   * The "PR Gate / enforce-pipeline-order" check must have run at least
+#     once (so GitHub recognises it as a registered status check). The
+#     first time you run this script on a fresh repo, you may need to
+#     open a PR (any PR — even a no-op) to seed the check name. After
+#     that this script is one-shot.
+#
+# Usage:
+#   ~/suibase/scripts/dev/apply-branch-protection
+#
+# Requires `gh` authenticated as a user with admin on the repo.
+
+set -e
+
+REPO="ChainMovers/suibase"
+CHECK_NAME="enforce-pipeline-order"
+
+apply_protection() {
+  local branch="$1"
+  echo "Configuring protection on $branch..."
+  # GitHub's branch protection API. Key bits:
+  #   * required_status_checks.strict=false (PR doesn't need to be
+  #     rebased on latest target — we allow stale-but-passing checks
+  #     to merge; this lets auto-merge work cleanly).
+  #   * required_status_checks.contexts includes our PR-gate.
+  #   * required_pull_request_reviews=null (no human review required —
+  #     the pipeline itself is the gate).
+  #   * restrictions=null (no per-user/team push restriction beyond
+  #     the PR rule).
+  #   * allow_force_pushes=false / allow_deletions=false (safety).
+  #   * required_linear_history=false (staging-promote opens merge
+  #     commits; don't break it).
+  gh api -X PUT "repos/$REPO/branches/$branch/protection" \
+    -H "Accept: application/vnd.github+json" \
+    -f required_status_checks[strict]=false \
+    -f "required_status_checks[contexts][]=$CHECK_NAME" \
+    -f enforce_admins=false \
+    -f required_pull_request_reviews=null \
+    -f restrictions=null \
+    -f allow_force_pushes=false \
+    -f allow_deletions=false \
+    -f required_linear_history=false \
+    -f allow_fork_syncing=false \
+    >/dev/null
+
+  echo "  ✓ $branch protected (PR Gate required, no human review, no force-push, no delete)"
+}
+
+for b in main staging pre-staging; do
+  apply_protection "$b"
+done
+
+echo
+echo "Done. Verify with:"
+echo "  gh api repos/$REPO/branches/main/protection | jq ."
+echo
+echo "Note: 'dev' is intentionally NOT protected — direct push is OK there"
+echo "since it is the work branch (no automation depends on dev's tip"
+echo "being via PR)."

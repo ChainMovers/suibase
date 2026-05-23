@@ -1,0 +1,202 @@
+name: Staging Tests
+
+# Stage 2 of the release pipeline:
+#
+#   dev → pre-staging → staging ──(this workflow)──► main
+#
+# By the time a commit reaches `staging`, `chainmovers/sui-binaries`
+# has already published a matching `suibase-daemon-v<version>` release
+# (the staging-promote.yml cron only opens a PR pre-staging → staging
+# when that precondition holds). So this workflow does the same
+# validation the post-merge release-tests does — version-match
+# assertion against the actual precompiled, then a sanity test —
+# but BEFORE main is touched.
+#
+# On green, auto-open and auto-merge a PR `staging → main` so the
+# whole chain is hands-off.
+#
+# Failures here ARE real bugs (the precompiled is broken, or
+# scripts/tests can't handle the published binary). Unlike pre-staging,
+# this branch produces meaningful alarms.
+
+on:
+  push:
+    branches: ["staging"]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v4
+
+      - name: Sui Prerequesites (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install curl
+
+      - name: Sui Prerequesites (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if ! command -v curl &>/dev/null; then
+            brew install curl
+          fi
+
+      - name: Prepare environment
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
+
+      - name: Install suibase + bootstrap daemon precompiled
+        # `install` only creates symlinks; `dev/start-daemon` now
+        # routes through `start_suibase_daemon_as_needed` which calls
+        # `sb_app_install` — and `sb_app_install` on the `staging`
+        # branch (NOT main) routes... wait — the central fix forces
+        # source build on every non-main branch. So on staging we'd
+        # also build from source. That's NOT what we want here: the
+        # whole point of staging is to test the PRECOMPILED. We need
+        # the staging branch to be treated like `main` for install
+        # purposes (use precompiled, not source).
+        #
+        # Solution: set CFG_precompiled_bin=true and a staging-specific
+        # env var to override the branch check in sb_app_install. Or
+        # do the install with a checked-out `main`-like state.
+        #
+        # Simpler implementation: directly download the published
+        # precompiled artifact from chainmovers/sui-binaries here,
+        # bypassing sb_app_install's branch-aware routing. This is
+        # exactly what `main`'s install flow does in production for
+        # end users, so it's the most faithful pre-main validation.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          "$HOME/suibase/install"
+
+          # Read the daemon version this staging commit expects.
+          # awk for portability — the previous `sed ... \+` regex is GNU-only;
+          # BSD sed on macOS-latest leaves the line unchanged.
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
+          tag="suibase-daemon-v${version}"
+          echo "Expecting sui-binaries release tag: $tag"
+
+          # Locate the platform-appropriate asset on that release. Note the
+          # platform tokens come from the sui-binaries build matrix and are
+          # "ubuntu" / "macos" (NOT what `uname -s` returns — `uname -s` is
+          # Linux/Darwin).
+          if [ "$(uname -s)" = "Darwin" ]; then
+            asset_glob="*macos*"
+          else
+            asset_glob="*ubuntu*"
+          fi
+
+          # Download the matching asset.
+          tmpdir=$(mktemp -d)
+          gh release download "$tag" \
+            --repo chainmovers/sui-binaries \
+            --pattern "$asset_glob" \
+            --dir "$tmpdir" || {
+              echo "::error::Could not download $tag asset (pattern $asset_glob) for $(uname -s) from chainmovers/sui-binaries."
+              echo "::error::staging-promote.yml is supposed to ensure the tag exists before opening a PR here. Investigate the publish."
+              exit 1
+            }
+
+          # Extract the daemon binary and install it where sb_app_* expects.
+          mkdir -p "$HOME/suibase/workdirs/common/bin"
+          # Locate the .tgz that came down and extract suibase-daemon
+          for f in "$tmpdir"/*.tgz "$tmpdir"/*.tar.gz; do
+            [ -f "$f" ] || continue
+            tar -xzf "$f" -C "$tmpdir"
+          done
+          # Find the binary in the extracted tree
+          bin_path=$(find "$tmpdir" -type f -name suibase-daemon -perm -u+x | head -1)
+          if [ -z "$bin_path" ]; then
+            echo "::error::suibase-daemon binary not found in extracted asset"
+            ls -lR "$tmpdir"
+            exit 1
+          fi
+          cp "$bin_path" "$HOME/suibase/workdirs/common/bin/suibase-daemon"
+          chmod +x "$HOME/suibase/workdirs/common/bin/suibase-daemon"
+
+          # Write the version yaml the suibase scripts expect alongside the binary.
+          printf "version: %s\nname: suibase-daemon\n" "$version" \
+            > "$HOME/suibase/workdirs/common/bin/suibase-daemon-version.yaml"
+
+          # Sanity start the daemon.
+          "$HOME/suibase/scripts/dev/start-daemon"
+
+      - name: Verify precompiled version matches staging's source
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          src_version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
+          bin_version=$("$HOME/suibase/workdirs/common/bin/suibase-daemon" --version 2>/dev/null \
+            | awk '{print $2}')
+          echo "staging source version:    $src_version"
+          echo "installed binary version: $bin_version"
+          if [ "$src_version" != "$bin_version" ]; then
+            echo "::error::staging is at $src_version but the precompiled we just downloaded is $bin_version. Pipeline invariant violated — staging-promote.yml opened the PR too early or the release artifact is malformed."
+            exit 1
+          fi
+          echo "Version match confirmed: $src_version"
+
+      - name: Run release sanity tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          "$HOME/suibase/scripts/tests/run-all.sh" --release-tests
+
+  open-main-pr:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: success() && github.event_name == 'push'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - name: Open auto-merge PR staging → main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Skip if staging is already at main (nothing to promote).
+          main_sha=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          staging_sha=$(git rev-parse HEAD)
+          if [ "$main_sha" = "$staging_sha" ]; then
+            echo "::notice::main is already at staging's commit — no promotion needed."
+            exit 0
+          fi
+
+          existing=$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open staging → main; enabling auto-merge."
+            gh pr merge "$existing" --auto --merge || true
+            exit 0
+          fi
+
+          # Read daemon version for the PR title.
+          # awk for portability — the previous `sed ... \+` regex is GNU-only;
+          # BSD sed on macOS-latest leaves the line unchanged.
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
+
+          gh pr create \
+            --base main \
+            --head staging \
+            --title "Promote staging to main (suibase-daemon v${version})" \
+            --body "Auto-opened by \`staging.yml\` after the staging validation passed against the published \`suibase-daemon-v${version}\` precompiled. Will auto-merge once required checks pass."
+
+          number=$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')
+          gh pr merge "$number" --auto --merge
+          echo "::notice::Opened auto-merge PR #$number staging → main."
