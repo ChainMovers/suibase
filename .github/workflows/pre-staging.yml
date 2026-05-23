@@ -40,8 +40,10 @@ jobs:
       - name: Read daemon version from Cargo.toml
         id: ver
         run: |
-          version=$(grep "^version" rust/suibase/Cargo.toml \
-            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          # awk for portability — the GNU sed `\+` regex used previously
+          # is not supported by BSD sed and silently no-ops on macOS.
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' \
+            rust/suibase/Cargo.toml)
           if [ -z "$version" ]; then
             echo "::error::Could not parse daemon version from rust/suibase/Cargo.toml"
             exit 1
