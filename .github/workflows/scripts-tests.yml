@@ -85,6 +85,20 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
+      - name: Suibase install (symlinks + cargobin)
+        run: |
+          "$HOME/suibase/install"
+
+      - name: Build suibase-daemon from source (non-main branches)
+        # See rust-tests.yml / typescript-tests.yml for the full rationale.
+        # Short version: on non-main, the released precompiled binary lags
+        # the source, so any test that exercises a newer daemon feature
+        # would silently run against the stale binary. Build from source
+        # to validate the branch's own code.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          "$HOME/suibase/scripts/dev/update-daemon"
+
       - name: Run suibase CLI sanity tests only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

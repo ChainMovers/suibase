@@ -117,6 +117,29 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
 
+      - name: Suibase install (symlinks + cargobin)
+        run: |
+          "$HOME/suibase/install"
+
+      - name: Build suibase-daemon from source (non-main branches)
+        # The installer keeps the latest released precompiled binary except
+        # on main, where source > released triggers an upgrade. That gating
+        # is correct for end users but the wrong default for CI on dev
+        # branches: the released binary lags the dev source, so daemon
+        # features the test exercises (e.g. newer sui-client gRPC quirks
+        # like compression-flag handling) are missing in CI and surface
+        # as inscrutable client-side errors.
+        #
+        # On non-main branches we force a source build so CI validates the
+        # branch's own code. On main we let the installer keep the released
+        # binary so the release workflows double as a smoke test that
+        # downloading the published precompiled artifact still works.
+        #
+        # Mirrors the same step in typescript-tests.yml (commit 573c1186).
+        if: github.ref != 'refs/heads/main'
+        run: |
+          "$HOME/suibase/scripts/dev/update-daemon"
+
       - name: Run rust demo/api tests only
         env:
           CI_WORKDIR: ${{ matrix.ci_workdir }}
