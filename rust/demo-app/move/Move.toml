@@ -3,10 +3,15 @@ name = "demo"
 version = "0.0.1"
 edition = "2024.beta"
 
-[dependencies]
-Sui = { local = "../../../../suibase/workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
-#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
-Log = { local = "../../../../suibase/move/@suibase/log" }
+# Localnet env entry. The publish flow may activate the `localnet_proxy`
+# env; sui-package-alt falls back to chain-id matching when the active
+# env name is not present here, so this single entry handles both the
+# direct `localnet` env and the proxy-routed `localnet_proxy` env by
+# virtue of sharing the same chain ID (localnet genesis is deterministic
+# in suibase). `testnet` and `mainnet` are sui system envs and cannot
+# be defined here — sui-package-alt provides them implicitly.
+[environments]
+localnet = "756b253e"
 
-[addresses]
-demo =  "0x0"
+[dependencies]
+log = { local = "../../../../suibase/move/@suibase/log" }

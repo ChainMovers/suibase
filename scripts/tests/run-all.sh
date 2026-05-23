@@ -83,6 +83,7 @@ main() {
     --scripts-tests|\
     --suibase-daemon-tests|\
     --rust-tests|\
+    --typescript-tests|\
     --release-tests|\
     --main-merge-check|\
     --dev-push-check|\

@@ -227,28 +227,45 @@ test_active_lock_protection() {
     ' &
     
     local bg_pid=$!
-    sleep 0.5  # Let background process acquire lock
-    
+
+    # Poll for the lock to appear (up to 10s). A fixed `sleep 0.5` was used
+    # before but macOS GitHub-hosted runners are slow to spawn bash + source
+    # __globals.sh + acquire the mutex, causing CI flakes.
+    local _waited=0
+    while [ $_waited -lt 100 ] && [ ! -f "/tmp/.suibase/cli-mainnet.lock/holder.info" ]; do
+        sleep 0.1
+        _waited=$((_waited + 1))
+    done
+
     # Verify lock exists with background process PID
     if [ ! -f "/tmp/.suibase/cli-mainnet.lock/holder.info" ]; then
         kill $bg_pid 2>/dev/null || true
         wait $bg_pid 2>/dev/null || true
         fail "Background process didn't create lock"
     fi
-    
+
     local holder_pid
     holder_pid=$(grep "^pid=" "/tmp/.suibase/cli-mainnet.lock/holder.info" | cut -d= -f2)
-    
+
     # Test that stale detection correctly identifies this as NOT stale
     if _is_mutex_stale "/tmp/.suibase/cli-mainnet.lock"; then
         kill $bg_pid 2>/dev/null || true
         wait $bg_pid 2>/dev/null || true
         fail "Active lock incorrectly detected as stale"
     fi
-    
+
     # Wait for background process to finish
     wait $bg_pid
-    
+
+    # Poll for cleanup (up to 10s). The lock removal runs via the trap in
+    # cli_mutex_release; on slow runners the wait can return before the
+    # filesystem op completes (especially with macOS APFS).
+    _waited=0
+    while [ $_waited -lt 100 ] && [ -d "/tmp/.suibase/cli-mainnet.lock" ]; do
+        sleep 0.1
+        _waited=$((_waited + 1))
+    done
+
     # Now the lock should be gone
     if [ -d "/tmp/.suibase/cli-mainnet.lock" ]; then
         fail "Background process didn't clean up lock"

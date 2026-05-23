@@ -23,6 +23,9 @@ outputs:
   isVSCodeExtension:
     description: True when changes to Suibase VSCode extension
     value: "${{ steps.diff.outputs.isVSCodeExtension }}"
+  isTypeScriptHelper:
+    description: True when changes to the TypeScript helper
+    value: "${{ steps.diff.outputs.isTypeScriptHelper }}"
 
 runs:
   using: composite
@@ -61,3 +64,7 @@ runs:
             - '.github/workflows/trig-sui-binaries.yml'
           isVSCodeExtension::
             - 'typescript/vscode-extension/**'
+          isTypeScriptHelper:
+            - 'typescript/helper/**'
+            - 'scripts/tests/040_typescript_tests/**'
+            - '.github/workflows/typescript-tests.yml'

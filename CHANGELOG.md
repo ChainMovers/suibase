@@ -8,7 +8,15 @@ Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.11] TBD
+## [0.1.11] 2026-05-22  
+### Added
+
+- gRPC (HTTP/2) proxying in suibase-daemon. JSON-RPC is deprecated.
+
+### Fixed
+
+- `add_private_keys` in suibase.yaml now works with recent sui releases (>= 1.7x)
+  that require `SUI_CONFIG_DIR` to be set even for keystore-only operations.
 
 
 ## [0.1.10] 2025-09-04

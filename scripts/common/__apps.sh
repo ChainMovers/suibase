@@ -1060,22 +1060,26 @@ sb_app_set_local_vars() {
         fi
       fi
 
-      # Check if the source code is newer than the local binary (this can happen after "~/suibase/update").
+      # Source version ahead of installed binary — typical right after
+      # "~/suibase/update" pulls a new release.
       #
-      # Upgrade only if major.minor in source code is higher (ignore patch and build).
+      # On main: trigger a re-install pass so sb_app_install picks up a
+      # newer precompiled from sui-binaries (if published). The pass is a
+      # no-op when the precompiled hasn't caught up yet (see local_src
+      # gate inside sb_app_install).
       #
-      # Only the main branch is considered for upgrade (because the precompiled binary for _LOCAL_SRC_VERSION need
-      # to exists).
+      # On non-main: source typically leads released precompiled, by
+      # design. Stay on the released binary; developers who want the
+      # source build can run ~/suibase/scripts/dev/update-daemon.
       if [ "$_ALL_INSTALLED" = "true" ] && [ -n "$_LOCAL_SRC_VERSION" ] && [ -n "$_LOCAL_BIN_version" ] && [ "$_SRC_TYPE" = "suibase" ]; then
-        # Get the branch name of the local repo.
         local _LOCAL_BRANCH
         _LOCAL_BRANCH=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD)
         if version_less_than "$_LOCAL_BIN_version" "$_LOCAL_SRC_VERSION"; then
           if [ "$_LOCAL_BRANCH" = "main" ]; then
             _ALL_INSTALLED="false"
-            echo "Upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION"
+            echo "$_ASSETS_NAME source is at $_LOCAL_SRC_VERSION but installed binary is $_LOCAL_BIN_version; checking sui-binaries for a matching release"
           else
-            echo "Not upgrading $_ASSETS_NAME from $_LOCAL_BIN_version to $_LOCAL_SRC_VERSION (not on main branch: $_LOCAL_BRANCH)"
+            echo "$_ASSETS_NAME source ($_LOCAL_SRC_VERSION) is ahead of installed binary ($_LOCAL_BIN_version); staying on $_LOCAL_BIN_version (run ~/suibase/scripts/dev/update-daemon to build from source)"
           fi
         fi
       fi
@@ -1298,14 +1302,41 @@ sb_app_install() {
     else
       get_app_var "$self" "is_installed"
       local _IS_INSTALLED=$APP_VAR
+      get_app_var "$self" "local_bin_version"
+      local _LOCAL_BIN_LATEST_VERSION=$APP_VAR
+      get_app_var "$self" "PRECOMP_REMOTE_VERSION"
+      local _PRECOMP_REMOTE_VERSION=$APP_VAR
+      get_app_var "$self" "local_src_version"
+      local _LOCAL_SRC_VERSION=$APP_VAR
+
+      # Cap the precompiled download at the user's local source version. This
+      # protects users on stale checkouts from auto-upgrading to a daemon
+      # binary that may be incompatible with their (older) scripts. The user
+      # gets a precise instruction (run ~/suibase/update) instead of a silent
+      # leapfrog.
+      #
+      # The gate is only meaningful when we know both versions; otherwise it
+      # is a no-op. For Mysten Labs assets (sui, walrus, ...) local_src_version
+      # is empty, so the historical behavior is preserved.
+      if [ -n "$_LOCAL_SRC_VERSION" ] && [ -n "$_PRECOMP_REMOTE_VERSION" ]; then
+        if version_less_than "$_LOCAL_SRC_VERSION" "$_PRECOMP_REMOTE_VERSION"; then
+          if [ "$_IS_INSTALLED" = "true" ]; then
+            warn_user "Skipping $_ASSETS_NAME upgrade to $_PRECOMP_REMOTE_VERSION: your suibase scripts are at $_LOCAL_SRC_VERSION. Keeping installed binary $_LOCAL_BIN_LATEST_VERSION. Run '~/suibase/update' to refresh scripts and binary together."
+            return
+          else
+            # No binary at all on a stale checkout: warn and let the install
+            # proceed against the remote (so the user is not left without a
+            # daemon). This is the lesser-evil branch — should be rare in
+            # practice, since fresh clones bring matching scripts.
+            warn_user "$_ASSETS_NAME $_PRECOMP_REMOTE_VERSION is newer than your suibase scripts ($_LOCAL_SRC_VERSION). Installing anyway because no local binary exists; run '~/suibase/update' soon to keep scripts and binary aligned."
+          fi
+        fi
+      fi
+
       local _DO_INSTALL="false"
       if [ "$_IS_INSTALLED" != "true" ]; then
         _DO_INSTALL="true"
       else
-        get_app_var "$self" "local_bin_version"
-        local _LOCAL_BIN_LATEST_VERSION=$APP_VAR
-        get_app_var "$self" "PRECOMP_REMOTE_VERSION"
-        local _PRECOMP_REMOTE_VERSION=$APP_VAR
         if [ -n "$_LOCAL_BIN_LATEST_VERSION" ] && [ -n "$_PRECOMP_REMOTE_VERSION" ]; then
           if version_less_than "$_LOCAL_BIN_LATEST_VERSION" "$_PRECOMP_REMOTE_VERSION"; then
             _DO_INSTALL="true"

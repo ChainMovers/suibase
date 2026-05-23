@@ -21,6 +21,9 @@ pub const REQUEST_FAILED_RESP_BUILDER: u8 = 4;
 pub const REQUEST_FAILED_NETWORK_DOWN: u8 = 5; // Not implemented yet.
 pub const REQUEST_FAILED_BAD_REQUEST_HTTP: u8 = 6; // Got HTTP Bad Request (400), Bad Method (405), etc.
 pub const REQUEST_FAILED_CONFIG_DISABLED: u8 = 7;
+// Reserved enum slot (used by a commented-out check in proxy_server.rs). Kept
+// to preserve the wire-protocol indexing of `req_failure_reasons`.
+#[allow(dead_code)]
 pub const REQUEST_FAILED_NOT_STARTED: u8 = 8;
 // Upstream answered, but it doesn't speak gRPC (e.g. JSON-RPC-only public
 // gateway returning HTML/JSON). Used by the gRPC forwarder to permanently

@@ -1,0 +1,121 @@
+name: TypeScript Tests
+# Tests for the suibase TypeScript helper (typescript/helper/).
+#
+# Mirrors rust-tests.yml at a smaller scale: this is opt-in for projects that
+# install the helper from a relative path, so we only test against localnet
+# (the workdir against which the 'demo' package is published).
+
+on:
+  push:
+    branches: ["dev"]
+
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isChanged: ${{ steps.diff.outputs.isScript == 'true' || steps.diff.outputs.isRust == 'true' || steps.diff.outputs.isTypeScriptHelper == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  test:
+    name: Test ${{ matrix.os }}
+    needs: diff
+    if: ${{ (needs.diff.outputs.isChanged == 'true') || (github.event_name == 'workflow_dispatch') }}
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        # The TS helper only has a localnet integration story (demo package),
+        # so unlike rust-tests we do not need a per-workdir matrix.
+
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false"
+          target: ${{ runner.os == 'Linux' && 'x86_64-unknown-linux-musl' || '' }}
+
+      - name: Rust caching (suibase-daemon + demo-app)
+        uses: Swatinem/rust-cache@v2
+        env:
+          RUST_ADD_CACHE_KEY_COMPONENT: ${{ matrix.os }}-typescript-helper
+        with:
+          workspaces: |
+            rust/suibase
+            rust/demo-app
+          cache-provider: github
+          cache-all-crates: false
+
+      - name: Install Rust musl target (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # Match suibase-daemon-tests.yml: musl is needed for the daemon build.
+          rust_channel=$(grep '^channel' "$GITHUB_WORKSPACE/rust/suibase/rust-toolchain.toml" | sed 's/channel = "\(.*\)"/\1/')
+          echo "Installing Rust $rust_channel toolchain with musl target"
+          rustup toolchain install "$rust_channel" --target x86_64-unknown-linux-musl --profile minimal
+
+      - name: Sui Prerequesites (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential musl musl-tools musl-dev
+
+      - name: Prepare environment
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
+
+      - name: Install suibase (creates ~/.local/bin symlinks)
+        run: |
+          "$HOME/suibase/install"
+
+      - name: Build suibase-daemon from source (non-main branches)
+        # The installer keeps the latest released precompiled binary except
+        # on the main branch, where source > released triggers an upgrade.
+        # That gating is correct for end users but the wrong default for
+        # CI on dev branches: the released binary lags the dev source, so
+        # any new daemon feature exercised by the test (e.g. proxying
+        # changes a newer sui client depends on) is missing in CI.
+        #
+        # On non-main branches we force a source build so CI validates the
+        # branch's own code. On main we let the installer keep the released
+        # binary so this workflow doubles as a smoke test that downloading
+        # the published precompiled artifact still works.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          "$HOME/suibase/scripts/dev/update-daemon"
+
+      - name: Run TypeScript helper tests
+        env:
+          CI_WORKDIR: localnet
+          CI_BRANCH: testnet
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash "$HOME/suibase/scripts/tests/040_typescript_tests/npm_test_suibase_helper.sh"

@@ -1,7 +1,12 @@
 [target.'cfg(all())']
-rustflags = ["--cfg", "uuid_unstable"]
+# `-D warnings` matches CI behavior: `actions-rust-lang/setup-rust-toolchain@v1`
+# sets RUSTFLAGS=-D warnings by default, so a warning that compiles fine
+# locally fails the macOS/Linux CI build. Setting it here makes local
+# builds (incl. `scripts/dev/update-daemon`) fail with the same strictness,
+# so dead-code / unused-import warnings get caught during development.
+rustflags = ["--cfg", "uuid_unstable", "-D", "warnings"]
 # Use the following if enabling tokio-console for instrumentation.
-# rustflags = ["--cfg", "uuid_unstable", "--cfg", "tokio_unstable" ]
+# rustflags = ["--cfg", "uuid_unstable", "--cfg", "tokio_unstable", "-D", "warnings"]
 
 [alias]
 test-poi = "test -p poi-server --features integration-tests"

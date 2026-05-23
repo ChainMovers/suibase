@@ -1,11 +1,15 @@
 [package]
-name = "Log"
+name = "log"
 version = "0.0.1"
-edition = "2024.alpha"
+edition = "2024.beta"
+
+# Modern Move 2024 derives the named-address from the package name
+# at compile time; modules in this package therefore reference
+# `log::<module>` matching `name` above. No [addresses] table is
+# permitted alongside [environments] (mutually exclusive — having
+# both flips the manifest parser into legacy mode and ignores
+# environments).
+[environments]
+localnet = "756b253e"
 
 [dependencies]
-Sui = { local = "../../../../suibase/workdirs/active/sui-repo/crates/sui-framework/packages/sui-framework" }
-#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
-
-[addresses]
-log =  "0x0"
