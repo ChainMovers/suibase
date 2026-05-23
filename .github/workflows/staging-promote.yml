@@ -1,0 +1,110 @@
+name: Staging Promote (pre-staging → staging)
+
+# Cron-poll for the pipeline.
+#
+#   dev → pre-staging ──(this workflow)──► staging → main
+#
+# Every 15 min, check whether `pre-staging` has a daemon version whose
+# matching release tag (`suibase-daemon-v<version>`) is published on
+# `chainmovers/sui-binaries`. If yes AND `pre-staging` is ahead of
+# `staging`, open an auto-merge PR `pre-staging → staging`.
+#
+# Promotions happen via auto-merge PR (not direct branch push) so:
+#   1. branch protection on `staging` stays strict (no bypass needed)
+#   2. there is an audit trail in the PR history
+#
+# "Waiting on the binary" is a normal operational state — the cron is
+# silent (exit 0) when the tag isn't published yet, no alarm.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 min
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout pre-staging
+        uses: actions/checkout@v4
+        with:
+          ref: pre-staging
+          fetch-depth: 0
+
+      - name: Read daemon version from pre-staging
+        id: ver
+        run: |
+          version=$(grep "^version" rust/suibase/Cargo.toml \
+            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          if [ -z "$version" ]; then
+            echo "::error::Could not parse daemon version from pre-staging's rust/suibase/Cargo.toml"
+            exit 1
+          fi
+          tag="suibase-daemon-v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag"         >> "$GITHUB_OUTPUT"
+
+      - name: Compare pre-staging vs staging heads
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pre_sha=$(git rev-parse origin/pre-staging)
+          staging_sha=$(git ls-remote origin refs/heads/staging | awk '{print $1}')
+          echo "pre-staging:  $pre_sha"
+          echo "staging:      $staging_sha"
+          if [ "$pre_sha" = "$staging_sha" ]; then
+            echo "ahead=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing to promote — pre-staging is at the same commit as staging."
+          else
+            # Is staging an ancestor of pre-staging? (i.e. pre-staging is strictly ahead)
+            if git merge-base --is-ancestor "$staging_sha" "$pre_sha"; then
+              echo "ahead=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::pre-staging is not strictly ahead of staging (history diverged). Aborting promotion."
+              echo "ahead=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Check if matching sui-binaries release is published
+        id: tag_check
+        if: steps.diff.outputs.ahead == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          gh release view "${{ steps.ver.outputs.tag }}" \
+            --repo chainmovers/sui-binaries >/dev/null 2>&1
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            echo "ready=true"  >> "$GITHUB_OUTPUT"
+            echo "::notice::sui-binaries has ${{ steps.ver.outputs.tag }} — promoting to staging."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Waiting on chainmovers/sui-binaries to publish ${{ steps.ver.outputs.tag }} — will retry on next cron tick."
+          fi
+
+      - name: Open auto-merge PR pre-staging → staging
+        if: steps.diff.outputs.ahead == 'true' && steps.tag_check.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Avoid duplicates if a previous cron tick already opened the PR.
+          existing=$(gh pr list --base staging --head pre-staging --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open pre-staging → staging; enabling auto-merge."
+            gh pr merge "$existing" --auto --merge || true
+            exit 0
+          fi
+          gh pr create \
+            --base staging \
+            --head pre-staging \
+            --title "Promote pre-staging to staging (${{ steps.ver.outputs.tag }})" \
+            --body "Auto-opened by \`staging-promote.yml\` once chainmovers/sui-binaries published \`${{ steps.ver.outputs.tag }}\`. Will auto-merge once required checks pass."
+          number=$(gh pr list --base staging --head pre-staging --state open --json number --jq '.[0].number')
+          gh pr merge "$number" --auto --merge
+          echo "::notice::Opened auto-merge PR #$number pre-staging → staging."

@@ -1,0 +1,94 @@
+name: Pre-Staging Trigger
+
+# Stage 1 of the release pipeline:
+#
+#   dev → pre-staging → staging → main
+#
+# `pre-staging` is the "we are committing to a release" branch. The only
+# job here is to make sure `chainmovers/sui-binaries` has a precompiled
+# binary that matches the suibase-daemon version recorded in this
+# branch's `rust/suibase/Cargo.toml`. If a matching release tag already
+# exists, this workflow is a no-op. If it doesn't, we push the
+# `Cargo.toml` over to `chainmovers/sui-binaries/triggers/suibase-daemon/`
+# — that path is wired to fire the daemon-binary build on that repo.
+#
+# This workflow runs NO tests. By design. Tests belong on `dev` (which
+# builds the daemon from source and validates the branch's own code)
+# and on `staging` (which validates against the just-published
+# precompiled). Adding tests here would create alarm fatigue because
+# "waiting on sui-binaries" is a normal state in this branch — it is
+# NOT a bug signal.
+#
+# Promotion from pre-staging to staging is handled by the cron poll in
+# staging-promote.yml, which fires every 15 min and opens an auto-merge
+# PR once the precompiled tag exists on sui-binaries.
+
+on:
+  push:
+    branches: ["pre-staging"]
+  workflow_dispatch:
+
+jobs:
+  trigger-binary-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read daemon version from Cargo.toml
+        id: ver
+        run: |
+          version=$(grep "^version" rust/suibase/Cargo.toml \
+            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          if [ -z "$version" ]; then
+            echo "::error::Could not parse daemon version from rust/suibase/Cargo.toml"
+            exit 1
+          fi
+          tag="suibase-daemon-v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag"         >> "$GITHUB_OUTPUT"
+          echo "pre-staging is at suibase-daemon v$version (expected sui-binaries tag: $tag)"
+
+      - name: Check if matching sui-binaries release tag already exists
+        id: tag_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          gh release view "${{ steps.ver.outputs.tag }}" \
+            --repo chainmovers/sui-binaries >/dev/null 2>&1
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            echo "exists=true"  >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.ver.outputs.tag }} already published on chainmovers/sui-binaries — nothing to trigger."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.ver.outputs.tag }} NOT yet published — will push trigger."
+          fi
+
+      - name: Push Cargo.toml to sui-binaries trigger path
+        # `dmnemec/copy_file_to_another_repo_action` is the same action
+        # suibase-daemon-tests.yml used to use (now removed there). It
+        # uses SUI_BINARIES_TOKEN to authenticate.
+        if: steps.tag_check.outputs.exists == 'false'
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.SUI_BINARIES_TOKEN }}
+        with:
+          source_file: "rust/suibase/Cargo.toml"
+          destination_repo: "chainmovers/sui-binaries"
+          destination_folder: "triggers/suibase-daemon"
+          user_email: "4542410+mario4tier@users.noreply.github.com"
+          user_name: "Mario Fortier"
+          commit_message: "Trigger suibase-daemon ${{ steps.ver.outputs.tag }} build from pre-staging"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.tag_check.outputs.exists }}" = "true" ]; then
+            echo "::notice::Binary ${{ steps.ver.outputs.tag }} already published; staging-promote.yml will pick this up on its next cron tick."
+          else
+            echo "::notice::Trigger pushed to chainmovers/sui-binaries. Build typically takes a few minutes; staging-promote.yml polls every 15 min."
+          fi
