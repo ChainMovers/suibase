@@ -3,15 +3,24 @@ name = "demo"
 version = "0.0.1"
 edition = "2024.beta"
 
-# Localnet env entry. The publish flow may activate the `localnet_proxy`
-# env; sui-package-alt falls back to chain-id matching when the active
-# env name is not present here, so this single entry handles both the
-# direct `localnet` env and the proxy-routed `localnet_proxy` env by
-# virtue of sharing the same chain ID (localnet genesis is deterministic
-# in suibase). `testnet` and `mainnet` are sui system envs and cannot
-# be defined here — sui-package-alt provides them implicitly.
+# sui-package-alt (v1.72.2) strict-matches the active env's alias name
+# against `[environments]` and rejects publish if absent. Suibase sets
+# the active env to `localnet_proxy` whenever the proxy is enabled, so
+# the package must list BOTH `localnet` (direct) and `localnet_proxy`
+# (proxy-routed) — there is no chain-id fallback in this sui CLI.
+#
+# KNOWN LIMITATION: the chain_id values below are pinned to a specific
+# `localnet regen`. Localnet's genesis is NOT deterministic across regen
+# in current suibase, so the values become stale on the next regen and
+# publish will fail with a chain_id mismatch. Maintenance of these values
+# is tracked as a follow-up (suibase should rewrite Move.toml chain_ids
+# during regen, or sui CLI needs a less strict mode).
+#
+# `testnet` and `mainnet` are sui system envs that sui-package-alt
+# provides implicitly — they should NOT be added here.
 [environments]
 localnet = "756b253e"
+localnet_proxy = "756b253e"
 
 [dependencies]
 log = { local = "../../../../suibase/move/@suibase/log" }
