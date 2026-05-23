@@ -45,6 +45,12 @@ output.bpl
 # Move build output (specific to suibase repo)
 **/move/build
 
+# Sui CLI artifacts that may be emitted in package or workspace dirs.
+# The intentional Move.lock under move/ is tracked separately.
+rust/demo-app/Move.lock
+rust/demo-app/Published.toml
+rust/demo-app/build/
+
 # logs
 wallet.log.*
 sui.log.*
