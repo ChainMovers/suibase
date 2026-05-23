@@ -9,7 +9,12 @@ edition = "2024.beta"
 # permitted alongside [environments] (mutually exclusive — having
 # both flips the manifest parser into legacy mode and ignores
 # environments).
+#
+# Both `localnet` (direct) and `localnet_proxy` (proxy-routed) entries
+# are required: sui-package-alt strict-matches the active env's alias
+# name. See rust/demo-app/move/Move.toml for the full rationale.
 [environments]
 localnet = "756b253e"
+localnet_proxy = "756b253e"
 
 [dependencies]
