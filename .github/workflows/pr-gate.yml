@@ -1,0 +1,62 @@
+name: PR Gate
+
+# Enforces the release-pipeline branch order:
+#
+#   dev → pre-staging → staging → main
+#
+# PRs targeting each branch must come from the immediately-upstream
+# branch. Branch protection then requires this check to pass, which
+# is how the "only main from staging" / "only staging from pre-staging"
+# / "only pre-staging from dev" invariants are enforced (GitHub has no
+# built-in "PRs only from branch X" rule).
+#
+# Auto-merge PRs opened by the pipeline workflows automatically pass
+# this gate because they have the correct head_ref. Human contributors
+# who try `gh pr create --base main --head some-feature` get a clear
+# failure pointing at the right target.
+
+on:
+  pull_request:
+    branches: ["main", "staging", "pre-staging"]
+    types: [opened, reopened, synchronize, edited]
+
+jobs:
+  enforce-pipeline-order:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert pipeline order
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          set -e
+          case "$BASE" in
+            main)        expected="staging" ;;
+            staging)     expected="pre-staging" ;;
+            pre-staging) expected="dev" ;;
+            *)
+              echo "::warning::PR Gate ran for unexpected base '$BASE' — letting it pass (gate only enforces main / staging / pre-staging)."
+              exit 0
+              ;;
+          esac
+          if [ "$HEAD" = "$expected" ]; then
+            echo "✓ PR from '$HEAD' → '$BASE' is allowed (pipeline order respected)."
+            exit 0
+          fi
+          cat <<EOF >&2
+          ::error::Pipeline order violated.
+
+          PR base:     $BASE
+          PR head:     $HEAD
+          Expected head for base '$BASE': $expected
+
+          The release pipeline is:
+
+              dev → pre-staging → staging → main
+
+          and each branch only accepts PRs from the one immediately
+          upstream. To get changes into '$BASE', merge them via the
+          upstream branch (use ~/suibase/scripts/dev/merge from dev,
+          and let the pipeline workflows handle the rest).
+          EOF
+          exit 1
