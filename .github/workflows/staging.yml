@@ -159,7 +159,11 @@ jobs:
     runs-on: ubuntu-latest
     if: success() && github.event_name == 'push'
     permissions:
-      contents: read
+      # `contents: write` is needed by `gh pr merge --auto` to enable
+      # auto-merge on a branch-protected base (main). `pull-requests:
+      # write` alone is enough to OPEN the PR but not to flip the
+      # auto-merge bit when main is protected.
+      contents: write
       pull-requests: write
     steps:
       - name: Checkout

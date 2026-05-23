@@ -1,6 +1,12 @@
-name: Staging Promote (pre-staging → staging)
+name: Release pipeline cron
 
-# Cron-poll for the pipeline.
+# IMPORTANT: this workflow LIVES ON `main` (cron schedules only fire from
+# the default branch in GitHub Actions) but OPERATES ON the pre-staging
+# and staging branches. The GitHub Actions UI shows it under `main` in
+# the run list — that's just the file's home, not a signal that main is
+# being touched.
+#
+# What this cron actually does:
 #
 #   dev → pre-staging ──(this workflow)──► staging → main
 #

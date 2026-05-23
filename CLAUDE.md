@@ -34,3 +34,30 @@ AI agent guidance for Suibase development.
 **suibase-daemon**: See rust/suibase/crates/suibase-daemon/CLAUDE.md
 
 **Notes**: Coexists with other Sui installs, uses official binaries + fallback compilation, auto-restart on panic.
+
+## Release pipeline (read before touching CI / .github / merge scripts)
+
+```
+dev ──merge script──► pre-staging ──cron auto──► staging ──auto-PR──► main
+```
+
+- **`dev`**: work branch. Source build, full tests.
+- **`pre-staging`**: triggers `chainmovers/sui-binaries` to build a new precompiled if the Cargo.toml daemon version is new. **No tests run here.**
+- **`staging`**: precompiled is published. Validates against it. On green, auto-PRs to main.
+- **`main`**: released. Defense-in-depth smoke test only.
+
+**Branches main / staging / pre-staging are protected.** Never `git push` to them directly and never `gh pr create --base main`. The pipeline drives all promotions via auto-merge PRs.
+
+**To ship a change**:
+```bash
+~/suibase/scripts/dev/merge   # dev → pre-staging; workflows promote the rest
+```
+
+**Files**:
+- `.github/workflows/pre-staging.yml` — pushes Cargo.toml to sui-binaries when daemon version is new
+- `.github/workflows/staging-promote.yml` — cron on **main**, polls sui-binaries, auto-PRs pre-staging → staging
+- `.github/workflows/staging.yml` — validates precompiled, auto-PRs staging → main
+- `.github/workflows/pr-gate.yml` — required check that enforces head_ref order
+- `scripts/dev/{merge,sync}` — DX entry points
+- `scripts/dev/apply-branch-protection` — one-shot setup; idempotent
+- `CONTRIBUTING.md` — narrative + DX details
