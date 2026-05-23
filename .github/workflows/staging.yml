@@ -81,8 +81,9 @@ jobs:
           "$HOME/suibase/install"
 
           # Read the daemon version this staging commit expects.
-          version=$(grep "^version" rust/suibase/Cargo.toml \
-            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          # awk for portability — the previous `sed ... \+` regex is GNU-only;
+          # BSD sed on macOS-latest leaves the line unchanged.
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
           tag="suibase-daemon-v${version}"
           echo "Expecting sui-binaries release tag: $tag"
 
@@ -134,8 +135,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          src_version=$(grep "^version" rust/suibase/Cargo.toml \
-            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          src_version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
           bin_version=$("$HOME/suibase/workdirs/common/bin/suibase-daemon" --version 2>/dev/null \
             | awk '{print $2}')
           echo "staging source version:    $src_version"
@@ -185,8 +185,9 @@ jobs:
           fi
 
           # Read daemon version for the PR title.
-          version=$(grep "^version" rust/suibase/Cargo.toml \
-            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          # awk for portability — the previous `sed ... \+` regex is GNU-only;
+          # BSD sed on macOS-latest leaves the line unchanged.
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
 
           gh pr create \
             --base main \
