@@ -87,21 +87,23 @@ jobs:
           tag="suibase-daemon-v${version}"
           echo "Expecting sui-binaries release tag: $tag"
 
-          # Locate the platform-appropriate asset on that release.
+          # Locate the platform-appropriate asset on that release. Note the
+          # platform tokens come from the sui-binaries build matrix and are
+          # "ubuntu" / "macos" (NOT what `uname -s` returns — `uname -s` is
+          # Linux/Darwin).
           if [ "$(uname -s)" = "Darwin" ]; then
-            asset_pattern="${tag}-macos-.*\.tgz"
+            asset_glob="*macos*"
           else
-            asset_pattern="${tag}-ubuntu-.*\.tgz"
+            asset_glob="*ubuntu*"
           fi
 
-          # Download the matching asset. `gh release download` resolves the
-          # asset by name pattern.
+          # Download the matching asset.
           tmpdir=$(mktemp -d)
           gh release download "$tag" \
             --repo chainmovers/sui-binaries \
-            --pattern "*$(uname -s | tr '[:upper:]' '[:lower:]')*" \
+            --pattern "$asset_glob" \
             --dir "$tmpdir" || {
-              echo "::error::Could not download $tag asset for $(uname -s) from chainmovers/sui-binaries."
+              echo "::error::Could not download $tag asset (pattern $asset_glob) for $(uname -s) from chainmovers/sui-binaries."
               echo "::error::staging-promote.yml is supposed to ensure the tag exists before opening a PR here. Investigate the publish."
               exit 1
             }
