@@ -39,6 +39,7 @@ use crate::proxy_grpc::{
     forward_to_upstream, grpc_no_upstream_response, is_grpc_request, BufferedGrpcRequest,
     ForwardOutcome, GrpcProxyClient,
 };
+use crate::shared_types::TargetServer;
 
 // An application target the localhost:port
 //
@@ -493,9 +494,9 @@ impl ProxyServer {
     /// Upstreams in (2) are still tried because JSON-RPC health doesn't
     /// reflect gRPC capability: a public RPC gateway can be JSON-RPC-healthy
     /// yet not serve gRPC at all, while the official MystenLabs fullnode can
-    /// be marked JSON-RPC-degraded but still serve gRPC fine. `forward_unary`
-    /// falls through any upstream whose response isn't gRPC-shaped, so
-    /// duplicate attempts against non-gRPC servers are cheap.
+    /// be marked JSON-RPC-degraded but still serve gRPC fine.
+    /// `forward_to_upstream` falls through any upstream whose response isn't
+    /// gRPC-shaped, so duplicate attempts against non-gRPC servers are cheap.
     ///
     /// TODO: report attempts to NetworkMonitor so `testnet links` counters
     /// update for gRPC traffic too.
@@ -554,9 +555,6 @@ impl ProxyServer {
                     } else {
                         let mut best: Vec<(u8, String)> = Vec::new();
                         input_port.get_best_target_servers(&mut best, &handler_start);
-                        let mut seen_idx: std::collections::HashSet<u8> =
-                            std::collections::HashSet::new();
-                        let mut ordered: Vec<(u8, String)> = Vec::new();
                         let grpc_capable = |idx: u8| -> bool {
                             input_port
                                 .target_servers
@@ -564,17 +562,11 @@ impl ProxyServer {
                                 .map(|ts| ts.stats.is_grpc_capable())
                                 .unwrap_or(true)
                         };
-                        for (idx, url) in best {
-                            if grpc_capable(idx) && seen_idx.insert(idx) {
-                                ordered.push((idx, url));
-                            }
-                        }
-                        for (idx, ts) in input_port.target_servers.iter() {
-                            if grpc_capable(idx) && seen_idx.insert(idx) {
-                                ordered.push((idx, ts.rpc()));
-                            }
-                        }
-                        ordered
+                        select_grpc_upstreams(
+                            best,
+                            &input_port.target_servers,
+                            grpc_capable,
+                        )
                     }
                 }
                 _ => Vec::new(),
@@ -1017,5 +1009,195 @@ struct JsonRpcErrorDataObject {
 impl JsonRpcErrorDataObject {
     fn new(origin: String, retry: u8) -> Self {
         Self { origin, retry }
+    }
+}
+
+/// Build the prioritized gRPC upstream list for one request.
+///
+/// `best` is the list returned by `InputPort::get_best_target_servers`,
+/// already filtered to selectable + healthy servers and ordered by the
+/// network monitor's scoring. Those come first, in `best`'s order,
+/// skipped only if they fail the gRPC-capability check. Then any other
+/// **selectable**, gRPC-capable target follows as fallback, sorted by
+/// `(health_score, alias)` — same ordering JSON-RPC's
+/// `update_selection_vectors` uses, so a fallback request burns its
+/// retry budget on the least-bad upstream first.
+///
+/// Non-selectable servers are NEVER picked — mirrors JSON-RPC's
+/// `update_selection_vectors` (which skips `!is_selectable`) so the
+/// two protocols agree about what `selectable: false` means: never
+/// route to me, not even as last resort. Without this, a daemon-
+/// internal mock server or a `selectable: false` operator-parked
+/// upstream would silently receive production gRPC traffic if it
+/// happened to be the only gRPC-capable target left.
+fn select_grpc_upstreams(
+    best: Vec<(u8, String)>,
+    target_servers: &ManagedVec<TargetServer>,
+    is_grpc_capable: impl Fn(u8) -> bool,
+) -> Vec<(u8, String)> {
+    let mut seen_idx: std::collections::HashSet<u8> = std::collections::HashSet::new();
+    let mut ordered: Vec<(u8, String)> = Vec::new();
+    for (idx, url) in best {
+        if is_grpc_capable(idx) && seen_idx.insert(idx) {
+            ordered.push((idx, url));
+        }
+    }
+
+    // Fallback candidates: collect, sort, then append. Iterating
+    // `target_servers.iter()` directly yielded storage order, which
+    // burned attempt budget on unhealthy or arbitrarily-ordered
+    // upstreams before reaching the healthiest fallback.
+    let mut fallback: Vec<(u8, &TargetServer)> = Vec::new();
+    for (idx, ts) in target_servers.iter() {
+        if ts.is_selectable() && is_grpc_capable(idx) && !seen_idx.contains(&idx) {
+            fallback.push((idx, ts));
+        }
+    }
+    fallback.sort_by(|(_, a), (_, b)| {
+        // Lower health_score is better (same convention as
+        // InputPort::update_selection_vectors). Tie-break by alias
+        // so the order is deterministic across runs / hashmap
+        // iteration noise.
+        let a_score = a.health_score();
+        let b_score = b.health_score();
+        if a_score == b_score {
+            a.alias().cmp(&b.alias())
+        } else {
+            a_score.partial_cmp(&b_score).unwrap_or(std::cmp::Ordering::Equal)
+        }
+    });
+    for (idx, ts) in fallback {
+        if seen_idx.insert(idx) {
+            ordered.push((idx, ts.rpc()));
+        }
+    }
+    ordered
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::shared_types::Link;
+
+    fn make_ts(alias: &str, selectable: bool) -> TargetServer {
+        let mut link = Link::new(alias.to_string(), format!("http://{}:9000", alias));
+        link.selectable = selectable;
+        TargetServer::new(link)
+    }
+
+    fn mv_of(items: Vec<TargetServer>) -> ManagedVec<TargetServer> {
+        let mut mv = ManagedVec::new();
+        for ts in items {
+            mv.push(ts);
+        }
+        mv
+    }
+
+    #[test]
+    fn non_selectable_server_is_never_picked_even_as_fallback() {
+        // Mirrors the operator config the regression was found in: a
+        // single `selectable: false` upstream and no selectable peers.
+        // JSON-RPC returns NO_SERVER_AVAILABLE in this case; gRPC must
+        // do the same.
+        let mv = mv_of(vec![make_ts("localnet", /* selectable */ false)]);
+        let result = select_grpc_upstreams(Vec::new(), &mv, |_| true);
+        assert!(
+            result.is_empty(),
+            "selectable:false server must NOT be picked; got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn selectable_server_picked_when_not_in_best() {
+        // `best` may be empty if the network monitor hasn't scored
+        // servers yet. The fallback loop still needs to find any
+        // selectable + gRPC-capable target.
+        let mv = mv_of(vec![make_ts("upstream", true)]);
+        let result = select_grpc_upstreams(Vec::new(), &mv, |_| true);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, 0u8);
+    }
+
+    #[test]
+    fn best_servers_take_priority_in_their_order() {
+        // `best` is already sorted by the network monitor. Preserve
+        // its order; only add fallbacks AFTER all best entries.
+        let mv = mv_of(vec![
+            make_ts("a", true), // idx 0
+            make_ts("b", true), // idx 1
+            make_ts("c", true), // idx 2
+        ]);
+        let best = vec![
+            (2u8, "http://c:9000".to_string()),
+            (0u8, "http://a:9000".to_string()),
+        ];
+        let result = select_grpc_upstreams(best, &mv, |_| true);
+        // c, a, then b (the leftover selectable fallback).
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].0, 2);
+        assert_eq!(result[1].0, 0);
+        assert_eq!(result[2].0, 1);
+    }
+
+    #[test]
+    fn non_grpc_capable_servers_are_skipped_in_both_loops() {
+        // Mark idx 1 as not gRPC-capable; it must not appear via
+        // either `best` (loop 1) or fallback (loop 2).
+        let mv = mv_of(vec![
+            make_ts("a", true), // idx 0
+            make_ts("b", true), // idx 1 — declared not gRPC-capable below
+        ]);
+        let best = vec![(1u8, "http://b:9000".to_string())];
+        let result = select_grpc_upstreams(best, &mv, |idx| idx != 1);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, 0);
+    }
+
+    #[test]
+    fn duplicates_between_best_and_fallback_are_deduped() {
+        // A selectable server in `best` must not appear twice when
+        // the fallback loop iterates the same target_servers.
+        let mv = mv_of(vec![make_ts("a", true)]);
+        let best = vec![(0u8, "http://a:9000".to_string())];
+        let result = select_grpc_upstreams(best, &mv, |_| true);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn mixed_selectable_non_selectable_only_returns_selectable() {
+        // The user's local dev config that triggered the
+        // investigation: mocks marked selectable=true, the real
+        // backend marked selectable=false. After this fix, traffic
+        // never silently falls back to the non-selectable backend.
+        let mv = mv_of(vec![
+            make_ts("mock-0", true),     // idx 0
+            make_ts("mock-1", true),     // idx 1
+            make_ts("localnet", false),  // idx 2  — must be excluded
+        ]);
+        let result = select_grpc_upstreams(Vec::new(), &mv, |_| true);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|(idx, _)| *idx == 0 || *idx == 1));
+    }
+
+    #[test]
+    fn fallback_order_is_deterministic_by_alias_when_health_ties() {
+        // With equal health scores (the default for freshly-constructed
+        // TargetServers), the fallback loop must sort by alias so the
+        // dispatch order is reproducible across runs and ManagedVec
+        // iteration order. Otherwise a load-balancer chasing a flaky
+        // upstream burns its attempt budget in a different order each
+        // request and the failure mode looks intermittent.
+        let mv = mv_of(vec![
+            make_ts("zeta", true),    // idx 0
+            make_ts("alpha", true),   // idx 1
+            make_ts("middle", true),  // idx 2
+        ]);
+        let result = select_grpc_upstreams(Vec::new(), &mv, |_| true);
+        assert_eq!(result.len(), 3);
+        // Expected order: alpha, middle, zeta (alphabetical).
+        assert_eq!(result[0].1, "http://alpha:9000");
+        assert_eq!(result[1].1, "http://middle:9000");
+        assert_eq!(result[2].1, "http://zeta:9000");
     }
 }
