@@ -36,17 +36,22 @@ apply_protection() {
   #   * allow_force_pushes=false / allow_deletions=false (safety).
   #   * required_linear_history=false (staging-promote opens merge
   #     commits; don't break it).
+  # Use -F (typed) rather than -f (string) so the strict/contexts
+  # values land in the JSON as boolean/array correctly. Some older
+  # gh CLI versions only accept arrays via -F here.
   gh api -X PUT "repos/$REPO/branches/$branch/protection" \
     -H "Accept: application/vnd.github+json" \
-    -f required_status_checks[strict]=false \
-    -f "required_status_checks[contexts][]=$CHECK_NAME" \
-    -f enforce_admins=false \
-    -f required_pull_request_reviews=null \
-    -f restrictions=null \
-    -f allow_force_pushes=false \
-    -f allow_deletions=false \
-    -f required_linear_history=false \
-    -f allow_fork_syncing=false \
+    -F enforce_admins=false \
+    -F required_pull_request_reviews=null \
+    -F restrictions=null \
+    -F allow_force_pushes=false \
+    -F allow_deletions=false \
+    -F required_linear_history=false \
+    -F lock_branch=false \
+    -F allow_fork_syncing=false \
+    -F required_conversation_resolution=false \
+    -F "required_status_checks[strict]=false" \
+    -F "required_status_checks[contexts][]=$CHECK_NAME" \
     >/dev/null
 
   echo "  ✓ $branch protected (PR Gate required, no human review, no force-push, no delete)"
