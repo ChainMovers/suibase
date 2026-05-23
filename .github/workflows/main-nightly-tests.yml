@@ -109,8 +109,10 @@ jobs:
           "$HOME/suibase/install"
           "$HOME/suibase/scripts/dev/start-daemon"
 
-          src_version=$(grep "^version" "$GITHUB_WORKSPACE/rust/suibase/Cargo.toml" \
-            | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+          # awk for portability — the previous `sed ... \+` regex is GNU-only;
+          # BSD sed on macOS-latest leaves the line unchanged.
+          src_version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' \
+            "$GITHUB_WORKSPACE/rust/suibase/Cargo.toml")
           bin_version=$("$HOME/suibase/workdirs/common/bin/suibase-daemon" --version 2>/dev/null \
             | awk '{print $2}')
 
