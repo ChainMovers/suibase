@@ -1279,6 +1279,26 @@ sb_app_install() {
   get_app_var "$self" "assets_name"
   local _ASSETS_NAME=$APP_VAR
 
+  # suibase-daemon does NOT support macOS on Intel (x86_64). Apple stopped
+  # selling Intel Macs in 2023 and macOS 15 (Sequoia, 2024) onward is
+  # arm64-only. The Intel-macOS slot represented a small fraction of the
+  # Sui-developer user base, and keeping it added ~10 min of queue time
+  # to every release build via the slow GitHub Intel-macOS runner pool.
+  #
+  # Fail fast here — both for the precompiled-download path AND for the
+  # source-build path — so the user gets one consistent message instead
+  # of two different ways to discover the same fact. The gate is
+  # suibase-daemon-specific; Mysten Labs assets (sui, walrus, ...) have
+  # their own policies for x86_64-macos and are not affected.
+  if [ "$_ASSETS_NAME" = "suibase-daemon" ]; then
+    local _UNAME_S _UNAME_M
+    _UNAME_S=$(uname -s 2>/dev/null)
+    _UNAME_M=$(uname -m 2>/dev/null)
+    if [ "$_UNAME_S" = "Darwin" ] && [ "$_UNAME_M" = "x86_64" ]; then
+      setup_error "macOS for x86_64 not supported. suibase-daemon requires macOS on Apple Silicon (arm64) or Linux. (Apple stopped selling Intel Macs in 2023.)"
+    fi
+  fi
+
   # First check if precompiled binaries is allowed to be done.
   get_app_var "$self" "precompiled_bin"
   local _PRECOMP_ALLOWED=$APP_VAR
