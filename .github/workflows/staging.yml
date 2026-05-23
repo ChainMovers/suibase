@@ -175,11 +175,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Skip if staging is already at main (nothing to promote).
-          main_sha=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          # Skip if main already contains staging's tip (nothing new to
+          # promote). Under `gh pr merge --merge`, after a successful
+          # staging→main promotion, main is a merge commit whose second
+          # parent IS staging's tip — so staging's tip is reachable from
+          # main, even though their HEAD SHAs differ. A naive equality
+          # check would treat this as "ahead" and open empty PRs in a
+          # loop. Use `merge-base --is-ancestor` instead.
+          git fetch --quiet origin main
+          main_sha=$(git rev-parse origin/main)
           staging_sha=$(git rev-parse HEAD)
-          if [ "$main_sha" = "$staging_sha" ]; then
-            echo "::notice::main is already at staging's commit — no promotion needed."
+          if git merge-base --is-ancestor "$staging_sha" "$main_sha"; then
+            echo "::notice::main already contains staging's tip ($staging_sha) — no promotion needed."
             exit 0
           fi
 

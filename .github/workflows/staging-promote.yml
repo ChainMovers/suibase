@@ -58,21 +58,32 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Fetch staging too (checkout only got pre-staging).
+          git fetch --quiet origin staging
           pre_sha=$(git rev-parse origin/pre-staging)
-          staging_sha=$(git ls-remote origin refs/heads/staging | awk '{print $1}')
+          staging_sha=$(git rev-parse origin/staging)
           echo "pre-staging:  $pre_sha"
           echo "staging:      $staging_sha"
-          if [ "$pre_sha" = "$staging_sha" ]; then
-            echo "ahead=false" >> "$GITHUB_OUTPUT"
-            echo "Nothing to promote — pre-staging is at the same commit as staging."
+
+          # Count commits in pre-staging that are NOT reachable from staging.
+          # This is the right check under `gh pr merge --merge` semantics:
+          # merging pre-staging→staging creates a merge commit on staging
+          # whose second parent IS pre-staging's tip — so after the merge,
+          # pre-staging's tip is reachable from staging (count = 0) and
+          # there is nothing new to promote. When dev→pre-staging later
+          # advances pre-staging, that new tip is NOT reachable from
+          # staging (count > 0) and we promote.
+          #
+          # The previous `git merge-base --is-ancestor staging pre-staging`
+          # check was wrong: --merge mode never makes staging an ancestor
+          # of pre-staging, so the check rejected every legitimate promo.
+          unmerged=$(git rev-list --count "$staging_sha..$pre_sha")
+          echo "Commits on pre-staging not in staging: $unmerged"
+          if [ "$unmerged" -gt 0 ]; then
+            echo "ahead=true" >> "$GITHUB_OUTPUT"
           else
-            # Is staging an ancestor of pre-staging? (i.e. pre-staging is strictly ahead)
-            if git merge-base --is-ancestor "$staging_sha" "$pre_sha"; then
-              echo "ahead=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning::pre-staging is not strictly ahead of staging (history diverged). Aborting promotion."
-              echo "ahead=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "ahead=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing to promote — staging already contains pre-staging's tip."
           fi
 
       - name: Check if matching sui-binaries release is PUBLISHED (not draft)
