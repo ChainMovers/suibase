@@ -83,7 +83,7 @@ jobs:
           destination_folder: "triggers/suibase-daemon"
           user_email: "4542410+mario4tier@users.noreply.github.com"
           user_name: "Mario Fortier"
-          commit_message: "Trigger suibase-daemon ${{ steps.ver.outputs.tag }} build from pre-staging"
+          commit_message: "Build ${{ steps.ver.outputs.tag }}"
 
       - name: Summary
         run: |
