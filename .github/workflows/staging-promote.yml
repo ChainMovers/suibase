@@ -33,6 +33,12 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # `statuses: write` lets this workflow set the
+      # `enforce-pipeline-order` commit status directly on the PR's
+      # head — needed because pr-gate.yml's pull_request workflow
+      # does not fire on PRs opened by GITHUB_TOKEN (GitHub security
+      # feature against infinite loops).
+      statuses: write
     steps:
       - name: Checkout pre-staging
         uses: actions/checkout@v4
