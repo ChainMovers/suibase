@@ -494,9 +494,9 @@ impl ProxyServer {
     /// Upstreams in (2) are still tried because JSON-RPC health doesn't
     /// reflect gRPC capability: a public RPC gateway can be JSON-RPC-healthy
     /// yet not serve gRPC at all, while the official MystenLabs fullnode can
-    /// be marked JSON-RPC-degraded but still serve gRPC fine. `forward_unary`
-    /// falls through any upstream whose response isn't gRPC-shaped, so
-    /// duplicate attempts against non-gRPC servers are cheap.
+    /// be marked JSON-RPC-degraded but still serve gRPC fine.
+    /// `forward_to_upstream` falls through any upstream whose response isn't
+    /// gRPC-shaped, so duplicate attempts against non-gRPC servers are cheap.
     ///
     /// TODO: report attempts to NetworkMonitor so `testnet links` counters
     /// update for gRPC traffic too.
@@ -1015,10 +1015,13 @@ impl JsonRpcErrorDataObject {
 /// Build the prioritized gRPC upstream list for one request.
 ///
 /// `best` is the list returned by `InputPort::get_best_target_servers`,
-/// already filtered to selectable + healthy servers. Those come first,
-/// in `best`'s order, skipped only if they fail the gRPC-capability
-/// check. Then any other **selectable**, gRPC-capable target follows
-/// as fallback.
+/// already filtered to selectable + healthy servers and ordered by the
+/// network monitor's scoring. Those come first, in `best`'s order,
+/// skipped only if they fail the gRPC-capability check. Then any other
+/// **selectable**, gRPC-capable target follows as fallback, sorted by
+/// `(health_score, alias)` — same ordering JSON-RPC's
+/// `update_selection_vectors` uses, so a fallback request burns its
+/// retry budget on the least-bad upstream first.
 ///
 /// Non-selectable servers are NEVER picked — mirrors JSON-RPC's
 /// `update_selection_vectors` (which skips `!is_selectable`) so the
@@ -1039,8 +1042,32 @@ fn select_grpc_upstreams(
             ordered.push((idx, url));
         }
     }
+
+    // Fallback candidates: collect, sort, then append. Iterating
+    // `target_servers.iter()` directly yielded storage order, which
+    // burned attempt budget on unhealthy or arbitrarily-ordered
+    // upstreams before reaching the healthiest fallback.
+    let mut fallback: Vec<(u8, &TargetServer)> = Vec::new();
     for (idx, ts) in target_servers.iter() {
-        if ts.is_selectable() && is_grpc_capable(idx) && seen_idx.insert(idx) {
+        if ts.is_selectable() && is_grpc_capable(idx) && !seen_idx.contains(&idx) {
+            fallback.push((idx, ts));
+        }
+    }
+    fallback.sort_by(|(_, a), (_, b)| {
+        // Lower health_score is better (same convention as
+        // InputPort::update_selection_vectors). Tie-break by alias
+        // so the order is deterministic across runs / hashmap
+        // iteration noise.
+        let a_score = a.health_score();
+        let b_score = b.health_score();
+        if a_score == b_score {
+            a.alias().cmp(&b.alias())
+        } else {
+            a_score.partial_cmp(&b_score).unwrap_or(std::cmp::Ordering::Equal)
+        }
+    });
+    for (idx, ts) in fallback {
+        if seen_idx.insert(idx) {
             ordered.push((idx, ts.rpc()));
         }
     }
@@ -1151,5 +1178,26 @@ mod tests {
         let result = select_grpc_upstreams(Vec::new(), &mv, |_| true);
         assert_eq!(result.len(), 2);
         assert!(result.iter().all(|(idx, _)| *idx == 0 || *idx == 1));
+    }
+
+    #[test]
+    fn fallback_order_is_deterministic_by_alias_when_health_ties() {
+        // With equal health scores (the default for freshly-constructed
+        // TargetServers), the fallback loop must sort by alias so the
+        // dispatch order is reproducible across runs and ManagedVec
+        // iteration order. Otherwise a load-balancer chasing a flaky
+        // upstream burns its attempt budget in a different order each
+        // request and the failure mode looks intermittent.
+        let mv = mv_of(vec![
+            make_ts("zeta", true),    // idx 0
+            make_ts("alpha", true),   // idx 1
+            make_ts("middle", true),  // idx 2
+        ]);
+        let result = select_grpc_upstreams(Vec::new(), &mv, |_| true);
+        assert_eq!(result.len(), 3);
+        // Expected order: alpha, middle, zeta (alphabetical).
+        assert_eq!(result[0].1, "http://alpha:9000");
+        assert_eq!(result[1].1, "http://middle:9000");
+        assert_eq!(result[2].1, "http://zeta:9000");
     }
 }
