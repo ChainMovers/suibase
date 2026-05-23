@@ -1,6 +1,6 @@
 [![Discord chat](https://img.shields.io/discord/1038616996062953554.svg?logo=discord&style=flat-square)](https://discord.gg/Erb6SwsVbH) [![Active Development](https://img.shields.io/badge/Maintenance%20Level-Actively%20Developed-brightgreen.svg)](https://gist.github.com/cheerfulstoic/d107229326a01ff0f333a1d3476e068d)
 
-[![release](https://github.com/ChainMovers/suibase/actions/workflows/main-nightly-tests.yml/badge.svg)](https://github.com/ChainMovers/suibase/actions/workflows/main-nightly-tests.yml) [![nightly](https://github.com/ChainMovers/suibase/actions/workflows/dev-nightly-tests.yml/badge.svg)](https://github.com/ChainMovers/suibase/actions/workflows/dev-nightly-tests.yml)
+[![release](https://github.com/ChainMovers/suibase/actions/workflows/main-nightly-tests.yml/badge.svg)](https://github.com/ChainMovers/suibase/actions/workflows/main-nightly-tests.yml) [![staging](https://github.com/ChainMovers/suibase/actions/workflows/staging.yml/badge.svg?branch=staging)](https://github.com/ChainMovers/suibase/actions/workflows/staging.yml) [![nightly](https://github.com/ChainMovers/suibase/actions/workflows/dev-nightly-tests.yml/badge.svg)](https://github.com/ChainMovers/suibase/actions/workflows/dev-nightly-tests.yml)
 
 Streamlines development and testing of your Sui network apps.
 
