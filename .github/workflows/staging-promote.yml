@@ -69,23 +69,40 @@ jobs:
             fi
           fi
 
-      - name: Check if matching sui-binaries release is published
+      - name: Check if matching sui-binaries release is PUBLISHED (not draft)
         id: tag_check
         if: steps.diff.outputs.ahead == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The sui-binaries "Build Suibase Daemon" workflow creates the
+          # release tag as a DRAFT first, then uploads assets and publishes
+          # later. Promoting on the draft alone would leave staging.yml
+          # trying to download non-existent assets. Require the release to
+          # be fully published (isDraft == false) AND have assets attached
+          # before promoting.
           set +e
-          gh release view "${{ steps.ver.outputs.tag }}" \
-            --repo chainmovers/sui-binaries >/dev/null 2>&1
+          state=$(gh release view "${{ steps.ver.outputs.tag }}" \
+            --repo chainmovers/sui-binaries \
+            --json isDraft,assets 2>/dev/null)
           rc=$?
           set -e
-          if [ $rc -eq 0 ]; then
-            echo "ready=true"  >> "$GITHUB_OUTPUT"
-            echo "::notice::sui-binaries has ${{ steps.ver.outputs.tag }} — promoting to staging."
-          else
+          if [ $rc -ne 0 ] || [ -z "$state" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Waiting on chainmovers/sui-binaries to publish ${{ steps.ver.outputs.tag }} — will retry on next cron tick."
+            echo "::notice::Waiting on chainmovers/sui-binaries to publish ${{ steps.ver.outputs.tag }} (tag not found yet) — will retry on next cron tick."
+            exit 0
+          fi
+          is_draft=$(echo "$state" | jq -r .isDraft)
+          asset_count=$(echo "$state" | jq -r '.assets | length')
+          if [ "$is_draft" = "true" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ steps.ver.outputs.tag }} exists but is still a draft (sui-binaries build in progress) — will retry on next cron tick."
+          elif [ "$asset_count" = "0" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ steps.ver.outputs.tag }} is published but has no assets yet — will retry on next cron tick."
+          else
+            echo "ready=true"  >> "$GITHUB_OUTPUT"
+            echo "::notice::sui-binaries has ${{ steps.ver.outputs.tag }} (published, $asset_count assets) — promoting to staging."
           fi
 
       - name: Open auto-merge PR pre-staging → staging
