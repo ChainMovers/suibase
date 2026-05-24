@@ -37,24 +37,14 @@ fi
 
 # Make sure the dev branch does not have uncommitted changes.
 if ! git diff-index --quiet HEAD --; then
-  echo "Uncommitted changes in the dev branch. Please commit or stash them before merging."
-  echo
-  echo "===================================="
-  echo "  ✗ NO MERGE INTO PRE-STAGING"
-  echo "    Reason: uncommitted changes on dev"
-  echo "===================================="
+  echo "✗ NO MERGE — uncommitted changes on dev. Commit or stash first."
   exit 1
 fi
 
 # Make sure the dev branch is up-to-date with the remote.
 git fetch origin dev
 if [ "$(git rev-parse dev)" != "$(git rev-parse origin/dev)" ]; then
-  echo "dev branch not up-to-date with remote. Do 'git push'."
-  echo
-  echo "===================================="
-  echo "  ✗ NO MERGE INTO PRE-STAGING"
-  echo "    Reason: local dev != origin/dev"
-  echo "===================================="
+  echo "✗ NO MERGE — local dev != origin/dev. 'git push' first."
   exit 1
 fi
 
@@ -74,13 +64,7 @@ git fetch origin pre-staging
 
 # Check if there are any changes from dev that are not in pre-staging.
 if git merge-base --is-ancestor dev origin/pre-staging; then
-  echo
-  echo "===================================="
-  echo "  ⊘ NO MERGE INTO PRE-STAGING"
-  echo "    Reason: pre-staging already contains dev's tip"
-  echo "    (nothing new to promote — this is normal if you just ran"
-  echo "    merge a moment ago, or if you haven't pushed new commits)"
-  echo "===================================="
+  echo "⊘ NO MERGE — pre-staging already contains dev's tip."
   exit 0
 fi
 
@@ -99,7 +83,7 @@ fi
 # through without all CI being green at dev's tip).
 DEV_SHA=$(git rev-parse origin/dev)
 echo
-echo "Verifying dev@${DEV_SHA:0:10} is all-green before promoting..."
+echo "Verifying dev@${DEV_SHA:0:10} CI status..."
 
 # Workflows that ALL must be green on a dev push for a promotion to
 # be allowed. Lint covers syntax; the four matrices cover code.
@@ -111,60 +95,54 @@ REQUIRED_WORKFLOWS=(
   "Scripts Tests"
 )
 
+# Decide on STATUS first (completed vs not), then on conclusion. gh's
+# API returns conclusion as an empty string (not null) while a run is
+# still in progress, so checking conclusion alone is unreliable.
 any_failed=false
 any_running=false
+n_ok=0
 for w in "${REQUIRED_WORKFLOWS[@]}"; do
-  # Look for the run for THIS exact dev SHA (not just latest on dev).
-  result=$(gh run list --commit "$DEV_SHA" --workflow "$w" --limit 1 \
-    --json status,conclusion --jq '.[0] | "\(.status // "no-run")/\(.conclusion // "—")"' 2>/dev/null)
-  case "$result" in
-    "completed/success")
-      printf "  ✓ %s\n" "$w"
+  state=$(gh run list --commit "$DEV_SHA" --workflow "$w" --limit 1 \
+    --json status,conclusion --jq '.[0] | (.status // "no-run") + ":" + (.conclusion // "")' 2>/dev/null)
+  status="${state%%:*}"
+  conclusion="${state#*:}"
+  case "$status" in
+    completed)
+      case "$conclusion" in
+        success)              n_ok=$((n_ok + 1)) ;;
+        skipped|neutral)      n_ok=$((n_ok + 1)) ;;
+        *)
+          printf "  ✗ %s: %s\n" "$w" "$conclusion"
+          any_failed=true
+          ;;
+      esac
       ;;
-    "completed/skipped"|"completed/neutral")
-      printf "  ⊘ %s (skipped — no relevant diff)\n" "$w"
-      ;;
-    "in_progress/—"|"queued/—"|"waiting/—"|"requested/—"|"pending/—")
-      printf "  ⏳ %s still running\n" "$w"
+    in_progress|queued|waiting|requested|pending)
+      printf "  ⏳ %s\n" "$w"
       any_running=true
       ;;
-    "completed/failure"|"completed/cancelled"|"completed/timed_out"|"completed/action_required")
-      printf "  ✗ %s: %s\n" "$w" "$result"
-      any_failed=true
-      ;;
-    "no-run/—")
-      printf "  ✗ %s: no run found for dev@${DEV_SHA:0:10}\n" "$w"
+    no-run)
+      printf "  ✗ %s: no run found\n" "$w"
       any_failed=true
       ;;
     *)
-      printf "  ? %s: %s\n" "$w" "$result"
+      printf "  ? %s: %s\n" "$w" "$state"
       any_failed=true
       ;;
   esac
 done
+[ "$n_ok" -gt 0 ] && echo "  ✓ $n_ok green"
 
 if $any_failed; then
   echo
-  echo "===================================="
-  echo "  ✗ NO MERGE INTO PRE-STAGING"
-  echo "    Reason: some dev CI workflows are RED (or no run found)"
-  echo "    Fix the failing tests, push, and re-run."
-  echo "    Check at: https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
-  echo "===================================="
+  echo "✗ NO MERGE — dev CI has failures (or no run found). Fix and re-run."
   exit 1
 fi
 if $any_running; then
   echo
-  echo "===================================="
-  echo "  ✗ NO MERGE INTO PRE-STAGING"
-  echo "    Reason: CI on dev tip is still RUNNING"
-  echo "    Wait for CI to complete, then re-run."
-  echo "    Check at: https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
-  echo "===================================="
+  echo "⏳ NO MERGE — dev CI still running. Wait and re-run."
   exit 1
 fi
-
-echo "  → all green ✓"
 
 # Set the dev-all-green commit status so branch protection on
 # pre-staging is satisfied. The status name MUST match the required
@@ -187,11 +165,7 @@ if [ -z "$existing" ]; then
   existing=$(gh pr list --base pre-staging --head dev --state open --json number --jq '.[0].number')
 fi
 echo
-echo "===================================="
-echo "  ✓ MERGING INTO PRE-STAGING"
-echo "    PR #$existing dev → pre-staging (auto-merge enabled)"
-echo "    Pipeline will carry it: pre-staging → staging → main → deploy-docs"
-echo "===================================="
+echo "✓ MERGING — PR #$existing dev → pre-staging (auto-merge)"
 gh pr merge "$existing" --auto --merge
 
 # Trigger the cron immediately instead of waiting up to 15 min for the
