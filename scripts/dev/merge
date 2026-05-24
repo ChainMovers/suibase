@@ -68,6 +68,89 @@ if git merge-base --is-ancestor dev origin/pre-staging; then
   exit 0
 fi
 
+# Verify ALL push-event CI workflows on dev's tip are green BEFORE
+# letting the change escape into the release pipeline. This catches
+# the "dev had a red badge but I ran merge anyway" mistake.
+#
+# In-flight runs are treated as "wait" not "OK": if any workflow is
+# still in_progress/queued, the script aborts and asks you to re-run
+# once CI completes. Avoids the racy "merge fired while CI was still
+# running" case.
+#
+# On success, sets a `dev-all-green` commit status on dev's tip which
+# branch protection on pre-staging requires (belt + suspenders so
+# even if someone bypasses this script, the merge still can't go
+# through without all CI being green at dev's tip).
+DEV_SHA=$(git rev-parse origin/dev)
+echo
+echo "Verifying dev@${DEV_SHA:0:10} is all-green before promoting..."
+
+# Workflows that ALL must be green on a dev push for a promotion to
+# be allowed. Lint covers syntax; the four matrices cover code.
+REQUIRED_WORKFLOWS=(
+  "Lint"
+  "Suibase Daemon Tests"
+  "Rust Tests"
+  "TypeScript Tests"
+  "Scripts Tests"
+)
+
+any_failed=false
+any_running=false
+for w in "${REQUIRED_WORKFLOWS[@]}"; do
+  # Look for the run for THIS exact dev SHA (not just latest on dev).
+  result=$(gh run list --commit "$DEV_SHA" --workflow "$w" --limit 1 \
+    --json status,conclusion --jq '.[0] | "\(.status // "no-run")/\(.conclusion // "—")"' 2>/dev/null)
+  case "$result" in
+    "completed/success")
+      printf "  ✓ %s\n" "$w"
+      ;;
+    "completed/skipped"|"completed/neutral")
+      printf "  ⊘ %s (skipped — no relevant diff)\n" "$w"
+      ;;
+    "in_progress/—"|"queued/—"|"waiting/—"|"requested/—"|"pending/—")
+      printf "  ⏳ %s still running\n" "$w"
+      any_running=true
+      ;;
+    "completed/failure"|"completed/cancelled"|"completed/timed_out"|"completed/action_required")
+      printf "  ✗ %s: %s\n" "$w" "$result"
+      any_failed=true
+      ;;
+    "no-run/—")
+      printf "  ✗ %s: no run found for dev@${DEV_SHA:0:10}\n" "$w"
+      any_failed=true
+      ;;
+    *)
+      printf "  ? %s: %s\n" "$w" "$result"
+      any_failed=true
+      ;;
+  esac
+done
+
+if $any_failed; then
+  echo
+  echo "ABORT — some workflows on dev are RED (or unknown). Fix before promoting."
+  echo "Check at: https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
+  exit 1
+fi
+if $any_running; then
+  echo
+  echo "ABORT — CI on dev tip is still RUNNING. Wait for it to complete and re-run."
+  echo "Check at: https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
+  exit 1
+fi
+
+echo "  → all green ✓"
+
+# Set the dev-all-green commit status so branch protection on
+# pre-staging is satisfied. The status name MUST match the required
+# context configured by scripts/dev/apply-branch-protection.
+gh api -X POST "repos/ChainMovers/suibase/statuses/$DEV_SHA" \
+  -f state=success \
+  -f context=dev-all-green \
+  -f description="All dev push-event CI workflows passed (set by scripts/dev/merge)" \
+  >/dev/null
+
 # Reuse an open PR if one exists; otherwise open one.
 existing=$(gh pr list --base pre-staging --head dev --state open --json number --jq '.[0].number')
 if [ -z "$existing" ]; then
