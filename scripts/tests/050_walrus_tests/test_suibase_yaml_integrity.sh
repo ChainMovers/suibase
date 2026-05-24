@@ -553,7 +553,14 @@ test_edge_case_line_positions
 
 # Restore suibase.yaml from default template (handles both testnet and mainnet)
 restore_suibase_yaml_from_default "$WORKDIR"
-"$SUIBASE_DIR/scripts/dev/update-daemon"
+# Restart the daemon so it picks up the restored config. Was previously
+# `dev/update-daemon` which also rebuilds from source — but the intent
+# here is restart, not rebuild (the test runs against whatever daemon
+# binary is already built/installed). `dev/start-daemon` bootstraps via
+# sb_app_install if the binary is missing, so it's robust on any
+# branch and any state.
+"$SUIBASE_DIR/scripts/dev/stop-daemon" 2>/dev/null || true
+"$SUIBASE_DIR/scripts/dev/start-daemon"
 
 test_config_process_discrepancy
 

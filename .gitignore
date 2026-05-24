@@ -148,3 +148,4 @@ rust/suibase/test_output.log
 # Claude Code personal settings
 .claude/settings.local.json
 .claude/*.local.*
+.claude/*.lock
