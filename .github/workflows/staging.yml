@@ -157,7 +157,13 @@ jobs:
   open-main-pr:
     needs: validate
     runs-on: ubuntu-latest
-    if: success() && github.event_name == 'push'
+    # Run on both push (normal pipeline) AND workflow_dispatch
+    # (manual unstick — e.g. when a bot auto-merge to staging didn't
+    # fire the push event because of the GITHUB_TOKEN anti-loop rule).
+    # The previous `github.event_name == 'push'` gate meant manual
+    # dispatches succeeded at validation but silently skipped opening
+    # the staging→main PR, stalling the pipeline.
+    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:
       # `contents: write` is needed by `gh pr merge --auto` to enable
       # auto-merge on a branch-protected base (main). `pull-requests:
@@ -170,6 +176,12 @@ jobs:
       contents: write
       pull-requests: write
       statuses: write
+      # `actions: write` lets this workflow trigger `deploy-docs.yml`
+      # via workflow_dispatch after the bot auto-merges to main.
+      # Pushes by GITHUB_TOKEN do NOT fire downstream workflows
+      # (anti-loop feature) — without the dispatch, deploy-docs.yml
+      # never runs and the live site never updates after a release.
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -233,3 +245,37 @@ jobs:
           number=$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')
           gh pr merge "$number" --auto --merge
           echo "::notice::Opened auto-merge PR #$number staging → main."
+
+      - name: Trigger deploy-docs.yml after bot auto-merge
+        if: success() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Pushes by GITHUB_TOKEN don't fire downstream workflows
+          # (anti-loop security). The auto-merge above pushes to `main`
+          # as the bot — deploy-docs.yml's `on: push: branches: [main]`
+          # would not fire. Manually dispatch it so the live site
+          # updates without human intervention. The dispatch will run
+          # the workflow_dispatch branch of the `if:` guard in
+          # deploy-docs.yml, building+deploying regardless of whether
+          # docs/ changed — slightly wasteful when a non-docs commit
+          # reaches main but worth the simpler design.
+          #
+          # Poll for the merge to actually complete before dispatching,
+          # so deploy-docs builds the post-merge main tip.
+          number=$(gh pr list --base main --head staging --state all --limit 1 --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            echo "::warning::No staging→main PR found to track; skipping dispatch."
+            exit 0
+          fi
+          for i in $(seq 1 60); do
+            state=$(gh pr view "$number" --json state --jq .state)
+            if [ "$state" = "MERGED" ]; then
+              echo "PR #$number merged — dispatching deploy-docs.yml."
+              gh workflow run deploy-docs.yml --ref main
+              echo "::notice::Dispatched deploy-docs.yml after PR #$number auto-merge."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::PR #$number did not reach MERGED within 5 min; not dispatching."

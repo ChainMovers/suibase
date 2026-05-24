@@ -23,7 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          # Use the PR's head SHA directly (not the synthetic
+          # `refs/pull/N/merge` ref) so the checkout survives when the
+          # PR is auto-merged before this workflow's checkout step
+          # runs — GitHub deletes the merge ref the instant the PR
+          # closes, which races every fast auto-merge from
+          # `scripts/dev/merge` and produces noisy "couldn't find
+          # remote ref" failures. The head SHA stays valid because
+          # it's preserved in the merged branch's history.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # super-linter needs the full git history to get the
           # list of files that changed across commits
           fetch-depth: 0
