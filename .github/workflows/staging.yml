@@ -247,7 +247,9 @@ jobs:
           echo "::notice::Opened auto-merge PR #$number staging → main."
 
       - name: Trigger deploy-docs.yml after bot auto-merge
-        if: success() && github.event_name == 'push'
+        # Mirror the open-main-pr gate above — accept workflow_dispatch
+        # as well as push, so manual unsticks reach deploy-docs.
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
