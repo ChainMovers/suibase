@@ -131,14 +131,17 @@ for w in "${REQUIRED_WORKFLOWS[@]}"; do
   esac
 done
 
+CI_URL="https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
 if $any_failed; then
   echo
   echo "✗ NO MERGE — dev CI has failures (or no run found). Fix and re-run."
+  echo "  $CI_URL"
   exit 1
 fi
 if $any_running; then
   echo
   echo "⏳ NO MERGE — dev CI still running. Wait and re-run."
+  echo "  $CI_URL"
   exit 1
 fi
 
