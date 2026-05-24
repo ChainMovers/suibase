@@ -1319,15 +1319,23 @@ sb_app_install() {
     _PRECOMP_ALLOWED=${CFG_precompiled_bin:?}
   fi
 
-  # Non-main branches force a source build for suibase-managed assets.
+  # dev and pre-staging force a source build for suibase-managed assets.
   # The chainmovers/sui-binaries precompiled artifacts are published
-  # only on main releases, so the precompiled lags the dev source by
-  # design. Routing non-main + src_type=suibase through the source
-  # build path is the ONLY way the binary in CI / on a dev checkout
-  # reflects the branch's code; any other choice gives the misleading
-  # "staying on <stale>" message that left CI silently testing the
-  # old daemon (and surfacing as inscrutable client-side errors when
-  # a newer sui client talked to an older proxy).
+  # only after the daemon Cargo.toml version reaches main, so the
+  # precompiled lags the dev source by design. Routing dev/pre-staging
+  # + src_type=suibase through the source build path is the ONLY way
+  # the binary in CI / on a dev checkout reflects the branch's code;
+  # any other choice gives the misleading "staying on <stale>" message
+  # that left CI silently testing the old daemon (and surfacing as
+  # inscrutable client-side errors when a newer sui client talked to
+  # an older proxy).
+  #
+  # `main` AND `staging` both use the precompiled. Staging specifically
+  # exists to validate the released binary as end users see it — if
+  # it source-built here, the validation would be meaningless (it
+  # would just test source-built behavior, exactly what dev already
+  # tests, defeating staging's purpose). The same rationale lives in
+  # ensure_build_daemon() in scripts/tests/050_walrus_tests/__test_common.sh.
   #
   # Mysten Labs assets (sui, walrus, site-builder) have src_type != "suibase"
   # so this branch is a no-op for them.
@@ -1337,8 +1345,10 @@ sb_app_install() {
     if [ "$_SRC_TYPE_FOR_PRECOMP" = "suibase" ]; then
       local _LOCAL_BRANCH_FOR_PRECOMP
       _LOCAL_BRANCH_FOR_PRECOMP=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
-      if [ -n "$_LOCAL_BRANCH_FOR_PRECOMP" ] && [ "$_LOCAL_BRANCH_FOR_PRECOMP" != "main" ]; then
-        echo "$_ASSETS_NAME: building from source (non-main branch: $_LOCAL_BRANCH_FOR_PRECOMP — precompiled is published on main only)"
+      if [ -n "$_LOCAL_BRANCH_FOR_PRECOMP" ] \
+        && [ "$_LOCAL_BRANCH_FOR_PRECOMP" != "main" ] \
+        && [ "$_LOCAL_BRANCH_FOR_PRECOMP" != "staging" ]; then
+        echo "$_ASSETS_NAME: building from source (branch: $_LOCAL_BRANCH_FOR_PRECOMP — precompiled is only used on main/staging)"
         _PRECOMP_ALLOWED="false"
       fi
     fi
