@@ -47,7 +47,6 @@ if (sbh.isInstalled()) {
 | `publishedNewObjects(type)` | Object IDs of objects created when the package was published. `type` format: `package::module::type`. |
 | `clientAddress(name)` | Sui address by name (e.g. `active`, `sb-1-ed25519`, …). |
 | `rpcUrl()` | JSON-RPC URL for the selected workdir. |
-| `wsUrl()` | WebSocket URL for the selected workdir. |
 
 All methods are synchronous. Failures throw `SuibaseError` with a `code` field.
 

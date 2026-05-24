@@ -151,12 +151,4 @@ impl SuibaseHelperImpl {
             None => Err(Error::WorkdirNotSelected),
         }
     }
-
-    // Get a Websocket URL for the selected workdir.
-    pub fn ws_url(&mut self) -> Result<String, Error> {
-        match &self.workdir {
-            Some(wd) => Ok(wd.ws_url(&mut self.root)?),
-            None => Err(Error::WorkdirNotSelected),
-        }
-    }
 }

@@ -42,7 +42,6 @@ Add rate limiting fields to the Link configuration in `suibase.yaml`:
 links:
   - alias: "sui.io"
     rpc: "https://fullnode.testnet.sui.io:443"
-    ws: "wss://fullnode.testnet.sui.io:443"
     priority: 10
     max_per_secs: 100  # Optional: maximum requests per second
     max_per_min: 5000  # Optional: maximum requests per minute

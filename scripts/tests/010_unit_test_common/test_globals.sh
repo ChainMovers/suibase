@@ -23,6 +23,7 @@ tests() {
   test_color
   test_string_utils
   test_has_param
+  test_state_links_alias_extraction
   cd "$HOME" || fail "cd $HOME"
   rm -rf "${WORKDIRS:?}" >/dev/null 2>&1
   localnet create || fail "localnet create"
@@ -32,6 +33,41 @@ tests() {
   sleep 1
   test_file_newer_than_phase_2
   test_versions_consistency
+}
+
+test_state_links_alias_extraction() {
+  # Regression for the alias extraction used by create_state_links_as_needed
+  # when it emits .state/links JSON. parse_yaml has TWO behaviors:
+  #   - When `alias:` is the FIRST sub-key of a link block, it is folded
+  #     into the parent variable (e.g. CFG_links_1="alias: foo") and NO
+  #     separate CFG_links_1_alias sub-variable is emitted.
+  #   - When `alias:` is NOT first, the parent variable holds whichever key
+  #     IS first, and a separate CFG_links_N_alias sub-variable IS emitted.
+  # The extractor must handle BOTH shapes. The previous sed-based code only
+  # handled the first-key case; this test pins that the new helper handles
+  # both, regardless of yaml key ordering.
+
+  # Case 1: alias: is the FIRST yaml key. parse_yaml folds the value into
+  # the parent var and emits NO _alias sub-var. We must extract from the
+  # parent.
+  CFG_links_91="alias: a-first"
+  unset CFG_links_91_alias
+  CFG_links_91_rpc="http://a:9000"
+  local _got
+  _got=$(state_links_alias_for CFG_links_91)
+  if [ "$_got" != "a-first" ]; then
+    fail "alias wrong when alias: is first key; got '$_got', want 'a-first'"
+  fi
+
+  # Case 2: rpc: comes BEFORE alias: in yaml. The parent var now holds the
+  # rpc line; only the dedicated _alias sub-var carries the real alias.
+  CFG_links_92="rpc: http://b:9000"
+  CFG_links_92_alias="b-after"
+  CFG_links_92_rpc="http://b:9000"
+  _got=$(state_links_alias_for CFG_links_92)
+  if [ "$_got" != "b-after" ]; then
+    fail "alias wrong when rpc: precedes alias:; got '$_got', want 'b-after'"
+  fi
 }
 
 test_versions_consistency() {
