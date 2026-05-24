@@ -37,14 +37,14 @@ fi
 
 # Make sure the dev branch does not have uncommitted changes.
 if ! git diff-index --quiet HEAD --; then
-  echo "✗ NO MERGE — uncommitted changes on dev. Commit or stash first."
+  echo "❌ NO MERGE — uncommitted changes on dev. Commit or stash first."
   exit 1
 fi
 
 # Make sure the dev branch is up-to-date with the remote.
 git fetch origin dev
 if [ "$(git rev-parse dev)" != "$(git rev-parse origin/dev)" ]; then
-  echo "✗ NO MERGE — local dev != origin/dev. 'git push' first."
+  echo "❌ NO MERGE — local dev != origin/dev. 'git push' first."
   exit 1
 fi
 
@@ -64,7 +64,7 @@ git fetch origin pre-staging
 
 # Check if there are any changes from dev that are not in pre-staging.
 if git merge-base --is-ancestor dev origin/pre-staging; then
-  echo "⊘ NO MERGE — pre-staging already contains dev's tip."
+  echo "❌ NO MERGE — pre-staging already contains dev's tip."
   exit 0
 fi
 
@@ -117,7 +117,7 @@ for w in "${REQUIRED_WORKFLOWS[@]}"; do
       esac
       ;;
     in_progress|queued|waiting|requested|pending)
-      printf "  ⏳ %s\n" "$w"
+      printf "  ↻ %s\n" "$w"
       any_running=true
       ;;
     no-run)
@@ -134,13 +134,13 @@ done
 CI_URL="https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
 if $any_failed; then
   echo
-  echo "✗ NO MERGE — dev CI has failures (or no run found). Fix and re-run."
+  echo "❌ NO MERGE — dev CI has failures (or no run found). Fix and re-run."
   echo "  $CI_URL"
   exit 1
 fi
 if $any_running; then
   echo
-  echo "⏳ NO MERGE — dev CI still running. Wait and re-run."
+  echo "❌ NO MERGE — dev CI still running. Wait and re-run."
   echo "  $CI_URL"
   exit 1
 fi
