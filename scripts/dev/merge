@@ -164,3 +164,32 @@ if [ -z "$existing" ]; then
 fi
 echo "Auto-merging PR #$existing dev → pre-staging..."
 gh pr merge "$existing" --auto --merge
+
+# Trigger the cron immediately instead of waiting up to 15 min for the
+# next scheduled tick. Saves a chunk of pipeline latency. Cron is safe
+# to dispatch even if the PR hasn't finished merging yet — it exits
+# silent ("nothing to promote") if pre-staging isn't ahead of staging,
+# and exits silent ("waiting on sui-binaries") if the matching daemon
+# release tag isn't published yet. So the worst case of an early
+# dispatch is "one cron run that does nothing"; the regular 15-min
+# cron + the post-merge dispatch in staging-promote.yml itself still
+# catch any case we miss.
+#
+# Poll for the PR to reach MERGED first when possible, so the cron
+# sees the new pre-staging tip on its first try. Bounded — if the
+# merge takes longer than 60s, dispatch anyway and let the cron retry
+# logic do its thing.
+echo "Waiting for PR #$existing to reach MERGED state (then dispatching cron)..."
+for i in $(seq 1 12); do
+  state=$(gh pr view "$existing" --json state --jq .state 2>/dev/null)
+  if [ "$state" = "MERGED" ]; then
+    echo "PR #$existing merged — dispatching staging-promote.yml now (skips up to 15-min cron wait)."
+    gh workflow run staging-promote.yml --ref main || \
+      echo "(cron dispatch failed — the regular 15-min schedule will still catch this)"
+    exit 0
+  fi
+  sleep 5
+done
+echo "PR #$existing didn't reach MERGED in 60s — dispatching cron anyway."
+gh workflow run staging-promote.yml --ref main || \
+  echo "(cron dispatch failed — the regular 15-min schedule will still catch this)"
