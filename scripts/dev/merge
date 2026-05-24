@@ -100,7 +100,6 @@ REQUIRED_WORKFLOWS=(
 # still in progress, so checking conclusion alone is unreliable.
 any_failed=false
 any_running=false
-n_ok=0
 for w in "${REQUIRED_WORKFLOWS[@]}"; do
   state=$(gh run list --commit "$DEV_SHA" --workflow "$w" --limit 1 \
     --json status,conclusion --jq '.[0] | (.status // "no-run") + ":" + (.conclusion // "")' 2>/dev/null)
@@ -109,8 +108,8 @@ for w in "${REQUIRED_WORKFLOWS[@]}"; do
   case "$status" in
     completed)
       case "$conclusion" in
-        success)              n_ok=$((n_ok + 1)) ;;
-        skipped|neutral)      n_ok=$((n_ok + 1)) ;;
+        success)              printf "  ✓ %s\n" "$w" ;;
+        skipped|neutral)      printf "  ⊘ %s (skipped)\n" "$w" ;;
         *)
           printf "  ✗ %s: %s\n" "$w" "$conclusion"
           any_failed=true
@@ -131,7 +130,6 @@ for w in "${REQUIRED_WORKFLOWS[@]}"; do
       ;;
   esac
 done
-[ "$n_ok" -gt 0 ] && echo "  ✓ $n_ok green"
 
 if $any_failed; then
   echo
