@@ -19,16 +19,25 @@
 set -e
 
 REPO="ChainMovers/suibase"
-CHECK_NAME="enforce-pipeline-order"
+PIPELINE_GATE="enforce-pipeline-order"
+DEV_GREEN_GATE="dev-all-green"
 
 apply_protection() {
   local branch="$1"
+  shift
+  # Extra required status check contexts for this specific branch.
+  # pre-staging additionally requires `dev-all-green` (set by
+  # scripts/dev/merge after it verifies all push-event CI on dev tip
+  # is passing) so even a hand-opened PR can't slip in red CI.
+  local -a extra_contexts=("$@")
+
   echo "Configuring protection on $branch..."
   # GitHub's branch protection API. Key bits:
   #   * required_status_checks.strict=false (PR doesn't need to be
   #     rebased on latest target — we allow stale-but-passing checks
   #     to merge; this lets auto-merge work cleanly).
-  #   * required_status_checks.contexts includes our PR-gate.
+  #   * required_status_checks.contexts includes our PR-gate plus any
+  #     branch-specific extras.
   #   * required_pull_request_reviews=null (no human review required —
   #     the pipeline itself is the gate).
   #   * restrictions=null (no per-user/team push restriction beyond
@@ -39,6 +48,11 @@ apply_protection() {
   # Use -F (typed) rather than -f (string) so the strict/contexts
   # values land in the JSON as boolean/array correctly. Some older
   # gh CLI versions only accept arrays via -F here.
+  local -a ctx_args=("-F" "required_status_checks[contexts][]=$PIPELINE_GATE")
+  for c in "${extra_contexts[@]}"; do
+    ctx_args+=("-F" "required_status_checks[contexts][]=$c")
+  done
+
   gh api -X PUT "repos/$REPO/branches/$branch/protection" \
     -H "Accept: application/vnd.github+json" \
     -F enforce_admins=false \
@@ -51,15 +65,19 @@ apply_protection() {
     -F allow_fork_syncing=false \
     -F required_conversation_resolution=false \
     -F "required_status_checks[strict]=false" \
-    -F "required_status_checks[contexts][]=$CHECK_NAME" \
+    "${ctx_args[@]}" \
     >/dev/null
 
-  echo "  ✓ $branch protected (PR Gate required, no human review, no force-push, no delete)"
+  local extra_msg=""
+  [ ${#extra_contexts[@]} -gt 0 ] && extra_msg=" + extra: ${extra_contexts[*]}"
+  echo "  ✓ $branch protected (PR Gate required$extra_msg, no human review, no force-push, no delete)"
 }
 
-for b in main staging pre-staging; do
-  apply_protection "$b"
-done
+# main and staging: only enforce-pipeline-order (the structural head-ref check).
+# pre-staging: also require dev-all-green (set by scripts/dev/merge).
+apply_protection main
+apply_protection staging
+apply_protection pre-staging "$DEV_GREEN_GATE"
 
 echo
 echo "Done. Verify with:"

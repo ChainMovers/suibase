@@ -1077,7 +1077,10 @@ sb_app_set_local_vars() {
         _LOCAL_BRANCH=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD)
         if version_less_than "$_LOCAL_BIN_version" "$_LOCAL_SRC_VERSION"; then
           _ALL_INSTALLED="false"
-          if [ "$_LOCAL_BRANCH" = "main" ]; then
+          # main AND staging both use precompiled; dev/pre-staging build
+          # from source. Keep the message in sync with sb_app_install's
+          # actual routing decision below (around line 1349).
+          if [ "$_LOCAL_BRANCH" = "main" ] || [ "$_LOCAL_BRANCH" = "staging" ]; then
             echo "$_ASSETS_NAME source is at $_LOCAL_SRC_VERSION but installed binary is $_LOCAL_BIN_version; checking sui-binaries for a matching release"
           else
             echo "$_ASSETS_NAME source ($_LOCAL_SRC_VERSION) is ahead of installed binary ($_LOCAL_BIN_version) on branch $_LOCAL_BRANCH; rebuilding from source"

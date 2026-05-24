@@ -1,15 +1,21 @@
 name: Lint
 
 on:
-  # push covers all branches (dev/pre-staging/staging/main) and is the
-  # actual source of branch-level lint health. The pull_request trigger
-  # was removed because it races against fast auto-merges: by the time
-  # super-linter runs, GitHub has already deleted the synthetic
-  # `refs/pull/N/merge` ref (it points to a commit super-linter looks
-  # up via GITHUB_SHA), causing every dev → pre-staging auto-merge to
-  # produce a noisy red Lint badge on the closed PR. Push events on
-  # the merged commit catch the same lint signal a few seconds later.
-  push: null
+  # Lint runs on dev/staging/main but NOT pre-staging. Pre-staging is a
+  # waiting area for the external sui-binaries build; the lint signal
+  # there is redundant with what dev already produced and what staging
+  # will produce again. Reducing one of the four lint runs per release
+  # cycle.
+  #
+  # pull_request was also removed earlier — it races against fast
+  # auto-merges. By the time super-linter runs, GitHub has already
+  # deleted the synthetic `refs/pull/N/merge` ref (which super-linter
+  # looks up via GITHUB_SHA), causing every dev → pre-staging
+  # auto-merge to produce a noisy red Lint badge on the closed PR.
+  # Push events on the merged commit catch the same lint signal a
+  # few seconds later.
+  push:
+    branches: [dev, staging, main]
 
   workflow_dispatch:
 
