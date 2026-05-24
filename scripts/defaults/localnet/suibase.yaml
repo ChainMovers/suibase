@@ -152,4 +152,3 @@ walrus_relay_metrics_port: ~
 links:
   - alias: "localnet"
     rpc: "http://localhost:9000"
-    ws: "ws://localhost:9000"

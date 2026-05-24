@@ -10,7 +10,7 @@ initial_fund_per_address: ~
 sui_faucet_enabled: false
 sui_faucet_genesis_funding: ~
 sui_faucet_host_ip: "localhost"
-sui_faucet_port: 9124
+sui_faucet_port: 9125
 sui_faucet_max_request_per_second: 100
 sui_faucet_num_coins: 1
 sui_faucet_coin_value: 200000000
@@ -18,7 +18,7 @@ sui_faucet_request_buffer_size: 200
 sui_faucet_client_timeout_secs: 10
 
 default_repo_url: "https://github.com/MystenLabs/sui.git"
-default_repo_branch: "devnet"
+default_repo_branch: "testnet"
 force_tag: ~
 
 github_token: ~
@@ -34,7 +34,7 @@ autocoins_mode: "public"
 
 proxy_enabled: true
 proxy_host_ip: "localhost"
-proxy_port_number: 44341
+proxy_port_number: 44342
 
 dtp_enabled: false
 dtp_host_ip: "localhost"
@@ -47,27 +47,40 @@ sui_explorer_enabled: true
 sui_explorer_scheme: "https://"
 sui_explorer_host_ip: "suiscan.xyz"
 sui_explorer_port_number: ~
-sui_explorer_object_path: "/devnet/object/{ID}"
-sui_explorer_package_path: "/devnet/object/{ID}/contracts"
-sui_explorer_txn_path: "/devnet/tx/{ID}"
+sui_explorer_object_path: "/testnet/object/{ID}"
+sui_explorer_package_path: "/testnet/object/{ID}/contracts"
+sui_explorer_txn_path: "/testnet/tx/{ID}"
 
 # Enable default links defined in this file. When set to false,
 # users can define their own links without inheriting the defaults.
 enable_default_links: true
 
 walrus_relay_enabled: false
-walrus_relay_proxy_port: ~
-walrus_relay_local_port: ~
-walrus_relay_metrics_port: ~
+walrus_relay_proxy_port: 45852
+walrus_relay_local_port: 45802
+walrus_relay_metrics_port: 45812
 
 links:
   - alias: "sui.io"
-    rpc: "https://fullnode.devnet.sui.io:443"
+    rpc: "https://fullnode.testnet.sui.io:443"
+    ws: "wss://fullnode.testnet.sui.io:443"
     priority: 10
-  - alias: "suiscan.xyz"
-    rpc: "https://rpc-ws-devnet.suiscan.xyz:443"
-    metrics: "https://rpc-ws-devnet.suiscan.xyz/metrics"
+  - alias: "allnodes.com"
+    rpc: "https://sui-testnet.publicnode.com:443"
     priority: 20
+  - alias: "blastapi.io"
+    rpc: "https://sui-testnet.public.blastapi.io:443"
+    ws: "wss://sui-testnet.public.blastapi.io:443"
+    priority: 20
+  - alias: "suiscan.xyz"
+    rpc: "https://rpc-testnet.suiscan.xyz:443"
+    metrics: "https://rpc-testnet.suiscan.xyz/metrics"
+    ws: "wss://rpc-testnet.suiscan.xyz/websocket"
+    priority: 20
+#  - alias: "ankr.com"
+#    rpc: "https://rpc.ankr.com/sui_testnet"
+#    priority: 20
 # - alias: "vincagame.com"
-#   rpc: "https://fullnode.devnet.vincagame.com:443"
-#   priority: 30
+#    rpc: "https://fullnode.testnet.vincagame.com:443"
+#    ws: "wss://fullnode.testnet.vincagame.com:443"
+#    priority: 30

@@ -67,7 +67,4 @@ interface Helper {
 
   [Throws=Error]
   string rpc_url();
-
-  [Throws=Error]
-  string ws_url();
 };

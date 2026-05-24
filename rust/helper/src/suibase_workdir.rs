@@ -263,10 +263,6 @@ impl SuibaseWorkdir {
     pub(crate) fn rpc_url(&self, root: &mut SuibaseRoot) -> Result<String, Error> {
         self.get_url_from_state(root, "rpc")
     }
-
-    pub(crate) fn ws_url(&self, root: &mut SuibaseRoot) -> Result<String, Error> {
-        self.get_url_from_state(root, "ws")
-    }
 }
 
 impl SuibaseWorkdir {

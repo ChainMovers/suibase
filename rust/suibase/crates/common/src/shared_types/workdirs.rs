@@ -161,13 +161,13 @@ impl WorkdirPaths {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Link {
-    // A link in a suibase.yaml file.
+    // A link in a suibase.yaml file. All upstreams are assumed gRPC-capable;
+    // JSON-RPC is being sunset (July 2026) and is no longer modeled here.
     pub alias: String,
     pub selectable: bool,
     pub monitored: bool,
     pub rpc: Option<String>,
     pub metrics: Option<String>,
-    pub ws: Option<String>,
     pub priority: u8,
     pub max_per_secs: Option<u32>, // Rate limit: maximum requests per second (None = unlimited)
     pub max_per_min: Option<u32>,  // Rate limit: maximum requests per minute (None = unlimited)
@@ -181,7 +181,6 @@ impl Link {
             monitored: true,
             rpc: Some(rpc),
             metrics: None,
-            ws: None,
             priority: u8::MAX,
             max_per_secs: None, // Default: no rate limit
             max_per_min: None,  // Default: no rate limit
@@ -447,7 +446,6 @@ impl WorkdirUserConfig {
         // links:
         //   - alias: "localnet"
         //     rpc: "http://localhost:9000"
-        //     ws: "ws://localhost:9000"
         //     priority: 10
         //   - alias: "localnet"
         //     enabled: false
@@ -622,7 +620,6 @@ impl WorkdirUserConfig {
 
                     let rpc = link["rpc"].as_str().map(|s| s.to_string()); // Optional
                     let metrics = link["metrics"].as_str().map(|s| s.to_string()); // Optional
-                    let ws = link["ws"].as_str().map(|s| s.to_string()); // Optional
                     let priority = link["priority"].as_u64().unwrap_or(u64::MAX) as u8;
                     let max_per_secs = link["max_per_secs"].as_u64().map(|v| v as u32); // Optional rate limit
                     let max_per_min = link["max_per_min"].as_u64().map(|v| v as u32); // Optional rate limit
@@ -632,7 +629,6 @@ impl WorkdirUserConfig {
                         monitored,
                         rpc,
                         metrics,
-                        ws,
                         priority,
                         max_per_secs,
                         max_per_min,
@@ -735,7 +731,6 @@ mod tests {
         assert_eq!(link.monitored, true);
         assert_eq!(link.rpc, Some("http://localhost:9000".to_string()));
         assert_eq!(link.metrics, None);
-        assert_eq!(link.ws, None);
         assert_eq!(link.priority, u8::MAX);
         assert_eq!(link.max_per_secs, None); // Default: no rate limit
         assert_eq!(link.max_per_min, None); // Default: no rate limit
@@ -887,6 +882,55 @@ links:
         let high_rate_link = links.get("high_rate_rpc").unwrap();
         assert_eq!(high_rate_link.max_per_secs, Some(u32::MAX)); // Should handle max u32 value
         assert_eq!(high_rate_link.max_per_min, None);
+    }
+
+    // Regression test: the link parser must accept (a) legacy fields like
+    // `ws:` that have been removed from the struct, (b) unknown fields the
+    // user may have invented or copied from a newer release, and (c) links
+    // with most fields omitted. Loading any of these must not error and must
+    // not crash; unknown keys are simply ignored.
+    #[test]
+    fn test_yaml_parsing_unknown_and_missing_fields() {
+        let yaml_content = r#"
+links:
+  - alias: "legacy_ws_field"
+    rpc: "http://localhost:9000"
+    ws: "ws://localhost:9000"
+    priority: 10
+  - alias: "future_field"
+    rpc: "http://localhost:9001"
+    some_field_we_dont_know_about: "abc"
+    another_unknown:
+      nested: 123
+    priority: 20
+  - alias: "minimal"
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(yaml_content.as_bytes()).unwrap();
+        let temp_path = temp_file.path().to_str().unwrap();
+
+        let mut config = WorkdirUserConfig::new();
+        let result = config.load_and_merge_from_file(temp_path);
+        assert!(result.is_ok(), "loader must tolerate unknown/missing fields: {:?}", result.err());
+
+        let links = config.links();
+        assert_eq!(links.len(), 3);
+
+        // Legacy ws field is silently dropped, other fields still parsed.
+        let legacy = links.get("legacy_ws_field").unwrap();
+        assert_eq!(legacy.rpc.as_deref(), Some("http://localhost:9000"));
+        assert_eq!(legacy.priority, 10);
+
+        // Unknown fields are ignored; known fields still parse.
+        let future = links.get("future_field").unwrap();
+        assert_eq!(future.rpc.as_deref(), Some("http://localhost:9001"));
+        assert_eq!(future.priority, 20);
+
+        // Missing rpc / priority are all fine.
+        let minimal = links.get("minimal").unwrap();
+        assert_eq!(minimal.rpc, None);
+        assert_eq!(minimal.priority, u8::MAX);
     }
 
     #[test]

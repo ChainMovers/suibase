@@ -83,7 +83,6 @@ enable_default_links: false
 links:
   - alias: "localnet"
     rpc: "http://localhost:9000"
-    ws: "ws://localhost:9000"
     selectable: false  # IMPORTANT: Real server not selectable during tests
     monitored: true
 
@@ -299,7 +298,7 @@ impl MockServerTestHarness {
 
     /// Parse debug output to extract link configuration parameters
     fn parse_link_config_from_debug(debug_str: &str, alias: &str) -> Option<serde_json::Value> {
-        // Look for pattern like: "alias": Link { alias: "mock-0", selectable: true, monitored: true, rpc: Some("http://localhost:50001"), metrics: None, ws: None, priority: 255, max_per_secs: None, max_per_min: None }
+        // Look for pattern like: "alias": Link { alias: "mock-0", selectable: true, monitored: true, rpc: Some("http://localhost:50001"), metrics: None, priority: 255, max_per_secs: None, max_per_min: None }
         // We need to extract the max_per_secs and max_per_min values
         // The configuration we want is in the AdminController section, not the InputPort section
 

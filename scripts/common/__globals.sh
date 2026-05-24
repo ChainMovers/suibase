@@ -788,6 +788,37 @@ export -f del_key_value
 # Now load all the $CFG_ variables from the suibase.yaml files.
 # shellcheck source=SCRIPTDIR/__parse-yaml.sh
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
+
+# Auto-upgrade workdirs/<WORKDIR>/suibase.yaml when the user has not modified
+# it. Detected by byte match (CR-stripped) against the prior canonical content
+# saved at scripts/defaults/<WORKDIR>/suibase.yaml.prev. Only one previous
+# version is tracked (rare changes, kept manually). Applied to testnet/mainnet
+# only. Call only from mutating commands (start/update) — see __workdir-exec.sh.
+auto_upgrade_user_suibase_yaml_as_needed() {
+  local _WORKDIR="$1"
+  case "$_WORKDIR" in
+    testnet|mainnet) ;;
+    *) return ;;
+  esac
+  local _user="$WORKDIRS/$_WORKDIR/suibase.yaml"
+  local _default="$SCRIPTS_DIR/defaults/$_WORKDIR/suibase.yaml"
+  local _prev="$_default.prev"
+  [ -f "$_user" ] && [ -f "$_default" ] && [ -f "$_prev" ] || return
+  # Skip symlinks: user maintains their config elsewhere (e.g. dotfiles repo).
+  [ -L "$_user" ] && return
+  # Compare ignoring \r so Windows/WSL CRLF files still match.
+  cmp -s <(tr -d '\r' < "$_user") <(tr -d '\r' < "$_prev") || return
+  cmp -s <(tr -d '\r' < "$_user") <(tr -d '\r' < "$_default") && return
+  # Atomic replace: write to a sibling temp file, then rename on the same FS.
+  local _tmp="$_user.tmp.$$"
+  cp -f "$_default" "$_tmp" || { rm -f "$_tmp"; return; }
+  mv -f "$_tmp" "$_user" || { rm -f "$_tmp"; return; }
+  echo "suibase.yaml: auto-upgraded $_WORKDIR (was prior default, no user edits)" >&2
+  # Reload CFG_ vars to reflect the new file.
+  update_suibase_yaml
+}
+export -f auto_upgrade_user_suibase_yaml_as_needed
+
 update_suibase_yaml() {
   local _WORKDIR="$WORKDIR"
 
@@ -1928,6 +1959,36 @@ adjust_sui_aliases() {
 }
 export -f adjust_sui_aliases
 
+# Look up the alias for a parse_yaml-generated link variable name.
+# parse_yaml has two behaviors and we must handle both:
+#   (a) `alias:` is the FIRST sub-key of the link block — the value is folded
+#       into the parent variable (`$1`) as "alias: <value>" and no dedicated
+#       `_alias` sub-variable is emitted.
+#   (b) `alias:` is NOT first — the parent variable holds whichever key is
+#       first, and a dedicated `<parent>_alias` sub-variable IS emitted.
+# Try the sub-variable first; if missing, strip the "alias:" prefix from the
+# parent. Either way, alias extraction is independent of yaml key ordering.
+state_links_alias_for() {
+  local _alias_var="$1_alias"
+  if [ -n "${!_alias_var:-}" ]; then
+    echo "${!_alias_var}"
+    return
+  fi
+  local _parent="${!1}"
+  case "$_parent" in
+    alias:*)
+      # Strip the leading "alias:" plus surrounding whitespace.
+      _parent="${_parent#alias:}"
+      # shellcheck disable=SC2001
+      echo "$_parent" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+export -f state_links_alias_for
+
 create_state_links_as_needed() {
   WORKDIR_PARAM="$1"
 
@@ -1987,15 +2048,11 @@ create_state_links_as_needed() {
         if ! $_FIRST_LINE; then echo ","; else _FIRST_LINE=false; fi
         echo "    {"
         echo "      \"id\": $_i, "
-        # shellcheck disable=SC2001
-        _alias=$(echo "${!_links}" | sed 's/.*alias.*:\(.*\)/\1/' | tr -d '[:space:]')
+        _alias=$(state_links_alias_for "$_links")
         echo "      \"alias\": \"$_alias\", "
 
         _rpc="${_links}_rpc"
-        echo "      \"rpc\": \"${!_rpc}\", "
-
-        _ws="${_links}_ws"
-        echo "      \"ws\": \"${!_ws}\""
+        echo "      \"rpc\": \"${!_rpc}\""
         ((_i++))
         echo -n "    }" # close link
       done

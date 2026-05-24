@@ -1770,42 +1770,20 @@ impl WebSocketWorkerIOThread {
 
     async fn open_websocket(&mut self) -> bool {
         // Open a websocket connection to the server for this workdir.
-
-        // For now, the only tested servers for websocket are Shinami
-        // and Mysten Labs.
-
-        // TODO: Make this better config driven.
-
-        // Get the InputPort config from the globals.proxy (read-only).
-        let globals_read_guard = self.params.globals.proxy.read().await;
-        let globals = &*globals_read_guard;
-        let input_ports = &globals.input_ports;
-
-        // Iterate input_ports to find a matching workdir_idx.
-        let configured_rpc = input_ports.iter().find_map(|x| {
-            let (_, input_port) = x;
-            if input_port.workdir_idx() == self.params.workdir_idx {
-                input_port.find_target_server_ws_by_alias("shinami.com")
-            } else {
-                None
+        // JSON-RPC is being sunset (July 2026), so the previous mechanism of
+        // letting users override the ws URL via a `ws:` link field has been
+        // removed. Always use the hardcoded fullnode endpoints below.
+        let socket_url = match self.params.workdir_idx {
+            WORKDIR_IDX_LOCALNET => "ws://localhost:9000",
+            WORKDIR_IDX_DEVNET => "wss://fullnode.devnet.sui.io:443",
+            WORKDIR_IDX_TESTNET => "wss://fullnode.testnet.sui.io:443",
+            WORKDIR_IDX_MAINNET => "wss://fullnode.mainnet.sui.io:443",
+            _ => {
+                log::error!("Unexpected workdir_idx {:?}", self.params.workdir_idx);
+                return false;
             }
-        });
-
-        let socket_url = if let Some(configured_rpc) = configured_rpc {
-            configured_rpc
-        } else {
-            let default_rpc = match self.params.workdir_idx {
-                WORKDIR_IDX_LOCALNET => "ws://localhost:9000",
-                WORKDIR_IDX_DEVNET => "wss://fullnode.devnet.sui.io:443",
-                WORKDIR_IDX_TESTNET => "wss://fullnode.testnet.sui.io:443",
-                WORKDIR_IDX_MAINNET => "wss://fullnode.mainnet.sui.io:443",
-                _ => {
-                    log::error!("Unexpected workdir_idx {:?}", self.params.workdir_idx);
-                    return false;
-                }
-            };
-            default_rpc.to_string()
-        };
+        }
+        .to_string();
 
         match connect_async(&socket_url).await {
             Ok((ws_stream, _response)) => {

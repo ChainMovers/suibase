@@ -277,10 +277,6 @@ export class SuibaseWorkdir {
     return this.urlFromState(root, "rpc");
   }
 
-  wsUrl(root: SuibaseRoot): string {
-    return this.urlFromState(root, "ws");
-  }
-
   // ============ private ============
 
   private assertReady(root: SuibaseRoot): void {

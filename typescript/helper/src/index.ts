@@ -82,10 +82,6 @@ export class Helper {
     return this.requireWorkdir().rpcUrl(this.root);
   }
 
-  wsUrl(): string {
-    return this.requireWorkdir().wsUrl(this.root);
-  }
-
   private requireWorkdir(): SuibaseWorkdir {
     if (!this.workdir_) {
       throw new SuibaseError(
