@@ -25,7 +25,62 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Detect whether this push touched only docs/. If so, the expensive
+  # precompiled-validate matrix is skipped — docs changes can't break
+  # the released binary, so re-running the release-tests against the
+  # precompiled adds no signal but costs ~10 min/run (mostly the macOS
+  # validate). The open-main-pr job still runs (gated on either
+  # validate succeeding OR docs-only being true), so the promotion to
+  # main proceeds.
+  #
+  # For mixed pushes (some docs + some non-docs), full validate runs.
+  # For docs-only pushes, fast-path through to main in <2 min.
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+          # Need full history so the diff against the previous staging
+          # tip is accurate, even when the merge brings in many commits.
+          fetch-depth: 0
+      - id: diff
+        run: |
+          set -e
+          # `HEAD^1` is the OLD staging tip (first parent of the merge
+          # commit). `HEAD` is the new staging tip. Diff shows exactly
+          # what this push introduces.
+          if ! git rev-parse HEAD^1 >/dev/null 2>&1; then
+            # Edge case: first ever commit on staging (no parent).
+            # Treat as not-docs-only to force full validate.
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No parent commit — running full validate."
+            exit 0
+          fi
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          if [ -z "$changed" ]; then
+            # Edge case: empty diff (shouldn't happen for a push event).
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::No changed files — treating as docs-only (fast-path)."
+            exit 0
+          fi
+          echo "Changed files in this push:"
+          echo "$changed" | sed 's/^/  /'
+          non_docs=$(echo "$changed" | grep -v '^docs/' || true)
+          if [ -z "$non_docs" ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Docs-only push — skipping precompiled-validate matrix."
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Non-docs changes present — full validate required."
+          fi
+
   validate:
+    needs: detect-changes
+    # Fast-path: docs-only pushes skip the ~10-min precompiled validation.
+    if: needs.detect-changes.outputs.docs_only != 'true'
     name: Validate ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -155,15 +210,22 @@ jobs:
           "$HOME/suibase/scripts/tests/run-all.sh" --release-tests
 
   open-main-pr:
-    needs: validate
+    needs: [detect-changes, validate]
     runs-on: ubuntu-latest
-    # Run on both push (normal pipeline) AND workflow_dispatch
-    # (manual unstick — e.g. when a bot auto-merge to staging didn't
-    # fire the push event because of the GITHUB_TOKEN anti-loop rule).
-    # The previous `github.event_name == 'push'` gate meant manual
-    # dispatches succeeded at validation but silently skipped opening
-    # the staging→main PR, stalling the pipeline.
-    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    # Run when:
+    #   - validate succeeded (normal non-docs path), OR
+    #   - validate was skipped because this is a docs-only push
+    #     (fast-path — no need to re-validate the precompiled).
+    # AND the trigger is push (normal) OR workflow_dispatch (manual
+    # unstick). `if: always() && (...)` because needs.validate.result
+    # is "skipped" not "success" on the docs-only fast-path, but
+    # `if: success()` would also accept skipped — use the explicit
+    # condition for clarity.
+    if: |
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.validate.result == 'success' ||
+       (needs.validate.result == 'skipped' && needs.detect-changes.outputs.docs_only == 'true'))
     permissions:
       # `contents: write` is needed by `gh pr merge --auto` to enable
       # auto-merge on a branch-protected base (main). `pull-requests:
@@ -247,7 +309,9 @@ jobs:
           echo "::notice::Opened auto-merge PR #$number staging → main."
 
       - name: Trigger deploy-docs.yml after bot auto-merge
-        if: success() && github.event_name == 'push'
+        # Mirror the open-main-pr gate above — accept workflow_dispatch
+        # as well as push, so manual unsticks reach deploy-docs.
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -271,9 +335,23 @@ jobs:
           for i in $(seq 1 60); do
             state=$(gh pr view "$number" --json state --jq .state)
             if [ "$state" = "MERGED" ]; then
-              echo "PR #$number merged — dispatching deploy-docs.yml."
+              echo "PR #$number merged — dispatching deploy-docs.yml + release-tests.yml on main."
+              # deploy-docs: rebuild and publish gh-pages so the live
+              # site picks up content changes (or stays in sync after
+              # any release). Idempotent — safe even when no docs
+              # actually changed.
               gh workflow run deploy-docs.yml --ref main
-              echo "::notice::Dispatched deploy-docs.yml after PR #$number auto-merge."
+              # release-tests: the "immediate post-release" sanity
+              # check on main. Redundant with staging.yml's validate
+              # in normal operation, but preserves the signal that
+              # would otherwise be lost (release-tests.yml's `push:
+              # branches: [main]` trigger doesn't fire on bot pushes).
+              # If staging.yml's validate passed but release-tests on
+              # the merge commit fails, something specific to main's
+              # merge structure or environment is broken — worth a
+              # red badge.
+              gh workflow run release-tests.yml --ref main
+              echo "::notice::Dispatched deploy-docs.yml + release-tests.yml after PR #$number auto-merge."
               exit 0
             fi
             sleep 5

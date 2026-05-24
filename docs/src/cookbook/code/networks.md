@@ -67,15 +67,13 @@ To be done. Add your contribution here.
 @tab:active TypeScript
 
 ```ts
-import { JsonRpcProvider, devnetConnection } from "@mysten/sui.js";
+import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
 
-// connect to Devnet
-const provider = new JsonRpcProvider(devnetConnection);
-
-// get test Sui from the DevNet faucet server
-await provider.requestSuiFromFaucet(
-  "0x8bab471b0b2e69ac5051c58bbbf81159c4c9d42bf7a58d4f795ecfb12c968506"
-);
+// request test Sui from the devnet faucet
+await requestSuiFromFaucetV2({
+  host: getFaucetHost('devnet'),
+  recipient: '0x8bab471b0b2e69ac5051c58bbbf81159c4c9d42bf7a58d4f795ecfb12c968506',
+});
 ```
 
 :::
