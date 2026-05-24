@@ -3,7 +3,7 @@ title: "Proxy Server ( Multi-Link RPC )"
 order: 2
 ---
 
-Makes your JSON-RPC queries more reliable with:
+A local gRPC server that makes your queries to Sui more reliable with:
   - Selection of fastest RPC server currently available.
   - Automatic retry on failure (when safe against transaction execution repetition).
   - Load balancing across multiple RPC servers (to minimize rate-limiting).
@@ -35,7 +35,7 @@ Each **user query** is counted only once in one of the following metric dependin
 **Success first attempt**: One healthy RPC node was selected and the request succeeded immediately.<br>
 **Success after retry**: One healthy RPC node was selected but failed, the request eventually succeeded after retries with one or more other servers (when safe to retry). From a user perspective, the request succeeded as if a single RPC node was used.<br>
 **Failure bad request**: It was determined that the request was malformed and would not succeed with any RPC nodes. Therefore the request is not retried and the failure is reported immediately. Check the response for hint on how to fix the request.<br>
-**Failure others**: All other scenarios when the response was not a JSON-RPC success. The proxy response will have more information.<br>
+**Failure others**: All other scenarios when the response was not a gRPC success. The proxy response will have more information.<br>
 :::
 
 ::: details Details on individual server stats
