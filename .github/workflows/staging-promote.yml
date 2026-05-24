@@ -214,15 +214,44 @@ jobs:
           done
           echo "::warning::PR #$number did not reach MERGED within 5 min; not dispatching."
 
-      - name: Self-delete this run if it was a no-op
-        # Only delete clean no-op runs (success() filters out real
-        # failures, which we want to keep visible). A run is a no-op
-        # when EITHER `ahead != true` (nothing on pre-staging to
-        # promote) OR `ready != true` (sui-binaries hasn't published
-        # the matching release yet). Removing those entries keeps the
-        # Actions UI focused on runs that actually did work.
-        if: success() && !(steps.diff.outputs.ahead == 'true' && steps.tag_check.outputs.ready == 'true')
+      - name: Sweep stale no-op runs of this workflow
+        # GITHUB_TOKEN can't delete the workflow run that's currently
+        # executing it (HTTP 403 by GitHub design), so real-time
+        # self-delete isn't possible. Instead, each run sweeps its
+        # OWN predecessors: any completed run of this workflow that
+        # finished >15 min ago AND skipped the "Open auto-merge PR"
+        # step (= no commits ahead, or sui-binaries release not yet
+        # published — i.e. a no-op) gets deleted.
+        #
+        # The most recent runs are always left alone, which is fine:
+        # they're the ones an operator wants to see when checking
+        # "did the pipeline run recently?". With the 15-min cron plus
+        # repository_dispatch from sui-binaries, sweeps happen often
+        # enough that no-op clutter stays bounded.
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
+          workflow_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows" \
+            --jq '.workflows[] | select(.path == ".github/workflows/staging-promote.yml") | .id')
+          cutoff=$(date -u -d '15 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          # status=success limits the candidate set to clean runs; we
+          # never delete failures (those are signal worth keeping).
+          run_ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?status=success&per_page=50" \
+            --jq ".workflow_runs[] | select(.updated_at < \"$cutoff\") | .id")
+
+          deleted=0
+          for run_id in $run_ids; do
+            # The "Open auto-merge PR pre-staging → staging" step is
+            # gated on both promotion conditions. If it was SKIPPED,
+            # this run did no useful work and is safe to remove.
+            promote_step=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs" \
+              --jq '[.jobs[].steps[] | select(.name == "Open auto-merge PR pre-staging → staging")][0].conclusion // "missing"')
+            if [ "$promote_step" = "skipped" ]; then
+              if gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" >/dev/null 2>&1; then
+                deleted=$((deleted + 1))
+              fi
+            fi
+          done
+          echo "Deleted $deleted stale no-op run(s)."
