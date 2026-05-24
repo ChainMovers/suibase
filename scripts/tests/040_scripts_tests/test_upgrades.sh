@@ -56,14 +56,16 @@ test_version_comparison_basics() {
 test_daemon_upgrade_decision_logic() {
   echo "Testing daemon upgrade via repair script..."
 
-  # Check if we're on main branch - daemon upgrades only happen on main
+  # Daemon upgrades via published precompiled happen on main AND staging
+  # (staging validates the same precompiled). dev / pre-staging build
+  # from source, so the upgrade path is different there — skip.
   local current_branch
   current_branch=$(cd "$SUIBASE_DIR" && git rev-parse --abbrev-ref HEAD)
 
-  if [ "$current_branch" != "main" ]; then
-    # Skipping daemon upgrade test - not on main branch (current: $current_branch)"
-    # Note: Daemon upgrades are only allowed on main branch for stability"
-    #       To test upgrades, switch to main branch.
+  if [ "$current_branch" != "main" ] && [ "$current_branch" != "staging" ]; then
+    # Skipping daemon upgrade test - branch '$current_branch' doesn't use
+    # the published precompiled, so the precompiled-upgrade path under
+    # test isn't exercisable here.
     return 0
   fi
 

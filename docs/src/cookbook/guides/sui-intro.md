@@ -20,7 +20,7 @@ https://docs.sui.io/
 
 ### Useful Links
 - [References - docs.sui.io/reference ](https://docs.sui.io/reference)
-- [JSON-RPC - docs.sui.io/references/sui-api ](https://docs.sui.io/references/sui-api)
+- [Sui API Reference - docs.sui.io/references/sui-api ](https://docs.sui.io/references/sui-api)
 - [Cheat Sheet](https://docs.sui.io/guides/developer/dev-cheat-sheet)
 - https://suiexplorer.com
 

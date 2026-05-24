@@ -37,14 +37,14 @@ fi
 
 # Make sure the dev branch does not have uncommitted changes.
 if ! git diff-index --quiet HEAD --; then
-  echo "Uncommitted changes in the dev branch. Please commit or stash them before merging."
+  echo "❌ NO MERGE — uncommitted changes on dev. Commit or stash first."
   exit 1
 fi
 
 # Make sure the dev branch is up-to-date with the remote.
 git fetch origin dev
 if [ "$(git rev-parse dev)" != "$(git rev-parse origin/dev)" ]; then
-  echo "dev branch not up-to-date with remote. Do 'git push'."
+  echo "❌ NO MERGE — local dev != origin/dev. 'git push' first."
   exit 1
 fi
 
@@ -64,9 +64,95 @@ git fetch origin pre-staging
 
 # Check if there are any changes from dev that are not in pre-staging.
 if git merge-base --is-ancestor dev origin/pre-staging; then
-  echo "No changes to merge from dev to pre-staging."
+  echo "❌ NO MERGE — pre-staging already contains dev's tip."
   exit 0
 fi
+
+# Verify ALL push-event CI workflows on dev's tip are green BEFORE
+# letting the change escape into the release pipeline. This catches
+# the "dev had a red badge but I ran merge anyway" mistake.
+#
+# In-flight runs are treated as "wait" not "OK": if any workflow is
+# still in_progress/queued, the script aborts and asks you to re-run
+# once CI completes. Avoids the racy "merge fired while CI was still
+# running" case.
+#
+# On success, sets a `dev-all-green` commit status on dev's tip which
+# branch protection on pre-staging requires (belt + suspenders so
+# even if someone bypasses this script, the merge still can't go
+# through without all CI being green at dev's tip).
+DEV_SHA=$(git rev-parse origin/dev)
+echo
+echo "Verifying dev@${DEV_SHA:0:10} CI status..."
+
+# Workflows that ALL must be green on a dev push for a promotion to
+# be allowed. Lint covers syntax; the four matrices cover code.
+REQUIRED_WORKFLOWS=(
+  "Lint"
+  "Suibase Daemon Tests"
+  "Rust Tests"
+  "TypeScript Tests"
+  "Scripts Tests"
+)
+
+# Decide on STATUS first (completed vs not), then on conclusion. gh's
+# API returns conclusion as an empty string (not null) while a run is
+# still in progress, so checking conclusion alone is unreliable.
+any_failed=false
+any_running=false
+for w in "${REQUIRED_WORKFLOWS[@]}"; do
+  state=$(gh run list --commit "$DEV_SHA" --workflow "$w" --limit 1 \
+    --json status,conclusion --jq '.[0] | (.status // "no-run") + ":" + (.conclusion // "")' 2>/dev/null)
+  status="${state%%:*}"
+  conclusion="${state#*:}"
+  case "$status" in
+    completed)
+      case "$conclusion" in
+        success)              printf "  ✓ %s\n" "$w" ;;
+        skipped|neutral)      printf "  ⊘ %s (skipped)\n" "$w" ;;
+        *)
+          printf "  ✗ %s: %s\n" "$w" "$conclusion"
+          any_failed=true
+          ;;
+      esac
+      ;;
+    in_progress|queued|waiting|requested|pending)
+      printf "  ↻ %s\n" "$w"
+      any_running=true
+      ;;
+    no-run)
+      printf "  ✗ %s: no run found\n" "$w"
+      any_failed=true
+      ;;
+    *)
+      printf "  ? %s: %s\n" "$w" "$state"
+      any_failed=true
+      ;;
+  esac
+done
+
+CI_URL="https://github.com/ChainMovers/suibase/actions?query=branch%3Adev"
+if $any_failed; then
+  echo
+  echo "❌ NO MERGE — dev CI has failures (or no run found). Fix and re-run."
+  echo "  $CI_URL"
+  exit 1
+fi
+if $any_running; then
+  echo
+  echo "❌ NO MERGE — dev CI still running. Wait and re-run."
+  echo "  $CI_URL"
+  exit 1
+fi
+
+# Set the dev-all-green commit status so branch protection on
+# pre-staging is satisfied. The status name MUST match the required
+# context configured by scripts/dev/apply-branch-protection.
+gh api -X POST "repos/ChainMovers/suibase/statuses/$DEV_SHA" \
+  -f state=success \
+  -f context=dev-all-green \
+  -f description="All dev push-event CI workflows passed (set by scripts/dev/merge)" \
+  >/dev/null
 
 # Reuse an open PR if one exists; otherwise open one.
 existing=$(gh pr list --base pre-staging --head dev --state open --json number --jq '.[0].number')
@@ -79,5 +165,35 @@ if [ -z "$existing" ]; then
     --body "Auto-opened by \`scripts/dev/merge\`. The pipeline (pre-staging.yml → cron → staging.yml) carries it through to main. See CONTRIBUTING.md."
   existing=$(gh pr list --base pre-staging --head dev --state open --json number --jq '.[0].number')
 fi
-echo "Auto-merging PR #$existing dev → pre-staging..."
+echo
+echo "✓ MERGING — PR #$existing dev → pre-staging (auto-merge)"
 gh pr merge "$existing" --auto --merge
+
+# Trigger the cron immediately instead of waiting up to 15 min for the
+# next scheduled tick. Saves a chunk of pipeline latency. Cron is safe
+# to dispatch even if the PR hasn't finished merging yet — it exits
+# silent ("nothing to promote") if pre-staging isn't ahead of staging,
+# and exits silent ("waiting on sui-binaries") if the matching daemon
+# release tag isn't published yet. So the worst case of an early
+# dispatch is "one cron run that does nothing"; the regular 15-min
+# cron + the post-merge dispatch in staging-promote.yml itself still
+# catch any case we miss.
+#
+# Poll for the PR to reach MERGED first when possible, so the cron
+# sees the new pre-staging tip on its first try. Bounded — if the
+# merge takes longer than 60s, dispatch anyway and let the cron retry
+# logic do its thing.
+echo "Waiting for PR #$existing to reach MERGED state (then dispatching cron)..."
+for i in $(seq 1 12); do
+  state=$(gh pr view "$existing" --json state --jq .state 2>/dev/null)
+  if [ "$state" = "MERGED" ]; then
+    echo "PR #$existing merged — dispatching staging-promote.yml now (skips up to 15-min cron wait)."
+    gh workflow run staging-promote.yml --ref main || \
+      echo "(cron dispatch failed — the regular 15-min schedule will still catch this)"
+    exit 0
+  fi
+  sleep 5
+done
+echo "PR #$existing didn't reach MERGED in 60s — dispatching cron anyway."
+gh workflow run staging-promote.yml --ref main || \
+  echo "(cron dispatch failed — the regular 15-min schedule will still catch this)"
