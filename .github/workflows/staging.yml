@@ -157,7 +157,13 @@ jobs:
   open-main-pr:
     needs: validate
     runs-on: ubuntu-latest
-    if: success() && github.event_name == 'push'
+    # Run on both push (normal pipeline) AND workflow_dispatch
+    # (manual unstick — e.g. when a bot auto-merge to staging didn't
+    # fire the push event because of the GITHUB_TOKEN anti-loop rule).
+    # The previous `github.event_name == 'push'` gate meant manual
+    # dispatches succeeded at validation but silently skipped opening
+    # the staging→main PR, stalling the pipeline.
+    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:
       # `contents: write` is needed by `gh pr merge --auto` to enable
       # auto-merge on a branch-protected base (main). `pull-requests:
