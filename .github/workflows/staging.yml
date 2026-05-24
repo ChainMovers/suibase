@@ -273,9 +273,23 @@ jobs:
           for i in $(seq 1 60); do
             state=$(gh pr view "$number" --json state --jq .state)
             if [ "$state" = "MERGED" ]; then
-              echo "PR #$number merged — dispatching deploy-docs.yml."
+              echo "PR #$number merged — dispatching deploy-docs.yml + release-tests.yml on main."
+              # deploy-docs: rebuild and publish gh-pages so the live
+              # site picks up content changes (or stays in sync after
+              # any release). Idempotent — safe even when no docs
+              # actually changed.
               gh workflow run deploy-docs.yml --ref main
-              echo "::notice::Dispatched deploy-docs.yml after PR #$number auto-merge."
+              # release-tests: the "immediate post-release" sanity
+              # check on main. Redundant with staging.yml's validate
+              # in normal operation, but preserves the signal that
+              # would otherwise be lost (release-tests.yml's `push:
+              # branches: [main]` trigger doesn't fire on bot pushes).
+              # If staging.yml's validate passed but release-tests on
+              # the merge commit fails, something specific to main's
+              # merge structure or environment is broken — worth a
+              # red badge.
+              gh workflow run release-tests.yml --ref main
+              echo "::notice::Dispatched deploy-docs.yml + release-tests.yml after PR #$number auto-merge."
               exit 0
             fi
             sleep 5
