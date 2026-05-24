@@ -788,6 +788,37 @@ export -f del_key_value
 # Now load all the $CFG_ variables from the suibase.yaml files.
 # shellcheck source=SCRIPTDIR/__parse-yaml.sh
 source "$SCRIPTS_DIR/common/__parse-yaml.sh"
+
+# Auto-upgrade workdirs/<WORKDIR>/suibase.yaml when the user has not modified
+# it. Detected by byte match (CR-stripped) against the prior canonical content
+# saved at scripts/defaults/<WORKDIR>/suibase.yaml.prev. Only one previous
+# version is tracked (rare changes, kept manually). Applied to testnet/mainnet
+# only. Call only from mutating commands (start/update) — see __workdir-exec.sh.
+auto_upgrade_user_suibase_yaml_as_needed() {
+  local _WORKDIR="$1"
+  case "$_WORKDIR" in
+    testnet|mainnet) ;;
+    *) return ;;
+  esac
+  local _user="$WORKDIRS/$_WORKDIR/suibase.yaml"
+  local _default="$SCRIPTS_DIR/defaults/$_WORKDIR/suibase.yaml"
+  local _prev="$_default.prev"
+  [ -f "$_user" ] && [ -f "$_default" ] && [ -f "$_prev" ] || return
+  # Skip symlinks: user maintains their config elsewhere (e.g. dotfiles repo).
+  [ -L "$_user" ] && return
+  # Compare ignoring \r so Windows/WSL CRLF files still match.
+  cmp -s <(tr -d '\r' < "$_user") <(tr -d '\r' < "$_prev") || return
+  cmp -s <(tr -d '\r' < "$_user") <(tr -d '\r' < "$_default") && return
+  # Atomic replace: write to a sibling temp file, then rename on the same FS.
+  local _tmp="$_user.tmp.$$"
+  cp -f "$_default" "$_tmp" || { rm -f "$_tmp"; return; }
+  mv -f "$_tmp" "$_user" || { rm -f "$_tmp"; return; }
+  echo "suibase.yaml: auto-upgraded $_WORKDIR (was prior default, no user edits)" >&2
+  # Reload CFG_ vars to reflect the new file.
+  update_suibase_yaml
+}
+export -f auto_upgrade_user_suibase_yaml_as_needed
+
 update_suibase_yaml() {
   local _WORKDIR="$WORKDIR"
 
