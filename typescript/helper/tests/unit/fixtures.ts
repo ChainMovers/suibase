@@ -58,7 +58,6 @@ export function makeFixture(workdirs: FixtureWorkdirOptions[] = []): Fixture {
               id: 0,
               alias: wd.name,
               rpc: `http://localhost:9000/${wd.name}`,
-              ws: `ws://localhost:9000/${wd.name}`,
             },
           ],
         }),

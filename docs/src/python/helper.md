@@ -60,9 +60,6 @@ True
 >>> helper.rpc_url()
 'http://localhost:9000'
 
->>> helper.ws_url()
-'ws://localhost:9000'
-
 >>> helper.package_id("demo")
 '0x794fc1d80f18a02eb0b7094d2f5a9f9f40bcf653996291f7a7086404689a19b5'
 

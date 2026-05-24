@@ -14,7 +14,6 @@ sui-keys.workspace = true
 shared-crypto.workspace = true
 
 clap.workspace = true
-futures.workspace = true
 colored.workspace = true
 
 suibase = { path = "../../../../../suibase/rust/helper" }

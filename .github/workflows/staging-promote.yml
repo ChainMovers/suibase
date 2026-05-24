@@ -24,8 +24,14 @@ name: Release pipeline cron
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 min
+    - cron: "*/15 * * * *"   # every 15 min — safety net for missed dispatches
   workflow_dispatch:
+  # Fast path: chainmovers/sui-binaries fires this event after it
+  # finishes publishing a suibase-daemon release (assets uploaded,
+  # draft flipped). Cuts the average promote latency from ~7.5 min
+  # (half the cron interval) to ~1 min.
+  repository_dispatch:
+    types: [daemon-published]
 
 jobs:
   promote:
@@ -207,3 +213,16 @@ jobs:
             sleep 5
           done
           echo "::warning::PR #$number did not reach MERGED within 5 min; not dispatching."
+
+      - name: Self-delete this run if it was a no-op
+        # Only delete clean no-op runs (success() filters out real
+        # failures, which we want to keep visible). A run is a no-op
+        # when EITHER `ahead != true` (nothing on pre-staging to
+        # promote) OR `ready != true` (sui-binaries hasn't published
+        # the matching release yet). Removing those entries keeps the
+        # Actions UI focused on runs that actually did work.
+        if: success() && !(steps.diff.outputs.ahead == 'true' && steps.tag_check.outputs.ready == 'true')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true

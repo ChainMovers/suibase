@@ -2,7 +2,6 @@
 //
 // See these other modules for the Sui related code.
 mod counter;
-mod events;
 
 use clap::*;
 use colored::Colorize;
@@ -11,14 +10,12 @@ use colored::Colorize;
 #[derive(Parser)]
 #[clap(
     name = "demo",
-    about = "A Rust SDK demo application with events subscription",
+    about = "A Rust SDK demo application",
     rename_all = "kebab-case",
     author,
     version
 )]
 pub enum Command {
-    #[clap(name = "events")]
-    Events {},
     #[clap(name = "count")]
     Count {},
 }
@@ -27,10 +24,6 @@ impl Command {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
             Command::Count {} => counter::count().await,
-            Command::Events {} => {
-                // Blocking until Ctrl-C or error.
-                events::display_events_loop().await
-            }
         }
     }
 }

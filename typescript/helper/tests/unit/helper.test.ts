@@ -195,7 +195,7 @@ describe("Helper.clientAddress()", () => {
   });
 });
 
-describe("Helper.rpcUrl() / wsUrl()", () => {
+describe("Helper.rpcUrl()", () => {
   let fx: Fixture;
   before(() => {
     fx = makeFixture([{ name: "localnet" }]);
@@ -206,12 +206,6 @@ describe("Helper.rpcUrl() / wsUrl()", () => {
     const sbh = new Helper({ rootPath: fx.root });
     sbh.selectWorkdir("localnet");
     assert.equal(sbh.rpcUrl(), "http://localhost:9000/localnet");
-  });
-
-  test("wsUrl reads from .state/links primary link", () => {
-    const sbh = new Helper({ rootPath: fx.root });
-    sbh.selectWorkdir("localnet");
-    assert.equal(sbh.wsUrl(), "ws://localhost:9000/localnet");
   });
 });
 

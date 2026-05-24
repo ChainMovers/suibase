@@ -292,12 +292,32 @@ async fn try_forward_one(
     // Copy all headers except `host` (let hyper derive it from the new URI)
     // and the internal X-SBSD-* routing headers (must never leak upstream).
     // Preserving `te: trailers` is required by gRPC.
+    //
+    // Drop any inbound `grpc-accept-encoding` and force `identity` outbound:
+    // the Sui CLI's tonic gRPC client (≤ 1.72.x) cannot decode message-level
+    // gzip; without this, public upstreams that compress (chainbase /
+    // nodeinfra) cause the CLI to fail with
+    //   UNIMPLEMENTED: Content is compressed with `gzip` which isn't supported
+    // even though the proxy forwarding succeeded. JSON-RPC sunset (July 2026)
+    // means the alternative — keeping a JSON-RPC-only sui.io in the link list
+    // — has no future; instead we ask every gRPC upstream not to compress.
+    //
+    // Scope: this is request-side negotiation only. A spec-compliant upstream
+    // honors `grpc-accept-encoding: identity` and stops setting the per-message
+    // compression-flag byte. The response body is still streamed verbatim
+    // (`IdleTimeoutBody` does no per-frame inspection), so a misbehaving
+    // upstream that ignored the request header would still produce frames the
+    // CLI can't decode. No known Sui upstream does this today.
     for (key, value) in headers.iter() {
         if key == header::HOST || is_internal_routing_header(key) {
             continue;
         }
+        if key.as_str().eq_ignore_ascii_case("grpc-accept-encoding") {
+            continue;
+        }
         builder = builder.header(key, value);
     }
+    builder = builder.header("grpc-accept-encoding", "identity");
 
     let req_body: ReqBody = Full::new(body_bytes)
         .map_err(|never| -> ProxyError { match never {} })

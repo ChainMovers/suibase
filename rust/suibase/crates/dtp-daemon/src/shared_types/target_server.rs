@@ -36,13 +36,6 @@ impl TargetServer {
             .map_or_else(String::new, |rpc| rpc.clone())
     }
 
-    pub fn ws(&self) -> String {
-        self.config
-            .ws
-            .as_ref()
-            .map_or_else(String::new, |rpc| rpc.clone())
-    }
-
     pub fn set_rpc(&mut self, rpc: String) {
         self.config.rpc = Some(rpc);
     }
