@@ -57,12 +57,10 @@ Example with two RPC nodes:
 links:
   - alias: "sui.io"
     rpc: "https://fullnode.mainnet.sui.io:443"
-    ws: "wss://fullnode.mainnet.sui.io:443"
     priority: 10
   - alias: "suiscan.xyz"
     rpc: "https://rpc-mainnet.suiscan.xyz:443"
     metrics: "https://rpc-mainnet.suiscan.xyz/metrics"
-    ws: "wss://rpc-mainnet.suiscan.xyz/websocket"
     priority: 20
 ```
 - The indentation is important (two spaces before the '-').
@@ -74,9 +72,6 @@ Mandatory unique name for the link. Recommended less than 20 characters.
 
 **rpc**
 Mandatory RPC node address. Typically ````https://<node name>:443````
-
-**ws**
-Websocket address. For future use. You can specify it, but currently not used. [ Default = None ]
 
 **metric**
 The metric address. Not commonly provided by public nodes. For future use. You can specify it, but currently not used. [ Default = None ]
@@ -101,7 +96,6 @@ Add to ```~/suibase/workdirs/testnet/suibase.yaml```:
 links:
   - alias: "shinami.com"
     rpc: "https://api.shinami.com:443/node/v1/sui_testnet_xxxxxxxxx"
-    ws: "wss://api.shinami.com:443/node/v1/sui_testnet_xxxxxxxxx"
     priority: 10
 ```
 

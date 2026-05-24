@@ -177,9 +177,4 @@ impl Helper {
     pub fn rpc_url(&self) -> Result<String, Error> {
         self.0.lock().unwrap().rpc_url()
     }
-
-    /// Get a Websocket URL for the selected workdir.
-    pub fn ws_url(&self) -> Result<String, Error> {
-        self.0.lock().unwrap().ws_url()
-    }
 }

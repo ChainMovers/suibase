@@ -6,9 +6,8 @@ A good starting point for Rust+Move development on VSCode.
 
 What to expect?
 
-  * Rust+Move dApps that increment a Counter
-  * The counter emit a Move event on every increment.
-  * Rust app that subscribe and show all Sui Move events (do "cargo run events")
+  * Rust+Move dApp that increments a Counter
+  * The counter emits a Move event on every increment.
   * Rust app to send a transaction to increment the counter (do "cargo run count").
   * Uses the Suibase helper to get client address and the RPC URL.
 

@@ -3,8 +3,6 @@
 // type 'cargo run count' to send one transaction. After incrementing on the network,
 // the Move program will emit an event.
 //
-// type 'cargo run events' in another terminal to see the event.
-//
 use std::path::PathBuf;
 
 use shared_crypto::intent::Intent;

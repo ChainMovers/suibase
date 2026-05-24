@@ -209,6 +209,13 @@ workdir_exec() {
   *) usage ;;
   esac
 
+  # Auto-upgrade the user suibase.yaml when it matches the prior canonical
+  # default (testnet/mainnet only, see __globals.sh). Gated on mutating
+  # commands so read-only ones (status, links, etc.) never touch the file.
+  if [ "$CMD_START_REQ" = true ] || [ "$CMD_UPDATE_REQ" = true ]; then
+    auto_upgrade_user_suibase_yaml_as_needed "$WORKDIR"
+  fi
+
   # Optional params
   # These are for development/testing/internal and are purposely not
   # docuemnted (not intended for the end-user).
