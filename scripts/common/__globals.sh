@@ -1097,15 +1097,15 @@ build_sui_repo_branch() {
       # Sync local repo... if allowed.
       local _DETACHED_INFO
       _DETACHED_INFO=$(cd "$SUI_REPO_DIR" && git branch | grep detached)
-      # Checkout if _DETACHED_INFO does NOT contain the PRECOMP_REMOTE_TAG_NAME substring.
-      if [[ "$_DETACHED_INFO" != *"$PRECOMP_REMOTE_TAG_NAME"* ]]; then
-        # Checkout the tag that match the precompiled binary.
-        echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_TAG_NAME]"
+      # Checkout if _DETACHED_INFO does NOT contain the source tag substring.
+      if [[ "$_DETACHED_INFO" != *"$PRECOMP_REMOTE_SRC_TAG_NAME"* ]]; then
+        # Checkout the source tag that matches the precompiled binary.
+        echo "Checkout for $WORKDIR from repo [$CFG_default_repo_url] tag [$PRECOMP_REMOTE_SRC_TAG_NAME]"
         (cd "$SUI_REPO_DIR_DEFAULT" && git fetch >/dev/null 2>&1)
         (cd "$SUI_REPO_DIR_DEFAULT" && git reset --hard origin/"$CFG_default_repo_branch" >/dev/null 2>&1)
         (cd "$SUI_REPO_DIR_DEFAULT" && git switch "$CFG_default_repo_branch" >/dev/null 2>&1)
         (cd "$SUI_REPO_DIR_DEFAULT" && git merge '@{u}' >/dev/null 2>&1)
-        (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_TAG_NAME" >/dev/null 2>&1)
+        (cd "$SUI_REPO_DIR_DEFAULT" && git checkout "$PRECOMP_REMOTE_SRC_TAG_NAME" >/dev/null 2>&1)
         _FEEDBACK_BEFORE_RETURN=false
       fi
     fi
@@ -3490,6 +3490,11 @@ export PRECOMP_REMOTE_PLATFORM=""
 export PRECOMP_REMOTE_ARCH=""
 export PRECOMP_REMOTE_VERSION=""
 export PRECOMP_REMOTE_TAG_NAME=""
+# Tag to checkout in the *source* repo (MystenLabs/sui). Normally identical to
+# PRECOMP_REMOTE_TAG_NAME, but differs when the precompiled binary is fetched
+# from the chainmovers/sui-binaries "min" mirror (whose tag is sui-<net>-v<ver>-min
+# while the matching source tag stays <net>-v<ver>).
+export PRECOMP_REMOTE_SRC_TAG_NAME=""
 export PRECOMP_REMOTE_DOWNLOAD_URL=""
 export PRECOMP_REMOTE_DOWNLOAD_DIR=""
 export PRECOMP_REMOTE_FILE_NAME_VERSION=""
@@ -3500,12 +3505,25 @@ update_PRECOMP_REMOTE_var() {
   PRECOMP_REMOTE_ARCH=""
   PRECOMP_REMOTE_VERSION=""
   PRECOMP_REMOTE_TAG_NAME=""
+  PRECOMP_REMOTE_SRC_TAG_NAME=""
   PRECOMP_REMOTE_DOWNLOAD_URL=""
   PRECOMP_REMOTE_DOWNLOAD_DIR=""
   PRECOMP_REMOTE_FILE_NAME_VERSION=""
 
   local _REPO_URL="${CFG_default_repo_url:?}"
   local _BRANCH="${CFG_default_repo_branch:?}"
+
+  # Fetch the smaller "min" binaries from chainmovers/sui-binaries instead of the
+  # full MystenLabs release, but only when applicable: enabled, the default
+  # (MystenLabs) repo is unchanged, and no force_tag. The binary tag is
+  # sui-<branch>-v<ver>-min; the matching source tag stays <branch>-v<ver>.
+  local _USE_SUI_MIN="false"
+  if [ "${CFG_allow_sui_min_precomp:-true}" = "true" ] &&
+    [ "${CFG_default_repo_url:?}" = "${CFGDEFAULT_default_repo_url:?}" ] &&
+    [ "${CFG_force_tag:?}" = "~" ]; then
+    _USE_SUI_MIN="true"
+    _REPO_URL="${CFG_sui_min_precomp_repo_url:?}"
+  fi
 
   # Make sure _REPO is github (start with "https://github.com")
   if [[ "$_REPO_URL" != "https://github.com"* ]]; then
@@ -3570,6 +3588,16 @@ update_PRECOMP_REMOTE_var() {
       fi
     fi
 
+    # Candidate tags (newest first). For the min mirror, restrict to our own
+    # slimmed sui tags "sui-<branch>-v*-min" so we never match the other
+    # products published in the same repo (site-builder-*, seal-*, daemon-*).
+    local _TAG_NAMES
+    if [ "$_USE_SUI_MIN" = "true" ]; then
+      _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "sui-${_BRANCH}-v" | grep -- "-min" | sort_rv)
+    else
+      _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort_rv)
+    fi
+
     while read -r line; do
       # Return something like: "tag_name": "testnet-v1.8.2",
       _TAG_NAME="${line#*\:}"      # Remove the ":" and everything before
@@ -3610,7 +3638,7 @@ update_PRECOMP_REMOTE_var() {
           echo "Warn: Skipping invalid Mysten Labs assets $_TAG_NAME"
         fi
       fi
-    done <<<"$(echo "$_OUT" | grep "tag_name" | grep "$_BRANCH" | sort_rv)"
+    done <<<"$_TAG_NAMES"
 
     # Stop looping for retry if _DOWNLOAD_URL looks valid.
     # TODO Refactor this to avoid duplicate logic done in above loop.
@@ -3658,6 +3686,7 @@ update_PRECOMP_REMOTE_var() {
   fi
 
   local _TAG_VERSION="${_TAG_NAME#*\-v}" # Remove '-v' and everything before.
+  _TAG_VERSION="${_TAG_VERSION%-min}"    # Drop the "-min" suffix (no-op for MystenLabs tags).
   # echo "_OUT=$_OUT"
   # echo "_TAG_NAME=$_TAG_NAME"
   # echo "_TAG_VERSION=$_TAG_VERSION"
@@ -3669,6 +3698,11 @@ update_PRECOMP_REMOTE_var() {
   PRECOMP_REMOTE_ARCH="$_BIN_ARCH"
   PRECOMP_REMOTE_VERSION="$_TAG_VERSION"
   PRECOMP_REMOTE_TAG_NAME="$_TAG_NAME"
+  # Source repo (MystenLabs/sui) tag for this binary — identical to the binary
+  # tag except for the min mirror, whose binary tag is "sui-<branch>-v<ver>-min"
+  # while the source tag stays the plain "<branch>-v<ver>".
+  PRECOMP_REMOTE_SRC_TAG_NAME="$_TAG_NAME"
+  [ "$_USE_SUI_MIN" = "true" ] && PRECOMP_REMOTE_SRC_TAG_NAME="${_BRANCH}-v${_TAG_VERSION}"
   PRECOMP_REMOTE_DOWNLOAD_URL="$_DOWNLOAD_URL"
 
   return
