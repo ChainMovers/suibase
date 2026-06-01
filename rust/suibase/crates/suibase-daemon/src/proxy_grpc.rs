@@ -1,11 +1,18 @@
 // gRPC reverse-proxy support for ProxyServer.
 //
 // Forwards inbound HTTP/2 gRPC requests to an upstream sui-node, preserving
-// headers, body, and trailers. Both unary AND server-streaming responses are
+// headers, body, and trailers. Responses (unary AND server-streaming) are
 // passed through: the response body is wrapped (not collected) so frames flow
-// from upstream → proxy → client as they arrive. Client-streaming and
-// bidi-streaming remain unsupported (the inbound body is still buffered up
-// to MAX_BODY_SIZE before forwarding).
+// from upstream → proxy → client as they arrive.
+//
+// Requests are classified by method (`request_is_bufferable`):
+//   * whitelisted single-request methods (sui.rpc.v*, grpc.health.*) are
+//     buffered up to MAX_BODY_SIZE so they can be replayed across upstreams
+//     (retry), then forwarded.
+//   * everything else (gRPC server reflection — what grpcurl/grpcui/Postman
+//     use — and any unrecognized method) has its request body piped live to a
+//     single upstream, so client-streaming and bidi-streaming RPCs work. No
+//     cross-upstream retry for these (a half-sent request can't be replayed).
 //
 // Modeled on the patterns in ~/sui-proxy/crates/sui-proxy (HTTP/2 reverse
 // proxy for Sui gRPC).
@@ -16,11 +23,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use http::header;
 use http::{Request, Response, StatusCode, Uri};
 use http_body::{Body, Frame, SizeHint};
-use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full, Limited};
+use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
 use hyper::body::Incoming;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
@@ -65,10 +72,23 @@ const UPSTREAM_HEADER_TIMEOUT: Duration = Duration::from_secs(30);
 /// budget.
 const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Inbound body read budget. Unary gRPC clients send their (small) message
-/// then END_STREAM immediately; this only fires if the client opens a
-/// streaming RPC. Kept tight so the connection task doesn't park.
-const INBOUND_BODY_TIMEOUT: Duration = Duration::from_secs(5);
+/// Safety-net grace period for the buffered (single-request whitelist) path.
+///
+/// Classification is by method path (`request_is_bufferable`): whitelisted
+/// single-request methods take the buffered+retry path, everything else streams
+/// immediately. This timing window applies *only* to the buffered path, as a
+/// correctness backstop: a real unary / server-streaming client sends its
+/// single request message followed *immediately* by END_STREAM, so the body
+/// buffers well under this window → buffered (retry across upstreams). The
+/// window only ever fires if a method on the whitelist unexpectedly ships a
+/// *streaming* request (none do today) — in which case the already-read prefix
+/// plus the still-open inbound body are piped live to a single upstream (no
+/// retry — a half-sent request can't be replayed) rather than hanging.
+///
+/// Kept short so such a (today nonexistent) case incurs at most this much extra
+/// setup latency, while being comfortably longer than the back-to-back
+/// DATA+END_STREAM gap of any real unary client.
+const STREAM_DETECT_GRACE: Duration = Duration::from_millis(250);
 
 /// HTTP/2-capable client shared across requests. Construct once per
 /// ProxyServer; clone the Arc into request-handler closures.
@@ -127,86 +147,221 @@ fn is_internal_routing_header(name: &http::HeaderName) -> bool {
 }
 
 /// A request that's been fully buffered and is ready to be sent to one or
-/// more upstreams. Constructed once via `BufferedGrpcRequest::from_request`
-/// so the caller can drive its own per-upstream retry loop (e.g. checking
-/// rate limits or per-attempt globals between forwards).
+/// more upstreams. Produced by `InboundGrpcRequest::read` for whitelisted
+/// single-request methods so the caller can drive its own per-upstream retry
+/// loop (e.g. checking rate limits or per-attempt globals between forwards).
 pub struct BufferedGrpcRequest {
     method: http::Method,
-    version: http::Version,
     headers: http::HeaderMap,
     body_bytes: Bytes,
     path_and_query: String,
 }
 
-impl BufferedGrpcRequest {
-    /// Consume an inbound request and buffer its body. Returns either a
-    /// usable `BufferedGrpcRequest` or an early-response variant
-    /// (e.g. body too large).
+/// The request head shared by the buffered and streaming paths. HTTP version
+/// is intentionally dropped — the upstream client is `http2_only`, so the
+/// inbound version (HTTP/1.1 gRPC-Web or HTTP/2) never reaches the upstream.
+struct GrpcRequestHead {
+    method: http::Method,
+    headers: http::HeaderMap,
+    path_and_query: String,
+}
+
+/// Returns true for gRPC methods whose request is a **single message** (unary
+/// or server-streaming) and is therefore safe to buffer and replay across
+/// upstreams (the retry path).
+///
+/// This whitelists the Sui gRPC surface the daemon is built for: every
+/// `sui.rpc.v*` method has a single request today (some have streaming
+/// *responses*, e.g. `SubscribeCheckpoints`, which buffer fine because the
+/// *request* is one message), and the standard `grpc.health.*` service is
+/// single-request too. Matched by an API-version-agnostic prefix (`/sui.rpc.v`)
+/// so a future `sui.rpc.v3` — overwhelmingly likely to keep unary requests — is
+/// covered automatically; if one ever ships a streaming *request*, we add it to
+/// a small exception list reactively.
+///
+/// Anything NOT matched — gRPC server reflection (bidi), or any method the
+/// proxy doesn't recognize — is treated as streaming. We can't assume a single
+/// request for an unknown method, and piping the body live is the only handling
+/// that is correct for *both* unary and client/bidi requests (buffering would
+/// hang a client/bidi request). The only thing streaming forgoes is
+/// cross-upstream retry, which a half-sent request can't use anyway.
+fn request_is_bufferable(path: &str) -> bool {
+    path.starts_with("/sui.rpc.v") || path.starts_with("/grpc.health.")
+}
+
+/// A gRPC request whose body is piped live to a single upstream. Its `body`
+/// is either the raw inbound stream (method classified as streaming by path)
+/// or a `PrefixedBody` carrying the bytes read during the buffered-path
+/// safety-net window followed by the still-open inbound stream. Cannot be
+/// retried across upstreams (a half-sent request body can't be replayed), so
+/// the dispatcher forwards it to exactly one upstream.
+pub struct StreamingGrpcRequest {
+    head: GrpcRequestHead,
+    body: ReqBody,
+}
+
+/// Outcome of classifying an inbound gRPC request.
+pub enum InboundGrpcRequest {
+    /// A whitelisted single-request method whose body was buffered, so it can
+    /// be replayed across upstreams (retry preserved).
+    Buffered(BufferedGrpcRequest),
+    /// A non-whitelisted method (server reflection, or anything unrecognized) —
+    /// the request body is piped live to a single upstream.
+    Streaming(StreamingGrpcRequest),
+}
+
+impl InboundGrpcRequest {
+    /// Consume an inbound request and classify it as buffered (unary /
+    /// server-streaming) or streaming (client / bidi). See
+    /// `STREAM_DETECT_GRACE` for the detection rationale.
     ///
-    /// Imposes `INBOUND_BODY_TIMEOUT` on the collect — without it a client
-    /// that opens a *client-streaming* or *bidi-streaming* RPC (where the
-    /// request body stays open while the client streams messages) would
-    /// hang this connection task indefinitely. Server-streaming and unary
-    /// RPCs both send their (small) request message followed immediately
-    /// by END_STREAM, so this timeout fires only for inbound-streaming
-    /// shapes we do not support yet. Note: this is asymmetric with the
-    /// response body, which is wrapped in `IdleTimeoutBody` and streamed
-    /// through verbatim — see the module header.
-    pub async fn from_request(
-        req: Request<Incoming>,
-    ) -> Result<Self, Response<ProxyBody>> {
-        let path_and_query = req
-            .uri()
-            .path_and_query()
-            .map(|pq| pq.as_str().to_string())
-            .unwrap_or_else(|| "/".to_string());
+    /// Returns an early gRPC error response for an oversized body or a body
+    /// read error.
+    pub async fn read(req: Request<Incoming>) -> Result<Self, Response<ProxyBody>> {
+        // Destructure first and MOVE method/headers into the head (no clone on
+        // this per-request hot path). `parts.uri` is only borrowed below.
+        let (parts, incoming) = req.into_parts();
 
-        let (parts, body) = req.into_parts();
-        let method = parts.method;
-        let version = parts.version;
-        let headers = parts.headers;
+        // Classify by method (`:path`) — streaming-ness is a property of the
+        // method, available immediately with zero latency. Methods NOT on the
+        // single-request whitelist (server reflection — what grpcurl/Postman/
+        // grpcui use — or anything unrecognized) are piped live to one upstream:
+        // streaming is the only handling correct for an unknown request shape.
+        let bufferable = request_is_bufferable(parts.uri.path());
 
-        let collect_fut = BodyExt::collect(Limited::new(body, MAX_BODY_SIZE));
-        let body_bytes = match tokio::time::timeout(INBOUND_BODY_TIMEOUT, collect_fut).await {
-            Ok(Ok(collected)) => collected.to_bytes(),
-            Ok(Err(e)) => {
-                // http_body_util::Limited yields a boxed error. Walk the
-                // source chain to detect LengthLimitError without depending
-                // on its Display text.
-                if is_length_limit_error(e.as_ref()) {
-                    return Err(grpc_resource_exhausted_response("request body too large"));
-                }
-                log::debug!("grpc: failed to read request body: {}", e);
-                return Err(grpc_internal_response("failed to read request body"));
-            }
-            Err(_) => {
-                // Inbound body never reached EOS within the budget — most
-                // likely a streaming RPC. Streaming is not yet supported.
-                return Err(grpc_unimplemented_response(
-                    "streaming gRPC not supported by this proxy",
-                ));
-            }
+        let head = GrpcRequestHead {
+            method: parts.method,
+            headers: parts.headers,
+            path_and_query: parts
+                .uri
+                .path_and_query()
+                .map(|pq| pq.as_str().to_string())
+                .unwrap_or_else(|| "/".to_string()),
         };
 
-        Ok(Self {
-            method,
-            version,
-            headers,
-            body_bytes,
-            path_and_query,
-        })
+        if !bufferable {
+            // Pipe the live inbound body straight through — no buffering, no
+            // detection wait.
+            let body: ReqBody = incoming
+                .map_err(|e| -> ProxyError { Box::new(e) })
+                .boxed_unsync();
+            return Ok(InboundGrpcRequest::Streaming(StreamingGrpcRequest {
+                head,
+                body,
+            }));
+        }
+
+        // Known single-request method → buffer it so it can be replayed across
+        // upstreams (retry). Read with a short grace window purely as a safety
+        // net: a real unary/server-streaming client sends END_STREAM
+        // back-to-back with its single request message, so it buffers with ~0
+        // added latency. The window only ever fires if a method under these
+        // services unexpectedly ships a *streaming* request (none do today), in
+        // which case we switch to piping instead of hanging.
+        //
+        // `Pin<Box<Incoming>>` is `Unpin`, so we can call `BodyExt::frame`
+        // (which needs `Self: Unpin`) and also poll it from `PrefixedBody`.
+        let mut body = Box::pin(incoming);
+        let mut acc = BytesMut::new();
+
+        loop {
+            match tokio::time::timeout(STREAM_DETECT_GRACE, body.frame()).await {
+                Ok(Some(Ok(frame))) => {
+                    if let Some(data) = frame.data_ref() {
+                        if acc.len() + data.len() > MAX_BODY_SIZE {
+                            return Err(grpc_resource_exhausted_response("request body too large"));
+                        }
+                        acc.extend_from_slice(data);
+                    }
+                    // Trailers (rare on requests) imply END_STREAM is next; keep
+                    // looping and we'll hit `Ok(None)` → buffered.
+                    continue;
+                }
+                Ok(Some(Err(e))) => {
+                    log::debug!("grpc: failed to read request body: {}", e);
+                    return Err(grpc_internal_response("failed to read request body"));
+                }
+                Ok(None) => {
+                    // END_STREAM within the grace window → buffered (retryable).
+                    return Ok(InboundGrpcRequest::Buffered(BufferedGrpcRequest {
+                        method: head.method,
+                        headers: head.headers,
+                        body_bytes: acc.freeze(),
+                        path_and_query: head.path_and_query,
+                    }));
+                }
+                Err(_) => {
+                    // Idle for the grace window without END_STREAM → streaming.
+                    // Pipe the already-read prefix followed by the still-open
+                    // inbound body. HTTP/2 DATA framing is independent of gRPC
+                    // message framing, so concatenating the prefix into one
+                    // leading DATA frame is safe — the upstream reassembles the
+                    // byte stream.
+                    //
+                    // Surface this: a whitelisted method should buffer instantly,
+                    // so reaching here means either a (today nonexistent)
+                    // streaming request under a whitelisted prefix, or an
+                    // unusually slow client. Either way it forgoes cross-upstream
+                    // retry, which is worth a breadcrumb when diagnosing why.
+                    log::debug!(
+                        "grpc: request body for {} idle past {:?} without END_STREAM \
+                         despite whitelisted prefix — piping to a single upstream (no retry)",
+                        head.path_and_query,
+                        STREAM_DETECT_GRACE
+                    );
+                    let prefixed = PrefixedBody {
+                        prefix: Some(acc.freeze()),
+                        inner: body,
+                    };
+                    return Ok(InboundGrpcRequest::Streaming(StreamingGrpcRequest {
+                        head,
+                        body: prefixed.boxed_unsync(),
+                    }));
+                }
+            }
+        }
     }
 }
 
-fn is_length_limit_error(err: &(dyn std::error::Error + 'static)) -> bool {
-    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(err);
-    while let Some(e) = current {
-        if e.downcast_ref::<http_body_util::LengthLimitError>().is_some() {
-            return true;
+/// A `Body` that emits a buffered `prefix` (the bytes already read during
+/// stream detection) and then delegates to the still-open inbound body.
+/// Used to pipe a client/bidi-streaming request through to the upstream
+/// without losing the prefix consumed while classifying it.
+struct PrefixedBody {
+    prefix: Option<Bytes>,
+    inner: Pin<Box<Incoming>>,
+}
+
+impl Body for PrefixedBody {
+    type Data = Bytes;
+    type Error = ProxyError;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        // `PrefixedBody` is `Unpin` (prefix is `Option<Bytes>`, inner is
+        // `Pin<Box<_>>`), so `get_mut` is sound.
+        let this = self.as_mut().get_mut();
+        if let Some(prefix) = this.prefix.take() {
+            if !prefix.is_empty() {
+                return Poll::Ready(Some(Ok(Frame::data(prefix))));
+            }
         }
-        current = e.source();
+        this.inner
+            .as_mut()
+            .poll_frame(cx)
+            .map_err(|e| -> ProxyError { Box::new(e) })
     }
-    false
+
+    fn is_end_stream(&self) -> bool {
+        self.prefix.is_none() && self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        // Unknown total length for a live stream.
+        SizeHint::default()
+    }
 }
 
 /// Outcome of forwarding to one upstream.
@@ -234,19 +389,41 @@ pub enum ForwardOutcome {
 }
 
 /// Forward a buffered request to a single upstream. The caller drives the
-/// retry loop across multiple upstreams.
+/// retry loop across multiple upstreams (the buffered body is cheap to clone
+/// and can be replayed).
 pub async fn forward_to_upstream(
     buf: &BufferedGrpcRequest,
     base_url: &str,
     client: Arc<GrpcProxyClient>,
 ) -> ForwardOutcome {
-    try_forward_one(
+    let body: ReqBody = Full::new(buf.body_bytes.clone())
+        .map_err(|never| -> ProxyError { match never {} })
+        .boxed_unsync();
+    send_request(
         base_url,
         &buf.path_and_query,
         &buf.method,
-        buf.version,
         &buf.headers,
-        buf.body_bytes.clone(),
+        body,
+        client,
+    )
+    .await
+}
+
+/// Forward a client/bidi-streaming request to a single upstream, piping the
+/// live request body through. Consumes the request (the body is a one-shot
+/// live stream and cannot be replayed), so there is no cross-upstream retry.
+pub async fn forward_stream_to_upstream(
+    req: StreamingGrpcRequest,
+    base_url: &str,
+    client: Arc<GrpcProxyClient>,
+) -> ForwardOutcome {
+    send_request(
+        base_url,
+        &req.head.path_and_query,
+        &req.head.method,
+        &req.head.headers,
+        req.body,
         client,
     )
     .await
@@ -258,22 +435,22 @@ pub fn grpc_no_upstream_response(msg: &str) -> Response<ProxyBody> {
     grpc_unavailable_response(msg)
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn try_forward_one(
+/// Send one request (buffered or live-streaming body) to a single upstream
+/// and classify the outcome. Shared by `forward_to_upstream` (buffered) and
+/// `forward_stream_to_upstream` (streaming).
+async fn send_request(
     base_url: &str,
     path_and_query: &str,
     method: &http::Method,
-    _version: http::Version,
     headers: &http::HeaderMap,
-    body_bytes: Bytes,
+    req_body: ReqBody,
     client: Arc<GrpcProxyClient>,
 ) -> ForwardOutcome {
     log::debug!(
-        "grpc: forwarding {} {} → {} ({} bytes)",
+        "grpc: forwarding {} {} → {}",
         method,
         path_and_query,
         base_url,
-        body_bytes.len()
     );
     let upstream_uri = match build_upstream_uri(base_url, path_and_query) {
         Ok(u) => u,
@@ -319,10 +496,6 @@ async fn try_forward_one(
     }
     builder = builder.header("grpc-accept-encoding", "identity");
 
-    let req_body: ReqBody = Full::new(body_bytes)
-        .map_err(|never| -> ProxyError { match never {} })
-        .boxed_unsync();
-
     let upstream_req = match builder.body(req_body) {
         Ok(r) => r,
         Err(e) => return ForwardOutcome::Error(format!("build request: {}", e)),
@@ -333,7 +506,15 @@ async fn try_forward_one(
 
     let resp = match header_result {
         Ok(Ok(r)) => r,
-        Ok(Err(e)) => return ForwardOutcome::Error(format!("connect: {}", e)),
+        Ok(Err(e)) => {
+            let mut chain = format!("{}", e);
+            let mut src = std::error::Error::source(&e);
+            while let Some(s) = src {
+                chain.push_str(&format!(" | caused by: {}", s));
+                src = s.source();
+            }
+            return ForwardOutcome::Error(format!("connect: {}", chain));
+        }
         Err(_) => return ForwardOutcome::Error("header timeout".to_string()),
     };
 
@@ -531,15 +712,6 @@ fn grpc_internal_response(msg: &str) -> Response<ProxyBody> {
     grpc_status_response(13, msg) // INTERNAL
 }
 
-fn grpc_unimplemented_response(msg: &str) -> Response<ProxyBody> {
-    grpc_status_response(12, msg) // UNIMPLEMENTED
-}
-
-/// Public version of `grpc_unimplemented_response` for proxy_server use.
-pub fn grpc_unimplemented(msg: &str) -> Response<ProxyBody> {
-    grpc_unimplemented_response(msg)
-}
-
 fn build_upstream_uri(base: &str, path_and_query: &str) -> Result<Uri, ProxyError> {
     let base_uri: Uri = base.parse().map_err(|e| -> ProxyError { Box::new(e) })?;
     let authority = base_uri
@@ -580,6 +752,36 @@ mod tests {
         r.headers_mut()
             .insert(header::CONTENT_TYPE, HeaderValue::from_str(ct).unwrap());
         r
+    }
+
+    #[test]
+    fn request_is_bufferable_whitelists_sui_and_health() {
+        // Sui RPC methods (any API version) and the standard health service are
+        // single-request → buffered + retry.
+        assert!(request_is_bufferable(
+            "/sui.rpc.v2.LedgerService/GetServiceInfo"
+        ));
+        assert!(request_is_bufferable(
+            "/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints"
+        ));
+        // Version-agnostic: a future v3 is covered without a code change.
+        assert!(request_is_bufferable("/sui.rpc.v3.LedgerService/GetObject"));
+        assert!(request_is_bufferable("/grpc.health.v1.Health/Check"));
+        assert!(request_is_bufferable("/grpc.health.v1.Health/Watch"));
+    }
+
+    #[test]
+    fn request_is_bufferable_excludes_reflection_and_unknown() {
+        // Server reflection (bidi) and anything unrecognized must NOT be
+        // buffered — they take the live-streaming pipe instead.
+        assert!(!request_is_bufferable(
+            "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo"
+        ));
+        assert!(!request_is_bufferable(
+            "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo"
+        ));
+        assert!(!request_is_bufferable("/some.other.Service/Method"));
+        assert!(!request_is_bufferable("/"));
     }
 
     #[test]
