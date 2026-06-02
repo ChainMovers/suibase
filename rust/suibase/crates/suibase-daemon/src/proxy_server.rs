@@ -36,8 +36,8 @@ use tokio_graceful_shutdown::SubsystemHandle;
 use tower_service::Service as TowerService;
 
 use crate::proxy_grpc::{
-    forward_to_upstream, grpc_no_upstream_response, is_grpc_request, BufferedGrpcRequest,
-    ForwardOutcome, GrpcProxyClient,
+    forward_stream_to_upstream, forward_to_upstream, grpc_no_upstream_response, is_grpc_request,
+    ForwardOutcome, GrpcProxyClient, InboundGrpcRequest, StreamingGrpcRequest,
 };
 use crate::shared_types::TargetServer;
 
@@ -604,9 +604,23 @@ impl ProxyServer {
             );
         }
 
-        // Buffer the request body once so we can retry across upstreams.
-        let buffered = match BufferedGrpcRequest::from_request(req).await {
-            Ok(b) => b,
+        // Classify the request by reading its body far enough to tell a
+        // unary/server-streaming call (buffered → retryable across upstreams)
+        // from a client/bidi-streaming call (piped live to one upstream).
+        // Server reflection — what grpcurl/Postman/grpcui use — is bidi, so
+        // this is what lets gRPC tooling work through the proxy.
+        let buffered = match InboundGrpcRequest::read(req).await {
+            Ok(InboundGrpcRequest::Buffered(b)) => b,
+            Ok(InboundGrpcRequest::Streaming(stream_req)) => {
+                return Self::grpc_dispatch_streaming(
+                    stream_req,
+                    &upstreams,
+                    &shared,
+                    grpc_client,
+                    report,
+                )
+                .await;
+            }
             Err(early_response) => {
                 let _ = report.req_fail(0, REQUEST_FAILED_BODY_READ).await;
                 return early_response;
@@ -757,6 +771,129 @@ impl ProxyServer {
                 "rate-limited on all upstreams ({} attempts)",
                 rate_limit_attempts
             ))
+        }
+    }
+
+    /// Forward a client/bidi-streaming gRPC request (e.g. server reflection)
+    /// to a single upstream, piping the live request body through.
+    ///
+    /// No cross-upstream retry: a partially-sent request body can't be
+    /// replayed, so we commit to the highest-priority upstream (the same one
+    /// `grpc_dispatch` would have tried first). Server-streaming responses are
+    /// already streamed back verbatim by `forward_stream_to_upstream`, so both
+    /// directions flow concurrently — which is what bidi RPCs require.
+    async fn grpc_dispatch_streaming(
+        stream_req: StreamingGrpcRequest,
+        upstreams: &[(u8, String)],
+        shared: &Arc<SharedStates>,
+        grpc_client: Arc<GrpcProxyClient>,
+        mut report: ProxyHandlerReport<'_>,
+    ) -> hyper::Response<crate::proxy_grpc::ProxyBody> {
+        // Caller already returned early on an empty list, but don't index-panic
+        // the connection task if a future refactor reaches here with none.
+        let (server_idx, base_url) = match upstreams.first() {
+            Some(u) => u.clone(),
+            None => {
+                let _ = report
+                    .req_fail(0, REQUEST_FAILED_NO_SERVER_AVAILABLE)
+                    .await;
+                return grpc_no_upstream_response("no upstream available");
+            }
+        };
+
+        // Per-attempt rate-limit token (also drives the QPS/QPM counters shown
+        // by `<workdir> links`), mirroring the buffered path.
+        {
+            let globals_read = shared.globals.read().await;
+            let globals = &*globals_read;
+            if let Some(input_port) = globals.input_ports.get(shared.port_idx) {
+                if let Some(ts) = input_port.target_servers.get(server_idx) {
+                    if ts.try_acquire_token().is_err() {
+                        let _ = report.rate_limited(server_idx).await;
+                        let _ = report
+                            .req_fail(0, REQUEST_FAILED_NO_SERVER_RESPONDING)
+                            .await;
+                        return grpc_no_upstream_response(
+                            "rate-limited (streaming request, single upstream)",
+                        );
+                    }
+                }
+            }
+        }
+
+        let req_initiation_time = EpochTimestamp::now();
+        let outcome =
+            forward_stream_to_upstream(stream_req, &base_url, Arc::clone(&grpc_client)).await;
+        let resp_received_time = EpochTimestamp::now();
+
+        match outcome {
+            ForwardOutcome::GrpcResponse(resp) => {
+                let _ = report
+                    .req_resp_ok(server_idx, req_initiation_time, resp_received_time, 0)
+                    .await;
+                resp
+            }
+            ForwardOutcome::NotGrpc {
+                status,
+                content_type,
+            } => {
+                log::warn!(
+                    "grpc(stream): upstream '{}' returned non-gRPC response (HTTP {}, content-type='{}'); marking NOT_GRPC_CAPABLE",
+                    base_url,
+                    status,
+                    content_type
+                );
+                let _ = report
+                    .req_resp_err_per_attempt(
+                        server_idx,
+                        req_initiation_time,
+                        resp_received_time,
+                        0,
+                        REQUEST_FAILED_NOT_GRPC_CAPABLE,
+                    )
+                    .await;
+                let _ = report
+                    .req_fail(1, REQUEST_FAILED_NO_SERVER_RESPONDING)
+                    .await;
+                grpc_no_upstream_response(&format!(
+                    "upstream returned non-gRPC response (HTTP {})",
+                    status
+                ))
+            }
+            ForwardOutcome::HttpError { status, .. } => {
+                log::warn!(
+                    "grpc(stream): upstream '{}' returned transient HTTP error (HTTP {})",
+                    base_url,
+                    status
+                );
+                let _ = report
+                    .send_failed(
+                        server_idx,
+                        req_initiation_time,
+                        SEND_FAILED_RESP_HTTP_STATUS,
+                        status.as_u16(),
+                    )
+                    .await;
+                let _ = report
+                    .req_fail(1, REQUEST_FAILED_NO_SERVER_RESPONDING)
+                    .await;
+                grpc_no_upstream_response(&format!("upstream HTTP error {}", status))
+            }
+            ForwardOutcome::Error(msg) => {
+                log::warn!("grpc(stream): upstream '{}' send failed: {}", base_url, msg);
+                let _ = report
+                    .send_failed(
+                        server_idx,
+                        req_initiation_time,
+                        SEND_FAILED_UNSPECIFIED_ERROR,
+                        0,
+                    )
+                    .await;
+                let _ = report
+                    .req_fail(1, REQUEST_FAILED_NO_SERVER_RESPONDING)
+                    .await;
+                grpc_no_upstream_response(&msg)
+            }
         }
     }
 

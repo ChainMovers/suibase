@@ -1020,6 +1020,39 @@ impl MockServerTestHarness {
         Ok(responses)
     }
 
+    /// Send a gRPC request whose request body stays open forever: one message
+    /// frame, then never END_STREAM. This mimics a client/bidi-streaming client
+    /// such as gRPC server reflection (what grpcurl uses), which sends a message
+    /// and keeps its request stream open waiting for responses.
+    ///
+    /// A proxy that buffers the whole request body before forwarding would hang
+    /// here waiting for END_STREAM; a proxy that pipes the body through returns
+    /// the upstream's response. The mock answers gRPC without reading the
+    /// request body (like a real bidi server), so a working proxy responds
+    /// promptly even though this stream never closes.
+    pub async fn send_grpc_request_open_body(
+        &self,
+        grpc_path: &str,
+    ) -> Result<reqwest::Response> {
+        use futures::StreamExt;
+        let proxy_url = format!("http://localhost:44340{}", grpc_path);
+        // One 5-byte empty gRPC frame (compression flag=0, length=0), then a
+        // never-yielding, never-ending stream so the request body has no
+        // END_STREAM.
+        let body_stream = futures::stream::once(async {
+            Ok::<bytes::Bytes, std::io::Error>(bytes::Bytes::from_static(&[0u8, 0, 0, 0, 0]))
+        })
+        .chain(futures::stream::pending::<Result<bytes::Bytes, std::io::Error>>());
+        let response = grpc_client()
+            .post(&proxy_url)
+            .header(reqwest::header::CONTENT_TYPE, "application/grpc")
+            .header("te", "trailers")
+            .body(reqwest::Body::wrap_stream(body_stream))
+            .send()
+            .await?;
+        Ok(response)
+    }
+
     /// Wait for servers to be included in the load balancing subset
     /// Returns the list of servers that are marked for load distribution
     pub async fn wait_for_load_balanced_servers(

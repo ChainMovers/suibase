@@ -46,7 +46,7 @@ jobs:
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
       - name: Checkout Dev Branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: dev
 

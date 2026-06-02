@@ -40,7 +40,7 @@ jobs:
     outputs:
       docs_only: ${{ steps.diff.outputs.docs_only }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: staging
           # Need full history so the diff against the previous staging
@@ -89,7 +89,7 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
     steps:
       - name: Checkout staging
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
@@ -246,7 +246,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: staging
 

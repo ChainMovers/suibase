@@ -25,6 +25,7 @@ github_token: ~
 
 precompiled_bin: true
 enable_local_repo: false
+allow_sui_min_precomp: true
 
 cargo_release: false
 cargo_add_options: ~
