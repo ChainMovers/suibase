@@ -172,7 +172,7 @@ jobs:
           existing=$(gh pr list --base staging --head pre-staging --state open --json number --jq '.[0].number')
           if [ -n "$existing" ]; then
             echo "PR #$existing already open pre-staging → staging; enabling auto-merge."
-            gh pr merge "$existing" --auto --merge || true
+            gh pr merge "$existing" --auto --merge || gh pr merge "$existing" --merge || true
             exit 0
           fi
           gh pr create \
@@ -181,7 +181,9 @@ jobs:
             --title "Promote pre-staging to staging (${{ steps.ver.outputs.tag }})" \
             --body "Auto-opened by \`staging-promote.yml\` once chainmovers/sui-binaries published \`${{ steps.ver.outputs.tag }}\`. Will auto-merge once required checks pass."
           number=$(gh pr list --base staging --head pre-staging --state open --json number --jq '.[0].number')
-          gh pr merge "$number" --auto --merge
+          # --auto is refused with "clean status" when the PR is already mergeable
+          # (all required checks satisfied at creation); fall back to a direct merge.
+          gh pr merge "$number" --auto --merge || gh pr merge "$number" --merge
           echo "::notice::Opened auto-merge PR #$number pre-staging → staging."
 
       - name: Trigger staging.yml after bot auto-merge
