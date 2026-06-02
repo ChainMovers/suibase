@@ -192,6 +192,70 @@ get_walrus_relay_pid() {
     strip_ansi_colors "$status_output" | grep -o "pid [0-9]\+" | grep -o "[0-9]\+" | head -1
 }
 
+wait_for_walrus_relay_pid() {
+    # Poll `wal-relay status` until a PID appears, or until timeout.
+    # Echoes the PID (empty string if none found within timeout).
+    #
+    # Why poll instead of a single read: the relay is launched as a detached
+    # background child and reported "started" as soon as its local
+    # /v1/tip-config endpoint answers. That endpoint can respond before the
+    # process is reliably visible in `ps` (and the daemon writes status.yaml
+    # asynchronously), so a single-shot read here was racy in CI.
+    local timeout="${1:-30}"
+    local end=$((SECONDS + timeout))
+    local pid=""
+    while [ "$SECONDS" -lt "$end" ]; do
+        pid=$(get_walrus_relay_pid)
+        if [ -n "$pid" ]; then
+            echo "$pid"
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo ""
+    return 1
+}
+
+dump_walrus_relay_diagnostics() {
+    # Dump relay state to stderr to help distinguish "process died" from
+    # "not yet ready" when a PID assertion fails. Best-effort; never fails.
+    local _context="$1"
+    local _log="$WORKDIRS/$WORKDIR/walrus-relay/walrus-relay-process.log"
+    local _yaml="$WORKDIRS/$WORKDIR/suibase.yaml"
+
+    {
+        echo "----- walrus relay diagnostics ($_context) -----"
+        echo "[wal-relay status]"
+        "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1 | sed 's/^/  /' || true
+
+        echo "[walrus-upload-relay processes in ps]"
+        local _procs
+        _procs=$(ps x -o pid,cmd 2>/dev/null | grep "walrus-upload-relay" | grep -v grep)
+        if [ -n "$_procs" ]; then
+            echo "$_procs" | sed 's/^/  /'
+        else
+            echo "  (none)"
+        fi
+
+        echo "[listeners on relay ports]"
+        local _ports
+        _ports=$(grep -E "^walrus_relay_(local|proxy|metrics)_port:" "$_yaml" 2>/dev/null | grep -o "[0-9]\+" | paste -sd'|' -)
+        if [ -n "$_ports" ]; then
+            ss -tlnp 2>/dev/null | grep -E ":(${_ports}) " | sed 's/^/  /' || echo "  (none listening)"
+        else
+            echo "  (could not determine ports from $_yaml)"
+        fi
+
+        echo "[tail of $_log]"
+        if [ -f "$_log" ]; then
+            tail -30 "$_log" 2>/dev/null | sed 's/^/  /'
+        else
+            echo "  (log file not found)"
+        fi
+        echo "------------------------------------------------"
+    } >&2
+}
+
 test_config_process_discrepancy() {
     echo "--- Test: Config-Process Discrepancy Scenarios ---"
     echo "Testing: Config and process state mismatches should not cause exit code 1"
@@ -211,12 +275,13 @@ test_config_process_discrepancy() {
         fail "Failed to start $WORKDIR services"
     fi
 
-    # Get the PID of running process
+    # Get the PID of running process (poll briefly to avoid startup race)
     local pid1
-    pid1=$(get_walrus_relay_pid)
+    pid1=$(wait_for_walrus_relay_pid 30)
     echo "Process PID after enable and start: $pid1"
 
     if [ -z "$pid1" ]; then
+        dump_walrus_relay_diagnostics "scenario 1: after enable + start"
         fail "No PID found after wal-relay enable and start - process should be running"
     fi
 
@@ -281,6 +346,7 @@ test_config_process_discrepancy() {
     local pid3
     pid3=$(get_walrus_relay_pid)
     if [ -n "$pid3" ]; then
+        dump_walrus_relay_diagnostics "scenario 2: after disable (expected stopped)"
         fail "Process still running (PID: $pid3) after wal-relay disable - disable operation failed"
     else
         echo "✓ Process stopped as expected"
@@ -323,7 +389,7 @@ test_config_process_discrepancy() {
     fi
 
     local pid5
-    pid5=$(get_walrus_relay_pid)
+    pid5=$(wait_for_walrus_relay_pid 30)
     if [ -n "$pid5" ]; then
         echo "✓ New process started (PID: $pid5)"
         # Verify this is a new process (different from all previous PIDs)
@@ -332,6 +398,7 @@ test_config_process_discrepancy() {
         fi
         echo "✓ Confirmed new process with unique PID"
     else
+        dump_walrus_relay_diagnostics "scenario 3: after enable"
         fail "No PID found after wal-relay enable - process should be running"
     fi
 
@@ -376,6 +443,7 @@ test_config_process_discrepancy() {
     local pid7
     pid7=$(get_walrus_relay_pid)
     if [ -n "$pid7" ]; then
+        dump_walrus_relay_diagnostics "scenario 4: after disable (expected stopped)"
         fail "Process still running (PID: $pid7) after wal-relay disable - disable operation failed"
     else
         echo "✓ No process running as expected"

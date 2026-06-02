@@ -12,7 +12,7 @@ use anyhow::Result;
 use axum::{
     body::{Body, Bytes},
     extract::State,
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Json, Response},
     routing::any,
     Router,
@@ -126,20 +126,31 @@ impl MockServerTask {
 /// - anything else (default JSON-RPC) → existing JSON-RPC handler logic.
 async fn unified_handler(
     State(state): State<Arc<MockServerState>>,
-    headers: HeaderMap,
-    body: Bytes,
+    req: axum::extract::Request,
 ) -> Response {
-    let is_grpc = headers
+    let is_grpc = req
+        .headers()
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.starts_with("application/grpc"))
         .unwrap_or(false);
 
     if is_grpc {
+        // Deliberately DO NOT buffer the request body on the gRPC path. A
+        // client/bidi-streaming client (e.g. server reflection — what grpcurl
+        // uses) keeps its request stream open, so buffering here would hang
+        // until the client half-closes. Answering without reading the body
+        // mirrors a real bidi server that responds to each request message as
+        // it arrives, and lets a test prove the proxy pipes the request body
+        // through instead of buffering it (see proxy_grpc_request_streaming).
         handle_grpc_request(state).await
     } else {
-        // JSON path: parse the already-buffered body and hand off.
-        let parsed: Value = match serde_json::from_slice(&body) {
+        // JSON path: buffer the (small) body then hand off.
+        let bytes = match axum::body::to_bytes(req.into_body(), 16 * 1024 * 1024).await {
+            Ok(b) => b,
+            Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        };
+        let parsed: Value = match serde_json::from_slice(&bytes) {
             Ok(v) => v,
             Err(_) => return StatusCode::BAD_REQUEST.into_response(),
         };
