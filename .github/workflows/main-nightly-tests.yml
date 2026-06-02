@@ -36,7 +36,7 @@ jobs:
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
       - name: Checkout Main Branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1

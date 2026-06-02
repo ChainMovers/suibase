@@ -15,7 +15,7 @@ jobs:
     outputs:
       isDoc: ${{ steps.diff.outputs.isDoc }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -30,17 +30,17 @@ jobs:
       # Note: fetch-depth 0 is required to get the whole history, which is used to
       #       generate the contributors list.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Install Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: "latest"
           run_install: true
@@ -51,7 +51,7 @@ jobs:
           cp -f "$GITHUB_WORKSPACE/docs/ci/package.json.ci" "$GITHUB_WORKSPACE/docs/package.json"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           # Node 22 — pnpm@latest started importing `node:sqlite` in late
           # May 2026 which is only available on Node 22.5+; Node 20 fails

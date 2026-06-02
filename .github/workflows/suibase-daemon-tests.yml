@@ -15,7 +15,7 @@ jobs:
     outputs:
       isChanged: ${{ steps.diff.outputs.isSuibaseDaemon }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -44,7 +44,7 @@ jobs:
           docker-images: true
           swap-storage: false # Not sure if needed for heavy link... keep it for now.
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
 
