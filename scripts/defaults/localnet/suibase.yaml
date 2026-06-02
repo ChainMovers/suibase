@@ -87,6 +87,10 @@ precompiled_bin: true
 # the binaries. This is made possible by setting enable_local_repo to true.
 enable_local_repo: false
 
+# When true, download a smaller "min" Sui binary asset from chainmovers/sui-binaries
+# instead of the full official MystenLabs release.
+allow_sui_min_precomp: true
+
 # Control cargo option when building sui binaries.
 #
 # cargo_add_options is appended to the cargo command line for both on-demand (e.g. "localnet build")

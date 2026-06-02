@@ -12,7 +12,7 @@ jobs:
     outputs:
       isDocHelperAPI: ${{ steps.diff.outputs.isDocHelperAPI }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
       - name: Detect Changes
@@ -21,7 +21,7 @@ jobs:
 
       - name: Upload Trigger Artifact
         if: ${{ steps.diff.outputs.isDocHelperAPI == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CHANGELOG.md
           path: ./CHANGELOG.md
@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Download Trigger Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: CHANGELOG.md
           path: .

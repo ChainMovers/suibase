@@ -42,6 +42,8 @@ sui_precompiled_bin: ~
 sui_precompiled_type: "mystenlabs"
 sui_precompiled_path: ~
 sui_support_version_check: true
+# Mirror that publishes the slimmed "min" sui release assets (see allow_sui_min_precomp).
+sui_min_precomp_repo_url: "https://github.com/chainmovers/sui-binaries.git"
 
 walrus_assets_name: "walrus"
 walrus_bin_names: "walrus,walrus-upload-relay"
