@@ -959,7 +959,7 @@ workdir_exec() {
         [ -z "$FAUCET_PROCESS_PID" ] &&
         [ -z "$SUIBASE_DAEMON_PID" ]; then
         if [ ! -d "$SUIBASE_TMP_DIR" ]; then
-          warn_user "Looks like the system was rebooted. Please do '$WORKDIR start' to resume."
+          warn_user "Looks like the system was rebooted. Please do '$WORKDIR regen' to resume."
         fi
       fi
     fi
