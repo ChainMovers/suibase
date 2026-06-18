@@ -10225,6 +10225,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "suibase"
+version = "0.0.1"
+dependencies = [
+ "home",
+ "serde_json",
+ "serde_yaml 0.8.26",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11506,6 +11516,9 @@ dependencies = [
  "include_dir",
  "serde",
  "serde_yaml 0.9.34+deprecated",
+ "sha2 0.10.9",
+ "sui-types",
+ "suibase",
  "tokio",
  "walrus-core",
  "walrus-sui",

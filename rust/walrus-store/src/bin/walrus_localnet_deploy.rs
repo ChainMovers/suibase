@@ -23,7 +23,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use walrus_core::keys::{NetworkKeyPair, ProtocolKeyPair};
 use walrus_sui::{
-    client::{ReadClient, SuiContractClient},
+    client::ReadClient,
     config::load_wallet_context_from_path,
     test_utils::system_setup::{
         create_and_init_system_for_test, end_epoch_zero, register_committee_and_stake,

@@ -21,6 +21,9 @@ default = []
 localnet = [
   "dep:walrus-sui",
   "dep:walrus-core",
+  "dep:sui-types",
+  "dep:suibase",
+  "dep:sha2",
   "dep:tokio",
   "dep:clap",
   "dep:serde",
@@ -32,6 +35,14 @@ mock = ["localnet"]
 [dependencies]
 walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"], optional = true }
 walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", optional = true }
+# sui-types MUST use the IDENTICAL git+tag as walrus's workspace (testnet-v1.73.1)
+# so its ObjectID unifies with walrus-sui's transitive sui-types (a registry crate
+# or a different tag/rev would be a *distinct* ObjectID type -> compile error).
+sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.1", optional = true }
+# The lightweight (Sui-free) suibase discovery helper: workdir/keystore/address.
+suibase = { path = "../helper", optional = true }
+# Deterministic 32-byte root-hash for blob ids (no real erasure-coded slivers).
+sha2 = { version = "0.10", optional = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 # Always-on (tiny): the public WalrusStore API returns anyhow::Result even in the

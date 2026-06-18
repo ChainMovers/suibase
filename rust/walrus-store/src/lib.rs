@@ -34,7 +34,8 @@ use anyhow::{bail, Result};
 /// Handle to a stored blob: the content id (`blob_id`) and the on-chain Sui object id.
 #[derive(Debug, Clone)]
 pub struct BlobHandle {
-    /// Content id (`0x` + 64 hex), stable for identical content.
+    /// Content id — the canonical Walrus `BlobId` string (URL-safe base64, no
+    /// padding), stable for identical content. Pass it back to `read`/`stat`/etc.
     pub blob_id: String,
     /// The Sui `Blob` object id (`0x` + 64 hex).
     pub object_id: String,
@@ -82,6 +83,7 @@ impl WalrusStore {
 
     /// Store `bytes` for `epochs` epochs: creates a real, certified `Blob` on-chain
     /// (held-key certify) and writes the bytes to the filesystem.
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
     pub async fn store(&self, bytes: &[u8], epochs: u32) -> Result<BlobHandle> {
         match self {
             #[cfg(feature = "localnet")]
@@ -92,6 +94,7 @@ impl WalrusStore {
     }
 
     /// Read a stored blob's bytes by `blob_id`.
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
     pub async fn read(&self, blob_id: &str) -> Result<Vec<u8>> {
         match self {
             #[cfg(feature = "localnet")]
@@ -102,6 +105,7 @@ impl WalrusStore {
     }
 
     /// Metadata for a stored blob.
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
     pub async fn stat(&self, blob_id: &str) -> Result<BlobMeta> {
         match self {
             #[cfg(feature = "localnet")]
@@ -112,7 +116,9 @@ impl WalrusStore {
     }
 
     /// Extend a certified blob's lifetime by `epochs` (real `extend_blob`; requires
-    /// the blob to be certified — exercises the held-key certify path end-to-end).
+    /// the blob to be certified and not yet expired — exercises the held-key certify
+    /// path end-to-end).
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
     pub async fn extend(&self, blob_id: &str, epochs: u32) -> Result<()> {
         match self {
             #[cfg(feature = "localnet")]
@@ -122,7 +128,9 @@ impl WalrusStore {
         }
     }
 
-    /// Delete a blob (real `delete_blob`) and remove its filesystem bytes.
+    /// Delete a blob (real `burn_blobs` on the `Blob` object) and remove its
+    /// filesystem bytes. Idempotent: deleting an already-deleted blob is a no-op.
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
     pub async fn delete(&self, blob_id: &str) -> Result<()> {
         match self {
             #[cfg(feature = "localnet")]
