@@ -153,6 +153,12 @@ walrus_relay_proxy_port: ~
 walrus_relay_local_port: ~
 walrus_relay_metrics_port: ~
 
+# Nodeless local Walrus (dev feature, opt-in). When true, 'localnet start'/'regen'
+# deploys real Walrus Blob/Storage objects on the localnet Sui with an off-node
+# held-key committee (no storage nodes). Disabled by default so default localnet
+# start is unchanged. See docs/dev/LOCALNET_WALRUS_PLAN.md.
+walrus_enabled: false
+
 links:
   - alias: "localnet"
     rpc: "http://localhost:9000"

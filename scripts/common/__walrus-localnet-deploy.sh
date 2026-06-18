@@ -62,6 +62,12 @@ deploy_walrus_localnet() {
     return 0
   fi
 
+  # Opt-in feature, disabled by default (mirrors walrus_relay_enabled). When
+  # off, this is a no-op so default localnet start/regen is unchanged.
+  if [ "${CFG_walrus_enabled:-false}" != "true" ]; then
+    return 0
+  fi
+
   local _RPC="http://localhost:9000"
   local _FAUCET="http://localhost:9123/gas"
   local _CONFIG_DEFAULT="$WORKDIRS/$_WORKDIR/config-default"
