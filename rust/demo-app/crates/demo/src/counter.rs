@@ -12,7 +12,7 @@ use sui_sdk::SuiClientBuilder;
 use suibase::Helper;
 
 use sui_sdk::json::SuiJsonValue;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::Transaction;
 
 use anyhow::ensure;
@@ -58,7 +58,7 @@ pub async fn count() -> Result<(), anyhow::Error> {
     // Get the keystore using the location given by suibase.
     let keystore_pathname = suibase.keystore_pathname()?;
     let keystore_pathbuf = PathBuf::from(keystore_pathname);
-    let keystore = Keystore::File(FileBasedKeystore::new(&keystore_pathbuf)?);
+    let keystore = Keystore::File(FileBasedKeystore::load_or_create(&keystore_pathbuf)?);
 
     // Create a Sui client.
     let rpc_url = suibase.rpc_url()?;
@@ -83,7 +83,9 @@ pub async fn count() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let signature = keystore.sign_secure(&client_address, &move_call, Intent::sui_transaction())?;
+    let signature = keystore
+        .sign_secure(&client_address, &move_call, Intent::sui_transaction())
+        .await?;
 
     let tx = Transaction::from_data(move_call, vec![signature]);
     let response = sui_client
