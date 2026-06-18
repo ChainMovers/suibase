@@ -15,10 +15,13 @@
   regression tests (red-checked).
 - ✅ **M5 (partial)** WS7 enforcement automated: `walrus-store-default-build.yml` asserts the default
   (no-feature) graph links no `suibase`/walrus/Sui/RocksDB (default = 2 crates; localnet = 827).
-- ⏭️ **M4** Real `walrus-sdk` backend for testnet/mainnet — **next**. Decision pinned below
-  (default stays inert; the real backend goes behind a `real`/default-on feature, not bare default).
-  Its green gate (a real testnet store/read) needs a funded testnet wallet + network, so it is run
-  with the owner's credentials rather than in the unattended local loop.
+- ✅ **M4 (store/read/extend/delete)** Real `walrus-sdk` backend behind the `real` feature (NOT bare
+  default — keeps the default inert per WS7). `for_workdir("testnet"|"mainnet")` builds a
+  `WalrusNodeClient<SuiContractClient>` from the workdir wallet (Sui RPC via the suibase proxy first,
+  public fullnode fallback) + the embedded public contract ids. **Live testnet store→read verified**
+  (real storage-node upload + real on-chain certified `Blob`, fund-gated test auto-converts SUI→WAL).
+  CI: a `real-backend` job compiles it + asserts WS7 (no `suibase` in the `real` graph). `stat` and
+  pools on the real backend are phase 2.
 
 **M4 feature-structure decision (reconciling this plan with the owner's "default = 0 heavy crates"
 guidance):** keep the bare default build inert (WS7, enforced by CI). Put `RealWalrusStore`

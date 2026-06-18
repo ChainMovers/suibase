@@ -103,3 +103,66 @@ jobs:
           cargo test --features localnet --test localnet_pool -- --nocapture
           # Pool/standalone namespace coexistence (identical content, no aliasing).
           cargo test --features localnet --test localnet_pool_namespace -- --nocapture
+
+  real-backend:
+    # Validates that the real walrus-sdk backend COMPILES in clean CI and that the WS7
+    # invariant holds for the `real` build (no `suibase`). The live testnet store/read
+    # test is fund-gated and simply SKIPS here (CI has no suibase workdir and no funds).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free Disk Space (the walrus/Sui graph is large)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - uses: actions/checkout@v6
+
+      - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false"
+
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust/walrus-store -> target"
+          cache-on-failure: "true"
+
+      - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+
+      - name: Build the real backend (walrus-sdk)
+        working-directory: rust/walrus-store
+        run: |
+          rustup toolchain install 1.96 --profile minimal
+          cargo build --features real
+
+      - name: WS7 — the `real` build must exclude suibase (enclave-safe)
+        working-directory: rust/walrus-store
+        run: |
+          cargo tree --features real --prefix none 2>/dev/null \
+            | awk 'NF {print $1}' | sort -u > /tmp/real-deps.txt
+          echo "real dependency graph ($(wc -l < /tmp/real-deps.txt) crates)"
+          if grep -qx "suibase" /tmp/real-deps.txt; then
+            echo "::error::WS7 violation: 'suibase' is in the real (enclave-facing) build graph"
+            exit 1
+          fi
+          for c in walrus-sdk walrus-sui sui-types; do
+            grep -qx "$c" /tmp/real-deps.txt \
+              || { echo "::error::real build unexpectedly missing $c"; exit 1; }
+          done
+          echo "WS7 holds for the real build: walrus-sdk present, suibase absent."
+
+      - name: Testnet round-trip (fund-gated — SKIPS without a funded workdir)
+        working-directory: rust/walrus-store
+        run: |
+          # No suibase testnet workdir / no funds in CI -> the test skips with a warning.
+          cargo test --features real --test testnet_roundtrip -- --nocapture

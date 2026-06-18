@@ -2197,6 +2197,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
  "const-oid",
+ "der_derive",
+ "flagset",
  "pem-rfc7468 0.7.0",
  "zeroize",
 ]
@@ -2213,6 +2215,17 @@ dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
  "rusticata-macros",
+]
+
+[[package]]
+name = "der_derive"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8034092389675178f570469e6c3b0465d3d30b4505c294a6550db47f3c17ad18"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2544,6 +2557,7 @@ dependencies = [
  "ff 0.13.1",
  "generic-array",
  "group 0.13.0",
+ "hkdf",
  "pem-rfc7468 0.7.0",
  "pkcs8 0.10.2",
  "rand_core 0.6.4",
@@ -2974,6 +2988,12 @@ name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
+
+[[package]]
+name = "flagset"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
 name = "flate2"
@@ -4214,6 +4234,30 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "url",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "10.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eba32bfb4ffdeaca3e34431072faf01745c9b26d25504aa7a6cf5684334fc4fc"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "getrandom 0.2.16",
+ "hmac",
+ "js-sys",
+ "p256",
+ "p384",
+ "pem",
+ "rand 0.8.5",
+ "rsa 0.9.10",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "signature 2.2.0",
+ "simple_asn1",
+ "zeroize",
 ]
 
 [[package]]
@@ -6099,6 +6143,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b84bcd6ae87133e903af7ef497404dda70c60d0ea14895fc8a5e6722754fc2a0"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "opentelemetry-otlp"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6107,7 +6164,7 @@ dependencies = [
  "async-trait",
  "futures-core",
  "http",
- "opentelemetry",
+ "opentelemetry 0.27.1",
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prost 0.13.5",
@@ -6124,7 +6181,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6e05acbfada5ec79023c85368af14abd0b307c015e9064d249b2a950ef459a6"
 dependencies = [
  "hex",
- "opentelemetry",
+ "opentelemetry 0.27.1",
  "opentelemetry_sdk",
  "prost 0.13.5",
  "serde",
@@ -6142,7 +6199,7 @@ dependencies = [
  "futures-executor",
  "futures-util",
  "glob",
- "opentelemetry",
+ "opentelemetry 0.27.1",
  "percent-encoding",
  "rand 0.8.5",
  "serde_json",
@@ -8064,6 +8121,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_norway"
+version = "0.9.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e408f29489b5fd500fab51ff1484fc859bb655f32c671f307dcd733b72e8168c"
+dependencies = [
+ "indexmap 2.14.0",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml-norway",
+]
+
+[[package]]
 name = "serde_path_to_error"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8313,6 +8383,18 @@ name = "simple-server-timing-header"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16e78919e05c9b8e123d435a4ad104b488ad1585631830e413830985c214086e"
+
+[[package]]
+name = "simple_asn1"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d585997b0ac10be3c5ee635f1bab02d512760d14b7c468801ac8a01d9ae5f1d"
+dependencies = [
+ "num-bigint 0.4.6",
+ "num-traits",
+ "thiserror 2.0.18",
+ "time",
+]
 
 [[package]]
 name = "simple_moving_average"
@@ -10339,7 +10421,7 @@ dependencies = [
  "crossterm",
  "futures",
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.27.1",
  "opentelemetry-otlp",
  "opentelemetry-proto",
  "opentelemetry_sdk",
@@ -10350,7 +10432,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-error",
- "tracing-opentelemetry",
+ "tracing-opentelemetry 0.28.0",
  "tracing-subscriber",
 ]
 
@@ -10607,6 +10689,27 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "tls_codec"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0de2e01245e2bb89d6f05801c564fa27624dbd7b1846859876c7dad82e90bf6b"
+dependencies = [
+ "tls_codec_derive",
+ "zeroize",
+]
+
+[[package]]
+name = "tls_codec_derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d2e76690929402faae40aebdda620a2c0e25dd6d3b9afe48867dfd95991f4bd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
 
 [[package]]
 name = "tokio"
@@ -11071,12 +11174,26 @@ checksum = "97a971f6058498b5c0f1affa23e7ea202057a7301dbff68e968b2d578bcbd053"
 dependencies = [
  "js-sys",
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.27.1",
  "opentelemetry_sdk",
  "smallvec",
  "tracing",
  "tracing-core",
  "tracing-log",
+ "tracing-subscriber",
+ "web-time",
+]
+
+[[package]]
+name = "tracing-opentelemetry"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ac28f2d093c6c477eaa76b23525478f38de514fa9aeb1285738d4b97a9552fc"
+dependencies = [
+ "js-sys",
+ "opentelemetry 0.31.0",
+ "tracing",
+ "tracing-core",
  "tracing-subscriber",
  "web-time",
 ]
@@ -11339,6 +11456,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
+name = "unsafe-libyaml-norway"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b39abd59bf32521c7f2301b52d05a6a2c975b6003521cbd0c6dc1582f0a22104"
+
+[[package]]
 name = "unsigned-varint"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11395,6 +11518,7 @@ dependencies = [
  "indexmap 2.14.0",
  "serde",
  "serde_json",
+ "serde_norway",
  "utoipa-gen",
 ]
 
@@ -11406,6 +11530,7 @@ checksum = "6ba0b99ee52df3028635d93840c797102da61f8a7bb3cf751032455895b52ef8"
 dependencies = [
  "proc-macro2",
  "quote",
+ "regex",
  "syn 2.0.117",
 ]
 
@@ -11508,6 +11633,86 @@ dependencies = [
 ]
 
 [[package]]
+name = "walrus-sdk"
+version = "1.51.0"
+source = "git+https://github.com/MystenLabs/walrus.git?rev=1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0#1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bimap",
+ "bytes",
+ "chrono",
+ "enum_dispatch",
+ "fastcrypto 0.1.9 (git+https://github.com/MystenLabs/fastcrypto?rev=4db0e90c732bbf7420ca20de808b698883148d9c)",
+ "futures",
+ "home",
+ "humantime",
+ "indexmap 2.14.0",
+ "indicatif",
+ "indoc",
+ "itertools 0.14.0",
+ "jsonwebtoken",
+ "pin-project",
+ "prometheus",
+ "rand 0.8.5",
+ "rayon",
+ "reqwest",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_with",
+ "serde_yaml 0.9.34+deprecated",
+ "sui-sdk",
+ "sui-types",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "url",
+ "utoipa",
+ "walrus-core",
+ "walrus-storage-node-client",
+ "walrus-sui",
+ "walrus-test-utils",
+ "walrus-utils",
+]
+
+[[package]]
+name = "walrus-storage-node-client"
+version = "1.51.0"
+source = "git+https://github.com/MystenLabs/walrus.git?rev=1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0#1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0"
+dependencies = [
+ "bcs",
+ "bytes",
+ "fastcrypto 0.1.9 (git+https://github.com/MystenLabs/fastcrypto?rev=4db0e90c732bbf7420ca20de808b698883148d9c)",
+ "futures",
+ "http",
+ "mime",
+ "opentelemetry 0.31.0",
+ "p256",
+ "pin-project",
+ "prometheus",
+ "rand 0.8.5",
+ "reqwest",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sui-simulator",
+ "sui-types",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry 0.32.1",
+ "utoipa",
+ "walrus-core",
+ "walrus-utils",
+ "x509-cert",
+]
+
+[[package]]
 name = "walrus-store"
 version = "0.0.1"
 dependencies = [
@@ -11521,6 +11726,7 @@ dependencies = [
  "suibase",
  "tokio",
  "walrus-core",
+ "walrus-sdk",
  "walrus-sui",
 ]
 
@@ -11578,6 +11784,7 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "utoipa",
  "walkdir",
  "walrus-core",
  "walrus-test-utils",
@@ -11605,11 +11812,14 @@ version = "1.51.0"
 source = "git+https://github.com/MystenLabs/walrus.git?rev=1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0#1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0"
 dependencies = [
  "anyhow",
+ "bytes",
  "const-str 0.6.4",
  "git-version",
  "home",
+ "http-body",
  "humantime",
  "once_cell",
+ "pin-project",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -12466,6 +12676,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "x509-cert"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1301e935010a701ae5f8655edc0ad17c44bad3ac5ce8c39185f75453b720ae94"
+dependencies = [
+ "const-oid",
+ "der 0.7.10",
+ "spki 0.7.3",
+ "tls_codec",
 ]
 
 [[package]]
