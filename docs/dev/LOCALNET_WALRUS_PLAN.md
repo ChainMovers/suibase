@@ -1,7 +1,7 @@
 # Nodeless Local Walrus on Suibase Localnet + Workdir-Aware `WalrusStore` — Implementation Plan
 
-**Status:** Draft working plan · **Gate-0 verdict (analytical):** LIKELY-GO (medium confidence) ·
-**Gate-0 empirical confirmation:** pending (blocked on a build dependency, see below).
+**Status:** Draft working plan · **Gate-0 verdict:** ✅ **PASS — GO** (empirically confirmed on
+suibase localnet, 2026-06-17).
 
 > This is the **working implementation plan** for a new Suibase feature, authored on the
 > `feature/localnet-walrus` branch. It is the precursor to the generic, end-user-facing
@@ -52,6 +52,39 @@ Two facts make a single off-node signature sufficient:
 The signing path reuses `walrus-core` verbatim (no hand-rolled BCS): build a `Confirmation` and sign
 with `ProtocolKeyPair::sign_message` (`keys.rs:261-273`); the scheme is fastcrypto BLS12381 **min_pk**,
 matching the on-chain native `bls12381_min_pk_verify`.
+
+## Gate-0 Results (empirical — PASS) {#gate-0-results}
+
+Executed 2026-06-17 against a live suibase localnet (Sui `1.73.1-ff1fe0ec`, the exact version the
+Walrus reference pins) using binaries built from `walrus-reference-main @ 1049b56`. Build dependency
+resolved without sudo: `libclang.so` from the `libclang` pip wheel + GCC freestanding headers via
+`BINDGEN_EXTRA_CLANG_ARGS`. Two independent proofs:
+
+1. **Walrus's own `test_register_certify_blob` passed** (`cargo test -p walrus-sui --features test-utils -- --ignored`):
+   `2 passed; 0 failed`. This test performs off-node held-key `certify_blob` with **no storage nodes**
+   (`TestNodeKeys::blob_certificate_for_signers` → `certify_blobs`), confirming the fastcrypto min_pk
+   DST matches Sui's native `bls12381_min_pk_verify` — the #1 risk, **resolved**.
+2. **A throwaway spike on suibase localnet passed end-to-end** (`crates/walrus-sui/examples/localnet_nodeless_certify.rs`):
+   publish Walrus contracts → set up + stake an N=1 committee off-node → `reserve_space` →
+   `register_blob` (uncertified) → **off-node held-key `certify_blob` OK** → `extend_blob` OK (proves
+   the cert is real) → filesystem byte round-trip OK. Re-confirmed after `localnet regen`.
+
+Separately, `walrus-deploy deploy-system-contract` published `wal`/`wal_exchange`/`walrus`/
+`walrus_subsidies` with an N=1 deterministic committee and emitted all object IDs + the held committee
+BLS key (`testbed_config.yaml: nodes[0].keypair`) — **no storage nodes** — validating the Layer-A
+deploy mechanism.
+
+**Two empirical findings that refine the plan (both mechanical, neither a blocker):**
+
+- **Committee staking is a real step `walrus-deploy` does not perform.** `deploy-system-contract` and
+  `generate-dry-run-configs` leave the committee **empty** (`members: []`); the node is only registered
+  + staked by `register_committee_and_stake` + `end_epoch_zero` (`walrus-sui` test-utils). Layer A (M1)
+  must perform this step itself (a small helper bin, or replicate those two functions) — the
+  node-oriented `generate-dry-run-configs` is not sufficient.
+- **Localnet has read-after-write lag.** After `initiate_epoch_change`, the fullnode (`:9000`) takes a
+  few seconds to reflect the new epoch/committee — the committee read returned empty twice, then
+  `epoch=1 members=1` on the third read (~4s). Poll `current_committee()` until it advances rather than
+  reading once.
 
 ## Gate-0 Spike (throwaway — must PASS before building the feature)
 
@@ -192,10 +225,13 @@ globals; must pass `scripts-tests` + `rust-tests`.
 
 ## Risks
 
-1. **fastcrypto min_pk DST not verbatim in-repo** → the off-node sign / on-chain verify round trip
-   (M0 step 6 certify) is the proof; sign via `sign_message` to inherit the correct DST. *(Top risk.)*
-2. **`deploy-system-contract` does NOT stake / end epoch 0** → always run `generate-dry-run-configs`
-   (or replicate `register_committee_and_stake` + `end_epoch_zero`).
+1. ~~fastcrypto min_pk DST not verbatim in-repo~~ — **RESOLVED** (Gate-0): the sign→verify round trip
+   passed (Walrus's own `test_register_certify_blob` + the localnet spike). Always sign via
+   `ProtocolKeyPair::sign_message` so the DST is whatever fastcrypto uses.
+2. **`deploy-system-contract` / `generate-dry-run-configs` do NOT stake the committee** (confirmed
+   empirically — committee stays `members: []`) → Layer A must call `register_committee_and_stake` +
+   `end_epoch_zero` itself, then **poll `current_committee()`** until the new epoch is reflected
+   (localnet read-after-write lag, ~seconds).
 3. **min_pk / key-format footgun** → load via `ProtocolKeyPair::from_str` (handles the `0x04` flag);
    never raw `from_bytes`.
 4. **`cert_epoch` must equal the live epoch at submission** → read epoch just before signing and
