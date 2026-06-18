@@ -40,8 +40,14 @@ echo "=== M1: nodeless localnet Walrus wiring (non-destructive) ==="
 # 1. localnet walrus-config.yaml template (deploy-filled placeholders).
 TEMPLATE="$SCRIPTS/templates/localnet/config-default/walrus-config.yaml"
 check "localnet walrus-config.yaml template exists" test -f "$TEMPLATE"
-check "template valid YAML; default_context=localnet; rpc localhost:9000" \
-    python3 -c "import yaml,sys; d=yaml.safe_load(open('$TEMPLATE')); sys.exit(0 if d.get('default_context')=='localnet' and 'http://localhost:9000' in d['contexts']['localnet']['rpc_urls'] else 1)"
+# grep-based (NO PyYAML dependency — the rust-tests CI runner has no pyyaml installed;
+# the deploy bin validates the REAL written config via serde_yaml at deploy time).
+check "template default_context: localnet" \
+    grep -qE '^default_context:[[:space:]]*localnet([[:space:]]|$)' "$TEMPLATE"
+check "template declares a contexts: block" grep -qE '^contexts:' "$TEMPLATE"
+check "template has a localnet: context entry" grep -qE '^[[:space:]]+localnet:' "$TEMPLATE"
+check "template localnet rpc -> http://localhost:9000" \
+    grep -qE 'http://localhost:9000' "$TEMPLATE"
 
 # 2. CRITICAL: opt-in, disabled by default (default localnet start must be unchanged).
 check "walrus_enabled: false default in defaults/localnet/suibase.yaml" \
