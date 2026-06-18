@@ -23,7 +23,6 @@ localnet = [
   "dep:walrus-core",
   "dep:tokio",
   "dep:clap",
-  "dep:anyhow",
   "dep:serde",
   "dep:serde_yaml",
   "dep:include_dir",
@@ -35,7 +34,9 @@ walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b
 walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", optional = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
-anyhow = { version = "1", optional = true }
+# Always-on (tiny): the public WalrusStore API returns anyhow::Result even in the
+# default build. NOT part of the heavy walrus/Sui graph (WS7).
+anyhow = "1"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_yaml = { version = "0.9", optional = true }
 # Embeds embedded-contracts/ into the binary so a precompiled artifact is
