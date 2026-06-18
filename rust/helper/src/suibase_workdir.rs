@@ -3,15 +3,39 @@ use std::path::{Path, PathBuf};
 
 use std::fs::File;
 use std::io::BufReader;
-use std::str::FromStr;
 
 use serde_json::Value;
 use serde_yaml::Value as YamlValue;
 
-use sui_types::base_types::{ObjectID, SuiAddress};
-
 use crate::error::Error;
 use crate::suibase_root::SuibaseRoot;
+
+// Validate + normalize a Sui object id / address hex string to the canonical
+// "0x" + 64 lowercase hex form. Accepts an optional 0x/0X prefix and short
+// forms (left zero-padded), matching the prior ObjectID::from_hex_literal /
+// SuiAddress::from_str + to_string() behavior. Returns None if not valid hex
+// or longer than 32 bytes. This keeps the helper free of any Sui-types
+// dependency (see docs/dev/LOCALNET_WALRUS_PLAN.md — helper is a pure,
+// always-buildable file reader).
+fn normalize_sui_hex(input: &str) -> Option<String> {
+    let s = input
+        .strip_prefix("0x")
+        .or_else(|| input.strip_prefix("0X"))
+        .unwrap_or(input);
+    if s.is_empty() || s.len() > 64 {
+        return None;
+    }
+    if !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut out = String::with_capacity(66);
+    out.push_str("0x");
+    for _ in 0..(64 - s.len()) {
+        out.push('0');
+    }
+    out.push_str(&s.to_ascii_lowercase());
+    Some(out)
+}
 
 pub(crate) struct SuibaseWorkdir {
     workdir_name: Option<String>,
@@ -85,11 +109,11 @@ impl SuibaseWorkdir {
         Ok(self.workdir_name.as_ref().unwrap().to_string())
     }
 
-    pub(crate) fn package_object_id(
+    pub(crate) fn package_id(
         &self,
         root: &mut SuibaseRoot,
         package_name: &str,
-    ) -> Result<ObjectID, Error> {
+    ) -> Result<String, Error> {
         let pathname =
             self.get_pathname_published_file(root, package_name, "package-id", "json")?;
         let mut in_str = std::fs::read_to_string(&pathname).map_err(|io_error| {
@@ -110,7 +134,7 @@ impl SuibaseWorkdir {
 
         // Parse the expected hex string.
         let package_id =
-            ObjectID::from_hex_literal(package_id_hex).map_err(|_| Error::PackageIdInvalidHex {
+            normalize_sui_hex(package_id_hex).ok_or_else(|| Error::PackageIdInvalidHex {
                 id: package_id_hex.to_string(),
             })?;
         Ok(package_id)
@@ -148,11 +172,11 @@ impl SuibaseWorkdir {
         Ok(keystore_file)
     }
 
-    pub(crate) fn published_new_object_ids(
+    pub(crate) fn published_new_objects(
         &self,
         root: &mut SuibaseRoot,
         object_type: &str,
-    ) -> Result<Vec<ObjectID>, Error> {
+    ) -> Result<Vec<String>, Error> {
         // Validate the parameter format.
         let mut names = vec![];
         for found in object_type.split("::") {
@@ -195,7 +219,7 @@ impl SuibaseWorkdir {
                             if let Some(objectid_field) = created_object.get("objectId") {
                                 if let Some(objectid_str) = objectid_field.as_str() {
                                     objects.push(
-                                        ObjectID::from_hex_literal(objectid_str).map_err(|_| {
+                                        normalize_sui_hex(objectid_str).ok_or_else(|| {
                                             Error::PublishedNewObjectParseError {
                                                 path: pathname.to_string(),
                                                 id: objectid_str.to_string(),
@@ -213,11 +237,11 @@ impl SuibaseWorkdir {
         Ok(objects)
     }
 
-    pub(crate) fn client_sui_address(
+    pub(crate) fn client_address(
         &self,
         root: &mut SuibaseRoot,
         address_name: &str,
-    ) -> Result<SuiAddress, Error> {
+    ) -> Result<String, Error> {
         // Validate the parameters.
         if address_name.is_empty() {
             return Err(Error::AddressNameEmpty);
@@ -245,7 +269,7 @@ impl SuibaseWorkdir {
             if let Some(known_item) = known.get(address_name) {
                 if let Some(address_v) = known_item.get("address") {
                     if let Some(address_str) = address_v.as_str() {
-                        return SuiAddress::from_str(address_str).map_err(|_| {
+                        return normalize_sui_hex(address_str).ok_or_else(|| {
                             Error::WorkdirStateDNSParseError {
                                 path: pathname.to_string(),
                                 address: address_str.to_string(),
@@ -479,7 +503,7 @@ impl SuibaseWorkdir {
         })
     }
 
-    fn get_client_active_address(&self, root: &mut SuibaseRoot) -> Result<SuiAddress, Error> {
+    fn get_client_active_address(&self, root: &mut SuibaseRoot) -> Result<String, Error> {
         // Directly access and parse the client.yaml.
         if !root.is_installed() {
             return Err(Error::NotInstalled);
@@ -522,12 +546,55 @@ impl SuibaseWorkdir {
             .ok_or(Error::ConfigActiveAddressParseError {
                 address: "<missing>".to_string(),
             })?;
-        let sui_address = SuiAddress::from_str(active_addr).map_err(|_| {
+        let sui_address = normalize_sui_hex(active_addr).ok_or_else(|| {
             Error::ConfigActiveAddressParseError {
                 address: active_addr.to_string(),
             }
         })?;
 
         Ok(sui_address) // Success!
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_sui_hex;
+
+    #[test]
+    fn normalize_canonical_full_length() {
+        let canon = "0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af";
+        assert_eq!(normalize_sui_hex(canon).as_deref(), Some(canon));
+    }
+
+    #[test]
+    fn normalize_lowercases_and_keeps_length_66() {
+        let upper = "0x6C2547CBBC38025CF3ADAC45F63CB0A8D12ECF777CDC75A4971612BF97FDF6AF";
+        let out = normalize_sui_hex(upper).unwrap();
+        assert_eq!(out.len(), 66);
+        assert!(out.starts_with("0x"));
+        assert_eq!(out, upper.to_ascii_lowercase());
+    }
+
+    #[test]
+    fn normalize_pads_short_forms_like_from_hex_literal() {
+        // from_hex_literal("0x2") -> 0x000..02 (32-byte left-padded), to_string canonical.
+        assert_eq!(
+            normalize_sui_hex("0x2").as_deref(),
+            Some("0x0000000000000000000000000000000000000000000000000000000000000002")
+        );
+        // No prefix is accepted too.
+        assert_eq!(
+            normalize_sui_hex("2").as_deref(),
+            Some("0x0000000000000000000000000000000000000000000000000000000000000002")
+        );
+    }
+
+    #[test]
+    fn normalize_rejects_invalid() {
+        assert_eq!(normalize_sui_hex(""), None); // empty
+        assert_eq!(normalize_sui_hex("0x"), None); // empty after prefix
+        assert_eq!(normalize_sui_hex("0xzz"), None); // non-hex
+        // 65 hex chars (> 32 bytes) is too long.
+        assert_eq!(normalize_sui_hex(&"a".repeat(65)), None);
     }
 }

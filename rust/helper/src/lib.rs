@@ -39,7 +39,6 @@ mod suibase_workdir;
 use crate::suibase_helper_impl::SuibaseHelperImpl;
 
 use std::sync::{Arc, Mutex};
-use sui_types::base_types::{ObjectID, SuiAddress};
 
 #[cfg(feature = "build-with-uniffi")]
 uniffi::include_scaffolding!("suibase");
@@ -110,19 +109,13 @@ impl Helper {
         self.0.lock().unwrap().keystore_pathname()
     }
 
-    /// Get the ObjectID of the last successfully published "package_name".
+    /// Get the object id (as `0x` + 64 hex) of the last successfully published "package_name".
     ///
     /// package_name is the "name" field specified in the "Move.toml".
     ///
     /// Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn package_object_id(&self, package_name: &str) -> Result<ObjectID, Error> {
-        self.0.lock().unwrap().package_object_id(package_name)
-    }
-
-    /// Alternative for string-based API.
     pub fn package_id(&self, package_name: &str) -> Result<String, Error> {
-        let id = self.package_object_id(package_name)?;
-        Ok(id.to_string())
+        self.0.lock().unwrap().package_id(package_name)
     }
 
     /// Get the ObjectID of the objects that were created when the package was published.
@@ -142,15 +135,11 @@ impl Helper {
     ///
     /// The object_type is "acme::Tools::Anvil"
     ///
+    /// Each id is returned as `0x` + 64 hex.
+    ///
     /// Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn published_new_object_ids(&self, object_type: &str) -> Result<Vec<ObjectID>, Error> {
-        self.0.lock().unwrap().published_new_object_ids(object_type)
-    }
-
-    /// Alternative to published_new_object_ids() for string-based API.
     pub fn published_new_objects(&self, object_type: &str) -> Result<Vec<String>, Error> {
-        let res = self.published_new_object_ids(object_type)?;
-        Ok(res.iter().map(|c| c.to_string()).collect())
+        self.0.lock().unwrap().published_new_objects(object_type)
     }
 
     /// Get an address by name.
@@ -163,14 +152,9 @@ impl Helper {
     /// Examples: "active", "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
     ///
     /// Choosing "active" is same as doing "sui client active-address" for the selected workdir.
-    pub fn client_sui_address(&self, address_name: &str) -> Result<SuiAddress, Error> {
-        self.0.lock().unwrap().client_sui_address(address_name)
-    }
-
-    /// Alternative to client_sui_address() for string-based API.
+    /// Returned as `0x` + 64 hex.
     pub fn client_address(&self, address_name: &str) -> Result<String, Error> {
-        let addr = self.client_sui_address(address_name)?;
-        Ok(addr.to_string())
+        self.0.lock().unwrap().client_address(address_name)
     }
 
     /// Get a RPC URL for the selected workdir.

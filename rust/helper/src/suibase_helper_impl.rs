@@ -2,8 +2,6 @@
 //
 // This is the implementation. See lib.rs for the public API and documentation.
 
-use sui_types::base_types::{ObjectID, SuiAddress};
-
 use crate::error::Error;
 use crate::suibase_root::SuibaseRoot;
 use crate::suibase_workdir::SuibaseWorkdir;
@@ -85,12 +83,12 @@ impl SuibaseHelperImpl {
     // package_name is the "name" field specified in the "Move.toml".
     //
     // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn package_object_id(
+    pub fn package_id(
         self: &mut SuibaseHelperImpl,
         package_name: &str,
-    ) -> Result<ObjectID, Error> {
+    ) -> Result<String, Error> {
         match &self.workdir {
-            Some(wd) => Ok(wd.package_object_id(&mut self.root, package_name)?),
+            Some(wd) => wd.package_id(&mut self.root, package_name),
             None => Err(Error::WorkdirNotSelected),
         }
     }
@@ -113,12 +111,12 @@ impl SuibaseHelperImpl {
     // The object_type is "acme::Tools::Anvil"
     //
     // Related path: ~/suibase/workdirs/<workdir_name>/published-data/<package_name>/
-    pub fn published_new_object_ids(
+    pub fn published_new_objects(
         self: &mut SuibaseHelperImpl,
         object_type: &str,
-    ) -> Result<Vec<ObjectID>, Error> {
+    ) -> Result<Vec<String>, Error> {
         match &self.workdir {
-            Some(wd) => Ok(wd.published_new_object_ids(&mut self.root, object_type)?),
+            Some(wd) => wd.published_new_objects(&mut self.root, object_type),
             None => Err(Error::WorkdirNotSelected),
         }
     }
@@ -134,12 +132,12 @@ impl SuibaseHelperImpl {
     //
     // Example of valid names: "sb-1-ed25519", "sb-3-scp256r1", "sb-5-scp256k1" ...
     //
-    pub fn client_sui_address(
+    pub fn client_address(
         self: &mut SuibaseHelperImpl,
         address_name: &str,
-    ) -> Result<SuiAddress, Error> {
+    ) -> Result<String, Error> {
         match &self.workdir {
-            Some(wd) => Ok(wd.client_sui_address(&mut self.root, address_name)?),
+            Some(wd) => wd.client_address(&mut self.root, address_name),
             None => Err(Error::WorkdirNotSelected),
         }
     }

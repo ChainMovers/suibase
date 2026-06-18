@@ -4,6 +4,7 @@
 // the Move program will emit an event.
 //
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -12,6 +13,7 @@ use sui_sdk::SuiClientBuilder;
 use suibase::Helper;
 
 use sui_sdk::json::SuiJsonValue;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::Transaction;
 
@@ -35,13 +37,14 @@ pub async fn count() -> Result<(), anyhow::Error> {
     let workdir_name = suibase.workdir()?;
     println!("Using suibase workdir [{}]", workdir_name);
 
-    // Get information from the last publication.
-    let package_id = suibase.package_object_id("demo")?;
+    // Get information from the last publication. The suibase helper now returns
+    // ids as strings (it no longer depends on sui-types); parse to ObjectID here.
+    let package_id = ObjectID::from_str(&suibase.package_id("demo")?)?;
 
     // Get the single Counter object that was created when the "demo" package was published.
     //
     // "demo::Counter::Counter" is for "package::Module::Type" defined in 'counter.move'.
-    let object_ids = suibase.published_new_object_ids("demo::Counter::Counter")?;
+    let object_ids = suibase.published_new_objects("demo::Counter::Counter")?;
     ensure!(
         object_ids.len() == 1,
         format!(
@@ -49,11 +52,11 @@ pub async fn count() -> Result<(), anyhow::Error> {
             object_ids.len()
         )
     );
-    let counter_id = object_ids[0];
+    let counter_id = ObjectID::from_str(&object_ids[0])?;
     // println!("demo::Counter ObjectID is: {}", counter_id);
 
     // Use the active client address (check the docs for useful alternatives for tests).
-    let client_address = suibase.client_sui_address("active")?;
+    let client_address = SuiAddress::from_str(&suibase.client_address("active")?)?;
 
     // Get the keystore using the location given by suibase.
     let keystore_pathname = suibase.keystore_pathname()?;
