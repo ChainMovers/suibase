@@ -79,6 +79,11 @@ jobs:
           mkdir -p "$HOME/suibase/workdirs/common/bin"
           cp target/debug/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
 
+      - name: Pure-logic unit tests (blob-id/descriptor/wallet — no live localnet)
+        working-directory: rust/walrus-store
+        run: |
+          cargo test --features localnet --lib -- --nocapture
+
       - name: Enable walrus + regen (runs the nodeless deploy)
         run: |
           echo "walrus_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
