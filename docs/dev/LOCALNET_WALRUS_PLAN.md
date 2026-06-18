@@ -1,7 +1,31 @@
 # Nodeless Local Walrus on Suibase Localnet + Workdir-Aware `WalrusStore` — Implementation Plan
 
-**Status:** Draft working plan · **Gate-0 verdict:** ✅ **PASS — GO** (empirically confirmed on
-suibase localnet, 2026-06-17).
+**Status:** In progress on `feature/localnet-walrus` · **Gate-0 verdict:** ✅ **PASS — GO**
+(empirically confirmed on suibase localnet, 2026-06-17).
+
+**Milestone progress (2026-06-18):**
+- ✅ **M0** Gate-0 spike — PASS (off-node certify verifies, extend works, regen-survives).
+- ✅ **M1** Nodeless deploy (Layer A) — `walrus_enabled` flag (default **off**, no auto-deploy),
+  `walrus-localnet-deploy` bin (embeds vendored contracts), regen hook, static config test.
+- ✅ **M2** `WalrusStore` mock store/read/stat/extend/delete — content dedup, write-bytes-before-
+  certify, off-node held-key certify. 6 unit tests + gated live round-trip + heavy CI workflow.
+- ✅ **M3** Pool ops — create/store_pooled/delete_pooled/pool_status/extend/grow + `encoded_size()`.
+  Off-node held-key certify for **pooled** (Deletable) blobs verified live. 3-lens adversarial
+  review folded in (epoch-at-certify, pool-scoped sidecars, non-idempotency doc). Pool + namespace
+  regression tests (red-checked).
+- ✅ **M5 (partial)** WS7 enforcement automated: `walrus-store-default-build.yml` asserts the default
+  (no-feature) graph links no `suibase`/walrus/Sui/RocksDB (default = 2 crates; localnet = 827).
+- ⏭️ **M4** Real `walrus-sdk` backend for testnet/mainnet — **next**. Decision pinned below
+  (default stays inert; the real backend goes behind a `real`/default-on feature, not bare default).
+  Its green gate (a real testnet store/read) needs a funded testnet wallet + network, so it is run
+  with the owner's credentials rather than in the unattended local loop.
+
+**M4 feature-structure decision (reconciling this plan with the owner's "default = 0 heavy crates"
+guidance):** keep the bare default build inert (WS7, enforced by CI). Put `RealWalrusStore`
+(`walrus-sdk`) behind its own feature so the *enclave* opts into it explicitly, the *localnet mock*
+stays behind `localnet`/`mock`, and a bare `cargo build` pulls neither. The WS7 CI assertion forbids
+`suibase` + the localnet-only walrus graph in the bare-default build; when M4 lands it asserts the
+**`real`** build excludes `suibase` (not the whole walrus graph, which the real backend needs).
 
 > This is the **working implementation plan** for a new Suibase feature, authored on the
 > `feature/localnet-walrus` branch. It is the precursor to the generic, end-user-facing
