@@ -54,7 +54,7 @@ use walrus_sui::{
     types::move_structs::BlobWithAttribute,
 };
 
-use crate::{BlobHandle, BlobMeta};
+use crate::{BlobHandle, BlobMeta, PoolHandle, PoolStatus};
 
 /// The single RS2 encoding type known to this walrus rev.
 const ENCODING_TYPE: EncodingType = EncodingType::RS2;
@@ -130,12 +130,20 @@ impl LocalnetDescriptor {
 struct BlobSidecar {
     /// Canonical Walrus BlobId string (URL-safe base64) — the public id.
     blob_id: String,
-    /// On-chain `Blob` object id (`0x` + hex).
+    /// On-chain object id (`0x` + hex): a `Blob` for a standalone blob, or a
+    /// `PooledBlob` for a pooled one.
     object_id: String,
     /// Unencoded size in bytes.
     size: u64,
     /// Epochs purchased at store time (informational; chain is authoritative).
+    /// Zero for pooled blobs — the owning pool holds the storage term.
     epochs: u32,
+    /// For a pooled blob, the owning `StoragePool` object id; `None` for a
+    /// standalone blob. Pooled sidecars also live under a per-pool subdirectory, so
+    /// the on-disk path is the source of truth for scoping; this is a redundant
+    /// in-file record for debuggability.
+    #[serde(default)]
+    pool_id: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +366,7 @@ impl LocalnetMockStore {
                 object_id: object_id_str.clone(),
                 size: unencoded_size,
                 epochs,
+                pool_id: None,
             },
         )?;
 
@@ -466,9 +475,195 @@ impl LocalnetMockStore {
             .await
             .with_context(|| format!("burn_blobs {object_id}"))?;
 
-        // Remove local artifacts (ignore not-found for idempotency).
-        let _ = std::fs::remove_file(self.bytes_path(id));
+        // Remove this blob's standalone index; drop the shared content-addressed bytes
+        // only if no pooled blob still references the same content (idempotent).
         let _ = std::fs::remove_file(self.sidecar_path(id));
+        self.gc_bytes_if_unreferenced(id);
+        Ok(())
+    }
+
+    // ----- storage pools (M3) ---------------------------------------------
+
+    /// Encoded size in bytes of an `unencoded_size`-byte blob under this
+    /// deployment's shard count + RS2. Pool capacities are in encoded bytes, so
+    /// callers use this to size a pool to the blobs they intend to register.
+    pub async fn encoded_size(&self, unencoded_size: u64) -> Result<u64> {
+        let n_shards = self
+            .client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")?;
+        EncodingConfig::new(n_shards)
+            .get_for_type(ENCODING_TYPE)
+            .encoded_blob_length(unencoded_size)
+            .context("computing encoded blob length (blob too large or zero-symbol?)")
+    }
+
+    /// Create a storage pool reserving `reserved_capacity_bytes` of ENCODED capacity
+    /// for `epochs` epochs. The walrus-sui wrapper transfers the created `StoragePool`
+    /// to the sender and returns its object id. Pays WAL (funded once per process).
+    pub async fn create_pool(&self, reserved_capacity_bytes: u64, epochs: u32) -> Result<PoolHandle> {
+        self.ensure_wal_funded().await?;
+        let pool_id = self
+            .client
+            .create_storage_pool(reserved_capacity_bytes, epochs)
+            .await
+            .context("create_storage_pool (is the wallet funded with WAL?)")?;
+        Ok(PoolHandle {
+            pool_id: pool_id.to_string(),
+        })
+    }
+
+    /// Store `bytes` into an existing pool: register (Deletable) -> off-node held-key
+    /// certify_pooled_blobs -> bytes to fs. The pool's pre-reserved capacity pays for
+    /// storage, so there is no per-blob WAL/reserve here.
+    ///
+    /// Bytes are written BEFORE certify (same servable-bytes invariant as
+    /// [`Self::store`]). Registered as Deletable so individual blobs can be removed
+    /// from the pool via [`Self::delete_pooled`]; the certify message therefore binds
+    /// to the pooled blob's own object id (`blob_persistence_type()` handles this).
+    /// The sidecar is written under the pool's subdir so the same content can be
+    /// pooled in several pools (and/or stored standalone) without aliasing.
+    ///
+    /// NOTE: not content-idempotent within a pool — re-storing identical bytes into
+    /// the SAME pool aborts at register, because the pool's blob table rejects the
+    /// duplicate blob id. (Unlike [`Self::store`], which dedups identical content.)
+    pub async fn store_pooled(&self, pool_id: &str, bytes: &[u8]) -> Result<BlobHandle> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        let unencoded_size = bytes.len() as u64;
+
+        let root32: [u8; 32] = Sha256::digest(bytes).into();
+        let root_hash = MerkleNode::from(root32);
+        let blob_id = BlobId::from_metadata(root_hash.clone(), ENCODING_TYPE, unencoded_size);
+        let encoded_size = self.encoded_size(unencoded_size).await?;
+
+        let metadata = BlobObjectMetadata {
+            blob_id,
+            root_hash,
+            unencoded_size,
+            encoded_size,
+            encoding_type: ENCODING_TYPE,
+        };
+
+        let pooled = self
+            .client
+            .register_pooled_blobs(pool, vec![metadata], BlobPersistence::Deletable)
+            .await
+            .context(
+                "register_pooled_blobs(Deletable) (pool out of capacity, or this exact \
+                 content already registered in the pool?)",
+            )?
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("register_pooled_blobs returned no PooledBlob"))?;
+
+        let blob_id_str = blob_id.to_string();
+        let object_id_str = pooled.id.to_string();
+
+        // Persist bytes (shared, content-addressed) + a POOL-SCOPED sidecar BEFORE
+        // certify (epochs=0: the pool owns the term).
+        self.write_bytes(blob_id, bytes)?;
+        self.write_pooled_sidecar(
+            pool_id,
+            blob_id,
+            &BlobSidecar {
+                blob_id: blob_id_str.clone(),
+                object_id: object_id_str.clone(),
+                size: unencoded_size,
+                epochs: 0,
+                pool_id: Some(pool_id.to_string()),
+            },
+        )?;
+
+        // Off-node held-key certify. The signed message's epoch must equal the
+        // CURRENT (committee) epoch at certify time — the chain asserts
+        // `cert_epoch == system epoch` — so re-read it here rather than reusing
+        // `registered_epoch` (register and certify are separate transactions, and an
+        // epoch tick between them would otherwise invalidate the signature). For a
+        // Deletable pooled blob the persistence binds to the blob's object id, which
+        // `blob_persistence_type()` supplies.
+        let epoch: Epoch = self
+            .client
+            .read_client()
+            .current_epoch()
+            .await
+            .context("current_epoch")?;
+        let confirmation = Confirmation::new(epoch, blob_id, pooled.blob_persistence_type());
+        let signed = self.held_key.sign_message(&confirmation);
+        let certificate =
+            ConfirmationCertificate::from_signed_messages_and_indices(vec![signed], vec![0u16])
+                .map_err(|e| anyhow!("building pooled ConfirmationCertificate: {e}"))?;
+        self.client
+            .certify_pooled_blobs(pool, &[(&pooled, certificate)])
+            .await
+            .context("certify_pooled_blobs (single-signer N=1 quorum)")?;
+
+        Ok(BlobHandle {
+            blob_id: blob_id_str,
+            object_id: object_id_str,
+        })
+    }
+
+    /// Delete a pooled blob from `pool_id` (no certify) and remove its fs bytes.
+    /// Idempotent and POOL-SCOPED: a re-delete after this pool's sidecar is gone is a
+    /// no-op (the on-chain `delete_pooled_blob` would otherwise abort on the missing
+    /// blob). The shared content-addressed bytes are dropped only if no other pool /
+    /// standalone blob still references the same content.
+    pub async fn delete_pooled(&self, pool_id: &str, blob_id: &str) -> Result<()> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        let id = parse_blob_id(blob_id)?;
+        // The per-pool sidecar is our record that THIS pool holds the blob; once it's
+        // gone we've already deleted from this pool (mirrors `delete`'s idempotency).
+        if self.try_read_pooled_sidecar(pool_id, id)?.is_none() {
+            return Ok(());
+        }
+        self.client
+            .delete_pooled_blob(pool, id)
+            .await
+            .with_context(|| format!("delete_pooled_blob {blob_id} from pool {pool_id}"))?;
+        let _ = std::fs::remove_file(self.pooled_sidecar_path(pool_id, id));
+        self.gc_bytes_if_unreferenced(id);
+        Ok(())
+    }
+
+    /// Live status of a storage pool (epochs, encoded capacity reserved/used, count).
+    pub async fn pool_status(&self, pool_id: &str) -> Result<PoolStatus> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        let s = self
+            .client
+            .storage_pool_status(pool)
+            .await
+            .with_context(|| format!("storage_pool_status {pool_id}"))?;
+        Ok(PoolStatus {
+            pool_id: pool_id.to_string(),
+            start_epoch: s.start_epoch,
+            end_epoch: s.end_epoch,
+            reserved_capacity_bytes: s.reserved_encoded_capacity_bytes,
+            used_bytes: s.used_encoded_bytes,
+            blob_count: s.blob_count,
+        })
+    }
+
+    /// Extend a pool's lifetime by `epochs` epochs (pays WAL).
+    pub async fn extend_pool(&self, pool_id: &str, epochs: u32) -> Result<()> {
+        self.ensure_wal_funded().await?;
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        self.client
+            .extend_storage_pool(pool, epochs)
+            .await
+            .with_context(|| format!("extend_storage_pool {pool_id} by {epochs} epochs"))?;
+        Ok(())
+    }
+
+    /// Grow a pool's reserved ENCODED capacity by `additional_capacity_bytes` (WAL).
+    pub async fn grow_pool(&self, pool_id: &str, additional_capacity_bytes: u64) -> Result<()> {
+        self.ensure_wal_funded().await?;
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        self.client
+            .increase_storage_pool_capacity(pool, additional_capacity_bytes)
+            .await
+            .with_context(|| format!("increase_storage_pool_capacity {pool_id}"))?;
         Ok(())
     }
 
@@ -496,6 +691,14 @@ impl LocalnetMockStore {
     }
 
     // ----- filesystem helpers ---------------------------------------------
+    //
+    // Blob BYTES are content-addressed and SHARED: keyed by blob_id at the top of
+    // `data_dir`, so identical content stored several ways (standalone + pooled in one
+    // or more pools) maps to a single `.bin`. The blob_id -> on-chain-object INDEX
+    // (sidecar) is NOT 1:1, though — the same content can back a standalone `Blob` and
+    // a `PooledBlob` in each of several pools — so sidecars are SCOPED: standalone at
+    // `<hex>.meta`, pooled under `pools/<pool_id>/<hex>.meta`. Shared bytes are removed
+    // only once the last sidecar referencing that blob_id is gone (`blob_id_referenced`).
 
     fn bytes_path(&self, id: BlobId) -> PathBuf {
         self.data_dir.join(format!("{}.bin", hex_key(id)))
@@ -503,30 +706,81 @@ impl LocalnetMockStore {
     fn sidecar_path(&self, id: BlobId) -> PathBuf {
         self.data_dir.join(format!("{}.meta", hex_key(id)))
     }
+    /// Per-pool subdir holding that pool's pooled-blob sidecars. `pool_id` is
+    /// `0x` + hex (filesystem-safe), so it is a valid directory name.
+    fn pool_dir(&self, pool_id: &str) -> PathBuf {
+        self.data_dir.join("pools").join(pool_id)
+    }
+    fn pooled_sidecar_path(&self, pool_id: &str, id: BlobId) -> PathBuf {
+        self.pool_dir(pool_id).join(format!("{}.meta", hex_key(id)))
+    }
+
     fn write_bytes(&self, id: BlobId, bytes: &[u8]) -> Result<()> {
         let path = self.bytes_path(id);
         std::fs::write(&path, bytes)
             .with_context(|| format!("writing blob bytes {}", path.display()))
     }
-    fn write_sidecar(&self, id: BlobId, side: &BlobSidecar) -> Result<()> {
-        let path = self.sidecar_path(id);
+
+    fn write_sidecar_at(&self, path: &Path, side: &BlobSidecar) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating sidecar dir {}", parent.display()))?;
+        }
         let yaml = serde_yaml::to_string(side).context("serializing sidecar")?;
-        std::fs::write(&path, yaml)
-            .with_context(|| format!("writing sidecar {}", path.display()))
+        std::fs::write(path, yaml).with_context(|| format!("writing sidecar {}", path.display()))
     }
-    fn read_sidecar(&self, id: BlobId) -> Result<BlobSidecar> {
-        self.try_read_sidecar(id)?
-            .ok_or_else(|| anyhow!("no sidecar for blob {} (unknown blob id)", id))
-    }
-    fn try_read_sidecar(&self, id: BlobId) -> Result<Option<BlobSidecar>> {
-        let path = self.sidecar_path(id);
-        match std::fs::read_to_string(&path) {
+    fn try_read_sidecar_at(&self, path: &Path) -> Result<Option<BlobSidecar>> {
+        match std::fs::read_to_string(path) {
             Ok(raw) => Ok(Some(
                 serde_yaml::from_str(&raw)
                     .with_context(|| format!("parsing sidecar {}", path.display()))?,
             )),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e).with_context(|| format!("reading sidecar {}", path.display())),
+        }
+    }
+
+    // Standalone (non-pooled) sidecar accessors.
+    fn write_sidecar(&self, id: BlobId, side: &BlobSidecar) -> Result<()> {
+        self.write_sidecar_at(&self.sidecar_path(id), side)
+    }
+    fn read_sidecar(&self, id: BlobId) -> Result<BlobSidecar> {
+        self.try_read_sidecar(id)?
+            .ok_or_else(|| anyhow!("no sidecar for blob {} (unknown blob id)", id))
+    }
+    fn try_read_sidecar(&self, id: BlobId) -> Result<Option<BlobSidecar>> {
+        self.try_read_sidecar_at(&self.sidecar_path(id))
+    }
+
+    // Pooled sidecar accessors (scoped to one pool).
+    fn write_pooled_sidecar(&self, pool_id: &str, id: BlobId, side: &BlobSidecar) -> Result<()> {
+        self.write_sidecar_at(&self.pooled_sidecar_path(pool_id, id), side)
+    }
+    fn try_read_pooled_sidecar(&self, pool_id: &str, id: BlobId) -> Result<Option<BlobSidecar>> {
+        self.try_read_sidecar_at(&self.pooled_sidecar_path(pool_id, id))
+    }
+
+    /// True if ANY sidecar (standalone or in any pool) still references `id` — used
+    /// to decide whether the shared content-addressed bytes may be removed.
+    fn blob_id_referenced(&self, id: BlobId) -> bool {
+        if self.sidecar_path(id).exists() {
+            return true;
+        }
+        let needle = format!("{}.meta", hex_key(id));
+        if let Ok(rd) = std::fs::read_dir(self.data_dir.join("pools")) {
+            for entry in rd.flatten() {
+                if entry.path().join(&needle).exists() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Remove the shared bytes for `id` iff no sidecar references it any more.
+    fn gc_bytes_if_unreferenced(&self, id: BlobId) {
+        if !self.blob_id_referenced(id) {
+            let _ = std::fs::remove_file(self.bytes_path(id));
         }
     }
 }

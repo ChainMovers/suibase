@@ -53,6 +53,31 @@ pub struct BlobMeta {
     pub end_epoch: u32,
 }
 
+/// Handle to a storage pool: a pre-reserved chunk of (encoded) storage capacity
+/// that many pooled blobs share for the pool's lifetime.
+#[derive(Debug, Clone)]
+pub struct PoolHandle {
+    /// The Sui `StoragePool` object id (`0x` + hex).
+    pub pool_id: String,
+}
+
+/// Live state of a storage pool. Capacities are in **encoded** bytes (the unit the
+/// pool reserves), matching Walrus on-chain accounting.
+#[derive(Debug, Clone)]
+pub struct PoolStatus {
+    pub pool_id: String,
+    /// Epoch the pool's storage starts at.
+    pub start_epoch: u32,
+    /// Epoch after which the pool's storage expires.
+    pub end_epoch: u32,
+    /// Total reserved encoded capacity, in bytes.
+    pub reserved_capacity_bytes: u64,
+    /// Currently used encoded capacity, in bytes.
+    pub used_bytes: u64,
+    /// Number of pooled blobs currently registered in the pool.
+    pub blob_count: u64,
+}
+
 /// Network-agnostic Walrus store. Construct with [`WalrusStore::for_workdir`].
 ///
 /// One process may hold several independent stores (e.g. localnet + testnet) at once.
@@ -135,6 +160,92 @@ impl WalrusStore {
         match self {
             #[cfg(feature = "localnet")]
             Self::Localnet(s) => s.delete(blob_id).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    // ----- storage pools -------------------------------------------------
+
+    /// Encoded size, in bytes, of an `unencoded_size`-byte blob under this network's
+    /// shard count + encoding. Use it to size pools (capacities are encoded bytes).
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn encoded_size(&self, unencoded_size: u64) -> Result<u64> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.encoded_size(unencoded_size).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    /// Create a storage pool reserving `reserved_capacity_bytes` of **encoded**
+    /// capacity for `epochs` epochs (pays WAL up front). Pooled blobs registered
+    /// into it draw down this shared capacity instead of each reserving their own.
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn create_pool(&self, reserved_capacity_bytes: u64, epochs: u32) -> Result<PoolHandle> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.create_pool(reserved_capacity_bytes, epochs).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    /// Store `bytes` into an existing pool: register (deletable) + off-node held-key
+    /// certify into the pool, with bytes written to the filesystem. The pool's
+    /// pre-reserved capacity pays for storage (no per-blob WAL).
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn store_pooled(&self, pool_id: &str, bytes: &[u8]) -> Result<BlobHandle> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.store_pooled(pool_id, bytes).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    /// Delete a pooled blob from `pool_id` (no certify required) and remove its
+    /// filesystem bytes. Idempotent: re-deleting an already-deleted blob is a no-op.
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn delete_pooled(&self, pool_id: &str, blob_id: &str) -> Result<()> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.delete_pooled(pool_id, blob_id).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    /// Live status of a storage pool (epochs, encoded capacity, blob count).
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn pool_status(&self, pool_id: &str) -> Result<PoolStatus> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.pool_status(pool_id).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    /// Extend a pool's lifetime by `epochs` epochs (pays WAL).
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn extend_pool(&self, pool_id: &str, epochs: u32) -> Result<()> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.extend_pool(pool_id, epochs).await,
+            #[cfg(not(feature = "localnet"))]
+            _ => bail!("no backend compiled in"),
+        }
+    }
+
+    /// Grow a pool's reserved **encoded** capacity by `additional_capacity_bytes`
+    /// (pays WAL).
+    #[cfg_attr(not(feature = "localnet"), allow(unused_variables))]
+    pub async fn grow_pool(&self, pool_id: &str, additional_capacity_bytes: u64) -> Result<()> {
+        match self {
+            #[cfg(feature = "localnet")]
+            Self::Localnet(s) => s.grow_pool(pool_id, additional_capacity_bytes).await,
             #[cfg(not(feature = "localnet"))]
             _ => bail!("no backend compiled in"),
         }

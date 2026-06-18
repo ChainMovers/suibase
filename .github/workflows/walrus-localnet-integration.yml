@@ -2,9 +2,11 @@ name: Walrus Localnet Integration
 
 # Heavy end-to-end test of the nodeless localnet Walrus feature: builds the
 # walrus-store mock + deploy bin (the full walrus/Sui graph — git-pinned), deploys
-# nodeless Walrus on a real localnet via the regen hook, and runs the WalrusStore
-# store -> read -> stat -> extend -> delete round-trip (rust/walrus-store/tests/
-# localnet_roundtrip.rs).
+# nodeless Walrus on a real localnet via the regen hook, and runs both WalrusStore
+# integration suites: the blob round-trip (store -> read -> stat -> extend -> delete,
+# rust/walrus-store/tests/localnet_roundtrip.rs) and the storage-pool lifecycle
+# (create -> store_pooled -> pool_status -> extend -> grow -> delete,
+# rust/walrus-store/tests/localnet_pool.rs).
 #
 # This is EXPENSIVE (the walrus-sui graph compile) so it is NOT on the per-push fast
 # suites. It runs on demand and weekly, plus when walrus-store changes land on dev.
@@ -85,9 +87,14 @@ jobs:
           test -f "$HOME/suibase/workdirs/localnet/config/walrus-localnet.yaml" \
             || { echo "descriptor not written — deploy hook failed"; exit 1; }
 
-      - name: WalrusStore round-trip (store/read/stat/extend/delete)
+      - name: WalrusStore round-trip + pool lifecycle (held-key certify, fs bytes)
         working-directory: rust/walrus-store
         env:
           WALRUS_LOCALNET_TEST: "1"
         run: |
+          # Blob round-trip: store/read/stat/extend/delete (+ content dedup).
           cargo test --features localnet --test localnet_roundtrip -- --nocapture
+          # Storage pools: create/store_pooled/read/pool_status/extend/grow/delete.
+          cargo test --features localnet --test localnet_pool -- --nocapture
+          # Pool/standalone namespace coexistence (identical content, no aliasing).
+          cargo test --features localnet --test localnet_pool_namespace -- --nocapture
