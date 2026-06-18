@@ -57,10 +57,13 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          # 10-min timeout so a stuck apt (lock/prompt) fails fast instead of hanging the
-          # job, with ample headroom over a slow-mirror day (apt normally takes <1 min).
-          sudo timeout 600 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          # CI runners sometimes have unattended-upgrades/apt-daily holding the dpkg lock
+          # at startup, which made apt-get block until the job timed out (exit 124). Stop
+          # those services to free the lock; DPkg::Lock::Timeout waits gracefully, and the
+          # outer `timeout` is a hard 10-min fail-fast cap (apt normally takes <1 min).
+          sudo systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 update
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Prepare + install suibase
         run: |
@@ -144,10 +147,13 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          # 10-min timeout so a stuck apt (lock/prompt) fails fast instead of hanging the
-          # job, with ample headroom over a slow-mirror day (apt normally takes <1 min).
-          sudo timeout 600 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          # CI runners sometimes have unattended-upgrades/apt-daily holding the dpkg lock
+          # at startup, which made apt-get block until the job timed out (exit 124). Stop
+          # those services to free the lock; DPkg::Lock::Timeout waits gracefully, and the
+          # outer `timeout` is a hard 10-min fail-fast cap (apt normally takes <1 min).
+          sudo systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 update
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Build the real backend (walrus-sdk)
         working-directory: rust/walrus-store
