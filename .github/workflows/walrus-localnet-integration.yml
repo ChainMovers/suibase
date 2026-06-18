@@ -27,6 +27,7 @@ on:
 jobs:
   localnet-walrus-roundtrip:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - name: Free Disk Space (the walrus/Sui graph + localnet are large)
         uses: jlumbroso/free-disk-space@main
@@ -53,9 +54,12 @@ jobs:
           cache-on-failure: "true"
 
       - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          # timeout so a stuck apt (lock/prompt) fails fast instead of hanging the job.
+          sudo timeout 300 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Prepare + install suibase
         run: |
@@ -109,6 +113,7 @@ jobs:
     # invariant holds for the `real` build (no `suibase`). The live testnet store/read
     # test is fund-gated and simply SKIPS here (CI has no suibase workdir and no funds).
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - name: Free Disk Space (the walrus/Sui graph is large)
         uses: jlumbroso/free-disk-space@main
@@ -135,9 +140,12 @@ jobs:
           cache-on-failure: "true"
 
       - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          # timeout so a stuck apt (lock/prompt) fails fast instead of hanging the job.
+          sudo timeout 300 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Build the real backend (walrus-sdk)
         working-directory: rust/walrus-store
