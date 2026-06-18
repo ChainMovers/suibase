@@ -1,0 +1,44 @@
+[package]
+name = "walrus-store"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Workdir-aware Walrus client for Suibase: nodeless localnet mock + real walrus-sdk backend."
+homepage = "https://suibase.io"
+repository = "https://github.com/ChainMovers/suibase"
+
+# Dependencies on the Walrus crates are git-pinned to one reference commit so the
+# localnet contracts (published from the commit's `contracts/`, located via
+# `development_contract_dir()`) always match the `walrus-sui` API used here.
+# Keep this rev in sync with the Sui version Suibase localnet runs (currently
+# testnet-v1.73.1). See docs/dev/LOCALNET_WALRUS_PLAN.md (Q4).
+#
+# The whole feature is gated behind `localnet`/`mock` so the default build pulls
+# none of the heavy Walrus/Sui graph (WS7: nothing enclave-side depends on this).
+
+[features]
+default = []
+localnet = [
+  "dep:walrus-sui",
+  "dep:walrus-core",
+  "dep:tokio",
+  "dep:clap",
+  "dep:anyhow",
+  "dep:serde",
+  "dep:serde_yaml",
+]
+mock = ["localnet"]
+
+[dependencies]
+walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"], optional = true }
+walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+anyhow = { version = "1", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_yaml = { version = "0.9", optional = true }
+
+[[bin]]
+name = "walrus-localnet-deploy"
+path = "src/bin/walrus_localnet_deploy.rs"
+required-features = ["localnet"]
