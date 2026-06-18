@@ -23,9 +23,11 @@ Two coupled capabilities:
    `certify_blob` — is satisfied **off-node** by holding the committee's BLS secret key and
    self-signing the certificate.
 
-2. **A workdir-aware `WalrusStore` Rust client** that selects a localnet **mock** implementation
-   on `localnet` and the **real `walrus-sdk`** on `testnet`/`mainnet`, via
-   `WalrusStore::for_active_workdir()` — so app code is network-agnostic.
+2. **A workdir-aware `WalrusStore` Rust client** that exposes a localnet **mock** implementation
+   for `localnet` and the **real `walrus-sdk`** for `testnet`/`mainnet`. The **caller names the target
+   network explicitly** (`WalrusStore::for_workdir("localnet")`, `…("testnet")`, …); the API shape is
+   network-agnostic, and one process may hold several stores at once. **No global "active" workdir is
+   consulted** (see [Network selection](#network-selection)).
 
 The mock's home is a **sibling crate** (e.g. `rust/walrus-store`, Apache-2.0) that depends on the
 suibase helper crate (`rust/helper`, crate name `suibase`) **only behind a `localnet`/`mock`
@@ -152,23 +154,37 @@ Any `ESigVerification` on certify = **HARD NO-GO**.
 ## Architecture
 
 ```
-            WalrusStore::for_active_workdir()
-                       |
-            +----------+-----------+
-            |                      |
-      localnet/mock           default (real)
-            |                      |
-   LocalnetMockStore         RealWalrusStore (walrus-sdk)
-            |
-      +-----+------+
-      | suibase     |  discovery (sync): package_id, published_new_objects,
-      | Helper      |  client_address, rpc_url, keystore_pathname
-      +-----+------+
-            |
+   WalrusStore::for_workdir("localnet")   WalrusStore::for_workdir("testnet")
+                  |                                      |
+            localnet/mock                          default (real)
+                  |                                      |
+         LocalnetMockStore                     RealWalrusStore (walrus-sdk)
+                  |
+            +-----+------+
+            | suibase     |  one instance per store; select_workdir("localnet")
+            | Helper      |  discovery (sync): package_id, published_new_objects,
+            +-----+------+  client_address, rpc_url, keystore_pathname
+                  |
    PTBs: reserve_space -> register_blob -> certify_blob -> extend_blob
-            |                                 (held BLS key, off-node sign)
+                  |                                 (held BLS key, off-node sign)
    bytes on filesystem (keyed by blob_id)
 ```
+
+### Network selection {#network-selection}
+
+The caller picks the network **explicitly by name** — there is **no `for_active_workdir()` and no read
+of the global "active" workdir**. (The suibase global active workdir is a contended, machine-global
+symlink that multiple processes fight to switch; it is being deprecated in a separate effort. Do not
+build new dependencies on it, and do not modify the existing `active`/`select_workdir` code yet.)
+
+- `WalrusStore::for_workdir(name)` (or typed `localnet()`/`testnet()`/`mainnet()` helpers) is a
+  factory: `localnet → LocalnetMockStore`, `testnet`/`mainnet → RealWalrusStore`.
+- Each store owns its **own `suibase::Helper` instance** and calls `helper.select_workdir(name)` with the
+  **explicit name** — never the special string `"active"`. `select_workdir` is instance-local (it does
+  not touch the global symlink), so **multiple stores coexist in one process** (e.g. a localnet store and
+  a testnet store side by side) with no contention. **No suibase code changes are required** for this.
+- In the default (non-`localnet`/`mock`) build the mock arm is `#[cfg]`-compiled out, so
+  `for_workdir("localnet")` is a hard error there (correct: the enclave never targets localnet).
 
 - **Layer A (bash):** publishes Walrus into the freshly-regenerated localnet and records the minted
   object IDs + held committee key.
@@ -194,7 +210,7 @@ Any `ESigVerification` on certify = **HARD NO-GO**.
 | 4 | `scripts/common/__workdir-exec.sh` regen flow | insert `deploy_walrus_localnet; repair_walrus_config_as_needed localnet` after the Sui wipe and before `start_all_services`, **non-fatal** (`warn_user` on failure). |
 | 5 | `scripts/defaults/localnet/suibase.yaml:151-154` | walrus ports are `~` today; set non-colliding localnet values (e.g. proxy 45851 / local 45801 / metrics 45811) if the relay path is reused, else leave nodeless. |
 | 6 | `scripts/templates/localnet/config-default/walrus-config.yaml` (**new**) | mirror the testnet/mainnet shape; context `localnet`; `rpc_urls: [http://localhost:9000]`; system/staking/exchange/package ids + committee-key handle as placeholders filled at deploy. |
-| 7 | `rust/walrus-store` (**new sibling crate**) | `WalrusStore` trait + `LocalnetMockStore` (behind `localnet`/`mock`) + `RealWalrusStore` (default, `walrus-sdk`) + `for_active_workdir()`. |
+| 7 | `rust/walrus-store` (**new sibling crate**) | `WalrusStore` enum + `LocalnetMockStore` (behind `localnet`/`mock`) + `RealWalrusStore` (default, `walrus-sdk`) + explicit `for_workdir(name)` factory (no global "active"; each store owns a `Helper` via `select_workdir(name)`). |
 | 8 | `scripts/tests/050_walrus_tests/test_localnet_walrus_*.sh` (**new**) | mirror existing tests: deploy-on-regen, store/read/extend/delete round-trip, pool lifecycle, regen survival. |
 | 9 | `docs/dev/LOCALNET_WALRUS_FEATURE.md` (**new, M5**) | generic end-user/dev doc (deploy recipe, held-key model, selection, funding, feature flags). |
 
@@ -214,14 +230,15 @@ globals; must pass `scripts-tests` + `rust-tests`.
 - **M3 — Pool ops (DD-D8):** add `create_pool`/`register_pooled`/`delete_pooled`
   (`system.move:216/238/264`); `create_storage_pool` returns `StoragePool` by value →
   `public_transfer` to sender; delete needs no certify.
-- **M4 — real-sdk impl + `for_active_workdir()`:** `RealWalrusStore` behind the default feature
-  wrapping `walrus-sdk`; selection reads the active suibase workdir; a testnet smoke store/read passes.
+- **M4 — real-sdk impl + explicit `for_workdir(name)`:** `RealWalrusStore` behind the default feature
+  wrapping `walrus-sdk`; the caller selects the network by name (localnet→mock, testnet/mainnet→real),
+  no global "active"; multiple stores may coexist in one process; a testnet smoke store/read passes.
 - **M5 — Suibase wiring + regen + tests + docs:** idempotent re-deploy on each regen (chain wiped in
   `__workdir-exec.sh`); new `scripts/tests/050_walrus_tests/` cases; Rust integration test gated on
   `localnet`; `cargo tree` CI assertion that the enclave graph has no `suibase`; write
   `docs/dev/LOCALNET_WALRUS_FEATURE.md`.
 - **M6 — Downstream consumer validation (out of scope here):** confirm the default build excludes
-  mock+suibase and the consumer uses `for_active_workdir()` only behind its own mock feature.
+  mock+suibase and the consumer uses `for_workdir(name)` (the mock arm only behind its own mock feature).
 
 ## Risks
 
