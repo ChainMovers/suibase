@@ -95,14 +95,14 @@ site_builder_support_version_check: true
 localnet_tools_assets_name: "localnet-tools"
 localnet_tools_bin_names: "walrus-localnet-deploy"
 localnet_tools_install_type: "user"
-localnet_tools_src_type: ~
-localnet_tools_src_path: ~
+localnet_tools_src_type: "suibase"
+localnet_tools_src_path: "rust/walrus-store"
 localnet_tools_repo_url: "https://github.com/chainmovers/sui-binaries.git"
 localnet_tools_repo_branch: "main"
 localnet_tools_force_tag: "localnet-tools-v0.0.1"
 localnet_tools_asset_name_filter: ~
 localnet_tools_asset_name_exclude: "_ci|_rel_notes"
-localnet_tools_build_type: ~
+localnet_tools_build_type: "rust"
 localnet_tools_run_type: "cli"
 localnet_tools_precompiled_bin: true
 localnet_tools_precompiled_type: "suibase"

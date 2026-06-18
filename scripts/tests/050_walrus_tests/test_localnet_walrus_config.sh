@@ -63,6 +63,14 @@ check "consts.yaml: support_version_check=false (bin has no --version)" \
     grep -qE '^localnet_tools_support_version_check:[[:space:]]*false' "$CONSTS"
 check "consts.yaml: force_tag scopes the user-install fetch (localnet-tools asset)" \
     grep -qE '^localnet_tools_force_tag:[[:space:]]*"localnet-tools-v' "$CONSTS"
+# Daemon-consistent: a suibase-built rust asset -> source-build on dev branches,
+# precompiled on main/staging (see sb_app_rust_build_and_install in __apps.sh).
+check "consts.yaml: src_type=suibase (routes through the app build system)" \
+    grep -qE '^localnet_tools_src_type:[[:space:]]*"suibase"' "$CONSTS"
+check "consts.yaml: build_type=rust" \
+    grep -qE '^localnet_tools_build_type:[[:space:]]*"rust"' "$CONSTS"
+check "consts.yaml: src_path=rust/walrus-store" \
+    grep -qE '^localnet_tools_src_path:[[:space:]]*"rust/walrus-store"' "$CONSTS"
 
 # 4. Deploy script: syntax + functions + gate + idempotency.
 DEPLOY="$COMMON/__walrus-localnet-deploy.sh"
@@ -75,6 +83,17 @@ check "deploy gated on CFG_walrus_enabled" grep -qE 'CFG_walrus_enabled.*!=.*"tr
 check "deploy has chain-id idempotency (skip on match)" grep -q "_PREV_CHAIN_ID" "$DEPLOY"
 check "deploy does not pass --contracts as a flag (uses embedded)" \
     bash -c "! grep -qE '^[[:space:]]*--contracts ' '$DEPLOY'"
+
+# 4b. Daemon-consistent build path: the generic per-asset rust builder + the dev
+#     force-rebuild command (mirrors scripts/dev/update-daemon).
+APPS="$COMMON/__apps.sh"
+check "__apps.sh defines sb_app_rust_build_and_install_generic()" \
+    grep -qE "^sb_app_rust_build_and_install_generic\(\)" "$APPS"
+check "__apps.sh routes non-daemon assets to the generic builder" \
+    grep -q "sb_app_rust_build_and_install_generic" "$APPS"
+DEVCMD="$SCRIPTS/dev/update-localnet-tools"
+check "dev/update-localnet-tools exists + executable" test -x "$DEVCMD"
+check "dev/update-localnet-tools passes bash -n" bash -n "$DEVCMD"
 
 # 5. Regen hook in __workdir-exec.sh.
 WEXEC="$COMMON/__workdir-exec.sh"

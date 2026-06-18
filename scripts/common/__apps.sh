@@ -1133,6 +1133,13 @@ sb_app_rust_build_and_install() {
   get_app_var "$self" "assets_name"
   local _ASSETS_NAME=$APP_VAR
 
+  # Assets other than the daemon build through the generic per-asset path. The daemon
+  # keeps its dedicated path below (musl static link, --version sanity) unchanged.
+  if [ "$_ASSETS_NAME" != "$SUIBASE_DAEMON_NAME" ]; then
+    sb_app_rust_build_and_install_generic "$self"
+    return $?
+  fi
+
   # Rust (re)build.
   exit_if_rust_build_deps_missing
 
@@ -1275,6 +1282,76 @@ sb_app_rust_build_and_install() {
   rm -rf "$SUIBASE_DAEMON_BUILD_DIR/target" >/dev/null 2>&1
 }
 export -f sb_app_rust_build_and_install
+
+# Generic per-asset rust build + install, for suibase-built assets OTHER than the
+# daemon (today: localnet-tools). Mirrors the daemon path's contract — build from the
+# asset's src_path, install the binary into SUIBASE_BIN_DIR, write the <asset>-version.yaml
+# the app system reads to skip rebuilds — but per-asset: NO musl static link
+# (walrus-sui/RocksDB do not link under musl), the cargo invocation comes from a
+# per-asset recipe, no --version sanity (these bins set support_version_check=false),
+# and target/ is NOT wiped (preserve incremental builds for dev iteration).
+sb_app_rust_build_and_install_generic() {
+  local self=$1
+
+  get_app_var "$self" "assets_name"
+  local _ASSETS_NAME=$APP_VAR
+  get_app_var "$self" "src_path"
+  local _SRC_PATH=$APP_VAR
+  get_app_var "$self" "bin_names"
+  local _BIN_NAME=$APP_VAR
+
+  exit_if_rust_build_deps_missing
+
+  local _BUILD_DIR="$SUIBASE_DIR/$_SRC_PATH"
+  if [ ! -f "$_BUILD_DIR/Cargo.toml" ]; then
+    setup_error "Cannot build $_ASSETS_NAME: missing $_BUILD_DIR/Cargo.toml"
+  fi
+
+  # Per-asset cargo recipe (release profile + the feature/bin the asset needs).
+  # release profile — same as the published sui-binaries producer artifact, and keeps
+  # the installed binary small (the heavy walrus graph in debug is ~2GB). First build
+  # is slower, but cargo's incremental build keeps later dev rebuilds fast.
+  local _PROFILE
+  local _CARGO_ARGS=()
+  case "$_ASSETS_NAME" in
+  localnet-tools)
+    _PROFILE="release"
+    _CARGO_ARGS=(--release --features localnet --bin walrus-localnet-deploy)
+    ;;
+  *)
+    setup_error "No source-build recipe for asset '$_ASSETS_NAME'"
+    ;;
+  esac
+
+  echo "Building $_ASSETS_NAME from source ($_SRC_PATH)..."
+  if ! (cd "$_BUILD_DIR" && cargo build "${_CARGO_ARGS[@]}" >>"$SUIBASE_LOGS_DIR/cargo-build.log" 2>&1); then
+    setup_error "Failed to build $_ASSETS_NAME (see $SUIBASE_LOGS_DIR/cargo-build.log)"
+  fi
+
+  local _SRC="$_BUILD_DIR/target/$_PROFILE/$_BIN_NAME"
+  if [ ! -f "$_SRC" ]; then
+    setup_error "Build of $_ASSETS_NAME produced no binary at $_SRC"
+  fi
+
+  # Install into the common bin dir (install_type=user).
+  mkdir -p "$SUIBASE_BIN_DIR"
+  \cp -f "$_SRC" "$SUIBASE_BIN_DIR/$_BIN_NAME"
+
+  # Version file: lets the app system skip rebuilding when source is unchanged
+  # (mirrors the daemon's <asset>-version.yaml). Version comes from the crate.
+  local _SRC_VERSION
+  _SRC_VERSION=$(grep -m1 "^version *= *" "$_BUILD_DIR/Cargo.toml" | sed -e 's/version[[:space:]]*=[[:space:]]*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
+  get_app_var "$self" "repo_branch"
+  local _REPO_BRANCH=$APP_VAR
+  {
+    echo "version: \"${_SRC_VERSION}\""
+    [ -n "${_REPO_BRANCH}" ] && echo "branch: \"${_REPO_BRANCH}\""
+    echo "origin: \"built\""
+  } >"$SUIBASE_BIN_DIR/${_ASSETS_NAME}-version.yaml"
+
+  echo "Installed $_BIN_NAME -> $SUIBASE_BIN_DIR/$_BIN_NAME (built from source)"
+}
+export -f sb_app_rust_build_and_install_generic
 
 sb_app_install() {
   # Best-effort attempt to update the app locally.
