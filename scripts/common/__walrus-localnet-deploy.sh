@@ -35,13 +35,13 @@ update_WALRUS_LOCALNET_SETUP_BIN_var() {
 }
 export -f update_WALRUS_LOCALNET_SETUP_BIN_var
 
-# Fetch the precompiled walrus-localnet-deploy binary from chainmovers/sui-binaries
-# (app "walrus_localnet_deploy" defined in scripts/defaults/consts.yaml). localnet +
-# walrus_enabled only. Best-effort + non-fatal: a missing/not-yet-published asset or
-# offline state must never abort 'localnet start'; the deploy then falls back to a
-# local dev build of rust/walrus-store. The install runs in a subshell so that even
-# a hard error inside the app machinery cannot terminate the caller.
-update_walrus_localnet_deploy_bin() {
+# Fetch the precompiled "localnet-tools" asset (which bundles the walrus-localnet-deploy
+# binary) from chainmovers/sui-binaries (app "localnet_tools" defined in
+# scripts/defaults/consts.yaml). localnet + walrus_enabled only. Best-effort + non-fatal:
+# a missing/not-yet-published asset or offline state must never abort 'localnet start';
+# the deploy then falls back to a local dev build of rust/walrus-store. The install runs
+# in a subshell so that even a hard error inside the app machinery cannot terminate the caller.
+update_localnet_tools_bin() {
   local _WORKDIR="${1:-$WORKDIR}"
   [ "$_WORKDIR" = "localnet" ] || return 0
   [ "${CFG_walrus_enabled:-false}" = "true" ] || return 0
@@ -53,13 +53,13 @@ update_walrus_localnet_deploy_bin() {
 
   if type -t init_app_obj >/dev/null 2>&1 && type -t app_call >/dev/null 2>&1; then
     (
-      init_app_obj "walrus_localnet_deploy" "$_WORKDIR" &&
-        app_call "walrus_localnet_deploy" "install"
+      init_app_obj "localnet_tools" "$_WORKDIR" &&
+        app_call "localnet_tools" "install"
     ) >/dev/null 2>&1 || true
   fi
   return 0
 }
-export -f update_walrus_localnet_deploy_bin
+export -f update_localnet_tools_bin
 
 # Best-effort wait for the localnet Sui JSON-RPC to answer before deploying.
 wait_for_localnet_rpc() {
@@ -104,7 +104,7 @@ deploy_walrus_localnet() {
   # Ensure the precompiled setup binary is present (fetched from
   # chainmovers/sui-binaries on localnet; a dev build of rust/walrus-store also
   # works). Non-fatal: a missing binary just means "no localnet Walrus this run".
-  update_walrus_localnet_deploy_bin "$_WORKDIR"
+  update_localnet_tools_bin "$_WORKDIR"
   if ! update_WALRUS_LOCALNET_SETUP_BIN_var; then
     warn_user "walrus-localnet-deploy binary not found; skipping localnet Walrus deploy."
     return 0
