@@ -58,8 +58,9 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          # timeout so a stuck apt (lock/prompt) fails fast instead of hanging the job.
-          sudo timeout 300 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          # 10-min timeout so a stuck apt (lock/prompt) fails fast instead of hanging the
+          # job, with ample headroom over a slow-mirror day (apt normally takes <1 min).
+          sudo timeout 600 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Prepare + install suibase
         run: |
@@ -144,8 +145,9 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          # timeout so a stuck apt (lock/prompt) fails fast instead of hanging the job.
-          sudo timeout 300 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          # 10-min timeout so a stuck apt (lock/prompt) fails fast instead of hanging the
+          # job, with ample headroom over a slow-mirror day (apt normally takes <1 min).
+          sudo timeout 600 apt-get install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
 
       - name: Build the real backend (walrus-sdk)
         working-directory: rust/walrus-store
