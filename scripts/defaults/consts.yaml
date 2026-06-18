@@ -78,3 +78,33 @@ site_builder_precompiled_bin: true
 site_builder_precompiled_type: "mystenlabs"
 site_builder_precompiled_path: ~
 site_builder_support_version_check: true
+
+# "localnet-tools" precompiled asset (built by chainmovers/sui-binaries as an UMBRELLA
+# that can bundle several localnet dev-tool binaries; today it carries the
+# walrus-localnet-deploy binary from the suibase-owned crate rust/walrus-store). Its
+# version is INDEPENDENT of the suibase VERSION (its own triggers/localnet-tools/Cargo.toml
+# on sui-binaries, tag localnet-tools-v<version>) — same model as suibase-daemon — since
+# these tools rev on their own cadence. Fetched only on localnet when walrus_enabled=true.
+# install_type "user" -> workdirs/common/bin (where __walrus-localnet-deploy.sh looks).
+# force_tag scopes the fetch to this exact tag (install_type=user ignores
+# asset_name_filter, so without a pinned tag the reverse-sorted tag loop could pick an
+# unrelated release). Bump force_tag together with the localnet-tools release version.
+# support_version_check is false (binary has no --version). precompiled-only (no source build).
+# NOTE: assets_name/force_tag name the ASSET (localnet-tools); bin_names/precompiled_path
+# name the BINARY inside it (walrus-localnet-deploy).
+localnet_tools_assets_name: "localnet-tools"
+localnet_tools_bin_names: "walrus-localnet-deploy"
+localnet_tools_install_type: "user"
+localnet_tools_src_type: ~
+localnet_tools_src_path: ~
+localnet_tools_repo_url: "https://github.com/chainmovers/sui-binaries.git"
+localnet_tools_repo_branch: "main"
+localnet_tools_force_tag: "localnet-tools-v0.0.1"
+localnet_tools_asset_name_filter: ~
+localnet_tools_asset_name_exclude: "_ci|_rel_notes"
+localnet_tools_build_type: ~
+localnet_tools_run_type: "cli"
+localnet_tools_precompiled_bin: true
+localnet_tools_precompiled_type: "suibase"
+localnet_tools_precompiled_path: "walrus-localnet-deploy"
+localnet_tools_support_version_check: false

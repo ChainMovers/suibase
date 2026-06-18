@@ -1,0 +1,7 @@
+# Pinned to match the git-pinned Walrus reference (rev 1049b56), which builds
+# on Rust 1.96. The walrus-sui dependency graph requires >= this toolchain.
+# This file is honored by both local dev builds and the chainmovers/sui-binaries
+# CI that produces the precompiled walrus-localnet-deploy binary.
+[toolchain]
+channel = "1.96"
+components = ["clippy", "rustfmt"]
