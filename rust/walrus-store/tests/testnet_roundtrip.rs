@@ -97,6 +97,36 @@ async fn testnet_roundtrip() -> anyhow::Result<()> {
     let back = back.expect("read produced no bytes");
     assert_eq!(back, payload, "read bytes != stored bytes");
 
-    eprintln!("read OK ({} bytes) — M4 testnet store->read round-trip: PASS", back.len());
+    eprintln!("read OK ({} bytes)", back.len());
+
+    // stat -> certified + correct size (read from the on-chain owned Blob). [M4 phase 2]
+    let meta = store.stat(&handle.blob_id).await?;
+    eprintln!(
+        "stat: size={} certified_epoch={:?} end_epoch={}",
+        meta.size, meta.certified_epoch, meta.end_epoch
+    );
+    assert_eq!(meta.size, payload.len() as u64, "stat size != stored size");
+    assert!(meta.certified_epoch.is_some(), "blob is not certified on-chain");
+    let end_before = meta.end_epoch;
+
+    // extend -> must push end_epoch out (hard-requires certified + unexpired).
+    store.extend(&handle.blob_id, 2).await?;
+    let meta2 = store.stat(&handle.blob_id).await?;
+    eprintln!("after extend: end_epoch {} -> {}", end_before, meta2.end_epoch);
+    assert!(
+        meta2.end_epoch > end_before,
+        "extend did not increase end_epoch ({} -> {})",
+        end_before, meta2.end_epoch
+    );
+
+    // delete -> the owned Blob object is removed, so stat can no longer find it.
+    store.delete(&handle.blob_id).await?;
+    eprintln!("delete OK");
+    assert!(
+        store.stat(&handle.blob_id).await.is_err(),
+        "stat should fail after delete (owned blob gone)"
+    );
+
+    eprintln!("M4 testnet store/read/stat/extend/delete: PASS");
     Ok(())
 }

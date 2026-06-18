@@ -23,10 +23,13 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use walrus_sdk::{
     config::ClientConfig,
-    core::{encoding::Primary, BlobId, DEFAULT_ENCODING},
+    core::{
+        encoding::{EncodingFactory, Primary},
+        BlobId, DEFAULT_ENCODING,
+    },
     node_client::{
-        responses::{BlobStoreResult, EventOrObjectId},
-        StoreArgs, StoreBlobsApi, WalrusNodeClient,
+        responses::{BlobStoreResult, EventOrObjectId, PooledBlobStoreResult},
+        StoreArgs, StoreBlobsApi, StoreBlobsInStoragePoolApi, WalrusNodeClient,
     },
     store_optimizations::StoreOptimizations,
     sui::{
@@ -272,30 +275,138 @@ impl RealWalrusStore {
         Ok(())
     }
 
-    // ----- not yet implemented for the real backend (M4 phase 2) ----------
+    // ----- metadata + encoded size ----------------------------------------
 
-    pub async fn stat(&self, _blob_id: &str) -> Result<BlobMeta> {
-        bail!("stat is not yet implemented for the real walrus-sdk backend (M4 phase 2)")
+    /// Metadata for a blob you own: size + epochs read from the on-chain `Blob` object
+    /// located by `blob_id`. Requires the blob to be owned by this wallet (`store`
+    /// keeps it, so a blob you stored is statable). `BlobStatus` from the storage nodes
+    /// omits size/end_epoch for deletable blobs, so we read the Sui object instead.
+    pub async fn stat(&self, blob_id: &str) -> Result<BlobMeta> {
+        let id = BlobId::from_str(blob_id).map_err(|e| anyhow!("invalid blob id {blob_id:?}: {e}"))?;
+        let blob = self
+            .client
+            .deletable_blobs_by_id(&id)
+            .await
+            .map_err(|e| anyhow!("listing owned blobs for {blob_id}: {e}"))?
+            .next()
+            .ok_or_else(|| anyhow!("no owned blob found for {blob_id} (stat needs an owned blob)"))?;
+        Ok(BlobMeta {
+            blob_id: blob_id.to_string(),
+            object_id: blob.id.to_string(),
+            size: blob.size,
+            certified_epoch: blob.certified_epoch,
+            end_epoch: blob.storage.end_epoch,
+        })
     }
-    pub async fn encoded_size(&self, _unencoded_size: u64) -> Result<u64> {
-        bail!("encoded_size is not yet implemented for the real walrus-sdk backend")
+
+    /// Encoded size, in bytes, of an `unencoded_size`-byte blob under this network's
+    /// shard count + encoding (for sizing pools — capacities are encoded bytes).
+    pub async fn encoded_size(&self, unencoded_size: u64) -> Result<u64> {
+        self.client
+            .encoding_config()
+            .get_for_type(DEFAULT_ENCODING)
+            .encoded_blob_length(unencoded_size)
+            .context("computing encoded blob length")
     }
-    pub async fn create_pool(&self, _reserved_capacity_bytes: u64, _epochs: u32) -> Result<PoolHandle> {
-        bail!("storage pools are not yet implemented for the real walrus-sdk backend")
+    /// Create a storage pool reserving `reserved_capacity_bytes` of ENCODED capacity
+    /// for `epochs` epochs (pays WAL). Returns the pool object id.
+    pub async fn create_pool(&self, reserved_capacity_bytes: u64, epochs: u32) -> Result<PoolHandle> {
+        let pool_id = self
+            .client
+            .sui_client()
+            .create_storage_pool(reserved_capacity_bytes, epochs)
+            .await
+            .map_err(|e| anyhow!("create_storage_pool: {e}"))?;
+        Ok(PoolHandle {
+            pool_id: pool_id.to_string(),
+        })
     }
-    pub async fn store_pooled(&self, _pool_id: &str, _bytes: &[u8]) -> Result<BlobHandle> {
-        bail!("storage pools are not yet implemented for the real walrus-sdk backend")
+
+    /// Store `bytes` into an existing pool: encode + upload to the storage nodes and
+    /// register + certify a pooled blob, drawing on the pool's pre-reserved capacity
+    /// (the full real flow via walrus-sdk's `reserve_and_store_blobs_in_storage_pool`).
+    pub async fn store_pooled(&self, pool_id: &str, bytes: &[u8]) -> Result<BlobHandle> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        // epochs_ahead is governed by the pool's term; encoding/persistence from here.
+        let store_args = StoreArgs::new(
+            DEFAULT_ENCODING,
+            1,
+            StoreOptimizations::all(),
+            BlobPersistence::Deletable,
+            PostStoreAction::Keep,
+        );
+        let results = self
+            .client
+            .reserve_and_store_blobs_in_storage_pool(vec![bytes.to_vec()], pool, &store_args)
+            .await
+            .map_err(|e| anyhow!("reserve_and_store_blobs_in_storage_pool: {e}"))?;
+        let result = results
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("pooled store returned no result"))?;
+        match result {
+            PooledBlobStoreResult::NewlyCreated { pooled_blob_object } => Ok(BlobHandle {
+                blob_id: pooled_blob_object.blob_id.to_string(),
+                object_id: pooled_blob_object.id.to_string(),
+            }),
+            PooledBlobStoreResult::Error {
+                failure_phase,
+                error_msg,
+                ..
+            } => bail!("pooled store failed in {failure_phase}: {error_msg}"),
+        }
     }
-    pub async fn delete_pooled(&self, _pool_id: &str, _blob_id: &str) -> Result<()> {
-        bail!("storage pools are not yet implemented for the real walrus-sdk backend")
+
+    /// Delete a pooled blob from `pool_id` (no certify needed).
+    pub async fn delete_pooled(&self, pool_id: &str, blob_id: &str) -> Result<()> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        let id = BlobId::from_str(blob_id).map_err(|e| anyhow!("invalid blob id {blob_id:?}: {e}"))?;
+        self.client
+            .sui_client()
+            .delete_pooled_blob(pool, id)
+            .await
+            .map_err(|e| anyhow!("delete_pooled_blob {blob_id} from {pool_id}: {e}"))?;
+        Ok(())
     }
-    pub async fn pool_status(&self, _pool_id: &str) -> Result<PoolStatus> {
-        bail!("storage pools are not yet implemented for the real walrus-sdk backend")
+
+    /// Live status of a storage pool (epochs, encoded capacity reserved/used, count).
+    pub async fn pool_status(&self, pool_id: &str) -> Result<PoolStatus> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        let s = self
+            .client
+            .sui_client()
+            .storage_pool_status(pool)
+            .await
+            .map_err(|e| anyhow!("storage_pool_status {pool_id}: {e}"))?;
+        Ok(PoolStatus {
+            pool_id: pool_id.to_string(),
+            start_epoch: s.start_epoch,
+            end_epoch: s.end_epoch,
+            reserved_capacity_bytes: s.reserved_encoded_capacity_bytes,
+            used_bytes: s.used_encoded_bytes,
+            blob_count: s.blob_count,
+        })
     }
-    pub async fn extend_pool(&self, _pool_id: &str, _epochs: u32) -> Result<()> {
-        bail!("storage pools are not yet implemented for the real walrus-sdk backend")
+
+    /// Extend a pool's lifetime by `epochs` epochs (pays WAL).
+    pub async fn extend_pool(&self, pool_id: &str, epochs: u32) -> Result<()> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        self.client
+            .sui_client()
+            .extend_storage_pool(pool, epochs)
+            .await
+            .map_err(|e| anyhow!("extend_storage_pool {pool_id}: {e}"))?;
+        Ok(())
     }
-    pub async fn grow_pool(&self, _pool_id: &str, _additional_capacity_bytes: u64) -> Result<()> {
-        bail!("storage pools are not yet implemented for the real walrus-sdk backend")
+
+    /// Grow a pool's reserved ENCODED capacity by `additional_capacity_bytes` (WAL).
+    pub async fn grow_pool(&self, pool_id: &str, additional_capacity_bytes: u64) -> Result<()> {
+        let pool = ObjectID::from_str(pool_id).context("pool_id")?;
+        self.client
+            .sui_client()
+            .increase_storage_pool_capacity(pool, additional_capacity_bytes)
+            .await
+            .map_err(|e| anyhow!("increase_storage_pool_capacity {pool_id}: {e}"))?;
+        Ok(())
     }
 }

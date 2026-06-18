@@ -152,7 +152,7 @@ funded by the deploy). This is faucet-cheap on a regen-able localnet.
 |---|---|---|
 | `cargo build` (default) | nothing heavy (2 crates) | inert; enclave-safe baseline |
 | `--features localnet` (alias `mock`) | `walrus-sui[test-utils]`, `walrus-core`, `sui-types`, `suibase`, … (~827 crates) | the nodeless localnet mock |
-| `--features real` | `walrus-sdk` (real backend) | testnet/mainnet — store/read/extend/delete |
+| `--features real` | `walrus-sdk` (real backend) | testnet/mainnet — store/read/stat/extend/delete + pools |
 
 The **default build links no `suibase`, no walrus/Sui graph, no RocksDB** — a downstream
 enclave consuming `WalrusStore` does not pull the localnet mock machinery. This is
@@ -189,7 +189,7 @@ WALRUS_LOCALNET_TEST=1 cargo test --features localnet
 | M2 `WalrusStore` mock store/read/stat/extend/delete | ✅ done |
 | M3 Pool ops (create/store_pooled/delete_pooled/status/extend/grow) | ✅ done |
 | M5 WS7 CI enforcement (cargo-tree assertion) | ✅ done |
-| M4 Real `walrus-sdk` backend — store/read/extend/delete | ✅ done (live testnet store→read verified; stat + pools = phase 2) |
+| M4 Real `walrus-sdk` backend — full | ✅ done (store/read/stat/extend/delete + pools all live-verified on testnet) |
 | M5 remainder (more script tests as desired) | ⏭️ optional |
 
 ## References

@@ -15,13 +15,14 @@
   regression tests (red-checked).
 - ✅ **M5 (partial)** WS7 enforcement automated: `walrus-store-default-build.yml` asserts the default
   (no-feature) graph links no `suibase`/walrus/Sui/RocksDB (default = 2 crates; localnet = 827).
-- ✅ **M4 (store/read/extend/delete)** Real `walrus-sdk` backend behind the `real` feature (NOT bare
-  default — keeps the default inert per WS7). `for_workdir("testnet"|"mainnet")` builds a
-  `WalrusNodeClient<SuiContractClient>` from the workdir wallet (Sui RPC via the suibase proxy first,
-  public fullnode fallback) + the embedded public contract ids. **Live testnet store→read verified**
-  (real storage-node upload + real on-chain certified `Blob`, fund-gated test auto-converts SUI→WAL).
-  CI: a `real-backend` job compiles it + asserts WS7 (no `suibase` in the `real` graph). `stat` and
-  pools on the real backend are phase 2.
+- ✅ **M4 (full)** Real `walrus-sdk` backend behind the `real` feature (NOT bare default — keeps the
+  default inert per WS7). `for_workdir("testnet"|"mainnet")` builds a `WalrusNodeClient<SuiContractClient>`
+  from the workdir wallet (Sui RPC via the suibase proxy first, public fullnode fallback) + the embedded
+  public contract ids. **All ops live-verified on testnet**: store/read/stat/extend/delete (round-trip
+  test) + the full pool lifecycle create/store_pooled/pool_status/extend/grow/delete (pool test) — real
+  storage-node upload + real on-chain certified `Blob`/`PooledBlob`, fund-gated tests auto-convert
+  SUI→WAL. CI: a `real-backend` job compiles it + asserts WS7 (no `suibase` in the `real` graph) and
+  runs both testnet tests (skip without funds).
 
 **M4 feature-structure decision (reconciling this plan with the owner's "default = 0 heavy crates"
 guidance):** keep the bare default build inert (WS7, enforced by CI). Put `RealWalrusStore`

@@ -180,5 +180,6 @@ jobs:
       - name: Testnet round-trip (fund-gated — SKIPS without a funded workdir)
         working-directory: rust/walrus-store
         run: |
-          # No suibase testnet workdir / no funds in CI -> the test skips with a warning.
+          # No suibase testnet workdir / no funds in CI -> the tests skip with a warning.
           cargo test --features real --test testnet_roundtrip -- --nocapture
+          cargo test --features real --test testnet_pool -- --nocapture
