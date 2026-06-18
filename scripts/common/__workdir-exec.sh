@@ -636,6 +636,13 @@ workdir_exec() {
     update_WALRUS_RELAY_PROCESS_PID_var
   fi
 
+  # Nodeless localnet Walrus (opt-in via walrus_enabled). Pure function defs that
+  # are inert unless walrus_enabled=true. See docs/dev/LOCALNET_WALRUS_PLAN.md.
+  if [ "$WORKDIR" = "localnet" ]; then
+    # shellcheck source=SCRIPTDIR/__walrus-localnet-deploy.sh
+    source "$SUIBASE_DIR/scripts/common/__walrus-localnet-deploy.sh"
+  fi
+
   if [ "$CMD_AUTOCOINS_REQ" = true ] || [ "$CMD_STATUS_REQ" = true ]; then
     # shellcheck source=SCRIPTDIR/__autocoins.sh
     source "$SUIBASE_DIR/scripts/common/__autocoins.sh"
@@ -1541,6 +1548,13 @@ workdir_exec() {
 
   # Start the local services (will be NOOP if already running).
   start_all_services
+
+  # Nodeless localnet Walrus deploy (opt-in via walrus_enabled; no-op otherwise).
+  # Runs after the local Sui node is up; idempotent (only deploys on first enable
+  # or after a regen changes the chain id). Non-fatal.
+  if [ "$WORKDIR" = "localnet" ]; then
+    deploy_walrus_localnet "$WORKDIR"
+  fi
 
   # print sui envs to help debugging (if someone else is using this script).
 

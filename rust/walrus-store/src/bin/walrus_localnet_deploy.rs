@@ -26,8 +26,8 @@ use walrus_sui::{
     client::{ReadClient, SuiContractClient},
     config::load_wallet_context_from_path,
     test_utils::system_setup::{
-        create_and_init_system_for_test, development_contract_dir, end_epoch_zero,
-        register_committee_and_stake, SystemContext,
+        create_and_init_system_for_test, end_epoch_zero, register_committee_and_stake,
+        SystemContext,
     },
     types::NodeRegistrationParams,
 };
@@ -36,6 +36,27 @@ use walrus_sui::{
 const ONE_WAL: u64 = 1_000_000_000;
 /// WAL minted into the exchange so the mock can convert SUI -> WAL to pay for storage.
 const EXCHANGE_FUND_WAL: u64 = 1_000_000 * ONE_WAL;
+
+/// The Walrus Move contracts, vendored from the git-pinned walrus rev and embedded
+/// into the binary so a precompiled artifact needs no walrus checkout at runtime.
+/// Kept in sync with the pinned rev via embedded-contracts/CONTRACTS.sha256 (drift-guard).
+static EMBEDDED_CONTRACTS: include_dir::Dir<'static> =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/embedded-contracts");
+
+/// Extract the embedded contracts under `<deploy_dir>/contracts-src` and return that
+/// directory (the parent that contains the wal/wal_exchange/walrus/walrus_subsidies
+/// package dirs, so their `../wal`-style local deps resolve).
+fn materialize_embedded_contracts(deploy_dir: &Path) -> Result<PathBuf> {
+    let out = deploy_dir.join("contracts-src");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).ok();
+    }
+    std::fs::create_dir_all(&out)?;
+    EMBEDDED_CONTRACTS
+        .extract(&out)
+        .context("extracting embedded contracts")?;
+    Ok(out)
+}
 
 #[derive(Parser)]
 #[command(name = "walrus-localnet-deploy", about = "Nodeless localnet Walrus deploy for Suibase")]
@@ -105,10 +126,13 @@ async fn deploy(args: DeployArgs) -> Result<()> {
     // Hold the N=1 committee BLS key in-process; persist it to the descriptor.
     let committee_key = ProtocolKeyPair::generate();
 
-    // contracts=None -> the git-pinned checkout's contracts/ (reproducible for everyone).
+    // contracts=None -> the vendored contracts embedded in this binary, so a
+    // precompiled artifact is self-contained at runtime (matched to the git-pinned
+    // walrus rev via embedded-contracts/CONTRACTS.sha256).
     let contract_dir = match args.contracts {
         Some(d) => d,
-        None => development_contract_dir().context("locating bundled walrus contracts")?,
+        None => materialize_embedded_contracts(&deploy_dir)
+            .context("materializing embedded walrus contracts")?,
     };
 
     let (sysctx, client) = create_and_init_system_for_test(
