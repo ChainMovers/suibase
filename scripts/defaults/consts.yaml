@@ -99,7 +99,7 @@ localnet_tools_src_type: "suibase"
 localnet_tools_src_path: "rust/walrus-store"
 localnet_tools_repo_url: "https://github.com/chainmovers/sui-binaries.git"
 localnet_tools_repo_branch: "main"
-localnet_tools_force_tag: "localnet-tools-v0.0.1"
+localnet_tools_force_tag: "localnet-tools-v0.0.2"
 localnet_tools_asset_name_filter: ~
 localnet_tools_asset_name_exclude: "_ci|_rel_notes"
 localnet_tools_build_type: "rust"
