@@ -73,7 +73,13 @@ Then regenerate the localnet so the deploy hook runs:
 ```
 
 On success the descriptor `~/suibase/workdirs/localnet/config/walrus-localnet.yaml`
-exists, and `WalrusStore::for_workdir("localnet")` works. The deploy binary
+exists, and `WalrusStore::for_workdir("localnet")` works.
+
+If `walrus_enabled: true` but you have **not** regenerated yet (the descriptor is
+missing, or its `chain_id` no longer matches the live localnet), `localnet start`
+and `localnet status` print a non-fatal footer advising a `localnet regen` — the
+localnet Sui node still runs, but the Walrus contracts are not deployed until the
+regen hook runs. The deploy binary
 (`walrus-localnet-deploy`) is **designed to ship precompiled** via
 `chainmovers/sui-binaries` (the consuming side is wired in `consts.yaml` /
 `__walrus-localnet-deploy.sh`); until that build pipeline is live, a dev checkout builds

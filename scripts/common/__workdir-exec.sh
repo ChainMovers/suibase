@@ -970,6 +970,17 @@ workdir_exec() {
         fi
       fi
     fi
+
+    # Nodeless localnet Walrus (opt-in via walrus_enabled): if enabled but the
+    # Walrus contracts are not deployed on this chain, the deploy only happens
+    # on a regen (fresh chain id). Surface a footer advisory so 'status' is not
+    # silently green while WalrusStore is unusable. No-op unless WORKDIR=localnet
+    # (where __walrus-localnet-deploy.sh was sourced).
+    if [ "$WORKDIR" = "localnet" ] && [ "$IS_DAEMON_CALL" != "true" ]; then
+      if is_walrus_localnet_deploy_needed "$WORKDIR"; then
+        warn_walrus_localnet_deploy_needed "$WORKDIR"
+      fi
+    fi
     exit 0
   fi
 
@@ -1297,6 +1308,14 @@ workdir_exec() {
         echo "$WORKDIR services started"
       fi
       echo "$SUI_VERSION"
+
+      # Nodeless localnet Walrus (opt-in via walrus_enabled): this fast path does
+      # not (re)deploy the contracts -- that only happens on a regen (fresh chain
+      # id) or the install/repair path below. If enabled but not deployed, the
+      # localnet Sui itself is up, so keep running but advise a regen.
+      if [ "$WORKDIR" = "localnet" ] && is_walrus_localnet_deploy_needed "$WORKDIR"; then
+        warn_walrus_localnet_deploy_needed "$WORKDIR"
+      fi
       exit 0
     fi
     # Note: If workdir/binary/config not OK, keep going to install or repair it.

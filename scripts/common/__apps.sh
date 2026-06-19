@@ -1338,7 +1338,10 @@ sb_app_rust_build_and_install_generic() {
   esac
 
   echo "Building $_ASSETS_NAME from source ($_SRC_PATH)..."
-  if ! (cd "$_BUILD_DIR" && cargo build "${_CARGO_ARGS[@]}" >>"$SUIBASE_LOGS_DIR/cargo-build.log" 2>&1); then
+  # Stream cargo's "Compiling ..." progress to the terminal AND the log: the heavy
+  # localnet graph takes minutes, and a fully-silent build reads as a hang. pipefail
+  # keeps the build's exit status (not tee's) so a real failure still aborts.
+  if ! (cd "$_BUILD_DIR" && set -o pipefail && cargo build "${_CARGO_ARGS[@]}" 2>&1 | tee -a "$SUIBASE_LOGS_DIR/cargo-build.log"); then
     setup_error "Failed to build $_ASSETS_NAME (see $SUIBASE_LOGS_DIR/cargo-build.log)"
   fi
 

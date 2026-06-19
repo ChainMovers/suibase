@@ -108,6 +108,37 @@ check "calls deploy_walrus_localnet" grep -q "deploy_walrus_localnet" "$WEXEC"
 check "is_walrus_supported_by_workdir gate unchanged (testnet/mainnet only)" \
     grep -qE '\[ "\$_workdir" = "testnet" \] \|\| \[ "\$_workdir" = "mainnet" \]' "$COMMON/__globals.sh"
 
+# 7. "regen recommended" advisory: enabled but contracts not deployed surfaces a
+#    non-fatal warning on 'localnet start' (fast path) and 'localnet status'.
+check "defines is_walrus_localnet_deploy_needed()" \
+    grep -qE "^is_walrus_localnet_deploy_needed\(\)" "$DEPLOY"
+check "defines warn_walrus_localnet_deploy_needed()" \
+    grep -qE "^warn_walrus_localnet_deploy_needed\(\)" "$DEPLOY"
+check "deploy-needed predicate gated on CFG_walrus_enabled + localnet" \
+    bash -c "grep -A8 '^is_walrus_localnet_deploy_needed()' '$DEPLOY' | grep -q 'CFG_walrus_enabled'"
+check "advisory recommends a regen" grep -qE "regen' to deploy them" "$DEPLOY"
+check "status/start call the deploy-needed predicate" \
+    grep -q "is_walrus_localnet_deploy_needed" "$WEXEC"
+check "status/start emit the advisory helper" \
+    grep -q "warn_walrus_localnet_deploy_needed" "$WEXEC"
+check "advisory call sites guarded on WORKDIR=localnet" \
+    bash -c "[ \$(grep -c 'is_walrus_localnet_deploy_needed \"\$WORKDIR\"' '$WEXEC') -eq 2 ]"
+
+# 7b. Functional: pure (no live localnet) branches of the predicate. The deploy
+#     script is all function defs, so it can be sourced standalone. ($1 = DEPLOY.)
+check "predicate: walrus disabled -> not needed" \
+    bash -c 'source "$1"; WORKDIRS="$(mktemp -d)"; mkdir -p "$WORKDIRS/localnet/config-default";
+             CFG_walrus_enabled=false; ! is_walrus_localnet_deploy_needed localnet' _ "$DEPLOY"
+check "predicate: non-localnet workdir -> not needed" \
+    bash -c 'source "$1"; WORKDIRS="$(mktemp -d)";
+             CFG_walrus_enabled=true; ! is_walrus_localnet_deploy_needed testnet' _ "$DEPLOY"
+check "predicate: enabled + descriptor missing -> needed" \
+    bash -c 'source "$1"; WORKDIRS="$(mktemp -d)"; mkdir -p "$WORKDIRS/localnet/config-default";
+             CFG_walrus_enabled=true; is_walrus_localnet_deploy_needed localnet' _ "$DEPLOY"
+check "warn helper recommends '<workdir> regen'" \
+    bash -c 'source "$1"; warn_user() { printf "%s\n" "$*"; };
+             warn_walrus_localnet_deploy_needed localnet 2>&1 | grep -q "localnet regen"' _ "$DEPLOY"
+
 echo
 if [ "$_fail" -eq 0 ]; then
     echo "PASS: M1 localnet Walrus wiring"

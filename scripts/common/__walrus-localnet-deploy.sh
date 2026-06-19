@@ -52,10 +52,26 @@ update_localnet_tools_bin() {
   fi
 
   if type -t init_app_obj >/dev/null 2>&1 && type -t app_call >/dev/null 2>&1; then
+    # Reached only when the binary is absent, i.e. the first 'start'/'regen' after
+    # enabling walrus: on dev this source-builds the heavy ~827-crate
+    # '--features localnet' graph; on main/staging it fetches the precompiled
+    # asset. Once staged in workdirs/common/bin, the early return above skips this
+    # on every later start/regen -- so it is genuinely done once. The build is
+    # otherwise silent (app_call output is suppressed here and cargo logs to a
+    # file), so announce it or it looks like a hang.
+    echo "Building localnet tools (done once, might take a long time...)"
+    [ -n "$SUIBASE_LOGS_DIR" ] && echo "  (full log: $SUIBASE_LOGS_DIR/cargo-build.log)"
+    # Let the build progress reach the terminal (the generic rust builder streams
+    # cargo's "Compiling ..." to terminal + log) -- suppress only the app-object
+    # setup chatter. Non-fatal: a still-missing binary is handled by the check
+    # below and by deploy_walrus_localnet()'s warn-and-skip.
     (
-      init_app_obj "localnet_tools" "$_WORKDIR" &&
+      init_app_obj "localnet_tools" "$_WORKDIR" >/dev/null 2>&1 &&
         app_call "localnet_tools" "install"
-    ) >/dev/null 2>&1 || true
+    ) || true
+    if update_WALRUS_LOCALNET_SETUP_BIN_var; then
+      echo "localnet tools ready."
+    fi
   fi
   return 0
 }
@@ -150,3 +166,57 @@ deploy_walrus_localnet() {
   return 0
 }
 export -f deploy_walrus_localnet
+
+# True (returns 0) when walrus_enabled=true on localnet but the Walrus Move
+# contracts are NOT deployed for the *current* chain: either the descriptor /
+# walrus-config is missing, or the descriptor's chain_id does not match the live
+# localnet chain id. This mirrors the idempotency check in deploy_walrus_localnet()
+# (a regen wipes the chain and changes its id, which is what (re)deploys the
+# contracts), so it is the signal for "a regen is needed".
+#
+# When the localnet Sui RPC is not reachable (node down), a stale chain id cannot
+# be proven, so it only reports "needed" when the descriptor/config is missing
+# outright -- this avoids a false alarm for a stopped-but-deployed localnet.
+is_walrus_localnet_deploy_needed() {
+  local _WORKDIR="${1:-$WORKDIR}"
+
+  # Nodeless localnet Walrus is localnet-only and opt-in (mirrors deploy gating).
+  [ "$_WORKDIR" = "localnet" ] || return 1
+  [ "${CFG_walrus_enabled:-false}" = "true" ] || return 1
+
+  local _CONFIG_DEFAULT="$WORKDIRS/$_WORKDIR/config-default"
+  local _DESCRIPTOR="$_CONFIG_DEFAULT/walrus-localnet.yaml"
+  local _WALRUS_CONFIG="$_CONFIG_DEFAULT/walrus-config.yaml"
+
+  # Never deployed (or only partially written) -> a regen is needed.
+  if [ ! -f "$_DESCRIPTOR" ] || [ ! -f "$_WALRUS_CONFIG" ]; then
+    return 0
+  fi
+
+  # Descriptor present: confirm it is for the live chain. If the node is not
+  # answering we cannot prove a mismatch, so assume it is fine (deployed).
+  local _RPC="http://localhost:9000"
+  local _LIVE_CHAIN_ID
+  _LIVE_CHAIN_ID=$(curl -fsS -m 3 -X POST "$_RPC" -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"sui_getChainIdentifier","params":[]}' 2>/dev/null |
+    sed 's/.*"result":"//;s/".*//')
+  if [ -z "$_LIVE_CHAIN_ID" ]; then
+    return 1
+  fi
+  local _PREV_CHAIN_ID
+  _PREV_CHAIN_ID=$(sed -n 's/^chain_id:[[:space:]]*//p' "$_DESCRIPTOR" | head -1)
+  if [ -n "$_PREV_CHAIN_ID" ] && [ "$_PREV_CHAIN_ID" = "$_LIVE_CHAIN_ID" ]; then
+    return 1 # deployed for this chain
+  fi
+  return 0 # missing/stale chain id -> (re)deploy via regen
+}
+export -f is_walrus_localnet_deploy_needed
+
+# Emit the standard "walrus enabled but contracts not deployed" advisory.
+# Non-fatal (warn_user goes to stderr, no exit). Shared by 'localnet start' and
+# 'localnet status' so the wording stays identical in both.
+warn_walrus_localnet_deploy_needed() {
+  local _WORKDIR="${1:-${WORKDIR:-localnet}}"
+  warn_user "walrus_enabled is true but the Walrus contracts are not deployed on this localnet. Run '$_WORKDIR regen' to deploy them."
+}
+export -f warn_walrus_localnet_deploy_needed
