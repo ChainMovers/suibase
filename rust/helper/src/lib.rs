@@ -29,6 +29,11 @@
 //!
 //! You may have to adjust the number "../" depending on where your Cargo.toml is located relative to ~/suibase.
 
+// uniffi 0.25's `include_scaffolding!` emits function-pointer comparisons in generated code
+// we don't control, tripping the `unpredictable_function_pointer_comparisons` lint
+// (warn-by-default since Rust 1.85). Scope the allow to the uniffi build only.
+#![cfg_attr(feature = "build-with-uniffi", allow(unpredictable_function_pointer_comparisons))]
+
 mod error;
 pub use crate::error::Error;
 
