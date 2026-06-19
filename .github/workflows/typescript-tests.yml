@@ -59,6 +59,7 @@ jobs:
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          rust-src-dir: "rust"
           cache: "false"
           target: ${{ runner.os == 'Linux' && 'x86_64-unknown-linux-musl' || '' }}
 
@@ -77,7 +78,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # Match suibase-daemon-tests.yml: musl is needed for the daemon build.
-          rust_channel=$(grep '^channel' "$GITHUB_WORKSPACE/rust/suibase/rust-toolchain.toml" | sed 's/channel = "\(.*\)"/\1/')
+          rust_channel=$(grep '^channel' "$GITHUB_WORKSPACE/rust/rust-toolchain.toml" | sed 's/channel = "\(.*\)"/\1/')
           echo "Installing Rust $rust_channel toolchain with musl target"
           rustup toolchain install "$rust_channel" --target x86_64-unknown-linux-musl --profile minimal
 

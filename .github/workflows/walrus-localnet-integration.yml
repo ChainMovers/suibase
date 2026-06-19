@@ -45,6 +45,7 @@ jobs:
       - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          rust-src-dir: "rust"
           cache: "false"
 
       - name: Rust Caching
@@ -135,6 +136,7 @@ jobs:
       - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          rust-src-dir: "rust"
           cache: "false"
 
       - name: Rust Caching

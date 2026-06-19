@@ -1,0 +1,7 @@
+# Default Rust toolchain for the suibase-owned crates under rust/ (helper,
+# suibase, demo-app, helper-uniffi). rustup resolves it by walking up from each
+# crate directory. rust/walrus-store/rust-toolchain.toml overrides this with its
+# own pin (1.96). CI's actions-rust-lang/setup-rust-toolchain reads this file via
+# `rust-src-dir: rust`.
+[toolchain]
+channel = "1.92"
