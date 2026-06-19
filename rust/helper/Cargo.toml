@@ -16,7 +16,8 @@ crate-type = ["lib"]
 doctest = false
 
 [dependencies]
-sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+#sui-types = { path = "../../../suibase/workdirs/active/sui-repo/crates/sui-types/" }
+sui-types = { git = "https://github.com/MystenLabs/sui", branch = "testnet", package = "sui-types" }
 home = "0.5.5"
 serde_json = { version = "1.0.95", features = ["preserve_order"] }
 serde_yaml = "0.8.26"

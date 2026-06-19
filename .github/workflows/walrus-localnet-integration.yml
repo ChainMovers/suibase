@@ -1,0 +1,185 @@
+name: Walrus Localnet Integration
+
+# Heavy end-to-end test of the nodeless localnet Walrus feature: builds the
+# walrus-store mock + deploy bin (the full walrus/Sui graph — git-pinned), deploys
+# nodeless Walrus on a real localnet via the regen hook, and runs both WalrusStore
+# integration suites: the blob round-trip (store -> read -> stat -> extend -> delete,
+# rust/walrus-store/tests/localnet_roundtrip.rs) and the storage-pool lifecycle
+# (create -> store_pooled -> pool_status -> extend -> grow -> delete,
+# rust/walrus-store/tests/localnet_pool.rs).
+#
+# This is EXPENSIVE (the walrus-sui graph compile) so it is NOT on the per-push fast
+# suites. It runs on demand and weekly, plus when walrus-store changes land on dev.
+# The fast suites stay unaffected: scripts-tests runs the non-destructive M1 wiring
+# test (test_localnet_walrus_config.sh), and the default `cargo build` of walrus-store
+# pulls none of the heavy graph (the localnet feature is off by default).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  push:
+    branches: ["dev"]
+    paths:
+      - "rust/walrus-store/**"
+      - ".github/workflows/walrus-localnet-integration.yml"
+
+jobs:
+  localnet-walrus-roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Free Disk Space (the walrus/Sui graph + localnet are large)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - uses: actions/checkout@v6
+
+      - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false"
+
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust/walrus-store -> target"
+          cache-on-failure: "true"
+
+      - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          # CI runners sometimes have unattended-upgrades/apt-daily holding the dpkg lock
+          # at startup, which made apt-get block until the job timed out (exit 124). Stop
+          # those services to free the lock; DPkg::Lock::Timeout waits gracefully, and the
+          # outer `timeout` is a hard 10-min fail-fast cap (apt normally takes <1 min).
+          sudo systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 update
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+
+      - name: Prepare + install suibase
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
+          "$HOME/suibase/install"
+
+      - name: Start localnet
+        run: |
+          ~/suibase/scripts/localnet start
+
+      - name: Build walrus-store (localnet feature) — deploy bin + mock
+        working-directory: rust/walrus-store
+        run: |
+          # rust-toolchain.toml pins 1.96; ensure it is installed.
+          rustup toolchain install 1.96 --profile minimal
+          cargo build --features localnet --bin walrus-localnet-deploy
+          # Stage the just-built bin where the deploy script looks (install_type=user);
+          # there is no precompiled asset to fetch in CI, so this is the dev fallback.
+          mkdir -p "$HOME/suibase/workdirs/common/bin"
+          cp target/debug/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+
+      - name: Pure-logic unit tests (blob-id/descriptor/wallet — no live localnet)
+        working-directory: rust/walrus-store
+        run: |
+          cargo test --features localnet --lib -- --nocapture
+
+      - name: Enable walrus + regen (runs the nodeless deploy)
+        run: |
+          echo "walrus_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
+          ~/suibase/scripts/localnet regen
+          # The deploy hook must have produced the descriptor the mock consumes.
+          test -f "$HOME/suibase/workdirs/localnet/config/walrus-localnet.yaml" \
+            || { echo "descriptor not written — deploy hook failed"; exit 1; }
+
+      - name: WalrusStore round-trip + pool lifecycle (held-key certify, fs bytes)
+        working-directory: rust/walrus-store
+        env:
+          WALRUS_LOCALNET_TEST: "1"
+        run: |
+          # Blob round-trip: store/read/stat/extend/delete (+ content dedup).
+          cargo test --features localnet --test localnet_roundtrip -- --nocapture
+          # Storage pools: create/store_pooled/read/pool_status/extend/grow/delete.
+          cargo test --features localnet --test localnet_pool -- --nocapture
+          # Pool/standalone namespace coexistence (identical content, no aliasing).
+          cargo test --features localnet --test localnet_pool_namespace -- --nocapture
+
+  real-backend:
+    # Validates that the real walrus-sdk backend COMPILES in clean CI and that the WS7
+    # invariant holds for the `real` build (no `suibase`). The live testnet store/read
+    # test is fund-gated and simply SKIPS here (CI has no suibase workdir and no funds).
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Free Disk Space (the walrus/Sui graph is large)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - uses: actions/checkout@v6
+
+      - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: "false"
+
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "rust/walrus-store -> target"
+          cache-on-failure: "true"
+
+      - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          # CI runners sometimes have unattended-upgrades/apt-daily holding the dpkg lock
+          # at startup, which made apt-get block until the job timed out (exit 124). Stop
+          # those services to free the lock; DPkg::Lock::Timeout waits gracefully, and the
+          # outer `timeout` is a hard 10-min fail-fast cap (apt normally takes <1 min).
+          sudo systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 update
+          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+
+      - name: Build the real backend (walrus-sdk)
+        working-directory: rust/walrus-store
+        run: |
+          rustup toolchain install 1.96 --profile minimal
+          cargo build --features real
+
+      - name: WS7 — the `real` build must exclude suibase (enclave-safe)
+        working-directory: rust/walrus-store
+        run: |
+          cargo tree --features real --prefix none 2>/dev/null \
+            | awk 'NF {print $1}' | sort -u > /tmp/real-deps.txt
+          echo "real dependency graph ($(wc -l < /tmp/real-deps.txt) crates)"
+          if grep -qx "suibase" /tmp/real-deps.txt; then
+            echo "::error::WS7 violation: 'suibase' is in the real (enclave-facing) build graph"
+            exit 1
+          fi
+          for c in walrus-sdk walrus-sui sui-types; do
+            grep -qx "$c" /tmp/real-deps.txt \
+              || { echo "::error::real build unexpectedly missing $c"; exit 1; }
+          done
+          echo "WS7 holds for the real build: walrus-sdk present, suibase absent."
+
+      - name: Testnet round-trip (fund-gated — SKIPS without a funded workdir)
+        working-directory: rust/walrus-store
+        run: |
+          # No suibase testnet workdir / no funds in CI -> the tests skip with a warning.
+          cargo test --features real --test testnet_roundtrip -- --nocapture
+          cargo test --features real --test testnet_pool -- --nocapture
