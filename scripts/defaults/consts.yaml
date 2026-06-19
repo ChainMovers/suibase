@@ -86,9 +86,12 @@ site_builder_support_version_check: true
 # on sui-binaries, tag localnet-tools-v<version>) — same model as suibase-daemon — since
 # these tools rev on their own cadence. Fetched only on localnet when walrus_enabled=true.
 # install_type "user" -> workdirs/common/bin (where __walrus-localnet-deploy.sh looks).
-# force_tag scopes the fetch to this exact tag (install_type=user ignores
-# asset_name_filter, so without a pinned tag the reverse-sorted tag loop could pick an
-# unrelated release). Bump force_tag together with the localnet-tools release version.
+# force_tag is ~ (unpinned): asset_name_filter "localnet-tools" scopes the user-install
+# reverse-sorted tag search to this asset family, so the NEWEST localnet-tools-v* release
+# is auto-selected with NO per-release consts.yaml edit. (Without the family filter a user
+# install reverse-sorts across ALL tags in the shared repo and wrongly picks the
+# lexicographically-highest one, e.g. suibase-daemon-v*. The local walrus-store crate
+# version still caps the upgrade, same protection as suibase-daemon.)
 # support_version_check is false (binary has no --version). precompiled-only (no source build).
 # NOTE: assets_name/force_tag name the ASSET (localnet-tools); bin_names/precompiled_path
 # name the BINARY inside it (walrus-localnet-deploy).
@@ -99,8 +102,8 @@ localnet_tools_src_type: "suibase"
 localnet_tools_src_path: "rust/walrus-store"
 localnet_tools_repo_url: "https://github.com/chainmovers/sui-binaries.git"
 localnet_tools_repo_branch: "main"
-localnet_tools_force_tag: "localnet-tools-v0.0.2"
-localnet_tools_asset_name_filter: ~
+localnet_tools_force_tag: ~
+localnet_tools_asset_name_filter: "localnet-tools"
 localnet_tools_asset_name_exclude: "_ci|_rel_notes"
 localnet_tools_build_type: "rust"
 localnet_tools_run_type: "cli"

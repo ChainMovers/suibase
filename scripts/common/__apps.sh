@@ -371,7 +371,21 @@ sb_app_init_PRECOMP_REMOTE_vars() {
         _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_ASSET_NAME_FILTER" | sort_rv)
       fi
     else
-      _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort_rv)
+      # install_type=user. A literal asset_name_filter (e.g. "localnet-tools")
+      # scopes the search to one asset family, so an UNPINNED (force_tag: ~) user
+      # install auto-tracks the newest release within that family instead of
+      # reverse-sorting across every asset in the shared sui-binaries repo. This
+      # matters because the repo-wide sort silently favors the lexicographically
+      # highest tag (suibase-daemon-v*), which a lower-sorting family like
+      # localnet-tools-v* could never win. "branch" is not meaningful for user
+      # assets (their tags carry no branch name) and null = legacy no-scoping.
+      get_app_var "$self" "asset_name_filter"
+      local _USER_ASSET_NAME_FILTER=$APP_VAR
+      if [ -n "$_USER_ASSET_NAME_FILTER" ] && [ "$_USER_ASSET_NAME_FILTER" != "branch" ]; then
+        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | grep "$_USER_ASSET_NAME_FILTER" | sort_rv)
+      else
+        _TAG_NAMES=$(echo "$_OUT" | grep "tag_name" | sort_rv)
+      fi
     fi
 
     # Apply exclusions configured in asset_name_exclude

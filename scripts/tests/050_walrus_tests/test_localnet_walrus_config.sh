@@ -61,8 +61,10 @@ check "consts.yaml: install_type=user (-> workdirs/common/bin)" \
     grep -qE '^localnet_tools_install_type:[[:space:]]*"user"' "$CONSTS"
 check "consts.yaml: support_version_check=false (bin has no --version)" \
     grep -qE '^localnet_tools_support_version_check:[[:space:]]*false' "$CONSTS"
-check "consts.yaml: force_tag scopes the user-install fetch (localnet-tools asset)" \
-    grep -qE '^localnet_tools_force_tag:[[:space:]]*"localnet-tools-v' "$CONSTS"
+check "consts.yaml: force_tag unpinned (~) — auto-latest, no per-release edit" \
+    grep -qE '^localnet_tools_force_tag:[[:space:]]*~' "$CONSTS"
+check "consts.yaml: asset_name_filter scopes user-install to the localnet-tools family" \
+    grep -qE '^localnet_tools_asset_name_filter:[[:space:]]*"localnet-tools"' "$CONSTS"
 # Daemon-consistent: a suibase-built rust asset -> source-build on dev branches,
 # precompiled on main/staging (see sb_app_rust_build_and_install in __apps.sh).
 check "consts.yaml: src_type=suibase (routes through the app build system)" \
