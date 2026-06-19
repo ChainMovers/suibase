@@ -41,6 +41,7 @@ jobs:
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          rust-src-dir: "rust"
           cache: "false" # Control cache in "Rust Caching" step instead.
 
       - name: Rust Caching
