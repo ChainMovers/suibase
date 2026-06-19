@@ -209,8 +209,108 @@ jobs:
         run: |
           "$HOME/suibase/scripts/tests/run-all.sh" --release-tests
 
+  # Parity with the daemon's `validate` job, for the localnet-tools precompiled.
+  # The daemon is version-matched (it has --version); walrus-localnet-deploy has no
+  # --version, so we validate it FUNCTIONALLY: download the published artifact and
+  # have it deploy nodeless walrus on a real localnet (publish Move pkgs + off-node
+  # committee + descriptor). This is the gate that makes main's unpinned auto-latest
+  # fetch safe to consume. Linux/glibc only (the binary is glibc-24.04, like sui).
+  # NOTE: this gates the SHARED staging->main promotion, so a walrus/localnet
+  # regression also holds back a daemon release. If that coupling becomes a problem,
+  # gate this job on a rust/walrus-store change (skip when unchanged) via a new
+  # detect-changes output, so daemon-only releases are not blocked by walrus.
+  validate-localnet-tools:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs_only != 'true'
+    name: Validate localnet-tools precompiled
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v6
+
+      - name: Prepare environment + install suibase
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/suibase"
+          "$HOME/suibase/install"
+
+      - name: Install the published suibase-daemon precompiled
+        # localnet start needs the daemon; install the published precompiled so it
+        # does NOT source-build (no rust toolchain on this job — the point is to test
+        # the PRECOMPILED localnet-tools, not compile anything).
+        run: |
+          set -e
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/suibase/Cargo.toml)
+          tag="suibase-daemon-v${version}"
+          tmpdir=$(mktemp -d)
+          gh release download "$tag" --repo chainmovers/sui-binaries --pattern '*ubuntu*' --dir "$tmpdir"
+          for f in "$tmpdir"/*.tgz "$tmpdir"/*.tar.gz; do [ -f "$f" ] && tar -xzf "$f" -C "$tmpdir"; done
+          bin_path=$(find "$tmpdir" -type f -name suibase-daemon -perm -u+x | head -1)
+          [ -n "$bin_path" ] || { echo "::error::suibase-daemon not in $tag asset"; ls -lR "$tmpdir"; exit 1; }
+          mkdir -p "$HOME/suibase/workdirs/common/bin"
+          cp "$bin_path" "$HOME/suibase/workdirs/common/bin/suibase-daemon"
+          chmod +x "$HOME/suibase/workdirs/common/bin/suibase-daemon"
+          printf 'version: %s\nname: suibase-daemon\n' "$version" \
+            > "$HOME/suibase/workdirs/common/bin/suibase-daemon-version.yaml"
+
+      - name: Install the published localnet-tools precompiled (the artifact under test)
+        run: |
+          set -e
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/walrus-store/Cargo.toml)
+          tag="localnet-tools-v${version}"
+          echo "Validating $tag"
+          # localnet-tools does NOT gate staging-promote (only the daemon does), so on a
+          # release that bumped walrus-store the producer may still be building. Poll.
+          for i in $(seq 1 30); do
+            gh release view "$tag" --repo chainmovers/sui-binaries >/dev/null 2>&1 && break
+            if [ "$i" -eq 30 ]; then
+              echo "::error::$tag never published after ~15 min — build-localnet-tools.yml on sui-binaries may have failed."
+              exit 1
+            fi
+            echo "[$i/30] $tag not yet published; waiting 30s..."
+            sleep 30
+          done
+          tmpdir=$(mktemp -d)
+          gh release download "$tag" --repo chainmovers/sui-binaries --pattern '*ubuntu*' --dir "$tmpdir"
+          for f in "$tmpdir"/*.tgz "$tmpdir"/*.tar.gz; do [ -f "$f" ] && tar -xzf "$f" -C "$tmpdir"; done
+          bin_path=$(find "$tmpdir" -type f -name walrus-localnet-deploy | head -1)
+          [ -n "$bin_path" ] || { echo "::error::walrus-localnet-deploy not in $tag asset"; ls -lR "$tmpdir"; exit 1; }
+          cp "$bin_path" "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+          chmod +x "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+          printf 'version: "%s"\nbranch: "main"\norigin: "precompiled"\n' "$version" \
+            > "$HOME/suibase/workdirs/common/bin/localnet-tools-version.yaml"
+          # Host-compat smoke: the glibc-24.04 binary must run on this runner.
+          "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy" --help >/dev/null
+          echo "$tag installed + runs."
+
+      - name: Start localnet
+        run: ~/suibase/scripts/localnet start
+
+      - name: Enable walrus + regen — the PRECOMPILED binary deploys nodeless walrus
+        run: |
+          set -e
+          echo "walrus_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
+          ~/suibase/scripts/localnet regen
+          desc="$HOME/suibase/workdirs/localnet/config/walrus-localnet.yaml"
+          [ -f "$desc" ] || { echo "::error::descriptor not written — the precompiled localnet-tools deploy failed"; exit 1; }
+          # The deploy hook must have used the PRECOMPILED artifact, not a source build.
+          vf="$HOME/suibase/workdirs/common/bin/localnet-tools-version.yaml"
+          grep -q 'origin: "precompiled"' "$vf" || { echo "::error::localnet-tools was not the precompiled artifact"; cat "$vf"; exit 1; }
+          # Descriptor must point at the live localnet chain (proves a coherent deploy).
+          live=$(curl -fsS -m 5 -X POST http://localhost:9000 -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"sui_getChainIdentifier","params":[]}' \
+            | sed 's/.*"result":"//;s/".*//')
+          got=$(sed -n 's/^chain_id:[[:space:]]*//p' "$desc" | head -1)
+          echo "live chain_id=$live  descriptor chain_id=$got"
+          [ "$live" = "$got" ] || { echo "::error::descriptor chain_id ($got) != live localnet ($live)"; exit 1; }
+          echo "::notice::Precompiled localnet-tools deployed nodeless walrus on localnet — descriptor OK."
+          cat "$desc"
+
   open-main-pr:
-    needs: [detect-changes, validate]
+    needs: [detect-changes, validate, validate-localnet-tools]
     runs-on: ubuntu-latest
     # Run when:
     #   - validate succeeded (normal non-docs path), OR
@@ -225,7 +325,9 @@ jobs:
       always() &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (needs.validate.result == 'success' ||
-       (needs.validate.result == 'skipped' && needs.detect-changes.outputs.docs_only == 'true'))
+       (needs.validate.result == 'skipped' && needs.detect-changes.outputs.docs_only == 'true')) &&
+      (needs.validate-localnet-tools.result == 'success' ||
+       (needs.validate-localnet-tools.result == 'skipped' && needs.detect-changes.outputs.docs_only == 'true'))
     permissions:
       # `contents: write` is needed by `gh pr merge --auto` to enable
       # auto-merge on a branch-protected base (main). `pull-requests:
