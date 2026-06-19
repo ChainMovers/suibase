@@ -4,24 +4,35 @@ name: Pre-Staging Trigger
 #
 #   dev → pre-staging → staging → main
 #
-# `pre-staging` is the "we are committing to a release" branch. The only
-# job here is to make sure `chainmovers/sui-binaries` has a precompiled
-# binary that matches the suibase-daemon version recorded in this
-# branch's `rust/suibase/Cargo.toml`. If a matching release tag already
-# exists, this workflow is a no-op. If it doesn't, we push the
-# `Cargo.toml` over to `chainmovers/sui-binaries/triggers/suibase-daemon/`
-# — that path is wired to fire the daemon-binary build on that repo.
+# `pre-staging` is the "we are committing to a release" branch. For EACH
+# suibase-owned precompiled asset, this job makes sure
+# `chainmovers/sui-binaries` has a binary matching the version recorded in
+# THIS branch:
+#
+#   * suibase-daemon  ← rust/suibase/Cargo.toml
+#   * localnet-tools  ← rust/walrus-store/Cargo.toml
+#
+# For each asset: if a matching release tag already exists on sui-binaries
+# this is a no-op; otherwise we copy that asset's Cargo.toml into
+# `chainmovers/sui-binaries/triggers/<asset>/` — that path is wired to fire
+# the binary build on that repo. That build clones suibase at THIS branch
+# (`pre-staging`), so the published artifact is compiled from exactly the
+# promoted source, not a moving `dev`.
+#
+# EXACT same procedure for both assets — only the source Cargo.toml + asset
+# name differ (a matrix). The build internals on sui-binaries legitimately
+# differ (the daemon links musl; localnet-tools links glibc because its
+# RocksDB/jemalloc graph resists musl, matching how MystenLabs/sui ships) —
+# that is the producer's concern, not this trigger's.
 #
 # This workflow runs NO tests. By design. Tests belong on `dev` (which
-# builds the daemon from source and validates the branch's own code)
-# and on `staging` (which validates against the just-published
-# precompiled). Adding tests here would create alarm fatigue because
-# "waiting on sui-binaries" is a normal state in this branch — it is
-# NOT a bug signal.
+# builds from source and validates the branch's own code) and on `staging`
+# (which validates against the just-published precompiled). "Waiting on
+# sui-binaries" is a normal state in this branch, NOT a bug signal.
 #
 # Promotion from pre-staging to staging is handled by the cron poll in
-# staging-promote.yml, which fires every 15 min and opens an auto-merge
-# PR once the precompiled tag exists on sui-binaries.
+# staging-promote.yml, which fires every 15 min and opens an auto-merge PR
+# once the precompiled tag(s) exist on sui-binaries.
 
 on:
   push:
@@ -33,25 +44,40 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # One matrix entry per suibase-owned precompiled asset.
+    #   * max-parallel: 1 — the two assets push to the SAME repo
+    #     (chainmovers/sui-binaries); running sequentially avoids a
+    #     concurrent-push (non-fast-forward) race.
+    #   * fail-fast: false — a problem triggering one asset must not abort
+    #     the other's trigger.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - asset: "suibase-daemon"
+            cargo: "rust/suibase/Cargo.toml"
+          - asset: "localnet-tools"
+            cargo: "rust/walrus-store/Cargo.toml"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Read daemon version from Cargo.toml
+      - name: Read ${{ matrix.asset }} version from ${{ matrix.cargo }}
         id: ver
         run: |
           # awk for portability — the GNU sed `\+` regex used previously
           # is not supported by BSD sed and silently no-ops on macOS.
           version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' \
-            rust/suibase/Cargo.toml)
+            "${{ matrix.cargo }}")
           if [ -z "$version" ]; then
-            echo "::error::Could not parse daemon version from rust/suibase/Cargo.toml"
+            echo "::error::Could not parse ${{ matrix.asset }} version from ${{ matrix.cargo }}"
             exit 1
           fi
-          tag="suibase-daemon-v${version}"
+          tag="${{ matrix.asset }}-v${version}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag"         >> "$GITHUB_OUTPUT"
-          echo "pre-staging is at suibase-daemon v$version (expected sui-binaries tag: $tag)"
+          echo "pre-staging is at ${{ matrix.asset }} v$version (expected sui-binaries tag: $tag)"
 
       - name: Check if matching sui-binaries release tag already exists
         id: tag_check
@@ -71,18 +97,17 @@ jobs:
             echo "Tag ${{ steps.ver.outputs.tag }} NOT yet published — will push trigger."
           fi
 
-      - name: Push Cargo.toml to sui-binaries trigger path
-        # `dmnemec/copy_file_to_another_repo_action` is the same action
-        # suibase-daemon-tests.yml used to use (now removed there). It
-        # uses SUI_BINARIES_TOKEN to authenticate.
+      - name: Push ${{ matrix.asset }} Cargo.toml to sui-binaries trigger path
+        # `dmnemec/copy_file_to_another_repo_action` authenticates with
+        # SUI_BINARIES_TOKEN and commits the file into the destination repo.
         if: steps.tag_check.outputs.exists == 'false'
         uses: dmnemec/copy_file_to_another_repo_action@main
         env:
           API_TOKEN_GITHUB: ${{ secrets.SUI_BINARIES_TOKEN }}
         with:
-          source_file: "rust/suibase/Cargo.toml"
+          source_file: "${{ matrix.cargo }}"
           destination_repo: "chainmovers/sui-binaries"
-          destination_folder: "triggers/suibase-daemon"
+          destination_folder: "triggers/${{ matrix.asset }}"
           user_email: "4542410+mario4tier@users.noreply.github.com"
           user_name: "Mario Fortier"
           commit_message: "Build ${{ steps.ver.outputs.tag }}"
@@ -90,7 +115,7 @@ jobs:
       - name: Summary
         run: |
           if [ "${{ steps.tag_check.outputs.exists }}" = "true" ]; then
-            echo "::notice::Binary ${{ steps.ver.outputs.tag }} already published; staging-promote.yml will pick this up on its next cron tick."
+            echo "::notice::${{ matrix.asset }} ${{ steps.ver.outputs.tag }} already published; staging-promote.yml will pick this up on its next cron tick."
           else
-            echo "::notice::Trigger pushed to chainmovers/sui-binaries. Build typically takes a few minutes; staging-promote.yml polls every 15 min."
+            echo "::notice::${{ matrix.asset }} trigger pushed to chainmovers/sui-binaries. Build typically takes a few minutes; staging-promote.yml polls every 15 min."
           fi
