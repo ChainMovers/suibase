@@ -545,13 +545,27 @@ stop_walrus_relay_process() {
       count=$((count + 1))
     done
 
-    # Force kill if still running
+    # Force kill if still running (kill -0 is accurate for liveness).
     if kill -0 "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null; then
       echo "Force killing ${_WORKDIR_PREFIX}walrus-upload-relay process"
       kill -9 "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
     fi
 
-    unset WALRUS_RELAY_PROCESS_PID
+    # Settle the `ps` view before returning. Callers verify the stop with
+    # update_WALRUS_RELAY_PROCESS_PID_var (a `ps`-table scan), which lags kernel
+    # reaping after SIGKILL — so a caller's immediate re-check races on slow CI
+    # (macOS) runners and wrongly reports "process may still be running". Poll the
+    # SAME `ps` view here until it clears (re-SIGKILL'ing a stubborn survivor), so
+    # callers see a settled state. Leaves WALRUS_RELAY_PROCESS_PID empty when gone,
+    # or set if it truly never died (a real failure the caller should surface).
+    local _settle=0
+    update_WALRUS_RELAY_PROCESS_PID_var
+    while [ -n "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_settle" -lt 5 ]; do
+      kill -9 "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
+      sleep 1
+      _settle=$((_settle + 1))
+      update_WALRUS_RELAY_PROCESS_PID_var
+    done
   fi
 
   # Note: We don't cleanup the workdir-specific symlink as it's permanent
