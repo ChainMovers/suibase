@@ -4084,9 +4084,16 @@ stop_all_services() {
       fi
 
       stop_walrus_relay_process
-      update_WALRUS_RELAY_PROCESS_PID_var
 
-      # Check if successful.
+      # Verify it stopped. POLL (see stop_walrus_relay_service_only): `ps` can
+      # briefly still show a just-SIGKILL'd process (reap lag on slow macOS CI).
+      local _vr_count=0
+      update_WALRUS_RELAY_PROCESS_PID_var
+      while [ -n "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_vr_count" -lt 10 ]; do
+        sleep 1
+        _vr_count=$((_vr_count + 1))
+        update_WALRUS_RELAY_PROCESS_PID_var
+      done
       if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
         setup_error "Failed to stop walrus relay. Try again. Use \"$WORKDIR status\" to monitor the situation."
       fi
@@ -4145,8 +4152,17 @@ stop_walrus_relay_service_only() {
   # Stop the walrus relay process (this produces the expected output)
   stop_walrus_relay_process
 
-  # Verify it was stopped
+  # Verify it was stopped. POLL, don't single-check: a just-SIGKILL'd process can
+  # briefly still appear in `ps` (kernel-reap lag, esp. on slow macOS CI runners),
+  # so an immediate re-check intermittently reported "may still be running" and
+  # aborted the disable before its confirmation printed (flaky relay/yaml tests).
+  local _verify_count=0
   update_WALRUS_RELAY_PROCESS_PID_var
+  while [ -n "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_verify_count" -lt 10 ]; do
+    sleep 1
+    _verify_count=$((_verify_count + 1))
+    update_WALRUS_RELAY_PROCESS_PID_var
+  done
   if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
     setup_error "Failed to stop walrus relay process (PID $WALRUS_RELAY_PROCESS_PID). The process may still be running. Try 'testnet wal-relay disable' again."
   fi
