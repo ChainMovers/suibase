@@ -133,7 +133,7 @@ deploy_walrus_localnet() {
 
   # Deploy: publish + off-node N=1 committee stake + write config/descriptor.
   # Contracts are embedded in the binary (no --contracts path needed).
-  echo "Deploying nodeless localnet Walrus (this runs only on first enable / after regen)..."
+  echo "Deploying localnet Walrus..."
   mkdir -p "$_CONFIG_DEFAULT"
   if ! "$WALRUS_LOCALNET_SETUP_BIN" deploy \
     --rpc "$_RPC" \
