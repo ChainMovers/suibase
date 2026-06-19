@@ -1,0 +1,24 @@
+# Suibase localnet Walrus config (NODELESS).
+#
+# Unlike testnet/mainnet (which use well-known static object IDs), the localnet
+# Walrus deployment is ephemeral: the object IDs and the held committee key are
+# created fresh on every `localnet start`/`regen` by deploy_walrus_localnet()
+# (see scripts/common/__walrus-localnet-deploy.sh) and written back into this
+# file in workdirs/localnet/config-default/. The 0x0 values below are
+# placeholders for a not-yet-deployed workdir; do not rely on them.
+#
+# NO storage nodes run. Bytes are served from the filesystem; real Blob/Storage
+# objects + held-key certify happen on the localnet Sui. See
+# docs/dev/LOCALNET_WALRUS_PLAN.md.
+contexts:
+  localnet:
+    system_object: 0x0
+    staking_object: 0x0
+    exchange_objects:
+      - 0x0
+    wallet_config:
+      path: $HOME/suibase/workdirs/localnet/config/client.yaml
+      active_env: localnet
+    rpc_urls:
+      - http://localhost:9000
+default_context: localnet

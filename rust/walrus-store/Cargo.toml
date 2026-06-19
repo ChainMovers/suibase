@@ -1,0 +1,67 @@
+[package]
+name = "walrus-store"
+version = "0.0.2"
+edition = "2021"
+license = "Apache-2.0"
+description = "Workdir-aware Walrus client for Suibase: nodeless localnet mock + real walrus-sdk backend."
+homepage = "https://suibase.io"
+repository = "https://github.com/ChainMovers/suibase"
+
+# Dependencies on the Walrus crates are git-pinned to one reference commit so the
+# localnet contracts (published from the commit's `contracts/`, located via
+# `development_contract_dir()`) always match the `walrus-sui` API used here.
+# Keep this rev in sync with the Sui version Suibase localnet runs (currently
+# testnet-v1.73.1). See docs/dev/LOCALNET_WALRUS_PLAN.md (Q4).
+#
+# The whole feature is gated behind `localnet`/`mock` so the default build pulls
+# none of the heavy Walrus/Sui graph (WS7: nothing enclave-side depends on this).
+
+[features]
+default = []
+localnet = [
+  "dep:walrus-sui",
+  "dep:walrus-core",
+  "dep:sui-types",
+  "dep:suibase",
+  "dep:sha2",
+  "dep:tokio",
+  "dep:clap",
+  "dep:serde",
+  "dep:serde_yaml",
+  "dep:include_dir",
+]
+mock = ["localnet"]
+# The real testnet/mainnet backend: wraps the high-level walrus-sdk client. Pulls the
+# heavy walrus/Sui graph but NOT `suibase` — workdir paths are resolved by convention
+# so a downstream enclave linking the real backend does not pull the helper (WS7).
+real = ["dep:walrus-sdk", "dep:tokio"]
+
+[dependencies]
+walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"], optional = true }
+# The high-level Walrus client (testnet/mainnet). Same git rev as walrus-sui above so
+# the transitive walrus-core / walrus-sui / sui-types unify. Needs no extra features.
+walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", optional = true }
+walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", optional = true }
+# sui-types MUST use the IDENTICAL git+tag as walrus's workspace (testnet-v1.73.1)
+# so its ObjectID unifies with walrus-sui's transitive sui-types (a registry crate
+# or a different tag/rev would be a *distinct* ObjectID type -> compile error).
+sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.1", optional = true }
+# The lightweight (Sui-free) suibase discovery helper: workdir/keystore/address.
+suibase = { path = "../helper", optional = true }
+# Deterministic 32-byte root-hash for blob ids (no real erasure-coded slivers).
+sha2 = { version = "0.10", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+# Always-on (tiny): the public WalrusStore API returns anyhow::Result even in the
+# default build. NOT part of the heavy walrus/Sui graph (WS7).
+anyhow = "1"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_yaml = { version = "0.9", optional = true }
+# Embeds embedded-contracts/ into the binary so a precompiled artifact is
+# source-self-contained (no walrus checkout at runtime).
+include_dir = { version = "0.7", optional = true }
+
+[[bin]]
+name = "walrus-localnet-deploy"
+path = "src/bin/walrus_localnet_deploy.rs"
+required-features = ["localnet"]

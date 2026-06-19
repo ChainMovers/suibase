@@ -5,17 +5,6 @@
     "BASH_MAX_TIMEOUT_MS": "900000"
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "scripts/dev/manage-local-repos.sh"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
