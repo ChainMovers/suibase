@@ -112,6 +112,8 @@ jobs:
         run: |
           # SDK-surface round-trip via WalrusLocalClient + compat::WalrusApi, plus a quilt.
           cargo test --test localnet_roundtrip -- --nocapture
+          # Extensive byte-range read coverage (many ranges + all input-error cases).
+          cargo test --test localnet_byte_range -- --nocapture
           # Storage pools: create/store_pooled/read/pool_status/extend/grow/delete.
           cargo test --test localnet_pool -- --nocapture
           # Pool/standalone namespace coexistence (identical content, no aliasing).
