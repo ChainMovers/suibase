@@ -12009,6 +12009,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "walrus-local-sdk"
+version = "0.0.3"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_yaml 0.9.34+deprecated",
+ "sui-types 0.1.0 (git+https://github.com/MystenLabs/sui?tag=testnet-v1.73.1)",
+ "suibase",
+ "tokio",
+ "walrus-core",
+ "walrus-sdk",
+ "walrus-sui",
+]
+
+[[package]]
 name = "walrus-sdk"
 version = "1.51.0"
 source = "git+https://github.com/MystenLabs/walrus.git?rev=1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0#1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0"
@@ -12086,21 +12101,6 @@ dependencies = [
  "walrus-core",
  "walrus-utils",
  "x509-cert",
-]
-
-[[package]]
-name = "walrus-store"
-version = "0.0.3"
-dependencies = [
- "anyhow",
- "serde",
- "serde_yaml 0.9.34+deprecated",
- "sui-types 0.1.0 (git+https://github.com/MystenLabs/sui?tag=testnet-v1.73.1)",
- "suibase",
- "tokio",
- "walrus-core",
- "walrus-sdk",
- "walrus-sui",
 ]
 
 [[package]]

@@ -15,7 +15,7 @@
 # You must source __globals.sh before this file.
 
 # Resolve the suibase-owned setup binary that does publish + off-node stake +
-# config/descriptor writing (rust/walrus-store, built like the daemon on dev).
+# config/descriptor writing (rust/localnet-tools, built like the daemon on dev).
 # Falls back to the dev build location while the binary pipeline is not wired.
 update_WALRUS_LOCALNET_SETUP_BIN_var() {
   WALRUS_LOCALNET_SETUP_BIN=""
@@ -39,7 +39,7 @@ export -f update_WALRUS_LOCALNET_SETUP_BIN_var
 # binary) from chainmovers/sui-binaries (app "localnet_tools" defined in
 # scripts/defaults/consts.yaml). localnet + walrus_local_enabled only. Best-effort + non-fatal:
 # a missing/not-yet-published asset or offline state must never abort 'localnet start';
-# the deploy then falls back to a local dev build of rust/walrus-store. The install runs
+# the deploy then falls back to a local dev build of rust/localnet-tools. The install runs
 # in a subshell so that even a hard error inside the app machinery cannot terminate the caller.
 update_localnet_tools_bin() {
   local _WORKDIR="${1:-$WORKDIR}"
@@ -118,7 +118,7 @@ deploy_walrus_localnet() {
   local _DESCRIPTOR="$_CONFIG_DEFAULT/walrus-localnet.yaml"
 
   # Ensure the precompiled setup binary is present (fetched from
-  # chainmovers/sui-binaries on localnet; a dev build of rust/walrus-store also
+  # chainmovers/sui-binaries on localnet; a dev build of rust/localnet-tools also
   # works). Non-fatal: a missing binary just means "no localnet Walrus this run".
   update_localnet_tools_bin "$_WORKDIR"
   if ! update_WALRUS_LOCALNET_SETUP_BIN_var; then

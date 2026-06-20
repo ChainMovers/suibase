@@ -9,7 +9,7 @@
 # walrus_local_enabled=true. The suibase-daemon is NOT involved.
 #
 # It is a glibc binary shipped in the 'localnet-tools' asset (alongside
-# walrus-localnet-deploy); on dev it is source-built from rust/walrus-store.
+# walrus-localnet-deploy); on dev it is source-built from rust/localnet-tools.
 # See docs/dev/SB_LOCAL_PLAN.md.
 
 # Resolve the sb-local binary (precompiled in workdirs/common/bin, or a dev build).

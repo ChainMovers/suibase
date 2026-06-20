@@ -44,7 +44,7 @@ use serde_json::json;
 use sui_types::base_types::SuiAddress;
 use walrus_sui::client::PostStoreAction;
 
-use walrus_store::localnet::{LocalnetMockStore, StoredBlob};
+use walrus_local_sdk::localnet::{LocalnetMockStore, StoredBlob};
 
 mod wire;
 use wire::{BlobStoreResult, RegisterBlobOp};

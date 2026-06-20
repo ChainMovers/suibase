@@ -1,7 +1,8 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Localnet nodeless mock for [`crate::WalrusStore`] (behind the `localnet` feature).
+//! Nodeless localnet mock engine — the lower-level store that [`crate::WalrusLocalClient`]
+//! (the drop-in `walrus_sdk` mirror) wraps, and that the `sb-local` HTTP facade builds on.
 //!
 //! Creates real `Blob`/`Storage` objects on the Suibase localnet Sui via PTBs +
 //! off-node held-key `certify_blob`, with bytes served from the filesystem. There
@@ -582,6 +583,26 @@ impl LocalnetMockStore {
         Ok((blob_id, bytes))
     }
 
+    /// The committee shard count (the encoder's only network input). Exposed for the
+    /// SDK-mirror layer ([`crate::WalrusLocalClient`]) so it can build quilts.
+    pub async fn n_shards(&self) -> Result<NonZeroU16> {
+        self.client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")
+    }
+
+    /// Fetch the on-chain `Blob` (+ optional attribute) for an object id — mirrors
+    /// `walrus_sdk::node_client::WalrusNodeClient::get_blob_by_object_id`.
+    pub async fn get_blob_by_object_id(&self, object_id: &ObjectID) -> Result<BlobWithAttribute> {
+        self.client
+            .read_client()
+            .get_blob_by_object_id(object_id)
+            .await
+            .with_context(|| format!("fetching Blob object {object_id}"))
+    }
+
     // ----- stat ------------------------------------------------------------
 
     /// Metadata for a stored blob: object id + size from the sidecar, and the live
@@ -862,20 +883,31 @@ impl LocalnetMockStore {
             blobs.push(blob);
         }
 
-        // The quilt encoder needs the committee shard count (same as plain blobs).
-        let n_shards = self
-            .client
-            .read_client()
-            .n_shards()
-            .await
-            .context("reading n_shards")?;
+        let quilt = self.construct_quilt_v1(&blobs).await?;
+        self.store_quilt_v1(quilt, epochs, post_store).await
+    }
+
+    /// Pack `blobs` into a `QuiltV1` (pure compute — no chain, beyond the one-time
+    /// n_shards read the encoder needs). The mirror's `quilt_client().construct_quilt`
+    /// delegates here so the SDK two-step (`construct_quilt` then
+    /// `reserve_and_store_quilt`) has the same construction path as [`Self::store_quilt`].
+    pub async fn construct_quilt_v1(&self, blobs: &[QuiltStoreBlob<'_>]) -> Result<QuiltV1> {
+        let n_shards = self.n_shards().await?;
         let config = EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE);
-
-        // Pure-compute pack: blobs -> one quilt blob + embedded index.
-        let quilt = QuiltConfigV1::get_encoder(config, &blobs)
+        QuiltConfigV1::get_encoder(config, blobs)
             .construct_quilt()
-            .map_err(|e| anyhow!("constructing quilt: {e}"))?;
+            .map_err(|e| anyhow!("constructing quilt: {e}"))
+    }
 
+    /// Store an already-constructed `QuiltV1`: its packed bytes go through the normal
+    /// [`Self::store_blob`] path (M0 => the packed blob id IS the quilt id), and the
+    /// per-patch ids are read off the embedded index.
+    pub async fn store_quilt_v1(
+        &self,
+        quilt: QuiltV1,
+        epochs: u32,
+        post_store: PostStoreAction,
+    ) -> Result<StoredQuilt> {
         // Snapshot the index (identifier + internal patch id + range + tags) BEFORE
         // consuming the quilt into its packed bytes.
         let index = quilt

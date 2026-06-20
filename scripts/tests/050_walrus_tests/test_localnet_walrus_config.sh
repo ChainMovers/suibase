@@ -172,24 +172,26 @@ check "consts.yaml: localnet_tools_bin_names still includes walrus-localnet-depl
     grep -qE '^localnet_tools_bin_names:.*walrus-localnet-deploy' "$CONSTS"
 check "generic rust builder iterates bin_names (no hardcoded single --bin)" \
     bash -c "! grep -qE 'CARGO_ARGS=\(--release --features localnet --bin walrus-localnet-deploy\)' '$APPS'"
-# The bins crate enables walrus-store's localnet feature via its dependency, so the
-# builder must NOT pass --features for localnet-tools.
+# localnet-tools is a single localnet-only crate (no cargo features), so the builder
+# must NOT pass --features for it.
 check "generic rust builder uses --release (no --features) for localnet-tools" \
     bash -c "grep -A8 'localnet-tools)' '$APPS' | grep -qE '_CARGO_ARGS=\(--release\)'"
 
-# Crate layout: the BINS live in rust/localnet-tools; walrus-store is a thin lib (no bins).
+# Crate layout: the BINS live in rust/localnet-tools; walrus-local-sdk is the library
+# (the localnet-only, drop-in mirror of the Mysten Walrus SDK) — no bins.
 BINS_CARGO="$SUIBASE_DIR/rust/localnet-tools/Cargo.toml"
-LIB_CARGO="$SUIBASE_DIR/rust/walrus-store/Cargo.toml"
+LIB_CARGO="$SUIBASE_DIR/rust/walrus-local-sdk/Cargo.toml"
 check "rust/localnet-tools/Cargo.toml exists (bins crate)" test -f "$BINS_CARGO"
 check "localnet-tools declares the sb-local [[bin]]" grep -qE '^name = "sb-local"' "$BINS_CARGO"
 check "localnet-tools declares the walrus-localnet-deploy [[bin]]" \
     grep -qE '^name = "walrus-localnet-deploy"' "$BINS_CARGO"
-check "localnet-tools depends on walrus-store with the localnet feature" \
-    bash -c "grep -q 'walrus-store = {.*features = \\[\"localnet\"\\]' '$BINS_CARGO'"
-check "walrus-store is lib-only (no [[bin]] sections)" \
+check "localnet-tools depends on the walrus-local-sdk path crate" \
+    bash -c "grep -qE 'walrus-local-sdk = \\{.*path = \"\\.\\./walrus-local-sdk\"' '$BINS_CARGO'"
+check "rust/walrus-local-sdk/Cargo.toml exists (library crate)" test -f "$LIB_CARGO"
+check "walrus-local-sdk is lib-only (no [[bin]] sections)" \
     bash -c "! grep -qE '^\\[\\[bin\\]\\]' '$LIB_CARGO'"
-check "walrus-store no longer pulls bin-only deps (axum/clap) in its localnet feature" \
-    bash -c "! grep -qE 'dep:axum|dep:clap' '$LIB_CARGO'"
+check "walrus-local-sdk depends on walrus-sdk (it mirrors the SDK's types)" \
+    bash -c "grep -qE '^walrus-sdk = ' '$LIB_CARGO'"
 
 # 9. The live HTTP round-trip test exists (destructive; self-skips when sb-local is down).
 SBHTTP="$SCRIPTS/tests/050_walrus_tests/test_sb_local_http.sh"

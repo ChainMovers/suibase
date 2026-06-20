@@ -1,16 +1,17 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Nodeless WalrusStore storage-pool lifecycle against a LIVE suibase localnet with
-//! a Walrus deployment: create_pool -> store_pooled (off-node held-key certify into
-//! the pool) -> read -> pool_status -> extend_pool -> grow_pool -> delete_pooled.
+//! Nodeless storage-pool lifecycle against a LIVE suibase localnet with a Walrus
+//! deployment: create_pool -> store_pooled (off-node held-key certify into the pool)
+//! -> read -> pool_status -> extend_pool -> grow_pool -> delete_pooled.
+//!
+//! Storage pools are a localnet-engine feature (not part of the walrus_sdk high-level
+//! WalrusNodeClient surface the mirror tracks), so this drives the engine directly.
 //!
 //! Gated by `WALRUS_LOCALNET_TEST=1` exactly like `localnet_roundtrip.rs`, so the
 //! default `cargo test` (no running localnet) skips it cleanly.
 
-#![cfg(feature = "localnet")]
-
-use walrus_store::WalrusStore;
+use walrus_local_sdk::localnet::LocalnetMockStore;
 
 #[tokio::test]
 async fn localnet_pool_lifecycle() -> anyhow::Result<()> {
@@ -21,7 +22,7 @@ async fn localnet_pool_lifecycle() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let store = WalrusStore::for_workdir("localnet").await?;
+    let store = LocalnetMockStore::open().await?;
 
     // Two DIFFERENT payloads of EQUAL length (so their encoded sizes match and the
     // pool can be sized deterministically), unique per run to avoid blob-id reuse.

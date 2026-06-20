@@ -20,7 +20,7 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
-use walrus_store::localnet::{LocalnetMockStore, QuiltInput, QuiltPatchData};
+use walrus_local_sdk::localnet::{LocalnetMockStore, QuiltInput, QuiltPatchData};
 
 use crate::wire::{QuiltPatchItem, QuiltStoreResult, StoredQuiltPatch};
 use crate::{bad_request, blob_store_result, internal_error, not_found, resolve_post_store, serve_bytes, PublisherQuery};
