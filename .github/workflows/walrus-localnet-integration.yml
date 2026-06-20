@@ -97,6 +97,14 @@ jobs:
         run: |
           cargo test --lib -- --nocapture
 
+      - name: Compile-gate the testnet parity harness (no funds needed)
+        working-directory: rust/walrus-local-sdk
+        run: |
+          # The fund-gated testnet_parity test never RUNS in CI, but compiling it proves the
+          # mirror's compat::WalrusApi forwarding still matches the REAL walrus_sdk
+          # WalrusNodeClient surface — catching signature/type drift without a funded wallet.
+          cargo test --no-run --test testnet_parity
+
       - name: Enable walrus + regen (runs the nodeless deploy + starts sb-local)
         run: |
           echo "walrus_local_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"

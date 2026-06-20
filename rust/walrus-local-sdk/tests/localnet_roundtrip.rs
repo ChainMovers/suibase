@@ -13,10 +13,14 @@
 
 mod common;
 
+use std::str::FromStr;
+
 use walrus_core::encoding::Primary;
-use walrus_core::{BlobId, EncodingType};
 use walrus_core::encoding::quilt_encoding::{QuiltStoreBlob, QuiltVersionV1};
+use walrus_core::{BlobId, EncodingType, QuiltPatchId};
 use walrus_local_sdk::WalrusLocalClient;
+use walrus_sdk::node_client::responses::BlobStoreResult;
+use walrus_sdk::node_client::store_args::StoreArgs;
 
 #[tokio::test]
 async fn localnet_roundtrip() -> anyhow::Result<()> {
@@ -45,6 +49,40 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
         "read should fail after delete (bytes removed)"
     );
 
+    // --- extra mirror-surface coverage on FRESH blobs (the parity body deleted its own) ---
+    let args = StoreArgs::default_with_epochs(5);
+    let p1 = format!("mirror-extras-one-{nonce}").into_bytes();
+    let p2 = format!("mirror-extras-two-{nonce}").into_bytes();
+    let p3 = format!("mirror-extras-three-{nonce}").into_bytes();
+
+    // multi-blob store: 3 inputs -> 3 results, in order, each NewlyCreated.
+    let multi = client
+        .reserve_and_store_blobs(vec![p1.clone(), p2.clone(), p3.clone()], &args)
+        .await?;
+    assert_eq!(multi.len(), 3, "3 inputs -> 3 BlobStoreResults (in order)");
+    assert!(
+        multi.iter().all(|r| matches!(r, BlobStoreResult::NewlyCreated { .. })),
+        "each fresh multi-store result should be NewlyCreated"
+    );
+    let id1 = multi[0].blob_id().expect("result 0 has a blob id");
+
+    // generic read success (turbofish) — proves U is accepted and the bytes round-trip.
+    assert_eq!(client.read_blob::<Primary>(&id1).await?, p1, "generic read != stored");
+
+    // get_blob_by_object_id: recover the on-chain Blob object id from NewlyCreated and
+    // map it back to the same content id.
+    let BlobStoreResult::NewlyCreated { blob_object, .. } = &multi[0] else {
+        anyhow::bail!("expected NewlyCreated for a fresh store");
+    };
+    let bwa = client.get_blob_by_object_id(&blob_object.id).await?;
+    assert_eq!(bwa.blob.blob_id, id1, "get_blob_by_object_id mapped to a different blob id");
+    eprintln!("multi-store + get_blob_by_object_id + generic read: OK");
+
+    // clean up the extras.
+    for r in &multi {
+        let _ = client.delete_owned_blob(&r.blob_id().unwrap()).await?;
+    }
+
     // Quilt round-trip through the mirror's sub-client (V1).
     let qc = client.quilt_client();
     let blobs = vec![
@@ -53,8 +91,7 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
         QuiltStoreBlob::new_owned(format!("beta-{nonce}").into_bytes(), "beta")?,
     ];
     let quilt = qc.construct_quilt::<QuiltVersionV1>(&blobs, EncodingType::RS2).await?;
-    let store_args = walrus_sdk::node_client::store_args::StoreArgs::default_with_epochs(5);
-    let qres = qc.reserve_and_store_quilt::<QuiltVersionV1>(quilt, &store_args).await?;
+    let qres = qc.reserve_and_store_quilt::<QuiltVersionV1>(quilt, &args).await?;
     let quilt_id = qres
         .blob_store_result
         .blob_id()
@@ -68,6 +105,22 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
     assert_eq!(by_ident[0].data(), b"alpha-bytes");
     let all = qc.get_all_blobs(&quilt_id).await?;
     assert_eq!(all.len(), 2, "get_all_blobs should return both patches");
+
+    // Read by public QuiltPatchId (get_blobs_by_ids) — round-trips a stored patch id.
+    let qpid = QuiltPatchId::from_str(&qres.stored_quilt_blobs[0].quilt_patch_id)?;
+    let by_id = qc.get_blobs_by_ids(&[qpid]).await?;
+    assert_eq!(by_id.len(), 1, "get_blobs_by_ids should return one patch");
+    assert_eq!(
+        by_id[0].identifier(),
+        qres.stored_quilt_blobs[0].identifier,
+        "get_blobs_by_ids returned a different patch than its id"
+    );
+
+    // Read by tag (get_blobs_by_tag) — only "alpha" carries kind=a.
+    let tagged = qc.get_blobs_by_tag(&quilt_id, "kind", "a").await?;
+    assert_eq!(tagged.len(), 1, "exactly one patch is tagged kind=a");
+    assert_eq!(tagged[0].data(), b"alpha-bytes");
+    eprintln!("quilt reads (by-id, by-tag) + multi-store: OK");
 
     eprintln!("localnet mirror round-trip + quilt: PASS");
     Ok(())

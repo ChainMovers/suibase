@@ -223,13 +223,24 @@ impl WalrusLocalClient {
     /// encoding axis `U` is irrelevant on localnet (bytes are served whole from the
     /// filesystem, not reconstructed from slivers), so it is accepted and ignored.
     pub async fn read_blob<U: EncodingAxis>(&self, blob_id: &BlobId) -> ClientResult<Vec<u8>> {
-        self.engine.read(&blob_id.to_string()).await.map_err(cerr)
+        self.read_bytes(blob_id).await
     }
 
     /// Non-generic convenience read (no turbofish). Equivalent to
     /// `read_blob::<walrus_core::encoding::Primary>`.
     pub async fn read_blob_primary(&self, blob_id: &BlobId) -> ClientResult<Vec<u8>> {
-        self.engine.read(&blob_id.to_string()).await.map_err(cerr)
+        self.read_bytes(blob_id).await
+    }
+
+    /// Shared read path. A missing blob surfaces the SDK's `BlobIdDoesNotExist` kind
+    /// (matching `walrus_sdk`'s `read_blob`, which returns `ClientErrorKind::BlobIdDoesNotExist`
+    /// for an unknown id) rather than a generic `Other` — so error-matching callers are drop-in.
+    async fn read_bytes(&self, blob_id: &BlobId) -> ClientResult<Vec<u8>> {
+        let id = blob_id.to_string();
+        if !self.engine.has_blob(&id) {
+            return Err(ClientError::from(ClientErrorKind::BlobIdDoesNotExist));
+        }
+        self.engine.read(&id).await.map_err(cerr)
     }
 
     // ----- delete (mirrors WalrusNodeClient::delete_owned_blob) -------------
@@ -380,6 +391,35 @@ impl LocalQuiltClient<'_> {
                 .await
                 .map_err(cerr)?;
             out.push(patch_to_quilt_blob(patch)?);
+        }
+        Ok(out)
+    }
+
+    /// Read patches whose tags contain `target_tag == target_value`. Mirrors
+    /// `QuiltClient::get_blobs_by_tag` (the localnet engine retains the per-patch tags
+    /// in the quilt index).
+    pub async fn get_blobs_by_tag(
+        &self,
+        quilt_id: &BlobId,
+        target_tag: &str,
+        target_value: &str,
+    ) -> ClientResult<Vec<QuiltStoreBlob<'static>>> {
+        let quilt_id = quilt_id.to_string();
+        let patches = self
+            .engine
+            .list_quilt_patches(&quilt_id)
+            .await
+            .map_err(cerr)?;
+        let mut out = Vec::new();
+        for p in patches {
+            if p.tags.get(target_tag).map(String::as_str) == Some(target_value) {
+                let patch = self
+                    .engine
+                    .read_quilt_blob(&quilt_id, &p.identifier)
+                    .await
+                    .map_err(cerr)?;
+                out.push(patch_to_quilt_blob(patch)?);
+            }
         }
         Ok(out)
     }
@@ -582,5 +622,19 @@ mod byte_range_tests {
         let bytes: Vec<u8> = vec![];
         let e = slice_byte_range(&bytes, 0, 1).unwrap_err();
         assert_eq!(input_err_msg(e), "byte range out of bounds: requested 0-1, blob size is 0");
+    }
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::WalrusLocalClient;
+
+    #[tokio::test]
+    async fn for_workdir_rejects_non_localnet() {
+        // The guard rejects any non-localnet name BEFORE opening anything, so this is a
+        // pure check that needs no live localnet (runs in the always-on `cargo test --lib`).
+        assert!(WalrusLocalClient::for_workdir("testnet").await.is_err());
+        assert!(WalrusLocalClient::for_workdir("mainnet").await.is_err());
+        assert!(WalrusLocalClient::for_workdir("bogus").await.is_err());
     }
 }

@@ -10,6 +10,7 @@
 //! trait surface so it is genuinely identical across backends.
 
 use walrus_local_sdk::compat::WalrusApi;
+use walrus_sdk::node_client::responses::BlobStoreResult;
 use walrus_sdk::node_client::store_args::StoreArgs;
 
 /// store -> read -> dedup(re-store) -> delete, using only the shared trait surface.
@@ -22,6 +23,13 @@ pub async fn parity_roundtrip<C: WalrusApi>(client: &C, payload: &[u8]) -> anyho
         .reserve_and_store_blobs(vec![payload.to_vec()], &args)
         .await?;
     assert_eq!(results.len(), 1, "one input -> one BlobStoreResult");
+    // Unique (nonce'd) payload -> a fresh blob, so the first store is NewlyCreated on
+    // BOTH backends (drop-in: the SDK variant, not just the id, matches).
+    assert!(
+        matches!(results[0], BlobStoreResult::NewlyCreated { .. }),
+        "first store of fresh content should be NewlyCreated, got {:?}",
+        results[0]
+    );
     let blob_id = results[0]
         .blob_id()
         .ok_or_else(|| anyhow::anyhow!("store result carried no blob id: {:?}", results[0]))?;
@@ -67,7 +75,14 @@ pub async fn parity_roundtrip<C: WalrusApi>(client: &C, payload: &[u8]) -> anyho
         Some(blob_id),
         "re-store of identical content must dedup to the same blob id"
     );
-    eprintln!("dedup OK");
+    // The just-stored, certified, unexpired blob dedups to AlreadyCertified on BOTH
+    // backends (not NewlyCreated) — the wire-faithful variant a drop-in caller sees.
+    assert!(
+        matches!(results2[0], BlobStoreResult::AlreadyCertified { .. }),
+        "re-store should dedup to AlreadyCertified, got {:?}",
+        results2[0]
+    );
+    eprintln!("dedup OK (AlreadyCertified)");
 
     // delete (count >= 1 since we just stored it)
     let removed = client.delete_owned_blob(&blob_id).await?;
