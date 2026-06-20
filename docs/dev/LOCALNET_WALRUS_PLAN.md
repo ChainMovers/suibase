@@ -5,7 +5,7 @@
 
 **Milestone progress (2026-06-18):**
 - ✅ **M0** Gate-0 spike — PASS (off-node certify verifies, extend works, regen-survives).
-- ✅ **M1** Nodeless deploy (Layer A) — `walrus_enabled` flag (default **off**, no auto-deploy),
+- ✅ **M1** Nodeless deploy (Layer A) — `walrus_local_enabled` flag (default **off**, no auto-deploy),
   `walrus-localnet-deploy` bin (embeds vendored contracts), regen hook, static config test.
 - ✅ **M2** `WalrusStore` mock store/read/stat/extend/delete — content dedup, write-bytes-before-
   certify, off-node held-key certify. 6 unit tests + gated live round-trip + heavy CI workflow.

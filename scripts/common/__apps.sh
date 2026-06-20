@@ -1312,7 +1312,10 @@ sb_app_rust_build_and_install_generic() {
   get_app_var "$self" "src_path"
   local _SRC_PATH=$APP_VAR
   get_app_var "$self" "bin_names"
-  local _BIN_NAME=$APP_VAR
+  local _BIN_NAMES_STRING=$APP_VAR
+  local OLD_IFS="$IFS"
+  IFS=',' read -r -a _BIN_NAMES <<<"${_BIN_NAMES_STRING}"
+  IFS="$OLD_IFS"
 
   exit_if_rust_build_deps_missing
 
@@ -1329,8 +1332,16 @@ sb_app_rust_build_and_install_generic() {
   local _CARGO_ARGS=()
   case "$_ASSETS_NAME" in
   localnet-tools)
+    # One cargo invocation builds every binary in bin_names (today:
+    # walrus-localnet-deploy + sb-local) from the rust/localnet-tools bins crate. That
+    # crate enables walrus-store's `localnet` feature via its own dependency, so there
+    # is no --features flag here.
     _PROFILE="release"
-    _CARGO_ARGS=(--release --features localnet --bin walrus-localnet-deploy)
+    _CARGO_ARGS=(--release)
+    local _b
+    for _b in "${_BIN_NAMES[@]}"; do
+      _CARGO_ARGS+=(--bin "$_b")
+    done
     ;;
   *)
     setup_error "No source-build recipe for asset '$_ASSETS_NAME'"
@@ -1338,18 +1349,24 @@ sb_app_rust_build_and_install_generic() {
   esac
 
   echo "Building $_ASSETS_NAME from source ($_SRC_PATH)..."
-  if ! (cd "$_BUILD_DIR" && cargo build "${_CARGO_ARGS[@]}" >>"$SUIBASE_LOGS_DIR/cargo-build.log" 2>&1); then
+  # Stream cargo's "Compiling ..." progress to the terminal AND the log: the heavy
+  # localnet graph takes minutes, and a fully-silent build reads as a hang. pipefail
+  # keeps the build's exit status (not tee's) so a real failure still aborts.
+  if ! (cd "$_BUILD_DIR" && set -o pipefail && cargo build "${_CARGO_ARGS[@]}" 2>&1 | tee -a "$SUIBASE_LOGS_DIR/cargo-build.log"); then
     setup_error "Failed to build $_ASSETS_NAME (see $SUIBASE_LOGS_DIR/cargo-build.log)"
   fi
 
-  local _SRC="$_BUILD_DIR/target/$_PROFILE/$_BIN_NAME"
-  if [ ! -f "$_SRC" ]; then
-    setup_error "Build of $_ASSETS_NAME produced no binary at $_SRC"
-  fi
-
-  # Install into the common bin dir (install_type=user).
+  # Install every built binary into the common bin dir (install_type=user).
   mkdir -p "$SUIBASE_BIN_DIR"
-  \cp -f "$_SRC" "$SUIBASE_BIN_DIR/$_BIN_NAME"
+  local _SRC
+  for _b in "${_BIN_NAMES[@]}"; do
+    _SRC="$_BUILD_DIR/target/$_PROFILE/$_b"
+    if [ ! -f "$_SRC" ]; then
+      setup_error "Build of $_ASSETS_NAME produced no binary at $_SRC"
+    fi
+    \cp -f "$_SRC" "$SUIBASE_BIN_DIR/$_b"
+    echo "Installed $_b -> $SUIBASE_BIN_DIR/$_b (built from source)"
+  done
 
   # Version file: lets the app system skip rebuilding when source is unchanged
   # (mirrors the daemon's <asset>-version.yaml). Version comes from the crate.
@@ -1362,8 +1379,6 @@ sb_app_rust_build_and_install_generic() {
     [ -n "${_REPO_BRANCH}" ] && echo "branch: \"${_REPO_BRANCH}\""
     echo "origin: \"built\""
   } >"$SUIBASE_BIN_DIR/${_ASSETS_NAME}-version.yaml"
-
-  echo "Installed $_BIN_NAME -> $SUIBASE_BIN_DIR/$_BIN_NAME (built from source)"
 }
 export -f sb_app_rust_build_and_install_generic
 

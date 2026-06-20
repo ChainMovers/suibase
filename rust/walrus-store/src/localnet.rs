@@ -6,8 +6,10 @@
 //! Creates real `Blob`/`Storage` objects on the Suibase localnet Sui via PTBs +
 //! off-node held-key `certify_blob`, with bytes served from the filesystem. There
 //! are NO storage nodes: the bytes are written to disk keyed by the blob id, the
-//! Merkle root is a deterministic stand-in (sha256 of the content), and the
-//! confirmation certificate is built off-node from the held N=1 committee BLS key.
+//! blob id + Merkle root are computed by walrus-core's REAL encoder (so a localnet
+//! blob id is bit-identical to what testnet/mainnet mint for the same content —
+//! pure local compute, no slivers retained), and the confirmation certificate is
+//! built off-node from the held N=1 committee BLS key.
 //!
 //! Discovery:
 //!   - the deploy-written descriptor `<workdir>/config/walrus-localnet.yaml`
@@ -27,7 +29,8 @@
 //! `read`/`stat`/`extend`/`delete`.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
+    num::NonZeroU16,
     path::{Path, PathBuf},
     str::FromStr,
     time::Duration,
@@ -35,15 +38,20 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
-use sha2::{Digest as _, Sha256};
 use sui_types::base_types::ObjectID;
 
 use walrus_core::{
-    encoding::{EncodingConfig, EncodingFactory},
+    encoding::{
+        quilt_encoding::{
+            QuiltApi, QuiltConfigApi, QuiltConfigV1, QuiltEncoderApi, QuiltPatchInternalIdApi,
+            QuiltStoreBlob, QuiltV1,
+        },
+        EncodingConfig, EncodingFactory,
+    },
     keys::ProtocolKeyPair,
-    merkle::Node as MerkleNode,
     messages::{BlobPersistenceType, Confirmation, ConfirmationCertificate},
-    BlobId, EncodingType, Epoch,
+    metadata::QuiltPatchInternalIdV1,
+    BlobId, EncodingType, Epoch, QuiltPatchId,
 };
 use walrus_sui::{
     client::{
@@ -51,7 +59,7 @@ use walrus_sui::{
         ReadClient, SuiContractClient,
     },
     config::load_wallet_context_from_path,
-    types::move_structs::BlobWithAttribute,
+    types::move_structs::{Blob, BlobWithAttribute},
 };
 
 use crate::{BlobHandle, BlobMeta, PoolHandle, PoolStatus};
@@ -63,6 +71,14 @@ const ENCODING_TYPE: EncodingType = EncodingType::RS2;
 /// The default `active_env` is `localnet_proxy` (port 44340); we must talk to the
 /// direct node so dry-run/simulate + object reads work without the proxy.
 const LOCALNET_DIRECT_RPC: &str = "http://localhost:9000";
+
+/// Max attempts to construct the contract client when opening the store. Right after
+/// `localnet start`/`regen` the node answers chain-id but can briefly 404 the
+/// just-(re)loaded System object (localnet read-after-write lag — the same lag the
+/// deploy bin polls around). Retry rather than fail the (long-running) server's startup.
+const CONNECT_MAX_ATTEMPTS: u32 = 20;
+/// Seconds between connect attempts (≈ CONNECT_MAX_ATTEMPTS × this, total budget).
+const CONNECT_RETRY_SECS: u64 = 2;
 
 /// 1 SUI in MIST.
 const ONE_SUI_MIST: u64 = 1_000_000_000;
@@ -147,6 +163,76 @@ struct BlobSidecar {
 }
 
 // ---------------------------------------------------------------------------
+// Publisher-grade store result (consumed by the sb-local HTTP facade)
+// ---------------------------------------------------------------------------
+
+/// Rich result of [`LocalnetMockStore::store_blob`]: the on-chain [`Blob`] move
+/// struct plus the context the HTTP publisher needs to build a wire-faithful
+/// `BlobStoreResult` (`newlyCreated` vs `alreadyCertified`, the encoded length and
+/// epochs for `resourceOperation`, and any shared-object id from a `share=true` PUT).
+pub struct StoredBlob {
+    /// The on-chain `Blob` (with `certified_epoch` set). Serializes camelCase exactly
+    /// like the real publisher's `blobObject`.
+    pub blob: Blob,
+    /// `true` if this store minted a new certified `Blob`; `false` if it deduped to an
+    /// already-certified, unexpired `Blob` (-> wire `alreadyCertified`).
+    pub newly_created: bool,
+    /// Encoded (erasure-coded) length in bytes (-> `RegisterFromScratch.encodedLength`).
+    pub encoded_length: u64,
+    /// Epochs purchased (-> `RegisterFromScratch.epochsAhead`).
+    pub epochs: u32,
+    /// For a `share=true` PUT (PostStoreAction::Share), the created `SharedBlob` id.
+    pub shared_object_id: Option<ObjectID>,
+}
+
+// ---------------------------------------------------------------------------
+// Quilt I/O types (M5) — consumed by the sb-local quilt HTTP facade
+// ---------------------------------------------------------------------------
+
+/// One input patch for [`LocalnetMockStore::store_quilt`]: a named blob (+ optional
+/// tags) to pack into the quilt.
+#[derive(Debug, Clone)]
+pub struct QuiltInput {
+    /// Patch identifier (alphanumeric + `_`/`-`/`.`); used to locate the patch later.
+    pub identifier: String,
+    /// The patch bytes.
+    pub data: Vec<u8>,
+    /// Optional key/value tags stored in the quilt index for this patch.
+    pub tags: BTreeMap<String, String>,
+}
+
+/// Result of [`LocalnetMockStore::store_quilt`]: the underlying packed-quilt `Blob`
+/// (for the wire `blobStoreResult`) + the `quilt_id` + per-patch ids.
+pub struct StoredQuilt {
+    /// The single on-chain `Blob` holding the packed quilt (its id IS the `quilt_id`).
+    pub stored: StoredBlob,
+    /// Canonical quilt id (= the packed blob's id) as a string.
+    pub quilt_id: String,
+    /// Per-input-patch ids + ranges, in quilt index order.
+    pub patches: Vec<QuiltPatchInfo>,
+}
+
+/// A patch entry: its identifier, the public `QuiltPatchId` string, the sliver range,
+/// and its tags.
+#[derive(Debug, Clone)]
+pub struct QuiltPatchInfo {
+    pub identifier: String,
+    /// Public `QuiltPatchId` (URL-safe base64 of quilt_id ++ internal patch id).
+    pub quilt_patch_id: String,
+    pub start_index: u16,
+    pub end_index: u16,
+    pub tags: BTreeMap<String, String>,
+}
+
+/// Bytes + metadata of a single patch read back from a quilt.
+#[derive(Debug, Clone)]
+pub struct QuiltPatchData {
+    pub identifier: String,
+    pub data: Vec<u8>,
+    pub tags: BTreeMap<String, String>,
+}
+
+// ---------------------------------------------------------------------------
 // The store
 // ---------------------------------------------------------------------------
 
@@ -221,8 +307,6 @@ impl LocalnetMockStore {
             .with_context(|| format!("creating {}", deploy_tmp.display()))?;
         let wallet_yaml = direct_rpc_wallet(&client_yaml, LOCALNET_DIRECT_RPC, &deploy_tmp)
             .context("preparing direct-rpc wallet")?;
-        let wallet = load_wallet_context_from_path(Some(&wallet_yaml), None)
-            .context("loading localnet mock wallet")?;
 
         // --- (5) ContractConfig from the descriptor object ids. ---------------
         let system_object = ObjectID::from_str(&desc.system_object).context("system_object")?;
@@ -239,20 +323,55 @@ impl LocalnetMockStore {
             None => None,
         };
 
-        // --- (6) Build the contract client. -----------------------------------
-        // contract_config BY REFERENCE; backoff BY VALUE (Default inferred from
-        // the param type so we don't need to name walrus_utils). gas_budget=None
-        // dry-runs to estimate (fine on localnet's direct node).
-        let client = SuiContractClient::new(
-            wallet,
-            &[LOCALNET_DIRECT_RPC],
-            &contract_config,
-            Default::default(),
-            None,
-            Duration::from_secs(30),
-        )
-        .await
-        .context("constructing SuiContractClient against localnet")?;
+        // --- (6) Build the contract client, tolerating localnet read-after-write lag.
+        // Right after `localnet start`/`regen` the node answers chain-id but can briefly
+        // 404 the just-(re)loaded System object, so retry the connect a few times before
+        // giving up. The wallet is reloaded each attempt because SuiContractClient::new
+        // consumes it (cheap: it just re-reads the yaml + keystore).
+        // contract_config BY REFERENCE; backoff BY VALUE (Default inferred from the
+        // param type). gas_budget=None dry-runs to estimate (fine on localnet's node).
+        let mut client = None;
+        let mut last_err: Option<anyhow::Error> = None;
+        for attempt in 0..CONNECT_MAX_ATTEMPTS {
+            let wallet = load_wallet_context_from_path(Some(&wallet_yaml), None)
+                .context("loading localnet mock wallet")?;
+            match SuiContractClient::new(
+                wallet,
+                &[LOCALNET_DIRECT_RPC],
+                &contract_config,
+                Default::default(),
+                None,
+                Duration::from_secs(30),
+            )
+            .await
+            {
+                Ok(c) => {
+                    client = Some(c);
+                    break;
+                }
+                Err(e) => {
+                    if attempt + 1 < CONNECT_MAX_ATTEMPTS {
+                        eprintln!(
+                            "sb-local: localnet not ready (attempt {}/{}): {e}; retrying in {}s…",
+                            attempt + 1,
+                            CONNECT_MAX_ATTEMPTS,
+                            CONNECT_RETRY_SECS
+                        );
+                        tokio::time::sleep(Duration::from_secs(CONNECT_RETRY_SECS)).await;
+                    }
+                    last_err = Some(e.into());
+                }
+            }
+        }
+        let client = match client {
+            Some(c) => c,
+            None => {
+                return Err(last_err.unwrap_or_else(|| anyhow!("unknown connect error"))).context(
+                    "constructing SuiContractClient against localnet (localnet still starting, \
+                     or a regen is needed?)",
+                )
+            }
+        };
 
         // --- (7) Filesystem data dir for bytes + sidecars. --------------------
         let data_dir = config_dir.join("walrus-localnet-blobs");
@@ -284,17 +403,47 @@ impl LocalnetMockStore {
     /// acceptable on a regen-able localnet with faucet-minted WAL and is not worth
     /// crash-recovery machinery for a dev mock.
     pub async fn store(&self, bytes: &[u8], epochs: u32) -> Result<BlobHandle> {
+        let stored = self.store_blob(bytes, epochs, PostStoreAction::Keep).await?;
+        Ok(BlobHandle {
+            blob_id: stored.blob.blob_id.to_string(),
+            object_id: stored.blob.id.to_string(),
+        })
+    }
+
+    /// Publisher-grade store: like [`Self::store`] but returns the full on-chain
+    /// [`Blob`] move struct + enough context to build a wire `BlobStoreResult`
+    /// (the HTTP publisher facade in `sb-local` consumes this). `post_store` controls
+    /// what happens to the `Blob` object after certify (Keep / TransferTo / Share —
+    /// mapping the publisher's `send_object_to`/`share` query params).
+    ///
+    /// Always Permanent (the publisher's deprecated `deletable` flag is a no-op; the
+    /// Permanent confirmation needs no blob object id, so the held-key signature is a
+    /// pure function of (epoch, blob_id)).
+    pub async fn store_blob(
+        &self,
+        bytes: &[u8],
+        epochs: u32,
+        post_store: PostStoreAction,
+    ) -> Result<StoredBlob> {
         let unencoded_size = bytes.len() as u64;
 
-        // Deterministic 32-byte Merkle-root stand-in (no real slivers exist); the
-        // SAME root_hash flows into both the blob_id and the metadata struct.
-        let root32: [u8; 32] = Sha256::digest(bytes).into();
-        let root_hash = MerkleNode::from(root32);
-        let blob_id = BlobId::from_metadata(root_hash.clone(), ENCODING_TYPE, unencoded_size);
+        // REAL Walrus blob id (M0): the encoder needs the committee shard count, so
+        // n_shards is fetched FIRST, then the id + on-chain metadata are computed
+        // locally by walrus-core (no storage nodes, no slivers retained). The same
+        // id then drives both the dedup check and the on-chain register.
+        let n_shards = self
+            .client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")?;
+        let (blob_id, metadata) = compute_real_metadata(bytes, n_shards)?;
+        let encoded_length = metadata.encoded_size;
 
         // Content dedup: if we already stored these exact bytes and the on-chain
-        // Blob is still certified + unexpired, return the existing handle instead of
-        // minting a duplicate (re-writing the identical bytes is harmless).
+        // Blob is still certified + unexpired, return the existing Blob (wire
+        // `alreadyCertified`) instead of minting a duplicate (re-writing the
+        // identical bytes is harmless).
         if let Some(side) = self.try_read_sidecar(blob_id)? {
             if let Ok(object_id) = ObjectID::from_str(&side.object_id) {
                 if let Ok(bwa) = self
@@ -307,9 +456,12 @@ impl LocalnetMockStore {
                     if bwa.blob.certified_epoch.is_some() && bwa.blob.storage.end_epoch > live_epoch
                     {
                         self.write_bytes(blob_id, bytes)?; // ensure bytes present
-                        return Ok(BlobHandle {
-                            blob_id: side.blob_id,
-                            object_id: side.object_id,
+                        return Ok(StoredBlob {
+                            blob: bwa.blob,
+                            newly_created: false,
+                            encoded_length,
+                            epochs,
+                            shared_object_id: None,
                         });
                     }
                 }
@@ -318,30 +470,11 @@ impl LocalnetMockStore {
 
         self.ensure_wal_funded().await?;
 
-        // encoded_size from the committee shard count + RS2.
-        let n_shards = self
-            .client
-            .read_client()
-            .n_shards()
-            .await
-            .context("reading n_shards")?;
-        let encoded_size = EncodingConfig::new(n_shards)
-            .get_for_type(ENCODING_TYPE)
-            .encoded_blob_length(unencoded_size)
-            .context("computing encoded blob length (blob too large or zero-symbol?)")?;
-
-        let metadata = BlobObjectMetadata {
-            blob_id,
-            root_hash,
-            unencoded_size,
-            encoded_size,
-            encoding_type: ENCODING_TYPE,
-        };
-
-        // Reserve, then register as Permanent.
+        // Reserve, then register as Permanent. encoded_size comes from the real
+        // metadata computed above (the encoded length of the erasure-coded blob).
         let storage = self
             .client
-            .reserve_space(encoded_size, epochs)
+            .reserve_space(encoded_length, epochs)
             .await
             .context("reserve_space (is the wallet funded with WAL?)")?;
         let mut blobs = self
@@ -349,7 +482,7 @@ impl LocalnetMockStore {
             .register_blobs(vec![(metadata, storage)], BlobPersistence::Permanent)
             .await
             .context("register_blobs(Permanent)")?;
-        let blob = blobs
+        let mut blob = blobs
             .pop()
             .ok_or_else(|| anyhow!("register_blobs returned no Blob"))?;
 
@@ -385,21 +518,31 @@ impl LocalnetMockStore {
             ConfirmationCertificate::from_signed_messages_and_indices(vec![signed], vec![0u16])
                 .map_err(|e| anyhow!("building ConfirmationCertificate from held key: {e}"))?;
 
-        // Certify on-chain; Keep retains the blob in the wallet (needed for
-        // extend/delete later).
+        // Certify on-chain. `post_store` decides the blob object's fate: Keep retains
+        // it in the wallet (needed for extend/delete later); TransferTo/Share map the
+        // publisher params. For Share, the returned map carries the SharedBlob id.
         let with_attr = BlobWithAttribute {
             blob: blob.clone(),
             attribute: None,
         };
-        let _shared: HashMap<BlobId, ObjectID> = self
+        let shared: HashMap<BlobId, ObjectID> = self
             .client
-            .certify_blobs(&[(&with_attr, certificate)], PostStoreAction::Keep)
+            .certify_blobs(&[(&with_attr, certificate)], post_store)
             .await
             .context("certify_blobs (single-signer N=1 quorum)")?;
 
-        Ok(BlobHandle {
-            blob_id: blob_id_str,
-            object_id: object_id_str,
+        // Reflect the certification locally so the returned Blob reads as certified,
+        // without an extra round-trip to re-read it (the object id is unchanged by
+        // certify, and post-store Keep/TransferTo leave the object readable).
+        blob.certified_epoch = Some(epoch);
+        let shared_object_id = shared.get(&blob_id).copied();
+
+        Ok(StoredBlob {
+            blob,
+            newly_created: true,
+            encoded_length,
+            epochs,
+            shared_object_id,
         })
     }
 
@@ -412,6 +555,31 @@ impl LocalnetMockStore {
         std::fs::read(&path).with_context(|| {
             format!("reading blob bytes for {blob_id} at {}", path.display())
         })
+    }
+
+    /// True iff a `blob_id`'s bytes are present on disk (cheap existence check the GET
+    /// route uses to distinguish 404 from a real read error).
+    pub fn has_blob(&self, blob_id: &str) -> bool {
+        match parse_blob_id(blob_id) {
+            Ok(id) => self.bytes_path(id).exists(),
+            Err(_) => false,
+        }
+    }
+
+    /// Resolve a `Blob` object id to its `blob_id` + bytes (for the aggregator's
+    /// `GET /v1/blobs/by-object-id/{id}` route). Reads the on-chain Blob to map the
+    /// object id to its content id, then serves the bytes from the filesystem.
+    pub async fn read_by_object_id(&self, object_id: &str) -> Result<(String, Vec<u8>)> {
+        let oid = ObjectID::from_str(object_id).context("object_id")?;
+        let bwa = self
+            .client
+            .read_client()
+            .get_blob_by_object_id(&oid)
+            .await
+            .with_context(|| format!("fetching Blob object {oid}"))?;
+        let blob_id = bwa.blob.blob_id.to_string();
+        let bytes = self.read(&blob_id).await?;
+        Ok((blob_id, bytes))
     }
 
     // ----- stat ------------------------------------------------------------
@@ -533,18 +701,14 @@ impl LocalnetMockStore {
         let pool = ObjectID::from_str(pool_id).context("pool_id")?;
         let unencoded_size = bytes.len() as u64;
 
-        let root32: [u8; 32] = Sha256::digest(bytes).into();
-        let root_hash = MerkleNode::from(root32);
-        let blob_id = BlobId::from_metadata(root_hash.clone(), ENCODING_TYPE, unencoded_size);
-        let encoded_size = self.encoded_size(unencoded_size).await?;
-
-        let metadata = BlobObjectMetadata {
-            blob_id,
-            root_hash,
-            unencoded_size,
-            encoded_size,
-            encoding_type: ENCODING_TYPE,
-        };
+        // REAL Walrus blob id (M0): same encoder as the standalone path.
+        let n_shards = self
+            .client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")?;
+        let (blob_id, metadata) = compute_real_metadata(bytes, n_shards)?;
 
         let pooled = self
             .client
@@ -665,6 +829,164 @@ impl LocalnetMockStore {
             .await
             .with_context(|| format!("increase_storage_pool_capacity {pool_id}"))?;
         Ok(())
+    }
+
+    // ----- quilts (M5) -----------------------------------------------------
+    //
+    // A quilt packs many named blobs into ONE blob + an embedded index (100%
+    // client-side pure compute, no storage nodes — walrus-core's quilt_encoding).
+    // We construct the quilt, then store its packed bytes through the EXISTING
+    // store_blob() path, so after M0 the resulting blob id IS the real quilt id and
+    // the quilt blob dedups/extends/deletes exactly like any other Permanent blob.
+
+    /// Pack `patches` into one quilt blob and store it for `epochs` epochs. Returns the
+    /// `quilt_id` (= the packed blob's real id), the underlying [`StoredBlob`] (for the
+    /// wire `blobStoreResult`), and per-patch [`QuiltPatchId`]s.
+    pub async fn store_quilt(
+        &self,
+        patches: Vec<QuiltInput>,
+        epochs: u32,
+        post_store: PostStoreAction,
+    ) -> Result<StoredQuilt> {
+        if patches.is_empty() {
+            bail!("a quilt must contain at least one patch");
+        }
+
+        // Build the walrus-core quilt blobs (owned, so they outlive the encoder).
+        let mut blobs: Vec<QuiltStoreBlob<'static>> = Vec::with_capacity(patches.len());
+        for p in patches {
+            let ident = p.identifier.clone();
+            let blob = QuiltStoreBlob::new_owned(p.data, p.identifier)
+                .map_err(|e| anyhow!("invalid quilt patch identifier {ident:?}: {e}"))?
+                .with_tags(p.tags);
+            blobs.push(blob);
+        }
+
+        // The quilt encoder needs the committee shard count (same as plain blobs).
+        let n_shards = self
+            .client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")?;
+        let config = EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE);
+
+        // Pure-compute pack: blobs -> one quilt blob + embedded index.
+        let quilt = QuiltConfigV1::get_encoder(config, &blobs)
+            .construct_quilt()
+            .map_err(|e| anyhow!("constructing quilt: {e}"))?;
+
+        // Snapshot the index (identifier + internal patch id + range + tags) BEFORE
+        // consuming the quilt into its packed bytes.
+        let index = quilt
+            .quilt_index()
+            .map_err(|e| anyhow!("reading quilt index: {e}"))?;
+        let patch_meta: Vec<(String, Vec<u8>, u16, u16, BTreeMap<String, String>)> = index
+            .quilt_patches
+            .iter()
+            .map(|p| {
+                let internal = QuiltPatchInternalIdV1::new(p.start_index, p.end_index).to_bytes();
+                (
+                    p.identifier.clone(),
+                    internal,
+                    p.start_index,
+                    p.end_index,
+                    p.tags.clone(),
+                )
+            })
+            .collect();
+
+        let quilt_bytes = quilt.into_data();
+
+        // Store the packed quilt as one normal Permanent blob (M0 => id == quilt_id).
+        let stored = self.store_blob(&quilt_bytes, epochs, post_store).await?;
+        let quilt_id = stored.blob.blob_id;
+
+        let patches = patch_meta
+            .into_iter()
+            .map(|(identifier, internal, start_index, end_index, tags)| QuiltPatchInfo {
+                identifier,
+                quilt_patch_id: QuiltPatchId::new(quilt_id, internal).to_string(),
+                start_index,
+                end_index,
+                tags,
+            })
+            .collect();
+
+        Ok(StoredQuilt {
+            stored,
+            quilt_id: quilt_id.to_string(),
+            patches,
+        })
+    }
+
+    /// Read one patch from a quilt by its public `QuiltPatchId` string.
+    pub async fn read_quilt_patch(&self, quilt_patch_id: &str) -> Result<QuiltPatchData> {
+        let qpid = QuiltPatchId::from_str(quilt_patch_id)
+            .map_err(|e| anyhow!("invalid quilt patch id {quilt_patch_id:?}: {e}"))?;
+        let quilt = self.open_quilt(&qpid.quilt_id.to_string()).await?;
+        let blob = quilt
+            .get_blob_by_patch_internal_id(&qpid.patch_id_bytes)
+            .map_err(|e| anyhow!("reading quilt patch {quilt_patch_id}: {e}"))?;
+        Ok(QuiltPatchData {
+            identifier: blob.identifier().to_string(),
+            data: blob.data().to_vec(),
+            tags: blob.tags().clone(),
+        })
+    }
+
+    /// Read one patch from a quilt by `quilt_id` + the patch `identifier`.
+    pub async fn read_quilt_blob(&self, quilt_id: &str, identifier: &str) -> Result<QuiltPatchData> {
+        let quilt = self.open_quilt(quilt_id).await?;
+        let blob = quilt
+            .get_blobs_by_identifiers(&[identifier])
+            .map_err(|e| anyhow!("reading quilt {quilt_id} blob {identifier:?}: {e}"))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("identifier {identifier:?} not found in quilt {quilt_id}"))?;
+        Ok(QuiltPatchData {
+            identifier: blob.identifier().to_string(),
+            data: blob.data().to_vec(),
+            tags: blob.tags().clone(),
+        })
+    }
+
+    /// List all patches in a quilt (identifier + public patch id + range + tags).
+    pub async fn list_quilt_patches(&self, quilt_id: &str) -> Result<Vec<QuiltPatchInfo>> {
+        let id = parse_blob_id(quilt_id)?;
+        let quilt = self.open_quilt(quilt_id).await?;
+        let index = quilt
+            .quilt_index()
+            .map_err(|e| anyhow!("reading quilt index for {quilt_id}: {e}"))?;
+        Ok(index
+            .quilt_patches
+            .iter()
+            .map(|p| {
+                let internal = QuiltPatchInternalIdV1::new(p.start_index, p.end_index).to_bytes();
+                QuiltPatchInfo {
+                    identifier: p.identifier.clone(),
+                    quilt_patch_id: QuiltPatchId::new(id, internal).to_string(),
+                    start_index: p.start_index,
+                    end_index: p.end_index,
+                    tags: p.tags.clone(),
+                }
+            })
+            .collect())
+    }
+
+    /// Read a quilt's packed bytes from the filesystem and reconstruct it (pure compute,
+    /// no network beyond the one-time n_shards read).
+    async fn open_quilt(&self, quilt_id: &str) -> Result<QuiltV1> {
+        let bytes = self.read(quilt_id).await?;
+        let n_shards = self
+            .client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")?;
+        let config = EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE);
+        QuiltV1::new_from_quilt_blob(bytes, config)
+            .map_err(|e| anyhow!("reconstructing quilt {quilt_id}: {e}"))
     }
 
     // ----- WAL funding -----------------------------------------------------
@@ -794,6 +1116,27 @@ fn parse_blob_id(s: &str) -> Result<BlobId> {
     BlobId::from_str(s).map_err(|e| anyhow!("invalid blob id {s:?}: {e}"))
 }
 
+/// REAL Walrus blob id + on-chain [`BlobObjectMetadata`] for `bytes` under an
+/// `n_shards`-shard committee (M0). Uses walrus-core's own encoder
+/// (`EncodingFactory::compute_metadata`), so the derived id is bit-identical to what
+/// testnet/mainnet mint for the same content — a client can compute/verify the id and
+/// carry blob identity across networks. This erasure-encodes the blob locally to take
+/// the Blake2b root, but retains NO slivers and contacts NO storage nodes (pure local
+/// compute). The metadata also carries the encoded length used to reserve storage.
+fn compute_real_metadata(
+    bytes: &[u8],
+    n_shards: NonZeroU16,
+) -> Result<(BlobId, BlobObjectMetadata)> {
+    let verified = EncodingConfig::new(n_shards)
+        .get_for_type(ENCODING_TYPE)
+        .compute_metadata(bytes)
+        .map_err(|e| anyhow!("computing blob metadata (blob too large?): {e}"))?;
+    let metadata: BlobObjectMetadata = (&verified)
+        .try_into()
+        .map_err(|e| anyhow!("building on-chain blob metadata: {e}"))?;
+    Ok((metadata.blob_id, metadata))
+}
+
 /// Filesystem-safe key for a BlobId: lowercase hex of its 32 bytes (avoids any
 /// base64 characters in filenames). `BlobId(pub [u8; 32])` exposes its bytes.
 fn hex_key(id: BlobId) -> String {
@@ -862,6 +1205,112 @@ mod tests {
             key.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
             "lowercase hex only: {key}"
         );
+    }
+
+    #[test]
+    fn compute_real_metadata_uses_walrus_core_encoder() {
+        // M0: the localnet blob id must be walrus-core's REAL erasure-coded id (so it
+        // equals testnet/mainnet for the same content), NOT the old sha256 stand-in.
+        // n_shards=1000 matches the suibase localnet deploy (--n-shards 1000), which is
+        // also Walrus testnet's shard count, so this is the cross-environment id.
+        let n_shards = NonZeroU16::new(1000).unwrap();
+        let payload = b"suibase localnet walrus M0 real-id test payload";
+
+        let (blob_id, metadata) = compute_real_metadata(payload, n_shards).expect("compute");
+
+        // Delegation guard: equals walrus-core's own compute_blob_id for the same
+        // params. If anyone reverts to a sha256/hand-rolled root, this id diverges and
+        // the assert fails (sha256 stand-in != real encoder id).
+        let reference = EncodingConfig::new(n_shards)
+            .get_for_type(ENCODING_TYPE)
+            .compute_blob_id(payload)
+            .expect("walrus-core compute_blob_id");
+        assert_eq!(blob_id, reference, "blob_id must be walrus-core's real encoder id");
+
+        // On-chain metadata is internally consistent and carries the encoded length.
+        assert_eq!(metadata.blob_id, blob_id);
+        assert_eq!(metadata.unencoded_size, payload.len() as u64);
+        assert!(
+            metadata.encoded_size >= metadata.unencoded_size,
+            "encoded_size {} should cover unencoded_size {}",
+            metadata.encoded_size,
+            metadata.unencoded_size
+        );
+        assert_eq!(metadata.encoding_type, ENCODING_TYPE);
+
+        // The public id string round-trips through parse_blob_id.
+        assert_eq!(parse_blob_id(&blob_id.to_string()).unwrap(), blob_id);
+
+        // Determinism: same bytes + shards -> same id.
+        let (blob_id2, _) = compute_real_metadata(payload, n_shards).expect("compute again");
+        assert_eq!(blob_id, blob_id2, "id must be deterministic for the same content");
+    }
+
+    #[test]
+    fn quilt_pack_unpack_roundtrip_and_patch_ids() {
+        // M5: validate the pure quilt pack/unpack + QuiltPatchId formation that the
+        // engine wires (no live chain needed — quilt construction is pure compute).
+        let n_shards = NonZeroU16::new(1000).unwrap();
+        let cfg = EncodingConfig::new(n_shards);
+
+        let blobs = vec![
+            QuiltStoreBlob::new_owned(b"first patch bytes".to_vec(), "alpha")
+                .unwrap()
+                .with_tags([("k".to_string(), "v".to_string())]),
+            QuiltStoreBlob::new_owned(b"second patch, different content".to_vec(), "beta").unwrap(),
+        ];
+
+        let quilt = QuiltConfigV1::get_encoder(cfg.get_for_type(ENCODING_TYPE), &blobs)
+            .construct_quilt()
+            .expect("construct quilt");
+
+        // Snapshot (identifier, internal patch id bytes) before consuming the quilt.
+        let index = quilt.quilt_index().expect("quilt index");
+        let patch_meta: Vec<(String, Vec<u8>)> = index
+            .quilt_patches
+            .iter()
+            .map(|p| {
+                (
+                    p.identifier.clone(),
+                    QuiltPatchInternalIdV1::new(p.start_index, p.end_index).to_bytes(),
+                )
+            })
+            .collect();
+        assert_eq!(patch_meta.len(), 2, "two patches expected");
+
+        let quilt_bytes = quilt.into_data();
+
+        // The packed quilt's id (what store_quilt would store) is a real blob id (M0).
+        let (quilt_id, _) = compute_real_metadata(&quilt_bytes, n_shards).expect("quilt id");
+
+        // Reconstruct from the packed bytes and read each patch back two ways.
+        let quilt2 = QuiltV1::new_from_quilt_blob(quilt_bytes, cfg.get_for_type(ENCODING_TYPE))
+            .expect("reconstruct quilt");
+
+        let expected: std::collections::BTreeMap<&str, &[u8]> = [
+            ("alpha", b"first patch bytes".as_slice()),
+            ("beta", b"second patch, different content".as_slice()),
+        ]
+        .into_iter()
+        .collect();
+
+        for (ident, internal) in &patch_meta {
+            let by_id = quilt2
+                .get_blob_by_patch_internal_id(internal)
+                .expect("read by internal id");
+            let by_ident = quilt2
+                .get_blobs_by_identifiers(&[ident.as_str()])
+                .expect("read by identifier");
+            assert_eq!(by_id.identifier(), ident);
+            assert_eq!(by_id.data(), by_ident[0].data());
+            assert_eq!(by_id.data(), expected[ident.as_str()], "patch bytes round-trip");
+
+            // The public QuiltPatchId round-trips through Display + FromStr.
+            let qpid_str = QuiltPatchId::new(quilt_id, internal.clone()).to_string();
+            let parsed = QuiltPatchId::from_str(&qpid_str).expect("parse QuiltPatchId");
+            assert_eq!(parsed.quilt_id, quilt_id);
+            assert_eq!(parsed.patch_id_bytes, *internal);
+        }
     }
 
     #[test]

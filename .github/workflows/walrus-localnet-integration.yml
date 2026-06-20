@@ -22,6 +22,7 @@ on:
     branches: ["dev"]
     paths:
       - "rust/walrus-store/**"
+      - "rust/localnet-tools/**"
       - ".github/workflows/walrus-localnet-integration.yml"
 
 jobs:
@@ -51,7 +52,9 @@ jobs:
       - name: Rust Caching
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "rust/walrus-store -> target"
+          workspaces: |
+            rust/walrus-store -> target
+            rust/localnet-tools -> target
           cache-on-failure: "true"
 
       - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
@@ -77,25 +80,29 @@ jobs:
         run: |
           ~/suibase/scripts/localnet start
 
-      - name: Build walrus-store (localnet feature) — deploy bin + mock
-        working-directory: rust/walrus-store
+      - name: Build localnet-tools (deploy bin + sb-local) + stage them
+        working-directory: rust/localnet-tools
         run: |
           # rust-toolchain.toml pins 1.96; ensure it is installed.
           rustup toolchain install 1.96 --profile minimal
-          cargo build --features localnet --bin walrus-localnet-deploy
-          # Stage the just-built bin where the deploy script looks (install_type=user);
-          # there is no precompiled asset to fetch in CI, so this is the dev fallback.
+          # The localnet-tools bins crate enables walrus-store's `localnet` feature via its
+          # dependency, so no --features flag is needed.
+          cargo build --bin walrus-localnet-deploy --bin sb-local
+          # Stage the just-built bins where the lifecycle scripts look (install_type=user);
+          # there is no precompiled asset to fetch in CI, so this is the dev fallback. With
+          # sb-local present, 'localnet regen' below auto-starts the HTTP server.
           mkdir -p "$HOME/suibase/workdirs/common/bin"
           cp target/debug/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+          cp target/debug/sb-local "$HOME/suibase/workdirs/common/bin/sb-local"
 
       - name: Pure-logic unit tests (blob-id/descriptor/wallet — no live localnet)
         working-directory: rust/walrus-store
         run: |
           cargo test --features localnet --lib -- --nocapture
 
-      - name: Enable walrus + regen (runs the nodeless deploy)
+      - name: Enable walrus + regen (runs the nodeless deploy + starts sb-local)
         run: |
-          echo "walrus_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
+          echo "walrus_local_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
           ~/suibase/scripts/localnet regen
           # The deploy hook must have produced the descriptor the mock consumes.
           test -f "$HOME/suibase/workdirs/localnet/config/walrus-localnet.yaml" \
@@ -112,6 +119,17 @@ jobs:
           cargo test --features localnet --test localnet_pool -- --nocapture
           # Pool/standalone namespace coexistence (identical content, no aliasing).
           cargo test --features localnet --test localnet_pool_namespace -- --nocapture
+
+      - name: sb-local HTTP wire round-trip (aggregator + publisher + quilt, curl)
+        env:
+          # Turn a "not reachable" skip into a hard failure: sb-local MUST be up
+          # (auto-started by the regen above), so the full drop-in contract is exercised.
+          SB_LOCAL_HTTP_TEST: "1"
+        run: |
+          # 'localnet status' should now show the Walrus API line.
+          ~/suibase/scripts/localnet status | grep -i "Walrus API" || true
+          # curl PUT/GET/Range/dedup/404 + real-id equality + quilt round-trip + interop.
+          ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
 
   real-backend:
     # Validates that the real walrus-sdk backend COMPILES in clean CI and that the WS7
@@ -142,7 +160,9 @@ jobs:
       - name: Rust Caching
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "rust/walrus-store -> target"
+          workspaces: |
+            rust/walrus-store -> target
+            rust/localnet-tools -> target
           cache-on-failure: "true"
 
       - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)

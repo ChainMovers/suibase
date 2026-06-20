@@ -33,6 +33,8 @@ case "$PARAM_NAME" in
   source "$SUIBASE_DIR/scripts/common/__suibase-daemon.sh"
   # shellcheck source=SCRIPTDIR/__sui-faucet-process.sh
   source "$SUIBASE_DIR/scripts/common/__sui-faucet-process.sh"
+  # shellcheck source=SCRIPTDIR/__sb-local-process.sh
+  source "$SUIBASE_DIR/scripts/common/__sb-local-process.sh"
   ;;
 "dtp")
   # shellcheck source=SCRIPTDIR/__dtp-daemon.sh
@@ -55,6 +57,16 @@ force_stop_all_services() {
   #
   # It is assumed that the daemon will delete the force_stop,
   # and resume the services as configured by "user_request".
+
+  # Stop the nodeless localnet Walrus HTTP API first (depends on the Sui RPC). Noop
+  # if not running; guarded on the function existing.
+  if type -t stop_sb_local_process >/dev/null 2>&1; then
+    update_SB_LOCAL_PROCESS_PID_var
+    if [ -n "$SB_LOCAL_PROCESS_PID" ]; then
+      set_key_value "localnet" "force_stop" "true"
+      stop_sb_local_process
+    fi
+  fi
 
   update_SUI_FAUCET_PROCESS_PID_var
   if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then

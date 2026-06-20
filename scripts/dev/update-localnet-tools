@@ -3,8 +3,8 @@
 # This script is only intended for developers and continuous integration.
 #
 # It forces a Rust rebuild of the "localnet-tools" binaries (today:
-# walrus-localnet-deploy, from rust/walrus-store) and reinstalls them into
-# workdirs/common/bin. Precompiled binaries are NOT used.
+# walrus-localnet-deploy + sb-local, from rust/walrus-store) and reinstalls them
+# into workdirs/common/bin. Precompiled binaries are NOT used.
 #
 # Mirrors scripts/dev/update-daemon for the localnet-tools asset, so the two
 # follow one consistent pattern (source build on a dev branch / via this command;
@@ -23,12 +23,14 @@ source "$SUIBASE_DIR/scripts/common/__apps.sh"
 exit_if_not_installed
 exit_if_deps_missing
 
-# Force a rebuild: delete the installed binary + version file so the install is
+# Force a rebuild: delete the installed binaries + version file so the install is
 # unconditional. (cargo still does an incremental compile — only changed sources.)
 rm -f "$SUIBASE_BIN_DIR/walrus-localnet-deploy" \
+  "$SUIBASE_BIN_DIR/sb-local" \
   "$SUIBASE_BIN_DIR/localnet-tools-version.yaml"
 
-# Build + install from source (rust/walrus-store, localnet feature).
+# Build + install from source (rust/walrus-store, localnet feature). Builds every
+# binary in localnet_tools_bin_names (walrus-localnet-deploy + sb-local).
 init_app_obj "localnet_tools" ""
 
 _BUILD_START_TIME=$SECONDS
@@ -36,4 +38,4 @@ sb_app_rust_build_and_install_generic "localnet_tools"
 _BUILD_END_TIME=$SECONDS
 
 _BUILD_DURATION=$((_BUILD_END_TIME - _BUILD_START_TIME))
-echo "✓ localnet-tools rebuilt in ${_BUILD_DURATION}s -> $SUIBASE_BIN_DIR/walrus-localnet-deploy"
+echo "✓ localnet-tools rebuilt in ${_BUILD_DURATION}s -> $SUIBASE_BIN_DIR/{walrus-localnet-deploy,sb-local}"
