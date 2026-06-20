@@ -150,3 +150,9 @@ jobs:
           REAL_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space \
           REAL_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space \
             ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_wire_parity.sh || true
+
+      - name: localnet regen wipe (no Walrus disk accumulation across regens)
+        run: |
+          # DESTRUCTIVE + must run LAST: seeds blob data, regens, and asserts the Walrus
+          # runtime is wiped + cleanly redeployed (fresh chain, 0 leftover blob files).
+          ~/suibase/scripts/tests/050_walrus_tests/test_localnet_walrus_regen_wipe.sh

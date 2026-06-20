@@ -1,6 +1,6 @@
 Walrus is fully integrated with Suibase, so it "just works" out of the box.
 
-Suibase makes it easy to develop concurrently with Walrus testnet and mainnet with the peace of mind that every operation is done with the proper binary and config matching the network.
+Suibase makes it easy to develop concurrently with Walrus localnet, testnet and mainnet with the peace of mind that every operation is done with the proper binary and config matching the network.
 
 ## Walrus
 
@@ -11,6 +11,23 @@ In same way, use `tsite` and `msite` instead of `site-builder`.
 Suibase scripts appends the proper --config, --context and wallet path to make sure you are using the correct mix of binaries and configs.
 
 The scripts pass all your command line parameters as-is to the original Mysten Labs binaries.
+
+## Localnet
+
+Suibase also runs **Walrus on localnet** — a nodeless, self-contained Walrus (no storage nodes, no faucet, no internet). Enable it in `~/suibase/workdirs/localnet/suibase.yaml`:
+
+```yaml
+walrus_local_enabled: true
+```
+
+then run `localnet regen` to deploy it. This gives you:
+
+- **An aggregator + publisher HTTP API** — the same `/v1/blobs` wire API as the real `walrus` daemon, at `http://localhost:45840`. Point any Walrus HTTP client at it by changing only the URL.
+- **`walrus_local_sdk`** — a Rust crate that mirrors Mysten's `walrus_sdk` (same method signatures, same return types), so the same code runs against localnet or a real network.
+
+It seeks **parity with testnet** — blob ids, the SDK surface, and the HTTP error contract all match — so what works on localnet behaves the same on testnet/mainnet.
+
+Being local, deterministic, fast and free, it is ideal for automated tests and for AI agents iterating on Walrus workflows without spending real SUI/WAL or waiting on a public network.
 
 ## Updates
 Run `testnet update` or `mainnet update`.
