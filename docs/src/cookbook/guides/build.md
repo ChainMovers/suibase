@@ -13,7 +13,7 @@ If you use the Rust SDK, replace your Git dependencies with "path".
 
 For Move dependencies replace Git dependencies with "local".
 
-For suibase users, see [here](./../../how-to/scripts.md#faster-rust-and-move-build) to re-use its local repo already downloaded.
+For suibase users, a per-network Sui repo is already downloaded at `~/suibase/workdirs/<network>/sui-repo` (kept current with `<network> update`) — point your `path`/`local` dependencies there to re-use it.
 
 ## Build only what you need
 
