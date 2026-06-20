@@ -195,6 +195,14 @@ store.delete_pooled(&pool.pool_id, &p.blob_id).await?;
 // also: pool_status / extend_pool / grow_pool
 ```
 
+More of the SDK surface is mirrored on `WalrusLocalClient` / its sub-clients:
+`reserve_and_store_blobs` honors `StoreArgs.persistence` (Permanent **or** Deletable, with
+`delete_owned_blob` matching the SDK — it removes only *deletable* owned blobs);
+`get_blob_by_object_id`; `blob_status`; `reserve_and_store_blobs_in_storage_pool` →
+`PooledBlobStoreResult`; and on the quilt sub-client `get_quilt_metadata`,
+`get_blobs_by_tag`, `get_blobs_by_ids`, and `construct_quilt_from_paths` /
+`reserve_and_store_quilt_from_paths`.
+
 Notes:
 
 - `blob_id` is the canonical Walrus `BlobId` (URL-safe base64). Identical content yields

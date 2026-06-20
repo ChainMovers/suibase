@@ -46,10 +46,18 @@ the SDK** and is **verified by parity tests** — not by a shared wrapper.
   `walrus_sdk::node_client::WalrusNodeClient<SuiContractClient>` and returns the
   SDK's own types. Construct via `WalrusLocalClient::for_workdir("localnet")` (only
   `"localnet"` is valid — any other name errors, directing you to `walrus_sdk`).
-  - `reserve_and_store_blobs(Vec<Vec<u8>>, &StoreArgs) -> Vec<BlobStoreResult>`
-  - `read_blob::<U: EncodingAxis>(&BlobId) -> Vec<u8>` (+ `read_blob_primary` convenience)
-  - `delete_owned_blob(&BlobId) -> usize`
+  - `reserve_and_store_blobs(Vec<Vec<u8>>, &StoreArgs) -> Vec<BlobStoreResult>` — honors
+    `StoreArgs.persistence` (Permanent **or** Deletable; Deletable certifies via the
+    object-id-bound held-key path).
+  - `read_blob::<U: EncodingAxis>(&BlobId) -> Vec<u8>` (+ `read_blob_primary` convenience);
+    a missing blob returns `ClientErrorKind::BlobIdDoesNotExist`.
+  - `delete_owned_blob(&BlobId) -> usize` — SDK semantics: deletes only **deletable** owned
+    blobs (a no-op returning `0` for a Permanent blob).
   - `get_blob_by_object_id(&ObjectID) -> BlobWithAttribute`
+  - `reserve_and_store_blobs_in_storage_pool(Vec<Vec<u8>>, ObjectID, &StoreArgs) -> Vec<PooledBlobStoreResult>`
+  - `blob_status(&BlobId) -> BlobStatus` — synthesized from local state (the SDK's status
+    methods are node-quorum reads; localnet blobs are always certified). `Nonexistent` for
+    an absent or pooled-only blob.
   - `engine() -> &LocalnetMockStore` — exposes the lower-level engine (NOT part of the
     SDK surface) for callers that need the engine-only APIs (e.g. storage pools) without
     re-opening. `sb-local` and the pool tests open a `LocalnetMockStore` directly instead.
@@ -60,8 +68,10 @@ the SDK** and is **verified by parity tests** — not by a shared wrapper.
     and `reserve_and_store_quilt::<V: QuiltVersion>(V::Quilt, &StoreArgs) ->
     QuiltStoreResult`. These are **generic over `QuiltVersion`** and structurally
     mirror `walrus_sdk`'s `QuiltClient` (dispatch via `V::QuiltConfig::get_encoder`;
-    iterate `quilt_index().patches()`). Plus reads: `get_blobs_by_identifiers`,
-    `get_blobs_by_ids`, `get_all_blobs`.
+    iterate `quilt_index().patches()`). Also `construct_quilt_from_paths` /
+    `reserve_and_store_quilt_from_paths` (reuse `walrus_sdk`'s own path helpers). Reads:
+    `get_blobs_by_identifiers`, `get_blobs_by_ids`, `get_blobs_by_tag`, `get_all_blobs`,
+    `get_quilt_metadata`.
   - `byte_range_read_client() -> LocalByteRangeReadClient`:
     `read_byte_range(&BlobId, start: u64, length: u64) -> ReadByteRangeResult`.
     Mirrors `walrus_sdk`'s `ByteRangeReadClient` **exactly**, including the

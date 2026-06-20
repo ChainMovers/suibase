@@ -36,6 +36,8 @@ repository = "https://github.com/ChainMovers/suibase"
 walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
 # The on-chain Sui side (SuiContractClient, ReadClient, Blob/BlobWithAttribute move structs).
 walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"] }
+# The storage-node API types — we return its `BlobStatus` from blob_status() (mirrors the SDK).
+walrus-storage-node-client = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
 # Encoder (real blob ids + quilt packing), keys, BlobId/QuiltPatchId/EncodingType.
 walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
 # sui-types MUST use the IDENTICAL git+tag as walrus's workspace (testnet-v1.73.1)

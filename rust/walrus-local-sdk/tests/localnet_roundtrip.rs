@@ -15,12 +15,15 @@ mod common;
 
 use std::str::FromStr;
 
-use walrus_core::encoding::Primary;
+use sui_types::base_types::ObjectID;
 use walrus_core::encoding::quilt_encoding::{QuiltStoreBlob, QuiltVersionV1};
+use walrus_core::encoding::Primary;
+use walrus_core::metadata::QuiltMetadata;
 use walrus_core::{BlobId, EncodingType, QuiltPatchId};
 use walrus_local_sdk::WalrusLocalClient;
-use walrus_sdk::node_client::responses::BlobStoreResult;
+use walrus_sdk::node_client::responses::{BlobStoreResult, PooledBlobStoreResult};
 use walrus_sdk::node_client::store_args::StoreArgs;
+use walrus_storage_node_client::api::BlobStatus;
 
 #[tokio::test]
 async fn localnet_roundtrip() -> anyhow::Result<()> {
@@ -105,6 +108,42 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
     );
     eprintln!("persistence (Deletable vs Permanent delete semantics): OK");
 
+    // blob_status: a Permanent certified blob -> Permanent{is_certified}; an absent blob
+    // (the parity body deleted `blob_id`) -> Nonexistent.
+    assert!(
+        matches!(client.blob_status(&pid).await?, BlobStatus::Permanent { is_certified: true, .. }),
+        "permanent certified blob should report Permanent/certified"
+    );
+    assert!(
+        matches!(client.blob_status(&blob_id).await?, BlobStatus::Nonexistent),
+        "deleted blob should report Nonexistent"
+    );
+
+    // Storage-pool store via the mirror (PooledBlobStoreResult). Pool created on the engine.
+    let engine = client.engine();
+    let cap = engine.encoded_size(1024).await? * 4;
+    let pool = engine.create_pool(cap, 5).await?;
+    let pool_oid = ObjectID::from_str(&pool.pool_id)?;
+    let pooled_payload = format!("pooled-mirror-{nonce}").into_bytes();
+    let pres = client
+        .reserve_and_store_blobs_in_storage_pool(vec![pooled_payload.clone()], pool_oid, &args)
+        .await?;
+    assert_eq!(pres.len(), 1, "1 pooled input -> 1 PooledBlobStoreResult");
+    assert!(
+        matches!(pres[0], PooledBlobStoreResult::NewlyCreated { .. }),
+        "pooled store should be NewlyCreated, got {:?}",
+        pres[0]
+    );
+    let pooled_id = pres[0].blob_id().expect("pooled result has a blob id");
+    assert_eq!(client.read_blob_primary(&pooled_id).await?, pooled_payload, "pooled read != stored");
+    // blob_status reports on STANDALONE blobs; a pooled-only blob has no standalone
+    // sidecar, so it is Nonexistent here (pool membership is queried via the engine).
+    assert!(
+        matches!(client.blob_status(&pooled_id).await?, BlobStatus::Nonexistent),
+        "pooled-only blob has no standalone status"
+    );
+    eprintln!("storage-pool store (PooledBlobStoreResult) + blob_status: OK");
+
     // Quilt round-trip through the mirror's sub-client (V1).
     let qc = client.quilt_client();
     let blobs = vec![
@@ -142,7 +181,27 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
     let tagged = qc.get_blobs_by_tag(&quilt_id, "kind", "a").await?;
     assert_eq!(tagged.len(), 1, "exactly one patch is tagged kind=a");
     assert_eq!(tagged[0].data(), b"alpha-bytes");
-    eprintln!("quilt reads (by-id, by-tag) + multi-store: OK");
+
+    // get_quilt_metadata: id + index match the stored quilt.
+    let QuiltMetadata::V1(qmeta) = qc.get_quilt_metadata(&quilt_id).await?;
+    assert_eq!(qmeta.quilt_id, quilt_id, "quilt metadata id mismatch");
+    assert_eq!(qmeta.index.quilt_patches.len(), 2, "quilt metadata index should list 2 patches");
+    eprintln!("quilt reads (by-id, by-tag, metadata) + multi-store: OK");
+
+    // Quilt from file paths (reserve_and_store_quilt_from_paths) — filenames -> identifiers.
+    let dir = std::env::temp_dir().join(format!("wlsdk-quilt-paths-{nonce}"));
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("file-a"), b"path-quilt-a")?;
+    std::fs::write(dir.join("file-b"), b"path-quilt-b")?;
+    let qres2 = qc
+        .reserve_and_store_quilt_from_paths::<QuiltVersionV1, _>(
+            &[dir.join("file-a"), dir.join("file-b")],
+            &args,
+        )
+        .await?;
+    assert_eq!(qres2.stored_quilt_blobs.len(), 2, "from_paths quilt should have 2 patches");
+    let _ = std::fs::remove_dir_all(&dir);
+    eprintln!("quilt from_paths: OK");
 
     eprintln!("localnet mirror round-trip + quilt: PASS");
     Ok(())

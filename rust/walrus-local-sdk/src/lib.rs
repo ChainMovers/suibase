@@ -35,7 +35,11 @@
 pub mod compat;
 pub mod localnet;
 
+use std::num::NonZeroUsize;
+use std::path::Path;
+
 use sui_types::base_types::ObjectID;
+use sui_types::{digests::TransactionDigest, event::EventID};
 use walrus_core::{
     encoding::{
         quilt_encoding::{
@@ -44,20 +48,21 @@ use walrus_core::{
         },
         EncodingAxis, EncodingConfig,
     },
+    metadata::QuiltMetadata,
     BlobId, EncodingType, QuiltPatchId,
 };
-use std::num::NonZeroUsize;
-
 use walrus_sdk::{
     error::{ClientError, ClientErrorKind, ClientResult},
     node_client::{
         byte_range_read_client::ReadByteRangeResult,
         client_types::StoredQuiltPatch,
+        quilt_client::{assign_identifiers_with_paths, read_blobs_from_paths},
         resource::RegisterBlobOp,
-        responses::{BlobStoreResult, EventOrObjectId, QuiltStoreResult},
+        responses::{BlobStoreResult, EventOrObjectId, PooledBlobStoreResult, QuiltStoreResult},
         store_args::StoreArgs,
     },
 };
+use walrus_storage_node_client::api::{BlobStatus, DeletableCounts};
 use walrus_sui::types::move_structs::BlobWithAttribute;
 
 use localnet::{LocalnetMockStore, StoredBlob};
@@ -281,6 +286,74 @@ impl WalrusLocalClient {
             .map_err(cerr)
     }
 
+    /// Best-effort blob status, returning the SDK's [`BlobStatus`]. NOTE: `walrus_sdk`'s
+    /// status methods do quorum reads across storage nodes (and take a `read_client`); on
+    /// nodeless localnet a stored blob is always certified, so this synthesizes the status
+    /// from local state — `Deletable`/`Permanent` per how it was stored, `Nonexistent` if
+    /// absent. For a Permanent blob the `status_event` is a zero placeholder (localnet has
+    /// no Sui status event).
+    pub async fn blob_status(&self, blob_id: &BlobId) -> ClientResult<BlobStatus> {
+        let id = blob_id.to_string();
+        // Status is tracked per STANDALONE blob (via its sidecar). An absent blob — or a
+        // pooled-only blob, which has no standalone sidecar — reports Nonexistent.
+        let deletable = match self.engine.blob_is_deletable(&id) {
+            Some(d) => d,
+            None => return Ok(BlobStatus::Nonexistent),
+        };
+        let meta = self.engine.stat(&id).await.map_err(cerr)?;
+        let certified = meta.certified_epoch.is_some();
+        if deletable {
+            Ok(BlobStatus::Deletable {
+                initial_certified_epoch: meta.certified_epoch,
+                deletable_counts: DeletableCounts {
+                    count_deletable_total: 1,
+                    count_deletable_certified: if certified { 1 } else { 0 },
+                },
+            })
+        } else {
+            Ok(BlobStatus::Permanent {
+                end_epoch: meta.end_epoch,
+                is_certified: certified,
+                status_event: EventID {
+                    tx_digest: TransactionDigest::ZERO,
+                    event_seq: 0,
+                },
+                deletable_counts: DeletableCounts {
+                    count_deletable_total: 0,
+                    count_deletable_certified: 0,
+                },
+                initial_certified_epoch: meta.certified_epoch,
+            })
+        }
+    }
+
+    // ----- storage pools (mirrors StoreBlobsApi::reserve_and_store_blobs_in_storage_pool) -----
+
+    /// Store blobs into an existing storage pool, returning one [`PooledBlobStoreResult`]
+    /// per input (in order). Mirrors `StoreBlobsApi::reserve_and_store_blobs_in_storage_pool`.
+    /// Localnet pooled blobs are Deletable and the pool's reservation pays for storage, so
+    /// `store_args` (epochs/persistence) does not apply here.
+    pub async fn reserve_and_store_blobs_in_storage_pool(
+        &self,
+        blobs: Vec<Vec<u8>>,
+        storage_pool_object_id: ObjectID,
+        _store_args: &StoreArgs,
+    ) -> ClientResult<Vec<PooledBlobStoreResult>> {
+        let pool = storage_pool_object_id.to_string();
+        let mut out = Vec::with_capacity(blobs.len());
+        for bytes in blobs {
+            let pooled = self
+                .engine
+                .store_pooled_object(&pool, &bytes)
+                .await
+                .map_err(cerr)?;
+            out.push(PooledBlobStoreResult::NewlyCreated {
+                pooled_blob_object: pooled,
+            });
+        }
+        Ok(out)
+    }
+
     // ----- quilt sub-client ------------------------------------------------
 
     /// A quilt sub-client. Mirrors `WalrusNodeClient::quilt_client`.
@@ -374,6 +447,43 @@ impl LocalQuiltClient<'_> {
             blob_store_result,
             stored_quilt_blobs,
         })
+    }
+
+    /// Construct a quilt from file/dir paths (filenames become patch identifiers).
+    /// Mirrors `QuiltClient::construct_quilt_from_paths::<V>`; reuses `walrus_sdk`'s own
+    /// `read_blobs_from_paths` + `assign_identifiers_with_paths` for identical behavior.
+    pub async fn construct_quilt_from_paths<V: QuiltVersion, P: AsRef<Path>>(
+        &self,
+        paths: &[P],
+        encoding_type: EncodingType,
+    ) -> ClientResult<V::Quilt> {
+        let files = read_blobs_from_paths(paths)?;
+        let blobs = assign_identifiers_with_paths(files)?;
+        self.construct_quilt::<V>(&blobs, encoding_type).await
+    }
+
+    /// Construct + store a quilt from file/dir paths. Mirrors
+    /// `QuiltClient::reserve_and_store_quilt_from_paths::<V>`.
+    pub async fn reserve_and_store_quilt_from_paths<V: QuiltVersion, P: AsRef<Path>>(
+        &self,
+        paths: &[P],
+        store_args: &StoreArgs,
+    ) -> ClientResult<QuiltStoreResult> {
+        let quilt = self
+            .construct_quilt_from_paths::<V, P>(paths, store_args.encoding_type)
+            .await?;
+        self.reserve_and_store_quilt::<V>(quilt, store_args).await
+    }
+
+    /// Quilt metadata (quilt id + the quilt blob's `BlobMetadata` + the embedded index).
+    /// Mirrors `QuiltClient::get_quilt_metadata` (V1).
+    pub async fn get_quilt_metadata(&self, quilt_id: &BlobId) -> ClientResult<QuiltMetadata> {
+        let v1 = self
+            .engine
+            .quilt_metadata_v1(&quilt_id.to_string())
+            .await
+            .map_err(cerr)?;
+        Ok(QuiltMetadata::V1(v1))
     }
 
     /// Read patches by identifier. Mirrors `QuiltClient::get_blobs_by_identifiers`.

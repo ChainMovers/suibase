@@ -51,7 +51,7 @@ use walrus_core::{
     },
     keys::ProtocolKeyPair,
     messages::{Confirmation, ConfirmationCertificate},
-    metadata::QuiltPatchInternalIdV1,
+    metadata::{QuiltMetadataV1, QuiltPatchInternalIdV1},
     BlobId, EncodingType, Epoch, QuiltPatchId,
 };
 use walrus_sui::{
@@ -60,7 +60,7 @@ use walrus_sui::{
         ReadClient, SuiContractClient,
     },
     config::load_wallet_context_from_path,
-    types::move_structs::{Blob, BlobWithAttribute},
+    types::move_structs::{Blob, BlobWithAttribute, PooledBlob},
 };
 
 use crate::{BlobHandle, BlobMeta, PoolHandle, PoolStatus};
@@ -739,6 +739,17 @@ impl LocalnetMockStore {
     /// the SAME pool aborts at register, because the pool's blob table rejects the
     /// duplicate blob id. (Unlike [`Self::store`], which dedups identical content.)
     pub async fn store_pooled(&self, pool_id: &str, bytes: &[u8]) -> Result<BlobHandle> {
+        let pooled = self.store_pooled_object(pool_id, bytes).await?;
+        Ok(BlobHandle {
+            blob_id: pooled.blob_id.to_string(),
+            object_id: pooled.id.to_string(),
+        })
+    }
+
+    /// Like [`Self::store_pooled`] but returns the on-chain [`PooledBlob`] move struct —
+    /// consumed by the SDK mirror's `reserve_and_store_blobs_in_storage_pool` to build a
+    /// wire-faithful `PooledBlobStoreResult`.
+    pub async fn store_pooled_object(&self, pool_id: &str, bytes: &[u8]) -> Result<PooledBlob> {
         let pool = ObjectID::from_str(pool_id).context("pool_id")?;
         let unencoded_size = bytes.len() as u64;
 
@@ -805,10 +816,7 @@ impl LocalnetMockStore {
             .await
             .context("certify_pooled_blobs (single-signer N=1 quorum)")?;
 
-        Ok(BlobHandle {
-            blob_id: blob_id_str,
-            object_id: object_id_str,
-        })
+        Ok(pooled)
     }
 
     /// Delete a pooled blob from `pool_id` (no certify) and remove its fs bytes.
@@ -1042,6 +1050,34 @@ impl LocalnetMockStore {
         let config = EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE);
         QuiltV1::new_from_quilt_blob(bytes, config)
             .map_err(|e| anyhow!("reconstructing quilt {quilt_id}: {e}"))
+    }
+
+    /// Build a [`QuiltMetadataV1`] for a stored quilt: its id + the packed quilt blob's
+    /// `BlobMetadata` (recomputed by walrus-core's encoder) + the embedded index. Consumed
+    /// by the mirror's `get_quilt_metadata`.
+    pub async fn quilt_metadata_v1(&self, quilt_id: &str) -> Result<QuiltMetadataV1> {
+        let id = parse_blob_id(quilt_id)?;
+        let bytes = self.read(quilt_id).await?;
+        let n_shards = self.n_shards().await?;
+        let verified = EncodingConfig::new(n_shards)
+            .get_for_type(ENCODING_TYPE)
+            .compute_metadata(&bytes)
+            .map_err(|e| anyhow!("computing quilt metadata for {quilt_id}: {e}"))?;
+        let metadata = verified.metadata().clone();
+        let quilt = QuiltV1::new_from_quilt_blob(
+            bytes,
+            EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE),
+        )
+        .map_err(|e| anyhow!("reconstructing quilt {quilt_id}: {e}"))?;
+        let index = quilt
+            .quilt_index()
+            .map_err(|e| anyhow!("reading quilt index for {quilt_id}: {e}"))?
+            .clone();
+        Ok(QuiltMetadataV1 {
+            quilt_id: id,
+            metadata,
+            index,
+        })
     }
 
     // ----- WAL funding -----------------------------------------------------
