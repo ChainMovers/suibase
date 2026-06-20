@@ -682,8 +682,14 @@ impl LocalByteRangeReadClient<'_> {
         start_byte_position: u64,
         byte_length: u64,
     ) -> ClientResult<ReadByteRangeResult> {
+        // Input validation first (matches the SDK order), then blob existence: a missing
+        // blob surfaces BlobIdDoesNotExist (as read_blob does), not a generic Other.
         let (start, length) = validate_byte_range_inputs(start_byte_position, byte_length)?;
-        let bytes = self.engine.read(&blob_id.to_string()).await.map_err(cerr)?;
+        let id = blob_id.to_string();
+        if !self.engine.has_blob(&id) {
+            return Err(ClientError::from(ClientErrorKind::BlobIdDoesNotExist));
+        }
+        let bytes = self.engine.read(&id).await.map_err(cerr)?;
         finish_byte_range(&bytes, start, length)
     }
 }

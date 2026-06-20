@@ -132,5 +132,43 @@ pub async fn parity_roundtrip<C: WalrusApi>(client: &C, payload: &[u8]) -> anyho
     // delete is idempotent
     let _ = client.delete_owned_blob(&blob_id).await?;
 
+    // ---- error-case parity: parameter mistakes must behave identically on both backends ----
+    // A valid-format but never-stored blob id (astronomically unlikely to exist).
+    let missing = walrus_core::BlobId([0x9c; 32]);
+
+    // read of a nonexistent blob -> error on both (the SDK + the mirror both surface
+    // BlobIdDoesNotExist).
+    assert!(
+        client.read_blob_primary(&missing).await.is_err(),
+        "reading a nonexistent blob_id must error"
+    );
+    // status of a nonexistent blob -> Nonexistent on both.
+    assert!(
+        matches!(client.blob_status(&missing).await?, BlobStatus::Nonexistent),
+        "status of a nonexistent blob must be Nonexistent"
+    );
+    // delete of a nonexistent blob -> 0 (no-op) on both.
+    assert_eq!(
+        client.delete_owned_blob(&missing).await?,
+        0,
+        "deleting a nonexistent blob must remove 0"
+    );
+    // byte-range on a nonexistent blob -> error on both.
+    assert!(
+        client.read_byte_range(&missing, 0, 1).await.is_err(),
+        "byte-range on a nonexistent blob must error"
+    );
+    // byte-range invalid params -> error on both (validation precedes existence):
+    //   zero length, and overflowing start+length.
+    assert!(
+        client.read_byte_range(&missing, 0, 0).await.is_err(),
+        "zero-length byte-range must error"
+    );
+    assert!(
+        client.read_byte_range(&missing, u64::MAX, 1).await.is_err(),
+        "overflowing byte-range must error"
+    );
+    eprintln!("error-case parity OK (nonexistent read/status/delete/byte-range + bad params)");
+
     Ok(blob_id.to_string())
 }
