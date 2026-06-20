@@ -579,6 +579,19 @@ impl LocalnetMockStore {
         }
     }
 
+    /// True iff `s` parses as a canonical Walrus `BlobId`. Lets the HTTP facade return
+    /// 400 (bad request) for a MALFORMED id vs 404 for a valid-but-absent one — matching
+    /// the real Walrus aggregator's behavior.
+    pub fn is_valid_blob_id(&self, s: &str) -> bool {
+        parse_blob_id(s).is_ok()
+    }
+
+    /// True iff `s` parses as a canonical `QuiltPatchId` (same 400-vs-404 distinction as
+    /// [`Self::is_valid_blob_id`]).
+    pub fn is_valid_quilt_patch_id(&self, s: &str) -> bool {
+        QuiltPatchId::from_str(s).is_ok()
+    }
+
     /// Whether the standalone blob with this id was registered Deletable (read from its
     /// sidecar). `None` when there is no standalone sidecar (unknown/absent blob). Drives
     /// the mirror's SDK-faithful `delete_owned_blob` (which deletes only deletable blobs).

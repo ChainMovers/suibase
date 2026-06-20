@@ -176,6 +176,10 @@ async fn get_by_patch_id(
     State(store): State<Arc<LocalnetMockStore>>,
     Path(quilt_patch_id): Path<String>,
 ) -> Response {
+    // Malformed id -> 400 (bad request), like the real aggregator; valid-but-absent -> 404.
+    if !store.is_valid_quilt_patch_id(&quilt_patch_id) {
+        return bad_request(&format!("malformed quilt patch id {quilt_patch_id}"));
+    }
     match store.read_quilt_patch(&quilt_patch_id).await {
         Ok(patch) => quilt_patch_response(&method, &headers, &quilt_patch_id, patch),
         Err(_) => not_found(

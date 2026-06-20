@@ -203,6 +203,10 @@ async fn get_blob(
     State(store): State<Arc<LocalnetMockStore>>,
     Path(blob_id): Path<String>,
 ) -> Response {
+    // Malformed id -> 400 (bad request), like the real aggregator; valid-but-absent -> 404.
+    if !store.is_valid_blob_id(&blob_id) {
+        return bad_request(&format!("malformed blob id {blob_id}"));
+    }
     if !store.has_blob(&blob_id) {
         return not_found("BLOB_NOT_FOUND", &format!("blob {blob_id} not found"));
     }
@@ -257,6 +261,11 @@ async fn put_blob(
     body: Bytes,
 ) -> Response {
     let epochs = q.epochs.unwrap_or(1);
+    // Reject epochs=0 cleanly (a real store would reserve 0 epochs of storage, which the
+    // chain rejects). Fast 400 instead of attempting a doomed on-chain reserve.
+    if epochs == 0 {
+        return bad_request("epochs must be >= 1");
+    }
     let post_store = match resolve_post_store(&q) {
         Ok(ps) => ps,
         Err(resp) => return resp,

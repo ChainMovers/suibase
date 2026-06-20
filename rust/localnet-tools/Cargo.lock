@@ -12088,6 +12088,7 @@ dependencies = [
  "tokio",
  "walrus-core",
  "walrus-sdk",
+ "walrus-storage-node-client",
  "walrus-sui",
 ]
 

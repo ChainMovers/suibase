@@ -139,3 +139,14 @@ jobs:
           ~/suibase/scripts/localnet status | grep -i "Walrus API" || true
           # curl PUT/GET/Range/dedup/404 + real-id equality + quilt round-trip + interop.
           ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
+
+      - name: sb-local wire parity vs the real Walrus aggregator/publisher (errors-only)
+        run: |
+          # Compare sb-local's HTTP contract — especially ERROR responses (GET nonexistent
+          # -> 404, malformed id -> 400, PUT bad params -> 4xx) — against the public Mysten
+          # testnet aggregator/publisher. Errors-only (no RUN_PUBLISHER_WRITES => no funds).
+          # Non-fatal: a transient outage of the external service must not fail this suite.
+          SB_LOCAL_BASE=http://localhost:45840 \
+          REAL_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space \
+          REAL_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space \
+            ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_wire_parity.sh || true
