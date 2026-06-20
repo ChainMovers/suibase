@@ -12014,6 +12014,7 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "serde",
+ "serde_json",
  "serde_yaml 0.9.34+deprecated",
  "sui-types 0.1.0 (git+https://github.com/MystenLabs/sui?tag=testnet-v1.73.1)",
  "suibase",

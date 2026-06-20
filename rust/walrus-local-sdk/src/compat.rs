@@ -23,6 +23,7 @@ use walrus_sdk::{
         store_args::StoreArgs,
     },
 };
+use walrus_storage_node_client::api::BlobStatus;
 
 /// The common blob-core surface shared by [`crate::WalrusLocalClient`] (localnet) and
 /// `walrus_sdk::node_client::WalrusNodeClient<SuiContractClient>` (real networks).
@@ -49,6 +50,9 @@ pub trait WalrusApi {
         start_byte_position: u64,
         byte_length: u64,
     ) -> ClientResult<ReadByteRangeResult>;
+
+    /// Blob status. See `WalrusNodeClient::get_blob_status_with_retries`.
+    async fn blob_status(&self, blob_id: &BlobId) -> ClientResult<BlobStatus>;
 }
 
 // --- localnet impl: delegate to the inherent mirror methods ---
@@ -79,6 +83,10 @@ impl WalrusApi for crate::WalrusLocalClient {
         self.byte_range_read_client()
             .read_byte_range(blob_id, start_byte_position, byte_length)
             .await
+    }
+
+    async fn blob_status(&self, blob_id: &BlobId) -> ClientResult<BlobStatus> {
+        crate::WalrusLocalClient::blob_status(self, blob_id).await
     }
 }
 
@@ -113,6 +121,12 @@ impl WalrusApi for WalrusNodeClient<SuiContractClient> {
     ) -> ClientResult<ReadByteRangeResult> {
         self.byte_range_read_client()
             .read_byte_range(blob_id, start_byte_position, byte_length)
+            .await
+    }
+
+    async fn blob_status(&self, blob_id: &BlobId) -> ClientResult<BlobStatus> {
+        // Use the client's own Sui client as the ReadClient for the on-chain status query.
+        self.get_blob_status_with_retries(blob_id, self.sui_client())
             .await
     }
 }

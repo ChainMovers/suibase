@@ -46,6 +46,13 @@ die() {
 
 [ -f "$TESTNET_WALLET" ] || die "testnet wallet not found: $TESTNET_WALLET"
 
+# sb-local must be up (the interop test must run, not skip).
+SB_LOCAL_BASE="${SB_LOCAL_BASE:-http://localhost:45840}"
+curl -x "" -s -m 3 "$SB_LOCAL_BASE/status" 2>/dev/null | grep -q "OK" || die \
+  "sb-local not reachable at $SB_LOCAL_BASE — start localnet with walrus enabled so the
+   aggregator/publisher is up (the interop test must run here, not skip)."
+export SB_LOCAL_BASE
+
 # Build an absolute-path testnet walrus config (the suibase one uses a workdir-relative
 # wallet path that would not resolve from the crate dir where cargo runs the test).
 TESTNET_CFG="$(mktemp /tmp/walrus-testnet-cfg.XXXXXX.yaml)" || die "mktemp failed"
@@ -95,6 +102,7 @@ run "localnet_roundtrip" cargo test --test localnet_roundtrip -- --nocapture
 run "localnet_byte_range" cargo test --test localnet_byte_range -- --nocapture
 run "localnet_pool" cargo test --test localnet_pool -- --nocapture
 run "localnet_pool_namespace" cargo test --test localnet_pool_namespace -- --nocapture
+run "localnet_sb_local_interop (HTTP <-> Rust SDK)" cargo test --test localnet_sb_local_interop -- --nocapture
 run "testnet_parity (REAL network, fund-gated)" cargo test --test testnet_parity -- --nocapture
 
 echo

@@ -587,6 +587,22 @@ impl LocalnetMockStore {
         self.try_read_sidecar(id).ok().flatten().map(|s| s.deletable)
     }
 
+    /// If this blob_id is stored in some pool (a pooled sidecar exists for it), return that
+    /// pool's id. Lets `blob_status` report a pooled-only blob as the Deletable, certified
+    /// blob it actually is on-chain (rather than letting the localnet storage layout leak
+    /// a `Nonexistent`). Returns the first match if several pools hold the same content.
+    pub fn find_pooled_pool_id(&self, blob_id: &str) -> Option<String> {
+        let id = parse_blob_id(blob_id).ok()?;
+        let needle = format!("{}.meta", hex_key(id));
+        let rd = std::fs::read_dir(self.data_dir.join("pools")).ok()?;
+        for entry in rd.flatten() {
+            if entry.path().join(&needle).exists() {
+                return entry.file_name().to_str().map(|s| s.to_string());
+            }
+        }
+        None
+    }
+
     /// Resolve a `Blob` object id to its `blob_id` + bytes (for the aggregator's
     /// `GET /v1/blobs/by-object-id/{id}` route). Reads the on-chain Blob to map the
     /// object id to its content id, then serves the bytes from the filesystem.

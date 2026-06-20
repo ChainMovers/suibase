@@ -294,37 +294,54 @@ impl WalrusLocalClient {
     /// no Sui status event).
     pub async fn blob_status(&self, blob_id: &BlobId) -> ClientResult<BlobStatus> {
         let id = blob_id.to_string();
-        // Status is tracked per STANDALONE blob (via its sidecar). An absent blob — or a
-        // pooled-only blob, which has no standalone sidecar — reports Nonexistent.
-        let deletable = match self.engine.blob_is_deletable(&id) {
-            Some(d) => d,
-            None => return Ok(BlobStatus::Nonexistent),
-        };
-        let meta = self.engine.stat(&id).await.map_err(cerr)?;
-        let certified = meta.certified_epoch.is_some();
-        if deletable {
-            Ok(BlobStatus::Deletable {
-                initial_certified_epoch: meta.certified_epoch,
+
+        // Standalone blob: status is DERIVED FROM CHAIN (engine.stat reads the on-chain
+        // Blob), so it matches what testnet reports for the same blob_id — the storage
+        // mechanism does not change the answer.
+        if let Some(deletable) = self.engine.blob_is_deletable(&id) {
+            let meta = self.engine.stat(&id).await.map_err(cerr)?;
+            let certified = meta.certified_epoch.is_some();
+            return Ok(if deletable {
+                BlobStatus::Deletable {
+                    initial_certified_epoch: meta.certified_epoch,
+                    deletable_counts: DeletableCounts {
+                        count_deletable_total: 1,
+                        count_deletable_certified: if certified { 1 } else { 0 },
+                    },
+                }
+            } else {
+                BlobStatus::Permanent {
+                    end_epoch: meta.end_epoch,
+                    is_certified: certified,
+                    // Localnet has no Sui status event; a zero placeholder stands in.
+                    status_event: EventID {
+                        tx_digest: TransactionDigest::ZERO,
+                        event_seq: 0,
+                    },
+                    deletable_counts: DeletableCounts {
+                        count_deletable_total: 0,
+                        count_deletable_certified: 0,
+                    },
+                    initial_certified_epoch: meta.certified_epoch,
+                }
+            });
+        }
+
+        // Pooled-only blob (no standalone Blob): it is a Deletable, certified blob on-chain
+        // (store_pooled always certifies), living for its pool's term — report it as such,
+        // NOT Nonexistent (which would leak the localnet storage layout into the status).
+        if let Some(pool_id) = self.engine.find_pooled_pool_id(&id) {
+            let pool = self.engine.pool_status(&pool_id).await.map_err(cerr)?;
+            return Ok(BlobStatus::Deletable {
+                initial_certified_epoch: Some(pool.start_epoch),
                 deletable_counts: DeletableCounts {
                     count_deletable_total: 1,
-                    count_deletable_certified: if certified { 1 } else { 0 },
+                    count_deletable_certified: 1,
                 },
-            })
-        } else {
-            Ok(BlobStatus::Permanent {
-                end_epoch: meta.end_epoch,
-                is_certified: certified,
-                status_event: EventID {
-                    tx_digest: TransactionDigest::ZERO,
-                    event_seq: 0,
-                },
-                deletable_counts: DeletableCounts {
-                    count_deletable_total: 0,
-                    count_deletable_certified: 0,
-                },
-                initial_certified_epoch: meta.certified_epoch,
-            })
+            });
         }
+
+        Ok(BlobStatus::Nonexistent)
     }
 
     // ----- storage pools (mirrors StoreBlobsApi::reserve_and_store_blobs_in_storage_pool) -----

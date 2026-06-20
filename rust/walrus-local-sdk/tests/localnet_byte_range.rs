@@ -9,8 +9,6 @@
 //!
 //! Gated by `WALRUS_LOCALNET_TEST=1` like the other live suites.
 
-mod common;
-
 use walrus_core::BlobId;
 use walrus_local_sdk::WalrusLocalClient;
 use walrus_sdk::node_client::store_args::StoreArgs;

@@ -126,6 +126,8 @@ jobs:
           cargo test --test localnet_pool -- --nocapture
           # Pool/standalone namespace coexistence (identical content, no aliasing).
           cargo test --test localnet_pool_namespace -- --nocapture
+          # sb-local HTTP <-> Rust SDK interop (same store, both front doors).
+          SB_LOCAL_HTTP_TEST=1 cargo test --test localnet_sb_local_interop -- --nocapture
 
       - name: sb-local HTTP wire round-trip (aggregator + publisher + quilt, curl)
         env:

@@ -136,11 +136,11 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
     );
     let pooled_id = pres[0].blob_id().expect("pooled result has a blob id");
     assert_eq!(client.read_blob_primary(&pooled_id).await?, pooled_payload, "pooled read != stored");
-    // blob_status reports on STANDALONE blobs; a pooled-only blob has no standalone
-    // sidecar, so it is Nonexistent here (pool membership is queried via the engine).
+    // A pooled blob is a Deletable, certified blob on-chain — blob_status reports it as
+    // such (the localnet storage layout does NOT leak a Nonexistent), matching testnet.
     assert!(
-        matches!(client.blob_status(&pooled_id).await?, BlobStatus::Nonexistent),
-        "pooled-only blob has no standalone status"
+        matches!(client.blob_status(&pooled_id).await?, BlobStatus::Deletable { .. }),
+        "pooled blob should report Deletable"
     );
     eprintln!("storage-pool store (PooledBlobStoreResult) + blob_status: OK");
 

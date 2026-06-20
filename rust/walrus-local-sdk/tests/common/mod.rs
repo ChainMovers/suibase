@@ -12,11 +12,36 @@
 use walrus_local_sdk::compat::WalrusApi;
 use walrus_sdk::node_client::responses::BlobStoreResult;
 use walrus_sdk::node_client::store_args::StoreArgs;
+use walrus_storage_node_client::api::BlobStatus;
+
+/// A fixed (non-nonce'd) content fixture and its canonical Walrus `BlobId`. This exact id is
+/// triple-confirmed for this content: the localnet store, the real-testnet store, AND the
+/// `walrus` CLI computed *in the testnet context* (`walrus --context testnet blob-id`) all
+/// produce it. (NB: `walrus blob-id --n-shards 1000` *standalone* gives a DIFFERENT value —
+/// the standalone path derives the RS2 encoding params differently than the live committee;
+/// the committee/store value is the authoritative one.) Storing this content MUST yield this
+/// id on either backend — the cross-environment blob_id parity proof.
+pub const BLOB_ID_FIXTURE: &[u8] = b"walrus-local-sdk cross-environment blob_id fixture v1";
+pub const EXPECTED_FIXTURE_BLOB_ID: &str = "x37bth2QxQZBbjZS6F-6l9mU_-bp46CRfOo33IAwe2U";
 
 /// store -> read -> dedup(re-store) -> delete, using only the shared trait surface.
 /// Returns the stored `blob_id` string (for any backend-specific follow-up assertions).
 pub async fn parity_roundtrip<C: WalrusApi>(client: &C, payload: &[u8]) -> anyhow::Result<String> {
     let args = StoreArgs::default_with_epochs(5);
+
+    // Cross-environment blob_id parity: the SAME content yields the SAME canonical blob_id
+    // on localnet AND testnet (both n_shards=1000 + walrus-core encoder), equal to the
+    // `walrus blob-id` CLI output. Storing the fixed fixture and checking the id proves it
+    // on whichever backend this body runs against.
+    let fixture = client
+        .reserve_and_store_blobs(vec![BLOB_ID_FIXTURE.to_vec()], &args)
+        .await?;
+    assert_eq!(
+        fixture[0].blob_id().expect("fixture has a blob id").to_string(),
+        EXPECTED_FIXTURE_BLOB_ID,
+        "cross-environment blob_id mismatch (n_shards / encoder drift?)"
+    );
+    eprintln!("blob_id parity OK (fixture == {EXPECTED_FIXTURE_BLOB_ID})");
 
     // store
     let results = client
@@ -39,6 +64,21 @@ pub async fn parity_roundtrip<C: WalrusApi>(client: &C, payload: &[u8]) -> anyho
     let back = client.read_blob_primary(&blob_id).await?;
     assert_eq!(back, payload, "read bytes != stored bytes");
     eprintln!("read OK ({} bytes)", back.len());
+
+    // blob_status parity: a freshly-stored Deletable blob (default StoreArgs) reports
+    // Deletable + certified on BOTH backends — the localnet status is derived from chain,
+    // so it must agree with testnet's node-quorum status for the same blob_id.
+    match client.blob_status(&blob_id).await? {
+        BlobStatus::Deletable { initial_certified_epoch, deletable_counts } => {
+            assert!(initial_certified_epoch.is_some(), "stored blob should be certified");
+            assert!(
+                deletable_counts.count_deletable_total >= 1,
+                "at least one deletable blob object expected"
+            );
+        }
+        other => anyhow::bail!("expected Deletable blob_status for a deletable store, got {other:?}"),
+    }
+    eprintln!("blob_status parity OK (Deletable, certified)");
 
     // byte-range read (drop-in: same call shape, same ReadByteRangeResult on both backends)
     if payload.len() >= 4 {
