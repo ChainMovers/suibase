@@ -209,7 +209,12 @@ impl WalrusLocalClient {
         for bytes in blobs {
             let stored = self
                 .engine
-                .store_blob(&bytes, store_args.epochs_ahead, store_args.post_store)
+                .store_blob(
+                    &bytes,
+                    store_args.epochs_ahead,
+                    store_args.persistence,
+                    store_args.post_store,
+                )
                 .await
                 .map_err(cerr)?;
             out.push(stored_blob_to_result(stored));
@@ -245,14 +250,21 @@ impl WalrusLocalClient {
 
     // ----- delete (mirrors WalrusNodeClient::delete_owned_blob) -------------
 
-    /// Delete owned blob(s) with this id, returning the number removed. Mirrors
-    /// `WalrusNodeClient::delete_owned_blob`. Idempotent: deleting an absent blob
-    /// returns `0`.
+    /// Delete owned **deletable** blob(s) with this id, returning the number removed.
+    /// Mirrors `WalrusNodeClient::delete_owned_blob`, which deletes only *deletable*
+    /// owned blobs — so a Permanent blob (or an absent one) is a no-op returning `0`.
+    /// Idempotent.
     pub async fn delete_owned_blob(&self, blob_id: &BlobId) -> ClientResult<usize> {
         let id = blob_id.to_string();
-        let existed = self.engine.has_blob(&id);
-        self.engine.delete(&id).await.map_err(cerr)?;
-        Ok(if existed { 1 } else { 0 })
+        match self.engine.blob_is_deletable(&id) {
+            // Deletable + present -> delete it (the localnet engine holds at most one).
+            Some(true) => {
+                self.engine.delete(&id).await.map_err(cerr)?;
+                Ok(1)
+            }
+            // Permanent (Some(false)) or absent (None) -> the SDK deletes nothing here.
+            _ => Ok(0),
+        }
     }
 
     // ----- status / object lookup ------------------------------------------
@@ -322,7 +334,12 @@ impl LocalQuiltClient<'_> {
         let quilt_index = quilt.quilt_index().map_err(ClientError::from)?.clone();
         let stored = self
             .engine
-            .store_blob(&quilt.into_data(), store_args.epochs_ahead, store_args.post_store)
+            .store_blob(
+                &quilt.into_data(),
+                store_args.epochs_ahead,
+                store_args.persistence,
+                store_args.post_store,
+            )
             .await
             .map_err(cerr)?;
         let blob_store_result = stored_blob_to_result(stored);

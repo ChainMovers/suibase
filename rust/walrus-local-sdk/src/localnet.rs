@@ -50,7 +50,7 @@ use walrus_core::{
         EncodingConfig, EncodingFactory,
     },
     keys::ProtocolKeyPair,
-    messages::{BlobPersistenceType, Confirmation, ConfirmationCertificate},
+    messages::{Confirmation, ConfirmationCertificate},
     metadata::QuiltPatchInternalIdV1,
     BlobId, EncodingType, Epoch, QuiltPatchId,
 };
@@ -161,6 +161,11 @@ struct BlobSidecar {
     /// in-file record for debuggability.
     #[serde(default)]
     pool_id: Option<String>,
+    /// `true` if the on-chain blob was registered Deletable (mirrors the caller's
+    /// `BlobPersistence`). Drives SDK-faithful `delete_owned_blob` (deletes only
+    /// deletable blobs). `#[serde(default)]` => older sidecars read as Permanent.
+    #[serde(default)]
+    deletable: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -404,7 +409,9 @@ impl LocalnetMockStore {
     /// acceptable on a regen-able localnet with faucet-minted WAL and is not worth
     /// crash-recovery machinery for a dev mock.
     pub async fn store(&self, bytes: &[u8], epochs: u32) -> Result<BlobHandle> {
-        let stored = self.store_blob(bytes, epochs, PostStoreAction::Keep).await?;
+        let stored = self
+            .store_blob(bytes, epochs, BlobPersistence::Permanent, PostStoreAction::Keep)
+            .await?;
         Ok(BlobHandle {
             blob_id: stored.blob.blob_id.to_string(),
             object_id: stored.blob.id.to_string(),
@@ -417,13 +424,16 @@ impl LocalnetMockStore {
     /// what happens to the `Blob` object after certify (Keep / TransferTo / Share —
     /// mapping the publisher's `send_object_to`/`share` query params).
     ///
-    /// Always Permanent (the publisher's deprecated `deletable` flag is a no-op; the
-    /// Permanent confirmation needs no blob object id, so the held-key signature is a
-    /// pure function of (epoch, blob_id)).
+    /// `persistence` selects Permanent vs Deletable (the SDK mirror passes the caller's
+    /// `StoreArgs.persistence`; `sb-local` passes Permanent). The held-key confirmation
+    /// is built from `blob.blob_persistence_type()`, so a Deletable blob's certificate
+    /// correctly binds to its object id (same path the pooled store uses) while a
+    /// Permanent one stays a pure function of (epoch, blob_id).
     pub async fn store_blob(
         &self,
         bytes: &[u8],
         epochs: u32,
+        persistence: BlobPersistence,
         post_store: PostStoreAction,
     ) -> Result<StoredBlob> {
         let unencoded_size = bytes.len() as u64;
@@ -471,8 +481,8 @@ impl LocalnetMockStore {
 
         self.ensure_wal_funded().await?;
 
-        // Reserve, then register as Permanent. encoded_size comes from the real
-        // metadata computed above (the encoded length of the erasure-coded blob).
+        // Reserve, then register with the requested persistence. encoded_size comes from
+        // the real metadata computed above (the encoded length of the erasure-coded blob).
         let storage = self
             .client
             .reserve_space(encoded_length, epochs)
@@ -480,15 +490,16 @@ impl LocalnetMockStore {
             .context("reserve_space (is the wallet funded with WAL?)")?;
         let mut blobs = self
             .client
-            .register_blobs(vec![(metadata, storage)], BlobPersistence::Permanent)
+            .register_blobs(vec![(metadata, storage)], persistence)
             .await
-            .context("register_blobs(Permanent)")?;
+            .with_context(|| format!("register_blobs({persistence:?})"))?;
         let mut blob = blobs
             .pop()
             .ok_or_else(|| anyhow!("register_blobs returned no Blob"))?;
 
         let blob_id_str = blob_id.to_string();
         let object_id_str = blob.id.to_string();
+        let deletable = blob.deletable;
 
         // Persist bytes + sidecar BEFORE certify, so a certified blob always has
         // servable local bytes (the object_id is already known from register).
@@ -501,19 +512,20 @@ impl LocalnetMockStore {
                 size: unencoded_size,
                 epochs,
                 pool_id: None,
+                deletable,
             },
         )?;
 
-        // Permanent confirmation: serializes as a single 0u8 tag with NO object id,
-        // so the signed message is a pure function of (epoch, blob_id) and is
-        // independent of blob.id (verified in walrus_core's own encoding test).
+        // The confirmation's persistence type comes from the registered blob: Permanent
+        // serializes as a single 0u8 tag (pure function of epoch+blob_id); Deletable binds
+        // to the blob's object id. `blob.blob_persistence_type()` returns the right variant.
         let epoch: Epoch = self
             .client
             .read_client()
             .current_epoch()
             .await
             .context("current_epoch")?;
-        let confirmation = Confirmation::new(epoch, blob_id, BlobPersistenceType::Permanent);
+        let confirmation = Confirmation::new(epoch, blob_id, blob.blob_persistence_type());
         let signed = self.held_key.sign_message(&confirmation);
         let certificate =
             ConfirmationCertificate::from_signed_messages_and_indices(vec![signed], vec![0u16])
@@ -565,6 +577,14 @@ impl LocalnetMockStore {
             Ok(id) => self.bytes_path(id).exists(),
             Err(_) => false,
         }
+    }
+
+    /// Whether the standalone blob with this id was registered Deletable (read from its
+    /// sidecar). `None` when there is no standalone sidecar (unknown/absent blob). Drives
+    /// the mirror's SDK-faithful `delete_owned_blob` (which deletes only deletable blobs).
+    pub fn blob_is_deletable(&self, blob_id: &str) -> Option<bool> {
+        let id = parse_blob_id(blob_id).ok()?;
+        self.try_read_sidecar(id).ok().flatten().map(|s| s.deletable)
     }
 
     /// Resolve a `Blob` object id to its `blob_id` + bytes (for the aggregator's
@@ -758,6 +778,7 @@ impl LocalnetMockStore {
                 size: unencoded_size,
                 epochs: 0,
                 pool_id: Some(pool_id.to_string()),
+                deletable: true, // pooled blobs are always registered Deletable
             },
         )?;
 
@@ -931,7 +952,9 @@ impl LocalnetMockStore {
         let quilt_bytes = quilt.into_data();
 
         // Store the packed quilt as one normal Permanent blob (M0 => id == quilt_id).
-        let stored = self.store_blob(&quilt_bytes, epochs, post_store).await?;
+        let stored = self
+            .store_blob(&quilt_bytes, epochs, BlobPersistence::Permanent, post_store)
+            .await?;
         let quilt_id = stored.blob.blob_id;
 
         let patches = patch_meta

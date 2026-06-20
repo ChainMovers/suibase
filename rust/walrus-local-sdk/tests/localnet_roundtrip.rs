@@ -78,10 +78,32 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
     assert_eq!(bwa.blob.blob_id, id1, "get_blob_by_object_id mapped to a different blob id");
     eprintln!("multi-store + get_blob_by_object_id + generic read: OK");
 
-    // clean up the extras.
+    // clean up the extras (default args => Deletable, so delete_owned_blob removes them).
     for r in &multi {
-        let _ = client.delete_owned_blob(&r.blob_id().unwrap()).await?;
+        assert_eq!(
+            client.delete_owned_blob(&r.blob_id().unwrap()).await?,
+            1,
+            "deletable blob should be removed by delete_owned_blob"
+        );
     }
+
+    // Persistence parity: a PERMANENT blob is NOT removed by delete_owned_blob (the SDK
+    // deletes only deletable owned blobs) -> returns 0 and the blob stays readable.
+    let perm_args = StoreArgs::default_with_epochs(5).permanent();
+    let pperm = format!("permanent-{nonce}").into_bytes();
+    let pr = client.reserve_and_store_blobs(vec![pperm.clone()], &perm_args).await?;
+    let pid = pr[0].blob_id().expect("permanent store has a blob id");
+    assert_eq!(
+        client.delete_owned_blob(&pid).await?,
+        0,
+        "delete_owned_blob must be a no-op for a Permanent blob"
+    );
+    assert_eq!(
+        client.read_blob_primary(&pid).await?,
+        pperm,
+        "Permanent blob must survive delete_owned_blob"
+    );
+    eprintln!("persistence (Deletable vs Permanent delete semantics): OK");
 
     // Quilt round-trip through the mirror's sub-client (V1).
     let qc = client.quilt_client();

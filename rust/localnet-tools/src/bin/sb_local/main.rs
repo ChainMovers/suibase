@@ -42,7 +42,7 @@ use clap::Parser;
 use serde::Deserialize;
 use serde_json::json;
 use sui_types::base_types::SuiAddress;
-use walrus_sui::client::PostStoreAction;
+use walrus_sui::client::{BlobPersistence, PostStoreAction};
 
 use walrus_local_sdk::localnet::{LocalnetMockStore, StoredBlob};
 
@@ -262,7 +262,12 @@ async fn put_blob(
         Err(resp) => return resp,
     };
 
-    match store.store_blob(body.as_ref(), epochs, post_store).await {
+    // sb-local stores Permanent (the publisher's deprecated `deletable` flag is a no-op,
+    // matching the real walrus daemon); the Deletable path is exercised via the Rust mirror.
+    match store
+        .store_blob(body.as_ref(), epochs, BlobPersistence::Permanent, post_store)
+        .await
+    {
         Ok(stored) => (StatusCode::OK, Json(blob_store_result(stored))).into_response(),
         Err(e) => internal_error(&format!("store failed: {e:#}")),
     }

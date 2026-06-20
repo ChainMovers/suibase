@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# Dev-only: run the FULL walrus-local-sdk Rust test suite, INCLUDING the fund-gated
+# real-network testnet parity test. Parameterless by design.
+#
+# Unlike CI (which runs the localnet suites and only COMPILE-checks testnet_parity), this
+# runs everything for real against:
+#   - a live suibase localnet with nodeless Walrus deployed (descriptor present), and
+#   - a FUNDED testnet wallet (SUI for gas + WAL for storage).
+#
+# IMPORTANT: a SKIPPED test is treated as a FAILURE here. The point of this script is to
+# verify REAL coverage, so every gated test must actually run. If a precondition is
+# missing (no localnet deploy, no testnet config/funds) the script fails with guidance
+# instead of quietly skipping.
+#
+# Preconditions you must satisfy first (this script does not mutate your setup):
+#   - localnet started + walrus enabled + regen'd:
+#       echo 'walrus_local_enabled: true' >> ~/suibase/workdirs/localnet/suibase.yaml
+#       ~/suibase/scripts/localnet regen
+#   - testnet wallet funded with SUI and WAL (convert with:
+#       cd ~/suibase/workdirs/testnet && ./bin/walrus --config config-default/walrus-config.yaml --context testnet get-wal)
+
+set -uo pipefail
+
+SUIBASE_DIR="$HOME/suibase"
+CRATE_DIR="$SUIBASE_DIR/rust/walrus-local-sdk"
+LOCALNET_DESCRIPTOR="$SUIBASE_DIR/workdirs/localnet/config/walrus-localnet.yaml"
+TESTNET_WALRUS_CONFIG_SRC="$SUIBASE_DIR/workdirs/testnet/config-default/walrus-config.yaml"
+TESTNET_WALLET="$SUIBASE_DIR/workdirs/testnet/config/client.yaml"
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+# --- Preconditions ---------------------------------------------------------
+
+[ -d "$CRATE_DIR" ] || die "crate not found: $CRATE_DIR"
+
+[ -f "$LOCALNET_DESCRIPTOR" ] || die \
+  "localnet Walrus not deployed (missing $LOCALNET_DESCRIPTOR).
+   Run: echo 'walrus_local_enabled: true' >> ~/suibase/workdirs/localnet/suibase.yaml && ~/suibase/scripts/localnet regen"
+
+[ -f "$TESTNET_WALRUS_CONFIG_SRC" ] || die \
+  "testnet walrus config not found: $TESTNET_WALRUS_CONFIG_SRC (is the testnet workdir set up?)"
+
+[ -f "$TESTNET_WALLET" ] || die "testnet wallet not found: $TESTNET_WALLET"
+
+# Build an absolute-path testnet walrus config (the suibase one uses a workdir-relative
+# wallet path that would not resolve from the crate dir where cargo runs the test).
+TESTNET_CFG="$(mktemp /tmp/walrus-testnet-cfg.XXXXXX.yaml)" || die "mktemp failed"
+trap 'rm -f "$TESTNET_CFG"' EXIT
+sed "s|path: config/client.yaml|path: $TESTNET_WALLET|" \
+  "$TESTNET_WALRUS_CONFIG_SRC" >"$TESTNET_CFG" || die "could not generate testnet config"
+
+# Make every gated test actually RUN (so a skip is unexpected = a real problem).
+export WALRUS_LOCALNET_TEST=1
+export WALRUS_TESTNET_TEST=1
+export WALRUS_TESTNET_CONFIG="$TESTNET_CFG"
+
+cd "$CRATE_DIR" || die "cannot cd $CRATE_DIR"
+
+# --- Run -------------------------------------------------------------------
+
+FAIL=0
+
+run() {
+  local name="$1"
+  shift
+  echo
+  echo "================= $name ================="
+  local out rc
+  out="$("$@" 2>&1)"
+  rc=$?
+  echo "$out"
+  if [ "$rc" -ne 0 ]; then
+    echo ">>> FAIL: $name (exit $rc)"
+    FAIL=1
+  fi
+  # A self-skip (the tests print 'SKIP:' and return Ok) is a FAILURE for this runner.
+  if grep -qiE "^SKIP:|: SKIP:|SKIP: set" <<<"$out"; then
+    echo ">>> FAIL: $name reported a SKIPPED test (treated as a failure here)"
+    FAIL=1
+  fi
+  # 'cargo test' counts self-skipped tests as 'ok'; only true 'ignored' would show here,
+  # but guard against it anyway.
+  if grep -qE "result: ok\. .* [1-9][0-9]* ignored" <<<"$out"; then
+    echo ">>> FAIL: $name has #[ignore]d tests (treated as a failure here)"
+    FAIL=1
+  fi
+}
+
+run "unit tests (cargo test --lib)" cargo test --lib -- --nocapture
+run "localnet_roundtrip" cargo test --test localnet_roundtrip -- --nocapture
+run "localnet_byte_range" cargo test --test localnet_byte_range -- --nocapture
+run "localnet_pool" cargo test --test localnet_pool -- --nocapture
+run "localnet_pool_namespace" cargo test --test localnet_pool_namespace -- --nocapture
+run "testnet_parity (REAL network, fund-gated)" cargo test --test testnet_parity -- --nocapture
+
+echo
+if [ "$FAIL" -eq 0 ]; then
+  echo "✅ ALL walrus-local-sdk tests PASSED (localnet + real testnet, no skips)"
+  exit 0
+else
+  echo "❌ FAILURES (or skips) present — see the per-section '>>> FAIL' lines above" >&2
+  exit 1
+fi
