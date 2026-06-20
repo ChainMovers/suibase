@@ -92,7 +92,7 @@ start_sui_faucet_process() {
   fi
 
   update_SUI_FAUCET_PROCESS_PID_var
-  echo "faucet started (process pid $SUI_FAUCET_PROCESS_PID)"
+  echo "faucet started ( pid $SUI_FAUCET_PROCESS_PID )"
 }
 export -f start_sui_faucet_process
 
@@ -101,7 +101,7 @@ stop_sui_faucet_process() {
   # noop if the process is already stopped.
   update_SUI_FAUCET_PROCESS_PID_var
   if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
-    echo "Stopping faucet (process pid $SUI_FAUCET_PROCESS_PID)"
+    echo "Stopping faucet ( pid $SUI_FAUCET_PROCESS_PID )"
 
     if $SUI_BASE_NET_MOCK; then
       unset SUI_FAUCET_PROCESS_PID

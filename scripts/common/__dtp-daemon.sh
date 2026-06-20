@@ -192,7 +192,7 @@ start_dtp_daemon() {
     exit 1
   fi
 
-  echo "$DTP_DAEMON_NAME started (process pid $DTP_DAEMON_PID)"
+  echo "$DTP_DAEMON_NAME started ( pid $DTP_DAEMON_PID )"
 }
 export -f start_dtp_daemon
 
@@ -226,7 +226,7 @@ stop_dtp_daemon() {
   # noop if the process is already stopped.
   update_DTP_DAEMON_PID_var
   if [ -n "$DTP_DAEMON_PID" ]; then
-    echo "Stopping $DTP_DAEMON_NAME (process pid $DTP_DAEMON_PID)"
+    echo "Stopping $DTP_DAEMON_NAME ( pid $DTP_DAEMON_PID )"
 
     # TODO This will just restart the daemon... need to actually kill the parents as well!
     kill -s SIGTERM "$DTP_DAEMON_PID"

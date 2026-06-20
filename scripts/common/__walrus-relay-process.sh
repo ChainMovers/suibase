@@ -520,7 +520,7 @@ EOF
   fi
 
   update_WALRUS_RELAY_PROCESS_PID_var
-  echo "walrus-upload-relay started (process pid $WALRUS_RELAY_PROCESS_PID)"
+  echo "walrus-upload-relay started ( pid $WALRUS_RELAY_PROCESS_PID )"
 }
 export -f start_walrus_relay_process
 
@@ -535,7 +535,7 @@ stop_walrus_relay_process() {
       *) _WORKDIR_PREFIX="${WORKDIR:0:1}" ;;  # fallback: first char
     esac
 
-    echo "Stopping ${_WORKDIR_PREFIX}walrus-upload-relay (PID $WALRUS_RELAY_PROCESS_PID)"
+    echo "Stopping ${_WORKDIR_PREFIX}walrus-upload-relay ( pid $WALRUS_RELAY_PROCESS_PID )"
     kill "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
 
     # Wait for process to terminate (up to 10 seconds)
