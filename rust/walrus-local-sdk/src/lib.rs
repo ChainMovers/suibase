@@ -38,14 +38,20 @@ pub mod localnet;
 use sui_types::base_types::ObjectID;
 use walrus_core::{
     encoding::{
-        quilt_encoding::{QuiltStoreBlob, QuiltV1},
-        EncodingAxis,
+        quilt_encoding::{
+            QuiltApi, QuiltConfigApi, QuiltEncoderApi, QuiltIndexApi, QuiltPatchApi,
+            QuiltPatchInternalIdApi, QuiltStoreBlob, QuiltVersion,
+        },
+        EncodingAxis, EncodingConfig,
     },
     BlobId, EncodingType, QuiltPatchId,
 };
+use std::num::NonZeroUsize;
+
 use walrus_sdk::{
-    error::{ClientError, ClientResult},
+    error::{ClientError, ClientErrorKind, ClientResult},
     node_client::{
+        byte_range_read_client::ReadByteRangeResult,
         client_types::StoredQuiltPatch,
         resource::RegisterBlobOp,
         responses::{BlobStoreResult, EventOrObjectId, QuiltStoreResult},
@@ -54,7 +60,7 @@ use walrus_sdk::{
 };
 use walrus_sui::types::move_structs::BlobWithAttribute;
 
-use localnet::{LocalnetMockStore, StoredBlob, StoredQuilt};
+use localnet::{LocalnetMockStore, StoredBlob};
 
 // ---------------------------------------------------------------------------
 // Lower-level (non-SDK) handle/metadata types — used by the [`localnet`] engine
@@ -258,6 +264,11 @@ impl WalrusLocalClient {
     pub fn quilt_client(&self) -> LocalQuiltClient<'_> {
         LocalQuiltClient { engine: &self.engine }
     }
+
+    /// A byte-range read sub-client. Mirrors `WalrusNodeClient::byte_range_read_client`.
+    pub fn byte_range_read_client(&self) -> LocalByteRangeReadClient<'_> {
+        LocalByteRangeReadClient { engine: &self.engine }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -272,30 +283,69 @@ pub struct LocalQuiltClient<'a> {
 }
 
 impl LocalQuiltClient<'_> {
-    /// Pack blobs into a `QuiltV1` (pure compute). Mirrors
-    /// `QuiltClient::construct_quilt::<QuiltVersionV1>`; `encoding_type` is accepted
-    /// for signature parity (localnet uses RS2).
-    pub async fn construct_quilt(
+    /// Pack blobs into a quilt (pure compute). Generic over `V: QuiltVersion`, mirroring
+    /// `walrus_sdk`'s `QuiltClient::construct_quilt::<V>` — it dispatches through `V`'s
+    /// associated `QuiltConfig` encoder, exactly like the SDK. The only difference: the
+    /// shard count comes straight from the localnet engine instead of the SDK's committee.
+    pub async fn construct_quilt<V: QuiltVersion>(
         &self,
         blobs: &[QuiltStoreBlob<'_>],
-        _encoding_type: EncodingType,
-    ) -> ClientResult<QuiltV1> {
-        self.engine.construct_quilt_v1(blobs).await.map_err(cerr)
+        encoding_type: EncodingType,
+    ) -> ClientResult<V::Quilt> {
+        let n_shards = self.engine.n_shards().await.map_err(cerr)?;
+        let encoder =
+            V::QuiltConfig::get_encoder(EncodingConfig::new(n_shards).get_for_type(encoding_type), blobs);
+        encoder.construct_quilt().map_err(ClientError::from)
     }
 
-    /// Store a constructed quilt. Mirrors
-    /// `QuiltClient::reserve_and_store_quilt::<QuiltVersionV1>`.
-    pub async fn reserve_and_store_quilt(
+    /// Store a constructed quilt. Generic over `V: QuiltVersion`, mirroring `walrus_sdk`'s
+    /// `QuiltClient::reserve_and_store_quilt::<V>` body verbatim — snapshot the index,
+    /// store the packed bytes as one blob, then map each patch to a `StoredQuiltPatch`.
+    /// The only difference: the packed bytes go through the localnet engine's `store_blob`
+    /// (held-key certify, fs bytes) instead of the SDK's node store.
+    pub async fn reserve_and_store_quilt<V: QuiltVersion>(
         &self,
-        quilt: QuiltV1,
+        quilt: V::Quilt,
         store_args: &StoreArgs,
     ) -> ClientResult<QuiltStoreResult> {
-        let sq: StoredQuilt = self
+        let quilt_index = quilt.quilt_index().map_err(ClientError::from)?.clone();
+        let stored = self
             .engine
-            .store_quilt_v1(quilt, store_args.epochs_ahead, store_args.post_store)
+            .store_blob(&quilt.into_data(), store_args.epochs_ahead, store_args.post_store)
             .await
             .map_err(cerr)?;
-        Ok(stored_quilt_to_result(sq))
+        let blob_store_result = stored_blob_to_result(stored);
+
+        if blob_store_result.is_not_stored() {
+            return Ok(QuiltStoreResult {
+                blob_store_result,
+                stored_quilt_blobs: Vec::new(),
+            });
+        }
+
+        let blob_id = blob_store_result
+            .blob_id()
+            .expect("a stored quilt blob has an id");
+        let stored_quilt_blobs = quilt_index
+            .patches()
+            .iter()
+            .map(|patch| {
+                let sliver_indices = patch.quilt_patch_internal_id().sliver_indices();
+                let start_index = sliver_indices.first().map(|s| s.get()).unwrap_or(0);
+                let end_index = sliver_indices
+                    .last()
+                    .map(|s| s.get())
+                    .map(|s| s + 1)
+                    .unwrap_or(0);
+                StoredQuiltPatch::new(blob_id, patch.identifier(), patch.quilt_patch_internal_id())
+                    .with_range(start_index.into(), end_index.into())
+            })
+            .collect::<Vec<_>>();
+
+        Ok(QuiltStoreResult {
+            blob_store_result,
+            stored_quilt_blobs,
+        })
     }
 
     /// Read patches by identifier. Mirrors `QuiltClient::get_blobs_by_identifiers`.
@@ -358,26 +408,179 @@ impl LocalQuiltClient<'_> {
     }
 }
 
-fn stored_quilt_to_result(sq: StoredQuilt) -> QuiltStoreResult {
-    let stored_quilt_blobs = sq
-        .patches
-        .into_iter()
-        .map(|p| StoredQuiltPatch {
-            identifier: p.identifier,
-            quilt_patch_id: p.quilt_patch_id,
-            range: Some((p.start_index as u64, p.end_index as u64)),
-        })
-        .collect();
-    QuiltStoreResult {
-        blob_store_result: stored_blob_to_result(sq.stored),
-        stored_quilt_blobs,
-    }
-}
-
 fn patch_to_quilt_blob(
     patch: localnet::QuiltPatchData,
 ) -> ClientResult<QuiltStoreBlob<'static>> {
     QuiltStoreBlob::new_owned(patch.data, patch.identifier)
         .map(|b| b.with_tags(patch.tags))
         .map_err(|e| cerr(anyhow::anyhow!("rebuilding quilt patch blob: {e}")))
+}
+
+// ---------------------------------------------------------------------------
+// LocalByteRangeReadClient — mirrors walrus_sdk's ByteRangeReadClient.
+// ---------------------------------------------------------------------------
+
+/// Build the EXACT `ByteRangeReadInputError` walrus_sdk raises for invalid range inputs.
+/// Because `ClientErrorKind` is a public, constructible enum, the mirror returns the same
+/// error kind + message as the SDK — kind-for-kind drop-in parity.
+fn byte_range_input_err(msg: impl Into<String>) -> ClientError {
+    ClientError::from(ClientErrorKind::ByteRangeReadInputError(msg.into()))
+}
+
+/// Validate the `(start, length)` inputs the way walrus_sdk's `read_byte_range` does,
+/// BEFORE touching the blob (the SDK validates inputs before fetching status/metadata).
+/// Pure — unit-tested exhaustively.
+fn validate_byte_range_inputs(
+    start_byte_position: u64,
+    byte_length: u64,
+) -> ClientResult<(usize, NonZeroUsize)> {
+    let start = usize::try_from(start_byte_position)
+        .map_err(|_| byte_range_input_err("start byte position is too large to convert to usize"))?;
+    let length = NonZeroUsize::new(
+        usize::try_from(byte_length)
+            .map_err(|_| byte_range_input_err("byte length is too large to convert to usize"))?,
+    )
+    .ok_or_else(|| byte_range_input_err("byte length cannot be zero"))?;
+    Ok((start, length))
+}
+
+/// Bounds-check the (validated) range against `bytes` and slice it out, matching
+/// walrus_sdk's `calculate_and_validate_end_byte_position` (same overflow / out-of-bounds
+/// error kinds + messages). On localnet the blob bytes are whole on disk (no slivers), so
+/// the range is a plain slice. Pure — unit-tested exhaustively.
+fn finish_byte_range(
+    bytes: &[u8],
+    start: usize,
+    length: NonZeroUsize,
+) -> ClientResult<ReadByteRangeResult> {
+    let blob_size = bytes.len();
+    let end = start
+        .checked_add(length.get())
+        .ok_or_else(|| byte_range_input_err("byte range overflow"))?;
+    if end > blob_size {
+        return Err(byte_range_input_err(format!(
+            "byte range out of bounds: requested {start}-{end}, blob size is {blob_size}"
+        )));
+    }
+    Ok(ReadByteRangeResult {
+        data: bytes[start..end].to_vec(),
+        unencoded_blob_size: blob_size as u64,
+    })
+}
+
+/// Full pure validate + slice (the order is: input validation, then bounds/slice). Lets
+/// unit tests exercise the whole `read_byte_range` contract without a live localnet.
+#[cfg(test)]
+fn slice_byte_range(
+    bytes: &[u8],
+    start_byte_position: u64,
+    byte_length: u64,
+) -> ClientResult<ReadByteRangeResult> {
+    let (start, length) = validate_byte_range_inputs(start_byte_position, byte_length)?;
+    finish_byte_range(bytes, start, length)
+}
+
+/// Localnet byte-range read sub-client. Mirrors
+/// `walrus_sdk::node_client::byte_range_read_client::ByteRangeReadClient`. Critical for
+/// clients that fetch slices of large blobs (range requests) without pulling the whole blob.
+pub struct LocalByteRangeReadClient<'a> {
+    engine: &'a LocalnetMockStore,
+}
+
+impl LocalByteRangeReadClient<'_> {
+    /// Read `[start_byte_position, start_byte_position + byte_length)` from a blob.
+    /// Mirrors `ByteRangeReadClient::read_byte_range` — same signature, same
+    /// `ReadByteRangeResult`, same input-validation error kinds. Input validation runs
+    /// before the blob is touched (SDK order); then the bytes are read and sliced.
+    pub async fn read_byte_range(
+        &self,
+        blob_id: &BlobId,
+        start_byte_position: u64,
+        byte_length: u64,
+    ) -> ClientResult<ReadByteRangeResult> {
+        let (start, length) = validate_byte_range_inputs(start_byte_position, byte_length)?;
+        let bytes = self.engine.read(&blob_id.to_string()).await.map_err(cerr)?;
+        finish_byte_range(&bytes, start, length)
+    }
+}
+
+#[cfg(test)]
+mod byte_range_tests {
+    use super::{slice_byte_range, validate_byte_range_inputs};
+    use walrus_sdk::error::ClientErrorKind;
+
+    fn input_err_msg(e: walrus_sdk::error::ClientError) -> String {
+        match e.kind() {
+            ClientErrorKind::ByteRangeReadInputError(m) => m.clone(),
+            other => panic!("expected ByteRangeReadInputError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ok_ranges_match_the_plain_slice() {
+        let bytes: Vec<u8> = (0u8..=255).cycle().take(10_000).collect();
+        let cases = [
+            (0u64, bytes.len() as u64), // whole blob
+            (0, 1),                     // first byte
+            (0, 100),                   // prefix
+            (9_900, 100),               // suffix (ends exactly at len)
+            (9_999, 1),                 // last byte
+            (1234, 1),                  // single middle byte
+            (1234, 4321),               // middle span
+            (4096, 4096),               // sliver-sized middle span
+            (5000, 5000),               // second half
+        ];
+        for (start, len) in cases {
+            let r = slice_byte_range(&bytes, start, len)
+                .unwrap_or_else(|e| panic!("range {start}+{len} should be Ok: {e:?}"));
+            let s = start as usize;
+            assert_eq!(r.data, &bytes[s..s + len as usize], "data for {start}+{len}");
+            assert_eq!(r.unencoded_blob_size, bytes.len() as u64);
+        }
+    }
+
+    #[test]
+    fn zero_length_is_an_input_error() {
+        // Validated BEFORE any blob access (matches the SDK), so it does not depend on bytes.
+        let e = validate_byte_range_inputs(0, 0).unwrap_err();
+        assert_eq!(input_err_msg(e), "byte length cannot be zero");
+    }
+
+    #[test]
+    fn out_of_bounds_is_rejected() {
+        let bytes = vec![7u8; 100];
+        // start past end
+        let e = slice_byte_range(&bytes, 100, 1).unwrap_err();
+        assert_eq!(input_err_msg(e), "byte range out of bounds: requested 100-101, blob size is 100");
+        // length past end
+        let e = slice_byte_range(&bytes, 0, 101).unwrap_err();
+        assert_eq!(input_err_msg(e), "byte range out of bounds: requested 0-101, blob size is 100");
+        // last byte + 1
+        let e = slice_byte_range(&bytes, 99, 2).unwrap_err();
+        assert_eq!(input_err_msg(e), "byte range out of bounds: requested 99-101, blob size is 100");
+    }
+
+    #[test]
+    fn exact_end_is_allowed() {
+        let bytes = vec![7u8; 100];
+        let r = slice_byte_range(&bytes, 99, 1).unwrap();
+        assert_eq!(r.data, vec![7u8]);
+        let r = slice_byte_range(&bytes, 0, 100).unwrap();
+        assert_eq!(r.data.len(), 100);
+    }
+
+    #[test]
+    fn overflow_is_an_input_error() {
+        let bytes = vec![0u8; 16];
+        // start + length overflows usize/u64 addition.
+        let e = slice_byte_range(&bytes, u64::MAX, 1).unwrap_err();
+        assert_eq!(input_err_msg(e), "byte range overflow");
+    }
+
+    #[test]
+    fn empty_blob_rejects_any_range() {
+        let bytes: Vec<u8> = vec![];
+        let e = slice_byte_range(&bytes, 0, 1).unwrap_err();
+        assert_eq!(input_err_msg(e), "byte range out of bounds: requested 0-1, blob size is 0");
+    }
 }

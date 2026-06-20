@@ -11,7 +11,8 @@
 //!
 //! NO storage nodes are started (nodeless). Real Blob/Storage objects + held-key
 //! certify happen on the localnet Sui; bytes are served from the filesystem by the
-//! WalrusStore client. See docs/dev/LOCALNET_WALRUS_PLAN.md.
+//! `LocalnetMockStore` engine (wrapped by the `WalrusLocalClient` SDK mirror). See
+//! docs/dev/LOCALNET_WALRUS_PLAN.md.
 
 use std::{
     num::NonZeroU16,
@@ -284,7 +285,7 @@ fn write_descriptor(
 ) -> Result<()> {
     let yaml = format!(
         "# Suibase nodeless localnet Walrus descriptor (ephemeral; rewritten each regen).\n\
-         # Consumed by the WalrusStore localnet mock. NOT a walrus CLI file.\n\
+         # Consumed by the LocalnetMockStore engine. NOT a walrus CLI file.\n\
          chain_id: {chain}\n\
          epoch: {epoch}\n\
          package_id: {pkg}\n\

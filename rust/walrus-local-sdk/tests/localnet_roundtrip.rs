@@ -15,7 +15,7 @@ mod common;
 
 use walrus_core::encoding::Primary;
 use walrus_core::{BlobId, EncodingType};
-use walrus_core::encoding::quilt_encoding::QuiltStoreBlob;
+use walrus_core::encoding::quilt_encoding::{QuiltStoreBlob, QuiltVersionV1};
 use walrus_local_sdk::WalrusLocalClient;
 
 #[tokio::test]
@@ -52,9 +52,9 @@ async fn localnet_roundtrip() -> anyhow::Result<()> {
             .with_tags([("kind".to_string(), "a".to_string())]),
         QuiltStoreBlob::new_owned(format!("beta-{nonce}").into_bytes(), "beta")?,
     ];
-    let quilt = qc.construct_quilt(&blobs, EncodingType::RS2).await?;
+    let quilt = qc.construct_quilt::<QuiltVersionV1>(&blobs, EncodingType::RS2).await?;
     let store_args = walrus_sdk::node_client::store_args::StoreArgs::default_with_epochs(5);
-    let qres = qc.reserve_and_store_quilt(quilt, &store_args).await?;
+    let qres = qc.reserve_and_store_quilt::<QuiltVersionV1>(quilt, &store_args).await?;
     let quilt_id = qres
         .blob_store_result
         .blob_id()

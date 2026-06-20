@@ -4,7 +4,7 @@
 #
 # Lifecycle for "sb-local": the standalone, localnet-only HTTP server that exposes the
 # Walrus aggregator + publisher wire API (GET/PUT /v1/blobs, quilts), backed by the
-# nodeless WalrusStore localnet mock. It is managed exactly like the localnet faucet:
+# nodeless LocalnetMockStore engine. It is managed exactly like the localnet faucet:
 # started on 'localnet start' and stopped on 'localnet stop', gated on
 # walrus_local_enabled=true. The suibase-daemon is NOT involved.
 #
@@ -75,8 +75,8 @@ sb_local_host_ip() { echo "${CFG_sb_local_host_ip:-localhost}"; }
 export -f sb_local_host_ip
 
 # Start sb-local (noop if unsupported, already running, not yet deployed, or no binary).
-# NON-FATAL on failure: the localnet + the Rust WalrusStore API still work without the
-# HTTP facade, so a problem here only warns (unlike the faucet, which is required).
+# NON-FATAL on failure: the localnet + the Rust WalrusLocalClient SDK still work without
+# the HTTP facade, so a problem here only warns (unlike the faucet, which is required).
 start_sb_local_process() {
   is_sb_local_supported || return 0
 

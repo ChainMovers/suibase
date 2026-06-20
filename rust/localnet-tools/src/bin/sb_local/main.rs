@@ -21,8 +21,8 @@
 //!
 //! It holds ONE [`LocalnetMockStore`] (built once at startup, shared via `Arc`), so a
 //! blob stored over HTTP is byte-identical and readable both via this API and via the
-//! Rust `WalrusStore` API (same shared filesystem dir). The suibase-daemon is NOT
-//! involved. See docs/dev/SB_LOCAL_PLAN.md.
+//! Rust `WalrusLocalClient` SDK mirror (same shared filesystem dir). The suibase-daemon
+//! is NOT involved. See docs/dev/SB_LOCAL_PLAN.md.
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
     let store = Arc::new(
         LocalnetMockStore::open()
             .await
-            .context("opening the localnet WalrusStore (run 'localnet regen' with walrus_local_enabled=true first?)")?,
+            .context("opening the localnet mock store (run 'localnet regen' with walrus_local_enabled=true first?)")?,
     );
 
     let app = router(store);

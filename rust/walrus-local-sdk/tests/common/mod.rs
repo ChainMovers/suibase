@@ -32,6 +32,32 @@ pub async fn parity_roundtrip<C: WalrusApi>(client: &C, payload: &[u8]) -> anyho
     assert_eq!(back, payload, "read bytes != stored bytes");
     eprintln!("read OK ({} bytes)", back.len());
 
+    // byte-range read (drop-in: same call shape, same ReadByteRangeResult on both backends)
+    if payload.len() >= 4 {
+        let start = 1u64;
+        let len = (payload.len() as u64 - 2).max(1); // a middle slice, length >= 1
+        let r = client.read_byte_range(&blob_id, start, len).await?;
+        assert_eq!(
+            r.data,
+            &payload[start as usize..(start + len) as usize],
+            "byte-range data != payload slice"
+        );
+        assert_eq!(
+            r.unencoded_blob_size,
+            payload.len() as u64,
+            "byte-range unencoded_blob_size != full blob size"
+        );
+        // Out-of-bounds must error identically on both backends.
+        assert!(
+            client
+                .read_byte_range(&blob_id, payload.len() as u64, 1)
+                .await
+                .is_err(),
+            "byte range past end should error"
+        );
+        eprintln!("byte-range OK ({len} bytes at {start}, total {})", r.unencoded_blob_size);
+    }
+
     // re-store identical bytes -> content dedup to the SAME blob id
     let results2 = client
         .reserve_and_store_blobs(vec![payload.to_vec()], &args)

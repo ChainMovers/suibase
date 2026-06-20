@@ -18,7 +18,10 @@
 use walrus_core::BlobId;
 use walrus_sdk::{
     error::ClientResult,
-    node_client::{responses::BlobStoreResult, store_args::StoreArgs},
+    node_client::{
+        byte_range_read_client::ReadByteRangeResult, responses::BlobStoreResult,
+        store_args::StoreArgs,
+    },
 };
 
 /// The common blob-core surface shared by [`crate::WalrusLocalClient`] (localnet) and
@@ -37,6 +40,15 @@ pub trait WalrusApi {
 
     /// See `WalrusNodeClient::delete_owned_blob`.
     async fn delete_owned_blob(&self, blob_id: &BlobId) -> ClientResult<usize>;
+
+    /// Read a byte range. See `ByteRangeReadClient::read_byte_range` (obtained via
+    /// `byte_range_read_client()` on each backend).
+    async fn read_byte_range(
+        &self,
+        blob_id: &BlobId,
+        start_byte_position: u64,
+        byte_length: u64,
+    ) -> ClientResult<ReadByteRangeResult>;
 }
 
 // --- localnet impl: delegate to the inherent mirror methods ---
@@ -56,6 +68,17 @@ impl WalrusApi for crate::WalrusLocalClient {
 
     async fn delete_owned_blob(&self, blob_id: &BlobId) -> ClientResult<usize> {
         crate::WalrusLocalClient::delete_owned_blob(self, blob_id).await
+    }
+
+    async fn read_byte_range(
+        &self,
+        blob_id: &BlobId,
+        start_byte_position: u64,
+        byte_length: u64,
+    ) -> ClientResult<ReadByteRangeResult> {
+        self.byte_range_read_client()
+            .read_byte_range(blob_id, start_byte_position, byte_length)
+            .await
     }
 }
 
@@ -80,5 +103,16 @@ impl WalrusApi for WalrusNodeClient<SuiContractClient> {
 
     async fn delete_owned_blob(&self, blob_id: &BlobId) -> ClientResult<usize> {
         WalrusNodeClient::delete_owned_blob(self, blob_id).await
+    }
+
+    async fn read_byte_range(
+        &self,
+        blob_id: &BlobId,
+        start_byte_position: u64,
+        byte_length: u64,
+    ) -> ClientResult<ReadByteRangeResult> {
+        self.byte_range_read_client()
+            .read_byte_range(blob_id, start_byte_position, byte_length)
+            .await
     }
 }

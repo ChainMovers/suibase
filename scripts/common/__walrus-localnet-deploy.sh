@@ -10,7 +10,8 @@
 #
 # NO storage nodes are started (nodeless). Real Blob/Storage objects + held-key
 # certify happen on the localnet Sui; bytes are served from the filesystem by
-# the WalrusStore client. See docs/dev/LOCALNET_WALRUS_PLAN.md.
+# the LocalnetMockStore engine (wrapped by the WalrusLocalClient SDK mirror).
+# See docs/dev/LOCALNET_WALRUS_PLAN.md.
 #
 # You must source __globals.sh before this file.
 
@@ -54,7 +55,7 @@ update_localnet_tools_bin() {
   if type -t init_app_obj >/dev/null 2>&1 && type -t app_call >/dev/null 2>&1; then
     # Reached only when the binary is absent, i.e. the first 'start'/'regen' after
     # enabling walrus: on dev this source-builds the heavy ~827-crate
-    # '--features localnet' graph; on main/staging it fetches the precompiled
+    # walrus/Sui graph (rust/localnet-tools); on main/staging it fetches the precompiled
     # asset. Once staged in workdirs/common/bin, the early return above skips this
     # on every later start/regen -- so it is genuinely done once. The build is
     # otherwise silent (app_call output is suppressed here and cargo logs to a
@@ -159,7 +160,7 @@ deploy_walrus_localnet() {
     --out-descriptor "$_DESCRIPTOR" \
     --n-shards 1000 \
     --chain-id "$_LIVE_CHAIN_ID"; then
-    warn_user "localnet Walrus deploy failed (non-fatal); WalrusStore localnet will be unavailable until the next successful '$_WORKDIR start'/'regen'."
+    warn_user "localnet Walrus deploy failed (non-fatal); the localnet Walrus mock will be unavailable until the next successful '$_WORKDIR start'/'regen'."
     return 0
   fi
 

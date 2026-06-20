@@ -1208,7 +1208,7 @@ fn direct_rpc_wallet(client_yaml: &Path, rpc: &str, out_dir: &Path) -> Result<Pa
 // Pure-logic unit tests (no live localnet / no walrus-Sui graph at runtime).
 // These exercise the blob-id key derivation, blob-id parsing, descriptor null
 // normalization, and the direct-rpc wallet rewrite. They only touch /tmp, so
-// they are safe to run in the per-push `cargo test --features localnet` (the
+// they are safe to run in the per-push `cargo test --lib` (the
 // live round-trip lives behind WALRUS_LOCALNET_TEST in tests/localnet_roundtrip).
 // ---------------------------------------------------------------------------
 #[cfg(test)]
@@ -1217,7 +1217,7 @@ mod tests {
 
     /// A unique scratch dir under the system temp dir (never the workdirs).
     fn tmp_dir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("walrus_store_ut_{}_{}", std::process::id(), tag));
+        let d = std::env::temp_dir().join(format!("walrus_local_sdk_ut_{}_{}", std::process::id(), tag));
         std::fs::create_dir_all(&d).unwrap();
         d
     }

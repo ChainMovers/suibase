@@ -4281,7 +4281,7 @@ start_all_services() {
 
   # Nodeless localnet Walrus HTTP API (sb-local): start after the local Sui node +
   # faucet, gated on walrus_local_enabled + a present deploy descriptor. NON-FATAL: a
-  # failure only warns (the localnet itself and the Rust WalrusStore API are
+  # failure only warns (the localnet itself and the Rust WalrusLocalClient SDK are
   # unaffected). Guarded on the function existing (sourced only for localnet).
   if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process >/dev/null 2>&1; then
     start_sb_local_process
