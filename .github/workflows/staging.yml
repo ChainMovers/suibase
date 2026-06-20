@@ -281,18 +281,14 @@ jobs:
           cp "$bin_path" "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
           chmod +x "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
           # sb-local is the second binary in the localnet-tools asset (the HTTP facade).
-          # SOFT for now: warn (don't fail) if the producer (build-localnet-tools.yml on
-          # sui-binaries) has not yet been updated to build `--bin sb-local`. Once it
-          # ships, the HTTP step below validates it functionally; promote this to a hard
-          # check then.
+          # HARD check: the producer (build-localnet-tools.yml on sui-binaries) builds both
+          # --bin targets, so a missing sb-local means a broken/incomplete asset. The HTTP
+          # step below then validates it functionally.
           sb_path=$(find "$tmpdir" -type f -name sb-local | head -1)
-          if [ -n "$sb_path" ]; then
-            cp "$sb_path" "$HOME/suibase/workdirs/common/bin/sb-local"
-            chmod +x "$HOME/suibase/workdirs/common/bin/sb-local"
-            echo "sb-local present in $tag asset."
-          else
-            echo "::warning::sb-local NOT in $tag asset — update build-localnet-tools.yml on chainmovers/sui-binaries to also build '--bin sb-local'."
-          fi
+          [ -n "$sb_path" ] || { echo "::error::sb-local not in $tag asset"; ls -lR "$tmpdir"; exit 1; }
+          cp "$sb_path" "$HOME/suibase/workdirs/common/bin/sb-local"
+          chmod +x "$HOME/suibase/workdirs/common/bin/sb-local"
+          echo "sb-local present in $tag asset."
           printf 'version: "%s"\nbranch: "main"\norigin: "precompiled"\n' "$version" \
             > "$HOME/suibase/workdirs/common/bin/localnet-tools-version.yaml"
           # Host-compat smoke: the glibc-24.04 binary must run on this runner.
@@ -322,18 +318,16 @@ jobs:
           echo "::notice::Precompiled localnet-tools deployed nodeless walrus on localnet — descriptor OK."
           cat "$desc"
 
-      - name: Validate sb-local HTTP API (the precompiled facade, if shipped)
+      - name: Validate sb-local HTTP API (the precompiled facade)
         run: |
           set -e
-          if [ -x "$HOME/suibase/workdirs/common/bin/sb-local" ]; then
-            # The regen above auto-started sb-local (its binary is in common/bin); assert
-            # the full drop-in wire contract against the PRECOMPILED facade.
-            ~/suibase/scripts/localnet status | grep -i "Walrus API" || true
-            SB_LOCAL_HTTP_TEST=1 ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
-            echo "::notice::Precompiled sb-local served the Walrus aggregator/publisher wire API."
-          else
-            echo "::warning::sb-local not in the precompiled asset — skipping HTTP validation (producer pending)."
-          fi
+          # The previous step guarantees sb-local is installed (hard check), and the regen
+          # above auto-started it (its binary is in common/bin). Assert the full drop-in
+          # wire contract against the PRECOMPILED facade (SB_LOCAL_HTTP_TEST=1 makes a
+          # "not reachable" skip a hard failure).
+          ~/suibase/scripts/localnet status | grep -i "Walrus API" || true
+          SB_LOCAL_HTTP_TEST=1 ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
+          echo "::notice::Precompiled sb-local served the Walrus aggregator/publisher wire API."
 
   open-main-pr:
     needs: [detect-changes, validate, validate-localnet-tools]

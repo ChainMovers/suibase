@@ -40,11 +40,10 @@ All milestones implemented + verified end-to-end on a live localnet:
 > `pre-staging.yml` lockstep does automatically from `rust/localnet-tools/Cargo.toml`
 > (bumped to 0.0.3) once this suibase change reaches `pre-staging`.
 >
-> So the ONLY remaining step is the normal suibase promotion (`dev → pre-staging`),
-> which fires the v0.0.3 build (now carrying sb-local). `staging.yml` validates the
-> precompiled sb-local functionally (HTTP round-trip); it currently **warns** (does not
-> fail) if sb-local is absent so the transition is safe — promote that warn → hard check
-> after the first green v0.0.3 staging validation.
+> Shipped to main via the pipeline; the `localnet-tools-v0.0.3` precompiled asset
+> (both bins) is published and validated. `staging.yml` now **hard-fails** if sb-local
+> is missing from the asset, and validates the precompiled sb-local functionally (HTTP
+> round-trip) — gating the staging → main promotion.
 
 ## Goal
 
