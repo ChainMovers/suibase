@@ -217,7 +217,7 @@ jobs:
   # fetch safe to consume. Linux/glibc only (the binary is glibc-24.04, like sui).
   # NOTE: this gates the SHARED staging->main promotion, so a walrus/localnet
   # regression also holds back a daemon release. If that coupling becomes a problem,
-  # gate this job on a rust/walrus-store change (skip when unchanged) via a new
+  # gate this job on a rust/localnet-tools or rust/walrus-store change (skip when unchanged) via a new
   # detect-changes output, so daemon-only releases are not blocked by walrus.
   validate-localnet-tools:
     needs: detect-changes
@@ -259,11 +259,11 @@ jobs:
       - name: Install the published localnet-tools precompiled (the artifact under test)
         run: |
           set -e
-          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/walrus-store/Cargo.toml)
+          version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' rust/localnet-tools/Cargo.toml)
           tag="localnet-tools-v${version}"
           echo "Validating $tag"
           # localnet-tools does NOT gate staging-promote (only the daemon does), so on a
-          # release that bumped walrus-store the producer may still be building. Poll.
+          # release that bumped localnet-tools the producer may still be building. Poll.
           for i in $(seq 1 30); do
             gh release view "$tag" --repo chainmovers/sui-binaries >/dev/null 2>&1 && break
             if [ "$i" -eq 30 ]; then
@@ -280,6 +280,19 @@ jobs:
           [ -n "$bin_path" ] || { echo "::error::walrus-localnet-deploy not in $tag asset"; ls -lR "$tmpdir"; exit 1; }
           cp "$bin_path" "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
           chmod +x "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+          # sb-local is the second binary in the localnet-tools asset (the HTTP facade).
+          # SOFT for now: warn (don't fail) if the producer (build-localnet-tools.yml on
+          # sui-binaries) has not yet been updated to build `--bin sb-local`. Once it
+          # ships, the HTTP step below validates it functionally; promote this to a hard
+          # check then.
+          sb_path=$(find "$tmpdir" -type f -name sb-local | head -1)
+          if [ -n "$sb_path" ]; then
+            cp "$sb_path" "$HOME/suibase/workdirs/common/bin/sb-local"
+            chmod +x "$HOME/suibase/workdirs/common/bin/sb-local"
+            echo "sb-local present in $tag asset."
+          else
+            echo "::warning::sb-local NOT in $tag asset — update build-localnet-tools.yml on chainmovers/sui-binaries to also build '--bin sb-local'."
+          fi
           printf 'version: "%s"\nbranch: "main"\norigin: "precompiled"\n' "$version" \
             > "$HOME/suibase/workdirs/common/bin/localnet-tools-version.yaml"
           # Host-compat smoke: the glibc-24.04 binary must run on this runner.
@@ -292,7 +305,7 @@ jobs:
       - name: Enable walrus + regen — the PRECOMPILED binary deploys nodeless walrus
         run: |
           set -e
-          echo "walrus_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
+          echo "walrus_local_enabled: true" >> "$HOME/suibase/workdirs/localnet/suibase.yaml"
           ~/suibase/scripts/localnet regen
           desc="$HOME/suibase/workdirs/localnet/config/walrus-localnet.yaml"
           [ -f "$desc" ] || { echo "::error::descriptor not written — the precompiled localnet-tools deploy failed"; exit 1; }
@@ -308,6 +321,19 @@ jobs:
           [ "$live" = "$got" ] || { echo "::error::descriptor chain_id ($got) != live localnet ($live)"; exit 1; }
           echo "::notice::Precompiled localnet-tools deployed nodeless walrus on localnet — descriptor OK."
           cat "$desc"
+
+      - name: Validate sb-local HTTP API (the precompiled facade, if shipped)
+        run: |
+          set -e
+          if [ -x "$HOME/suibase/workdirs/common/bin/sb-local" ]; then
+            # The regen above auto-started sb-local (its binary is in common/bin); assert
+            # the full drop-in wire contract against the PRECOMPILED facade.
+            ~/suibase/scripts/localnet status | grep -i "Walrus API" || true
+            SB_LOCAL_HTTP_TEST=1 ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
+            echo "::notice::Precompiled sb-local served the Walrus aggregator/publisher wire API."
+          else
+            echo "::warning::sb-local not in the precompiled asset — skipping HTTP validation (producer pending)."
+          fi
 
   open-main-pr:
     needs: [detect-changes, validate, validate-localnet-tools]

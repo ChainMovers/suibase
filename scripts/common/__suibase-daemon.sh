@@ -93,7 +93,7 @@ start_suibase_daemon() {
     fi
   fi
 
-  echo "$SUIBASE_DAEMON_NAME started (process pid $SUIBASE_DAEMON_PID)"
+  echo "$SUIBASE_DAEMON_NAME started ( pid $SUIBASE_DAEMON_PID )"
 }
 export -f start_suibase_daemon
 

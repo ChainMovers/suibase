@@ -2612,7 +2612,7 @@ stop_sui_process() {
   # noop if the process is already stopped.
   update_SUI_PROCESS_PID_var
   if [ -n "$SUI_PROCESS_PID" ]; then
-    echo "Stopping $WORKDIR (process pid $SUI_PROCESS_PID)"
+    echo "Stopping $WORKDIR ( pid $SUI_PROCESS_PID )"
     if $SUI_BASE_NET_MOCK; then
       unset SUI_PROCESS_PID
     else
@@ -2706,7 +2706,7 @@ start_sui_process() {
     fi
 
     update_SUI_PROCESS_PID_var
-    echo "localnet started (process pid $SUI_PROCESS_PID)"
+    echo "localnet started ( pid $SUI_PROCESS_PID )"
     update_SUI_VERSION_var
     echo "$SUI_VERSION"
 
@@ -4102,6 +4102,12 @@ stop_all_services() {
       return $_NOOP_REQUEST
     fi
   else
+    # Stop the nodeless localnet Walrus HTTP API first (it depends on the Sui RPC).
+    # Noop if not running; guarded on the function existing (localnet-only source).
+    if [ "$WORKDIR" = "localnet" ] && type -t stop_sb_local_process >/dev/null 2>&1; then
+      stop_sb_local_process
+    fi
+
     update_SUI_FAUCET_PROCESS_PID_var
     update_SUI_PROCESS_PID_var
 
@@ -4164,7 +4170,7 @@ stop_walrus_relay_service_only() {
     update_WALRUS_RELAY_PROCESS_PID_var
   done
   if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
-    setup_error "Failed to stop walrus relay process (PID $WALRUS_RELAY_PROCESS_PID). The process may still be running. Try 'testnet wal-relay disable' again."
+    setup_error "Failed to stop walrus relay process ( pid $WALRUS_RELAY_PROCESS_PID ). The process may still be running. Try 'testnet wal-relay disable' again."
   fi
 
   # Success. process that needed to be stopped was stopped.
@@ -4271,6 +4277,14 @@ start_all_services() {
     if [ -z "$SUI_FAUCET_PROCESS_PID" ]; then
       setup_error "Faucet not started or taking too long to start? Check \"$WORKDIR status\" in a few seconds. If persisting down, may be try again or \"$WORKDIR update\" of the code?"
     fi
+  fi
+
+  # Nodeless localnet Walrus HTTP API (sb-local): start after the local Sui node +
+  # faucet, gated on walrus_local_enabled + a present deploy descriptor. NON-FATAL: a
+  # failure only warns (the localnet itself and the Rust WalrusStore API are
+  # unaffected). Guarded on the function existing (sourced only for localnet).
+  if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process >/dev/null 2>&1; then
+    start_sb_local_process
   fi
 
   # Success. All process that needed to be started were started.
