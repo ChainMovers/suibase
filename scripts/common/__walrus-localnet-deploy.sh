@@ -21,8 +21,8 @@ update_WALRUS_LOCALNET_SETUP_BIN_var() {
   WALRUS_LOCALNET_SETUP_BIN=""
   local _candidates=(
     "$WORKDIRS/common/bin/walrus-localnet-deploy"
-    "$SUIBASE_DIR/rust/walrus-store/target/release/walrus-localnet-deploy"
-    "$SUIBASE_DIR/rust/walrus-store/target/debug/walrus-localnet-deploy"
+    "$SUIBASE_DIR/rust/localnet-tools/target/release/walrus-localnet-deploy"
+    "$SUIBASE_DIR/rust/localnet-tools/target/debug/walrus-localnet-deploy"
   )
   local _c
   for _c in "${_candidates[@]}"; do
@@ -37,14 +37,14 @@ export -f update_WALRUS_LOCALNET_SETUP_BIN_var
 
 # Fetch the precompiled "localnet-tools" asset (which bundles the walrus-localnet-deploy
 # binary) from chainmovers/sui-binaries (app "localnet_tools" defined in
-# scripts/defaults/consts.yaml). localnet + walrus_enabled only. Best-effort + non-fatal:
+# scripts/defaults/consts.yaml). localnet + walrus_local_enabled only. Best-effort + non-fatal:
 # a missing/not-yet-published asset or offline state must never abort 'localnet start';
 # the deploy then falls back to a local dev build of rust/walrus-store. The install runs
 # in a subshell so that even a hard error inside the app machinery cannot terminate the caller.
 update_localnet_tools_bin() {
   local _WORKDIR="${1:-$WORKDIR}"
   [ "$_WORKDIR" = "localnet" ] || return 0
-  [ "${CFG_walrus_enabled:-false}" = "true" ] || return 0
+  [ "${CFG_walrus_local_enabled:-false}" = "true" ] || return 0
 
   # Already present (precompiled from a prior run, or a dev build)? Nothing to do.
   if update_WALRUS_LOCALNET_SETUP_BIN_var; then
@@ -107,7 +107,7 @@ deploy_walrus_localnet() {
 
   # Opt-in feature, disabled by default (mirrors walrus_relay_enabled). When
   # off, this is a no-op so default localnet start/regen is unchanged.
-  if [ "${CFG_walrus_enabled:-false}" != "true" ]; then
+  if [ "${CFG_walrus_local_enabled:-false}" != "true" ]; then
     return 0
   fi
 
@@ -167,7 +167,7 @@ deploy_walrus_localnet() {
 }
 export -f deploy_walrus_localnet
 
-# True (returns 0) when walrus_enabled=true on localnet but the Walrus Move
+# True (returns 0) when walrus_local_enabled=true on localnet but the Walrus Move
 # contracts are NOT deployed for the *current* chain: either the descriptor /
 # walrus-config is missing, or the descriptor's chain_id does not match the live
 # localnet chain id. This mirrors the idempotency check in deploy_walrus_localnet()
@@ -182,7 +182,7 @@ is_walrus_localnet_deploy_needed() {
 
   # Nodeless localnet Walrus is localnet-only and opt-in (mirrors deploy gating).
   [ "$_WORKDIR" = "localnet" ] || return 1
-  [ "${CFG_walrus_enabled:-false}" = "true" ] || return 1
+  [ "${CFG_walrus_local_enabled:-false}" = "true" ] || return 1
 
   local _CONFIG_DEFAULT="$WORKDIRS/$_WORKDIR/config-default"
   local _DESCRIPTOR="$_CONFIG_DEFAULT/walrus-localnet.yaml"
@@ -217,6 +217,6 @@ export -f is_walrus_localnet_deploy_needed
 # 'localnet status' so the wording stays identical in both.
 warn_walrus_localnet_deploy_needed() {
   local _WORKDIR="${1:-${WORKDIR:-localnet}}"
-  warn_user "walrus_enabled is true but the Walrus contracts are not deployed on this localnet. Run '$_WORKDIR regen' to deploy them."
+  warn_user "walrus_local_enabled is true but the Walrus contracts are not deployed on this localnet. Run '$_WORKDIR regen' to deploy them."
 }
 export -f warn_walrus_localnet_deploy_needed

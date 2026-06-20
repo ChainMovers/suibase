@@ -6,7 +6,7 @@
 //!
 //! Gated by the env var `WALRUS_LOCALNET_TEST=1` so the default `cargo test` (which
 //! has no running localnet) skips it cleanly. For CI, run it in an integration job
-//! that has: started localnet, enabled walrus (walrus_enabled=true), and regen'd so
+//! that has: started localnet, enabled walrus (walrus_local_enabled=true), and regen'd so
 //! the deploy ran — then `WALRUS_LOCALNET_TEST=1 cargo test -p walrus-store \
 //! --features localnet --test localnet_roundtrip`.
 

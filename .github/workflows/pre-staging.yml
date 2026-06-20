@@ -10,7 +10,7 @@ name: Pre-Staging Trigger
 # THIS branch:
 #
 #   * suibase-daemon  ← rust/suibase/Cargo.toml
-#   * localnet-tools  ← rust/walrus-store/Cargo.toml
+#   * localnet-tools  ← rust/localnet-tools/Cargo.toml
 #
 # For each asset: if a matching release tag already exists on sui-binaries
 # this is a no-op; otherwise we copy that asset's Cargo.toml into
@@ -58,7 +58,7 @@ jobs:
           - asset: "suibase-daemon"
             cargo: "rust/suibase/Cargo.toml"
           - asset: "localnet-tools"
-            cargo: "rust/walrus-store/Cargo.toml"
+            cargo: "rust/localnet-tools/Cargo.toml"
     steps:
       - name: Checkout
         uses: actions/checkout@v6

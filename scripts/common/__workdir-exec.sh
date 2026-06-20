@@ -636,11 +636,14 @@ workdir_exec() {
     update_WALRUS_RELAY_PROCESS_PID_var
   fi
 
-  # Nodeless localnet Walrus (opt-in via walrus_enabled). Pure function defs that
-  # are inert unless walrus_enabled=true. See docs/dev/LOCALNET_WALRUS_PLAN.md.
+  # Nodeless localnet Walrus (opt-in via walrus_local_enabled). Pure function defs that
+  # are inert unless walrus_local_enabled=true. See docs/dev/LOCALNET_WALRUS_PLAN.md.
   if [ "$WORKDIR" = "localnet" ]; then
     # shellcheck source=SCRIPTDIR/__walrus-localnet-deploy.sh
     source "$SUIBASE_DIR/scripts/common/__walrus-localnet-deploy.sh"
+    # shellcheck source=SCRIPTDIR/__sb-local-process.sh
+    source "$SUIBASE_DIR/scripts/common/__sb-local-process.sh"
+    update_SB_LOCAL_PROCESS_PID_var
   fi
 
   if [ "$CMD_AUTOCOINS_REQ" = true ] || [ "$CMD_STATUS_REQ" = true ]; then
@@ -820,10 +823,19 @@ workdir_exec() {
       fi
       echo
 
+      # Nodeless localnet Walrus HTTP API (sb-local) status (opt-in via walrus_local_enabled).
+      local _SHOW_SB_LOCAL=false
+      local _SB_LOCAL_PID=""
+      if type -t is_sb_local_supported >/dev/null 2>&1 && is_sb_local_supported; then
+        _SHOW_SB_LOCAL=true
+        update_SB_LOCAL_PROCESS_PID_var
+        _SB_LOCAL_PID="$SB_LOCAL_PROCESS_PID"
+      fi
+
       # Individual process status
       if [ "$_USER_REQUEST" = "stop" ]; then
         # Show process "abnormally" still running.
-        if [ -n "$SUI_PROCESS_PID" ] || [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
+        if [ -n "$SUI_PROCESS_PID" ] || [ -n "$SUI_FAUCET_PROCESS_PID" ] || [ -n "$_SB_LOCAL_PID" ]; then
           echo "---"
           if [ -n "$SUI_PROCESS_PID" ]; then
             echo "localnet process : STILL RUNNING (pid $SUI_PROCESS_PID)"
@@ -831,11 +843,24 @@ workdir_exec() {
           if [ -n "$SUI_FAUCET_PROCESS_PID" ]; then
             echo "faucet process   : STILL RUNNING (pid $SUI_FAUCET_PROCESS_PID)"
           fi
+          if [ -n "$_SB_LOCAL_PID" ]; then
+            echo "Walrus API       : STILL RUNNING (pid $_SB_LOCAL_PID)"
+          fi
         fi
       else
         echo "---"
         echo_process "Localnet process" true "$SUI_PROCESS_PID"
         echo_process "Faucet process" "$_SUPPORT_FAUCET" "$SUI_FAUCET_PROCESS_PID"
+        if [ "$_SHOW_SB_LOCAL" = true ]; then
+          local _SB_LOCAL_INFO
+          _SB_LOCAL_INFO=$(
+            echo -n "http://"
+            echo_blue "$(sb_local_host_ip)"
+            echo -n ":"
+            echo_blue "$(sb_local_walrus_port)"
+          )
+          echo_process "Walrus API" true "$_SB_LOCAL_PID" "$_SB_LOCAL_INFO"
+        fi
       fi
     fi
 
@@ -971,7 +996,7 @@ workdir_exec() {
       fi
     fi
 
-    # Nodeless localnet Walrus (opt-in via walrus_enabled): if enabled but the
+    # Nodeless localnet Walrus (opt-in via walrus_local_enabled): if enabled but the
     # Walrus contracts are not deployed on this chain, the deploy only happens
     # on a regen (fresh chain id). Surface a footer advisory so 'status' is not
     # silently green while WalrusStore is unusable. No-op unless WORKDIR=localnet
@@ -1309,7 +1334,7 @@ workdir_exec() {
       fi
       echo "$SUI_VERSION"
 
-      # Nodeless localnet Walrus (opt-in via walrus_enabled): this fast path does
+      # Nodeless localnet Walrus (opt-in via walrus_local_enabled): this fast path does
       # not (re)deploy the contracts -- that only happens on a regen (fresh chain
       # id) or the install/repair path below. If enabled but not deployed, the
       # localnet Sui itself is up, so keep running but advise a regen.
@@ -1568,11 +1593,16 @@ workdir_exec() {
   # Start the local services (will be NOOP if already running).
   start_all_services
 
-  # Nodeless localnet Walrus deploy (opt-in via walrus_enabled; no-op otherwise).
+  # Nodeless localnet Walrus deploy (opt-in via walrus_local_enabled; no-op otherwise).
   # Runs after the local Sui node is up; idempotent (only deploys on first enable
-  # or after a regen changes the chain id). Non-fatal.
+  # or after a regen changes the chain id). Non-fatal. The sb-local HTTP API is then
+  # started here (start_all_services above ran BEFORE the descriptor existed on a
+  # first enable/regen, so it could not start it yet).
   if [ "$WORKDIR" = "localnet" ]; then
     deploy_walrus_localnet "$WORKDIR"
+    if type -t start_sb_local_process >/dev/null 2>&1; then
+      start_sb_local_process
+    fi
   fi
 
   # print sui envs to help debugging (if someone else is using this script).

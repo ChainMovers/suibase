@@ -4,6 +4,48 @@
 > `docs/dev/LOCALNET_WALRUS_PLAN.md` (the nodeless-localnet design) and
 > `docs/dev/LOCALNET_WALRUS_FEATURE.md` (the WalrusStore feature). Read those first.
 
+## Implementation status (2026-06-19) — DONE
+
+All milestones implemented + verified end-to-end on a live localnet:
+
+- **M0 real blob_id** — `LocalnetMockStore` now derives ids with walrus-core's real
+  encoder (`compute_metadata`); a localnet id is **bit-identical** to `walrus blob-id
+  --n-shards 1000` (verified). Quilt ids are real for free. Unit test +
+  `localnet_roundtrip`/`localnet_pool`/`localnet_pool_namespace` stay green.
+- **M1 the binary** — `rust/localnet-tools/src/bin/sb_local/` (axum). (Both bins were
+  later moved out of `rust/walrus-store` into the dedicated `rust/localnet-tools` bins
+  crate so walrus-store stays a thin library; walrus-store remains the lib they build on.)
+  GET/PUT `/v1/blobs`, `by-object-id`, `/status`; wire-faithful `BlobStoreResult`,
+  aggregator headers, `Range`→206, publisher query params.
+- **M2 lifecycle** — `scripts/common/__sb-local-process.sh`; started on `localnet start`
+  / stopped on `localnet stop` (own `sb_local_host_ip`/`sb_local_walrus_port`, default
+  `localhost:45840`); `localnet status` shows a `Walrus API` line; ps-reap-safe stop.
+- **M5 quilt** — engine `store_quilt`/`read_quilt_patch`/`read_quilt_blob`/
+  `list_quilt_patches` (walrus-core quilt_encoding) + the HTTP quilt routes (multipart
+  PUT, by-quilt-patch-id, by-quilt-id/{id}/{identifier}, patches list).
+- **M3 producer/consumer** — `consts.yaml` `localnet_tools_bin_names` carries both bins;
+  the dev source-builder + the precompiled consumer install both; crate version bumped
+  (lockstep trigger via `pre-staging.yml`).
+- **M4 tests/docs/CI** — `scripts/tests/050_walrus_tests/test_sb_local_http.sh` (live
+  curl round-trip, self-skipping) + static wiring asserts in `test_localnet_walrus_config.sh`;
+  `walrus-localnet-integration.yml` (dev) builds sb-local + runs the HTTP test;
+  `staging.yml` validates the precompiled sb-local.
+
+> **Producer DONE (2026-06-19):** `chainmovers/sui-binaries`
+> `.github/workflows/build-localnet-tools.yml` now builds `--bin walrus-localnet-deploy
+> --bin sb-local` and packs both in the `localnet-tools` tarball (commit `34c6321` on
+> main; verified the producer→consumer tar/extract contract installs both). The
+> precompiled `localnet-tools-v<n>` asset is cut by that workflow when its version
+> carrier (`triggers/localnet-tools/Cargo.toml`) changes — which the suibase
+> `pre-staging.yml` lockstep does automatically from `rust/localnet-tools/Cargo.toml`
+> (bumped to 0.0.3) once this suibase change reaches `pre-staging`.
+>
+> So the ONLY remaining step is the normal suibase promotion (`dev → pre-staging`),
+> which fires the v0.0.3 build (now carrying sb-local). `staging.yml` validates the
+> precompiled sb-local functionally (HTTP round-trip); it currently **warns** (does not
+> fail) if sb-local is absent so the transition is safe — promote that warn → hard check
+> after the first green v0.0.3 staging validation.
+
 ## Goal
 
 `sb-local` ("suibase localnet") is a **standalone, long-running localnet-only HTTP
@@ -15,7 +57,7 @@ server** that exposes the **Walrus aggregator/publisher wire API** —
 against localnet, with **real on-chain Blob creation** on PUT.
 
 It is managed by the suibase localnet lifecycle **exactly like the localnet faucet**
-(start on `localnet start` when `walrus_enabled`, stop on `localnet stop`). It is a
+(start on `localnet start` when `walrus_local_enabled`, stop on `localnet stop`). It is a
 **glibc** binary shipped in the `localnet-tools` asset (alongside
 `walrus-localnet-deploy`). **The suibase-daemon is NOT involved** — no proxying,
 no daemon dependency, so the daemon stays musl/lean.
@@ -81,7 +123,7 @@ no daemon dependency, so the daemon stays musl/lean.
   in `scripts/common/__globals.sh`; faucet runs at `http://localhost:9123`. Started/stopped
   from the localnet workdir exec path (`scripts/common/__workdir-exec.sh`) and shown in
   `localnet status`. Mirror this for `sb-local` (new `__sb-local.sh` or fold into
-  `__walrus-localnet-deploy.sh`). Gate on `localnet` + `CFG_walrus_enabled=true`.
+  `__walrus-localnet-deploy.sh`). Gate on `localnet` + `CFG_walrus_local_enabled=true`.
 
 **Producer/consumer (localnet-tools, already live):**
 - Producer: `chainmovers/sui-binaries` `.github/workflows/build-localnet-tools.yml` builds
@@ -97,9 +139,9 @@ no daemon dependency, so the daemon stays musl/lean.
 - **glibc only.** `sb-local` links `walrus-store --features localnet` → walrus-sui +
   walrus-core + sui-types + RocksDB. RocksDB does NOT musl-link. So `sb-local` builds
   with the localnet-tools generic recipe (glibc, no musl) — never in the musl daemon.
-- **localnet-only.** Gate everything on `localnet` workdir + `walrus_enabled=true`.
+- **localnet-only.** Gate everything on `localnet` workdir + `walrus_local_enabled=true`.
 - **Bind address = its OWN, independent variable.** sb-local gets a distinct
-  bind-address setting (e.g. `sb_local_bind` in suibase.yaml/consts.yaml). Mirror the
+  bind-address setting (e.g. `sb_local_host_ip` in suibase.yaml/consts.yaml). Mirror the
   faucet's configurable-bind PATTERN, but DO NOT reuse the faucet's variable or copy its
   value — the bind is set independently per process (the default may coincide, but it is a
   separate setting). Same for the port (its own variable).
@@ -132,20 +174,20 @@ no daemon dependency, so the daemon stays musl/lean.
   round-trip read; on-chain Blob registers with the real id; the existing integration suite
   (`localnet_roundtrip`/`localnet_pool`) stays green. ~<1 day, foundational (do first).
 
-- **M1 — the binary.** `rust/walrus-store/src/bin/sb_local.rs`, behind `localnet`
-  feature (`required-features = ["localnet"]`). axum server (add `axum` to the localnet
-  feature deps). Routes: `GET /v1/blobs/:id`, `PUT /v1/blobs`, `GET /status`. Holds one
+- **M1 — the binary.** `rust/localnet-tools/src/bin/sb_local/` (the bins crate; moved out
+  of walrus-store so the lib stays thin). axum server (axum is a dep of the bins crate). Routes: `GET /v1/blobs/:id`, `PUT /v1/blobs`, `GET /status`. Holds one
   `WalrusStore::for_workdir("localnet")`. CLI args: `--port`, maybe `--bind`. Build with
   the documented env (`RUSTUP_TOOLCHAIN=1.96 LIBCLANG_PATH=... BINDGEN_EXTRA_CLANG_ARGS=...`).
-  TEST (live, against a `walrus_enabled` regen'd localnet): `curl -X PUT --data-binary @file
+  TEST (live, against a `walrus_local_enabled` regen'd localnet): `curl -X PUT --data-binary @file
   localhost:<port>/v1/blobs` → parse `blobId` → `curl localhost:<port>/v1/blobs/<blobId>`
   → bytes match. RED-check: a wrong blob_id → 404. Verify the on-chain Blob exists
   (object_id in the response) and the SAME blob reads back via the Rust `WalrusStore` API
   (interop / shared dir).
 - **M2 — lifecycle.** Start/stop `sb-local` mirroring the faucet (`__globals.sh` +
-  `__workdir-exec.sh` or a new `__sb-local.sh`); PID var; gate on localnet+walrus_enabled;
-  port in `consts.yaml`/`suibase.yaml` (suggest default near RPC/faucet, e.g. `9124`,
-  configurable). Add a `localnet status` line ("Walrus API : OK ( pid X )
+  `__workdir-exec.sh` or a new `__sb-local.sh`); PID var; gate on localnet+walrus_local_enabled;
+  port in `consts.yaml`/`suibase.yaml` (default `45840` — the localnet slot of the Walrus
+  `458xx` range, configurable; see docs/dev/PORT_ALLOCATION.md). Add a `localnet status`
+  line ("Walrus API : OK ( pid X )
   http://localhost:<port>"). TEST: `localnet start` (walrus on) starts it; `localnet stop`
   stops it; status reflects it; a regen restarts it. Reuse the wal-relay `ps`-reap-safe
   stop pattern (poll the re-check — see `stop_walrus_relay_service_only`).
