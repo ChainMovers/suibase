@@ -12,14 +12,14 @@
 # walrus-localnet-deploy); on dev it is source-built from rust/localnet-tools.
 # See docs/dev/SB_LOCAL_PLAN.md.
 
-# Resolve the sb-local binary (precompiled in workdirs/common/bin, or a dev build).
+# Resolve the sb-local binary (precompiled in workdirs/common/bin, or a release dev build).
+# Always release — never target/debug (walrus-core encoding is ~50x slower unoptimized).
 # Mirrors update_WALRUS_LOCALNET_SETUP_BIN_var in __walrus-localnet-deploy.sh.
 update_SB_LOCAL_BIN_var() {
   SB_LOCAL_BIN=""
   local _candidates=(
     "$WORKDIRS/common/bin/sb-local"
     "$SUIBASE_DIR/rust/localnet-tools/target/release/sb-local"
-    "$SUIBASE_DIR/rust/localnet-tools/target/debug/sb-local"
   )
   local _c
   for _c in "${_candidates[@]}"; do
@@ -38,13 +38,12 @@ update_SB_LOCAL_PROCESS_PID_var() {
   # Match the running sb-local regardless of WHICH candidate path launched it
   # (precompiled common/bin vs a dev target build). Matching only the currently
   # *resolved* path would miss a process started from a different path — e.g. after a
-  # mid-session rebuild/install flips the resolver from target/debug to common/bin —
+  # mid-session rebuild/install flips the resolver from target/release to common/bin —
   # so 'stop' would no-op (leaking the old process) and 'start' would try (and fail) to
   # bind a duplicate. Probe every candidate path; first match wins.
   local _candidates=(
     "$WORKDIRS/common/bin/sb-local"
     "$SUIBASE_DIR/rust/localnet-tools/target/release/sb-local"
-    "$SUIBASE_DIR/rust/localnet-tools/target/debug/sb-local"
   )
   local _c _PID
   for _c in "${_candidates[@]}"; do

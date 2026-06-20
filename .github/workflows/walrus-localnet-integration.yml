@@ -84,13 +84,16 @@ jobs:
         run: |
           # rust-toolchain.toml pins 1.96; ensure it is installed.
           rustup toolchain install 1.96 --profile minimal
-          cargo build --bin walrus-localnet-deploy --bin sb-local
+          # ALWAYS --release: walrus-core's erasure encoding is CPU-heavy and a debug build
+          # runs it ~50x slower (a 50KB publish is ~20s in debug vs ~0.4s encode in release).
+          # The precompiled asset is release too, so this matches production.
+          cargo build --release --bin walrus-localnet-deploy --bin sb-local
           # Stage the just-built bins where the lifecycle scripts look (install_type=user);
           # there is no precompiled asset to fetch in CI, so this is the dev fallback. With
           # sb-local present, 'localnet regen' below auto-starts the HTTP server.
           mkdir -p "$HOME/suibase/workdirs/common/bin"
-          cp target/debug/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
-          cp target/debug/sb-local "$HOME/suibase/workdirs/common/bin/sb-local"
+          cp target/release/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+          cp target/release/sb-local "$HOME/suibase/workdirs/common/bin/sb-local"
 
       - name: Pure-logic unit tests (blob-id/descriptor/wallet — no live localnet)
         working-directory: rust/walrus-local-sdk

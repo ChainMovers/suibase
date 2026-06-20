@@ -23,7 +23,6 @@ update_WALRUS_LOCALNET_SETUP_BIN_var() {
   local _candidates=(
     "$WORKDIRS/common/bin/walrus-localnet-deploy"
     "$SUIBASE_DIR/rust/localnet-tools/target/release/walrus-localnet-deploy"
-    "$SUIBASE_DIR/rust/localnet-tools/target/debug/walrus-localnet-deploy"
   )
   local _c
   for _c in "${_candidates[@]}"; do
