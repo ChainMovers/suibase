@@ -1,6 +1,6 @@
 [package]
 name = "localnet-tools"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Suibase localnet dev tools: nodeless Walrus deploy + the sb-local Walrus aggregator/publisher HTTP server."

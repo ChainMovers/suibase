@@ -118,10 +118,11 @@ start_sb_local_process() {
   "$SB_LOCAL_BIN" --bind "$_BIND" --port "$_PORT" --workdir localnet \
     >"$_DIR/sb-local.log" 2>&1 &
 
-  # Wait until /status answers, or a hard failure shows in the log, or timeout. The
-  # window exceeds sb-local's own connect-retry budget (it polls the just-restarted node
-  # past the localnet read-after-write lag), so a slow node start is tolerated here too.
-  local end=$((SECONDS + 75))
+  # Wait until /status answers, or a hard failure shows in the log, or timeout. The window
+  # must EQUAL-OR-EXCEED sb-local's own connect-retry budget (CONNECT_MAX_ATTEMPTS in
+  # walrus-local-sdk, ~80s) so we observe its real outcome -- success (/status) or its own
+  # differentiated error -- instead of giving up while it is still polling the warming-up node.
+  local end=$((SECONDS + 90))
   local ALIVE=false
   local AT_LEAST_ONE_SECOND=false
   while [ $SECONDS -lt $end ]; do
@@ -140,8 +141,23 @@ start_sb_local_process() {
   [ "$AT_LEAST_ONE_SECOND" = true ] && echo
 
   if [ "$ALIVE" = false ]; then
-    warn_user "Walrus API did not become ready (non-fatal). Recent log:"
-    [ -f "$_DIR/sb-local.log" ] && tail -8 "$_DIR/sb-local.log"
+    # Differentiate the cause so the suggested next action is correct (all branches non-fatal).
+    if type -t is_walrus_localnet_deploy_needed >/dev/null 2>&1 &&
+      is_walrus_localnet_deploy_needed localnet; then
+      # Descriptor missing, or its chain id != the live chain id: the deploy is for another
+      # chain. Only a regen changes the chain id, so this genuinely needs a redeploy.
+      warn_user "Walrus API not started: contracts not deployed for this localnet chain -> run 'localnet regen' (walrus_local_enabled=true)."
+    elif type -t wait_for_localnet_rpc >/dev/null 2>&1 &&
+      ! wait_for_localnet_rpc "http://localhost:9000" 1; then
+      # The node itself is not answering JSON-RPC.
+      warn_user "Walrus API not started: localnet node not responding -> re-run 'localnet start'."
+    else
+      # Node up and the deploy matches this chain, but its gRPC has not served the Walrus
+      # system object within the budget: still warming up (common on a slow cold start).
+      # A plain restart -- not a regen -- is the fix.
+      warn_user "Walrus API not started: localnet still warming up (gRPC not serving objects yet) -> re-run 'localnet start' (regen only if it persists)."
+    fi
+    [ -f "$_DIR/sb-local.log" ] && tail -4 "$_DIR/sb-local.log"
     return 0
   fi
 

@@ -73,11 +73,17 @@ const ENCODING_TYPE: EncodingType = EncodingType::RS2;
 /// direct node so dry-run/simulate + object reads work without the proxy.
 const LOCALNET_DIRECT_RPC: &str = "http://localhost:9000";
 
-/// Max attempts to construct the contract client when opening the store. Right after
-/// `localnet start`/`regen` the node answers chain-id but can briefly 404 the
-/// just-(re)loaded System object (localnet read-after-write lag — the same lag the
-/// deploy bin polls around). Retry rather than fail the (long-running) server's startup.
-const CONNECT_MAX_ATTEMPTS: u32 = 20;
+/// Default max attempts to construct the contract client when opening the store. Right after
+/// `localnet start`/`regen` the node answers JSON-RPC (chain-id) but its gRPC `LedgerService`
+/// can briefly NOT_FOUND the just-(re)loaded System object — gRPC object-serving readiness
+/// LAGS JSON-RPC readiness, especially on a slow cold start. This retry loop IS the gRPC
+/// readiness gate: it polls `GetObject` (via `SuiContractClient::new`) until it answers.
+///
+/// 40 × 2s ≈ 80s, chosen to equal-or-exceed the shell `/status` wait in
+/// `__sb-local-process.sh` (so the shell observes the real outcome instead of giving up
+/// first). Override with `SB_LOCAL_CONNECT_MAX_ATTEMPTS` (CI may want fewer; a very slow
+/// host more).
+const CONNECT_MAX_ATTEMPTS: u32 = 40;
 /// Seconds between connect attempts (≈ CONNECT_MAX_ATTEMPTS × this, total budget).
 const CONNECT_RETRY_SECS: u64 = 2;
 
@@ -336,9 +342,14 @@ impl LocalnetMockStore {
         // consumes it (cheap: it just re-reads the yaml + keystore).
         // contract_config BY REFERENCE; backoff BY VALUE (Default inferred from the
         // param type). gas_budget=None dry-runs to estimate (fine on localnet's node).
+        let max_attempts = std::env::var("SB_LOCAL_CONNECT_MAX_ATTEMPTS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(CONNECT_MAX_ATTEMPTS);
         let mut client = None;
         let mut last_err: Option<anyhow::Error> = None;
-        for attempt in 0..CONNECT_MAX_ATTEMPTS {
+        for attempt in 0..max_attempts {
             let wallet = load_wallet_context_from_path(Some(&wallet_yaml), None)
                 .context("loading localnet mock wallet")?;
             match SuiContractClient::new(
@@ -356,11 +367,11 @@ impl LocalnetMockStore {
                     break;
                 }
                 Err(e) => {
-                    if attempt + 1 < CONNECT_MAX_ATTEMPTS {
+                    if attempt + 1 < max_attempts {
                         eprintln!(
                             "sb-local: localnet not ready (attempt {}/{}): {e}; retrying in {}s…",
                             attempt + 1,
-                            CONNECT_MAX_ATTEMPTS,
+                            max_attempts,
                             CONNECT_RETRY_SECS
                         );
                         tokio::time::sleep(Duration::from_secs(CONNECT_RETRY_SECS)).await;
@@ -372,10 +383,25 @@ impl LocalnetMockStore {
         let client = match client {
             Some(c) => c,
             None => {
-                return Err(last_err.unwrap_or_else(|| anyhow!("unknown connect error"))).context(
-                    "constructing SuiContractClient against localnet (localnet still starting, \
-                     or a regen is needed?)",
-                )
+                // Differentiate so the message names the actual cause + fix (kept short). The
+                // shell only starts sb-local when the descriptor matches the live chain id, so a
+                // persistent NOT_FOUND here is warm-up lag (restart), NOT a stale deploy (regen).
+                let budget = max_attempts as u64 * CONNECT_RETRY_SECS;
+                let err = last_err.unwrap_or_else(|| anyhow!("unknown connect error"));
+                let detail = format!("{err:#}").to_lowercase();
+                let object_missing = detail.contains("not found") || detail.contains("code 5");
+                let msg = if object_missing {
+                    format!(
+                        "localnet still warming up: gRPC has not served the Walrus system object \
+                         after {budget}s — re-run 'localnet start' (regen only if it persists)"
+                    )
+                } else {
+                    format!(
+                        "localnet node not reachable at {LOCALNET_DIRECT_RPC} after {budget}s \
+                         — re-run 'localnet start'"
+                    )
+                };
+                return Err(err).context(msg);
             }
         };
 

@@ -2930,7 +2930,7 @@ update_ACTIVE_ADDRESS_var() {
       if [ $_RETRY_COUNT -eq 0 ]; then
         echo "Getting active address for ${WORKDIR_NAME}"
       fi
-      wait_for_json_rpc_up "${WORKDIR_NAME}"
+      wait_for_sui_client_up "${WORKDIR_NAME}"
       _RETRY_COUNT=$((_RETRY_COUNT + 1))
     fi
   done
@@ -2962,7 +2962,7 @@ add_test_addresses() {
   local _CLIENT_FILE=$2
   local _WORDS_FILE=$3
 
-  wait_for_json_rpc_up "${WORKDIR_NAME}"
+  wait_for_sui_client_up "${WORKDIR_NAME}"
 
   # Track the highest ED25519 address during creation. This will tentatively become
   # the active address later.
@@ -3501,7 +3501,7 @@ sync_client_yaml() {
     fi
     if [ "$_EXPECTED_ENV" == "${WORKDIR_NAME}_proxy" ]; then
       # Block until verified that the proxy is responding (or timeout).
-      wait_for_json_rpc_up "${WORKDIR_NAME}"
+      wait_for_sui_client_up "${WORKDIR_NAME}"
     fi
   fi
 }
@@ -4311,6 +4311,11 @@ start_all_services() {
     fi
   fi
 
+  # Success. All process that needed to be started were started.
+  sync_client_yaml
+  trig_daemons_refresh
+  wait_for_sui_client_up "${WORKDIR_NAME}"
+
   # Nodeless localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
   # as-needed, then (re)start sb-local -- a single entry point mirroring
   # start_suibase_daemon_as_needed above (build-if-stale + restart-on-upgrade + start-if-down).
@@ -4318,14 +4323,14 @@ start_all_services() {
   # 'localnet start' after '~/suibase/update' self-heal sb-local (the daemon already self-heals
   # two calls up). NON-FATAL and gated on localnet + walrus_local_enabled inside the function;
   # guarded here on it existing (sourced only for localnet).
+  #
+  # Started LAST -- AFTER wait_for_sui_client_up confirms the node answers -- because sb-local
+  # connects to the node (over gRPC) to read the Walrus system object. Starting it earlier only
+  # burned its connect-retry budget against a not-yet-ready node (gRPC object-serving readiness
+  # lags JSON-RPC readiness on a cold start).
   if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process_as_needed >/dev/null 2>&1; then
     start_sb_local_process_as_needed
   fi
-
-  # Success. All process that needed to be started were started.
-  sync_client_yaml
-  trig_daemons_refresh
-  wait_for_json_rpc_up "${WORKDIR_NAME}"
 
   if [ "$_WERE_ALL_RUNNING" = true ]; then
     return $_NOOP_REQUEST

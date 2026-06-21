@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
     let store = Arc::new(
         LocalnetMockStore::open()
             .await
-            .context("opening the localnet mock store (run 'localnet regen' with walrus_local_enabled=true first?)")?,
+            .context("opening the localnet Walrus mock store")?,
     );
 
     let app = router(store);
