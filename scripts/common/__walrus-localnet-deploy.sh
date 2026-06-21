@@ -46,32 +46,46 @@ update_localnet_tools_bin() {
   [ "$_WORKDIR" = "localnet" ] || return 0
   [ "${CFG_walrus_local_enabled:-false}" = "true" ] || return 0
 
-  # Already present (precompiled from a prior run, or a dev build)? Nothing to do.
-  if update_WALRUS_LOCALNET_SETUP_BIN_var; then
+  # "Rebuild as needed", mirroring start_suibase_daemon_as_needed: defer the decision
+  # to the app machinery's is_installed instead of hand-checking a single binary.
+  # sb_app_set_local_vars sets is_installed=false when ANY bin in
+  # localnet_tools_bin_names (walrus-localnet-deploy AND sb-local) is missing, OR when the
+  # installed <asset>-version.yaml trails rust/localnet-tools/Cargo.toml by a MAJOR/MINOR
+  # bump (version_less_than compares major.minor only -- a patch-only bump does NOT
+  # retrigger here, so bump minor on a meaningful localnet-tools release).
+  #
+  # The previous check returned early as soon as walrus-localnet-deploy existed, so a
+  # crate that ADDED a bin (sb-local) was wrongly treated as already-installed: the
+  # rebuild was skipped, leaving sb-local missing and the Walrus HTTP API down
+  # ("Walrus API server binary not found").
+  type -t init_app_obj >/dev/null 2>&1 && type -t app_call >/dev/null 2>&1 || return 0
+
+  init_app_obj "localnet_tools" "$_WORKDIR"
+  app_call "localnet_tools" "set_local_vars"
+  get_app_var "localnet_tools" "is_installed"
+  if [ "$APP_VAR" = "true" ]; then
     return 0
   fi
 
-  if type -t init_app_obj >/dev/null 2>&1 && type -t app_call >/dev/null 2>&1; then
-    # Reached only when the binary is absent, i.e. the first 'start'/'regen' after
-    # enabling walrus: on dev this source-builds the heavy ~827-crate
-    # walrus/Sui graph (rust/localnet-tools); on main/staging it fetches the precompiled
-    # asset. Once staged in workdirs/common/bin, the early return above skips this
-    # on every later start/regen -- so it is genuinely done once. The build is
-    # otherwise silent (app_call output is suppressed here and cargo logs to a
-    # file), so announce it or it looks like a hang.
-    echo "Building localnet tools (done once, might take a long time...)"
-    [ -n "$SUIBASE_LOGS_DIR" ] && echo "  (full log: $SUIBASE_LOGS_DIR/cargo-build.log)"
-    # Let the build progress reach the terminal (the generic rust builder streams
-    # cargo's "Compiling ..." to terminal + log) -- suppress only the app-object
-    # setup chatter. Non-fatal: a still-missing binary is handled by the check
-    # below and by deploy_walrus_localnet()'s warn-and-skip.
-    (
-      init_app_obj "localnet_tools" "$_WORKDIR" >/dev/null 2>&1 &&
-        app_call "localnet_tools" "install"
-    ) || true
-    if update_WALRUS_LOCALNET_SETUP_BIN_var; then
-      echo "localnet tools ready."
-    fi
+  # Reached on the first 'start'/'regen' after enabling walrus, or after the crate
+  # gained a bin / bumped version. On dev this source-builds the heavy ~827-crate
+  # walrus/Sui graph (rust/localnet-tools) for EVERY bin (walrus-localnet-deploy +
+  # sb-local); on main/staging it fetches the precompiled asset. Announce it -- the
+  # build streams cargo progress but can run for minutes, so a silent run reads as a
+  # hang. The install runs in a subshell so even a hard error (setup_error) inside the
+  # app machinery cannot abort 'localnet start/regen' -- the deploy is non-fatal.
+  echo "Building localnet tools (done once, might take a long time...)"
+  [ -n "$SUIBASE_LOGS_DIR" ] && echo "  (full log: $SUIBASE_LOGS_DIR/cargo-build.log)"
+  (app_call "localnet_tools" "install") || true
+
+  # Re-derive readiness from the SAME multi-bin is_installed the gate above uses (not the
+  # single-bin update_WALRUS_LOCALNET_SETUP_BIN_var), so a partial install (deploy bin
+  # present but sb-local still missing, e.g. the install hit a swallowed setup_error)
+  # never prints a false "ready".
+  app_call "localnet_tools" "set_local_vars"
+  get_app_var "localnet_tools" "is_installed"
+  if [ "$APP_VAR" = "true" ]; then
+    echo "localnet tools ready."
   fi
   return 0
 }

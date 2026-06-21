@@ -144,6 +144,12 @@ SBP="$COMMON/__sb-local-process.sh"
 check "__sb-local-process.sh exists" test -f "$SBP"
 check "__sb-local-process.sh passes bash -n" bash -n "$SBP"
 check "defines start_sb_local_process()" grep -qE "^start_sb_local_process\(\)" "$SBP"
+check "defines start_sb_local_process_as_needed()" \
+    grep -qE "^start_sb_local_process_as_needed\(\)" "$SBP"
+check "sb-local as-needed rebuilds before start (daemon-style build-as-needed)" \
+    bash -c "grep -A20 '^start_sb_local_process_as_needed()' '$SBP' | grep -q 'update_localnet_tools_bin'"
+check "sb-local lifecycle is localnet-scoped (no always-on hot restart-on-upgrade)" \
+    bash -c "! grep -A20 '^start_sb_local_process_as_needed()' '$SBP' | grep -q 'restarting'"
 check "defines stop_sb_local_process()" grep -qE "^stop_sb_local_process\(\)" "$SBP"
 check "defines update_SB_LOCAL_PROCESS_PID_var()" grep -qE "^update_SB_LOCAL_PROCESS_PID_var\(\)" "$SBP"
 check "start gated on localnet + walrus_local_enabled (is_sb_local_supported)" \
@@ -158,7 +164,8 @@ check "localnet defaults define sb_local_host_ip" grep -qE "^sb_local_host_ip:" 
 
 # Lifecycle wiring: start/stop_all_services + status + post-deploy start.
 GLOB="$COMMON/__globals.sh"
-check "start_all_services starts sb-local" grep -q "start_sb_local_process" "$GLOB"
+check "start_all_services uses the sb-local as-needed entry point" \
+    grep -q "start_sb_local_process_as_needed" "$GLOB"
 check "stop_all_services stops sb-local" grep -q "stop_sb_local_process" "$GLOB"
 check "workdir-exec sources __sb-local-process.sh" grep -q "__sb-local-process.sh" "$WEXEC"
 check "workdir-exec starts sb-local after deploy" \

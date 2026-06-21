@@ -150,6 +150,30 @@ start_sb_local_process() {
 }
 export -f start_sb_local_process
 
+# Build the localnet-tools binaries as-needed, then start sb-local. The REBUILD half is the
+# daemon's logic (is_installed-driven -- see update_localnet_tools_bin and
+# start_suibase_daemon_as_needed): a 'localnet start' after '~/suibase/update' self-heals a
+# stale/missing binary before starting it. The LIFECYCLE half is NOT the daemon's: unlike the
+# always-on suibase-daemon, sb-local is a localnet-scoped service -- started here on
+# 'localnet start' and stopped by stop_all_services on 'localnet stop'. So there is no
+# always-on hot restart-on-upgrade; a running sb-local picks up a new binary on the next
+# localnet stop/start (or regen), its natural lifecycle event. NON-FATAL (the localnet + the
+# Rust WalrusLocalClient SDK work without the HTTP facade); gated on
+# localnet + walrus_local_enabled via is_sb_local_supported.
+start_sb_local_process_as_needed() {
+  is_sb_local_supported || return 0
+
+  # Build/install as-needed (no-op once is_installed). Analog of the daemon's `app_call install`.
+  if type -t update_localnet_tools_bin >/dev/null 2>&1; then
+    update_localnet_tools_bin "$WORKDIR"
+  fi
+
+  # Start as-needed: no-op if already running, or if the deploy descriptor is missing/stale,
+  # or the binary is still absent.
+  start_sb_local_process
+}
+export -f start_sb_local_process_as_needed
+
 # Stop sb-local. ps-reap-safe: like stop_walrus_relay_process, poll the SAME `ps`
 # view callers use until it clears (kernel-reap lag can briefly still list a
 # just-SIGKILL'd process on slow CI). Noop if not running.

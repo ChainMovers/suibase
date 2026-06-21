@@ -390,11 +390,43 @@ is_installed() {
   return
 }
 
+# True (0) when libclang -- required by bindgen in the Rust build (zstd-sys / rocksdb-sys) --
+# is discoverable the way clang-sys looks for it: an explicit LIBCLANG_PATH, the ldconfig
+# cache, the standard llvm lib dirs, or (on macOS) the Xcode toolchain.
+is_libclang_installed() {
+  [ -n "$LIBCLANG_PATH" ] && return 0
+  if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libclang[.-]'; then
+    return 0
+  fi
+  local _f
+  for _f in /usr/lib/llvm-*/lib/libclang.so* /usr/lib/*/libclang*.so* /usr/lib/libclang*.so* /usr/local/lib/libclang*.so*; do
+    [ -e "$_f" ] && return 0
+  done
+  if [ "$(uname -s)" = "Darwin" ]; then
+    # libclang ships inside the Xcode / Command Line Tools toolchain.
+    xcode-select -p >/dev/null 2>&1 && return 0
+    [ -e /Library/Developer/CommandLineTools/usr/lib/libclang.dylib ] && return 0
+  fi
+  return 1
+}
+export -f is_libclang_installed
+
 exit_if_rust_build_deps_missing() {
   # Check if all rust/cargo building dependencies are installed.
   is_installed cmake || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
   is_installed rustc || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
   is_installed cargo || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+
+  # bindgen (pulled in transitively by the Rust build via zstd-sys / rocksdb-sys) needs
+  # libclang at build time. Without it the build runs for minutes and then dies deep in a
+  # cryptic clang-sys panic ("Unable to find libclang ..."); fail fast here with the fix.
+  if ! is_libclang_installed; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      setup_error "Missing libclang, required to build the Rust binaries (bindgen). Install the Xcode command line tools: xcode-select --install . See https://docs.sui.io/build/install#prerequisites"
+    else
+      setup_error "Missing libclang, required to build the Rust binaries (bindgen). Install it with: sudo apt-get install -y libclang-dev . See https://docs.sui.io/build/install#prerequisites"
+    fi
+  fi
 
   # Verify Rust is recent enough.
   version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
@@ -4279,12 +4311,15 @@ start_all_services() {
     fi
   fi
 
-  # Nodeless localnet Walrus HTTP API (sb-local): start after the local Sui node +
-  # faucet, gated on walrus_local_enabled + a present deploy descriptor. NON-FATAL: a
-  # failure only warns (the localnet itself and the Rust WalrusLocalClient SDK are
-  # unaffected). Guarded on the function existing (sourced only for localnet).
-  if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process >/dev/null 2>&1; then
-    start_sb_local_process
+  # Nodeless localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
+  # as-needed, then (re)start sb-local -- a single entry point mirroring
+  # start_suibase_daemon_as_needed above (build-if-stale + restart-on-upgrade + start-if-down).
+  # This plain-'start' fast path never reaches deploy_walrus_localnet, so this is what makes a
+  # 'localnet start' after '~/suibase/update' self-heal sb-local (the daemon already self-heals
+  # two calls up). NON-FATAL and gated on localnet + walrus_local_enabled inside the function;
+  # guarded here on it existing (sourced only for localnet).
+  if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process_as_needed >/dev/null 2>&1; then
+    start_sb_local_process_as_needed
   fi
 
   # Success. All process that needed to be started were started.
