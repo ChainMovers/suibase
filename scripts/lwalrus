@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# This script calls the localnet 'lwalrus' binary (a nodeless, walrus-shaped CLI)
+# with the matching localnet config.
+#
+# Your localnet workdir should have been created with 'localnet start'/'localnet update',
+# and localnet Walrus must be enabled (walrus_local_enabled: true in the localnet
+# suibase.yaml, then 'localnet regen').
+#
+# Use 'lwalrus' like the Mysten 'walrus' CLI, but against your suibase localnet. Example:
+#    'lwalrus store ./myfile.bin'
+#    'lwalrus read <blob-id>'
+#
+# Unlike the real 'walrus' CLI (which talks directly to storage nodes), lwalrus serves
+# the nodeless localnet engine — see docs/dev/LWALRUS_LSITE_PLAN.md.
+
+SUIBASE_DIR="$HOME/suibase"
+
+# Source '__globals.sh'.
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="localnet"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
+# shellcheck source=SCRIPTDIR/common/__lwalrus-exec.sh
+source "$SUIBASE_DIR/scripts/common/__lwalrus-exec.sh"
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "suibase-script-name" ]]; then
+  # The installer verifies this echoes the script's own name.
+  echo "lwalrus"
+  exit
+fi
+
+lwalrus_exec "$@"

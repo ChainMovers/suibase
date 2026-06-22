@@ -34,6 +34,10 @@ walrus-local-sdk = { path = "../walrus-local-sdk" }
 # sb-local uses walrus-sui move_structs::Blob + client::PostStoreAction + sui-types SuiAddress.
 walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"] }
 walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+# lwalrus constructs StoreArgs and consumes BlobStoreResult — the SDK's own types.
+# walrus-local-sdk returns them but does not re-export them, so depend on walrus-sdk
+# directly at the SAME pin so the types unify across the path dep.
+walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
 sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.1" }
 
 anyhow = "1"
@@ -63,3 +67,11 @@ path = "src/bin/walrus_localnet_deploy.rs"
 [[bin]]
 name = "sb-local"
 path = "src/bin/sb_local/main.rs"
+
+# lwalrus: localnet-only `walrus`-shaped CLI over the nodeless engine
+# (WalrusLocalClient). The real `walrus` CLI does direct storage-node I/O, which
+# nodeless localnet has none of — lwalrus dispatches the storage commands to the
+# already-built WalrusLocalClient instead. See docs/dev/LWALRUS_LSITE_PLAN.md.
+[[bin]]
+name = "lwalrus"
+path = "src/bin/lwalrus/main.rs"

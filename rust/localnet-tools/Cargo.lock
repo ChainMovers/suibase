@@ -4544,6 +4544,7 @@ dependencies = [
  "tracing-subscriber",
  "walrus-core",
  "walrus-local-sdk",
+ "walrus-sdk",
  "walrus-sui",
 ]
 

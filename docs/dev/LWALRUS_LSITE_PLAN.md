@@ -1,8 +1,23 @@
 # lwalrus / lsite Plan — localnet `walrus` & `site-builder` CLI parity
 
-Status: **Phase 1 (`lwalrus`) GREEN-LIT — in progress. Phase 2 (`lsite` + portal)
-DEFERRED** (owner decision 2026-06-22: "revisit site-builder+portal if anyone
-cares"). Feasibility established 2026-06-22 (workflows wf_5875ba7a + wf_b784f37e).
+Status: **Phase 1 (`lwalrus`) MVP IMPLEMENTED** (2026-06-22): a shim binary in
+`rust/localnet-tools` (`store`/`read`/`blob-status`/`delete` over WalrusLocalClient),
+the `scripts/lwalrus` wrapper + `__lwalrus-exec.sh` gate, added to
+`localnet_tools_bin_names`. **Phase 2 (`lsite` + portal) DEFERRED** ("revisit if
+anyone cares"). Feasibility from workflows wf_5875ba7a + wf_b784f37e.
+
+PARITY MODEL (decided 2026-06-22): NOT byte-exact `--help` (lwalrus is a subset, and
+the localnet stack may be pinned to a different walrus rev than the shipped binary).
+Instead lwalrus carries an explicit "Not supported for localnet:" help section (the
+single source of truth), invoking anything unsupported prints "Not supported for
+localnet", and a fund-free always-on test (`scripts/tests/050_walrus_tests/test_lwalrus_parity.sh`)
+SEMANTICALLY compares only the SUPPORTED surface vs the shipped `walrus`, ignoring the
+unsupported list — flagging drift (new/removed/changed) among supported commands.
+
+FOLLOW-UP: `update-walrus-pin` maintenance script (detect-by-default / `--apply`),
+target rev = the walrus version `testnet update` installs; re-pins the 7 Cargo.toml
+rev lines + re-vendors embedded-contracts + regenerates CONTRACTS.sha256, fail-loud,
+guarded by the parity test. (The current pin differs from the shipped walrus v1.50.0.)
 
 ## Goal
 
