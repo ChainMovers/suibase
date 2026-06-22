@@ -165,15 +165,34 @@ deploy_walrus_localnet() {
   # Contracts are embedded in the binary (no --contracts path needed).
   echo "Deploying localnet Walrus..."
   mkdir -p "$_CONFIG_DEFAULT"
-  if ! "$WALRUS_LOCALNET_SETUP_BIN" deploy \
+
+  # Publishing the Walrus Move packages makes the vendored walrus/move build
+  # tooling print a confusing "[NOTE] Updating dependencies for `testnet`
+  # environment ..." line: the embedded contracts are pinned to the testnet
+  # framework rev, so that env name is baked into their Move.lock and is
+  # misleading on a localnet deploy. Drop ONLY that NOTE line; the other build
+  # progress (INCLUDING DEPENDENCY / BUILDING ...) is kept on purpose, as it
+  # legitimately shows the contracts being built and deployed on the localnet.
+  # Capture the full output to a log (kept for debugging) and stream the rest to
+  # the console; on failure, dump the full log so nothing is lost. There is no
+  # set -e/pipefail in this path, so PIPESTATUS[0] is the deploy's own code.
+  local _deploy_log="$_CONFIG_DEFAULT/walrus-localnet-deploy.log"
+  "$WALRUS_LOCALNET_SETUP_BIN" deploy \
     --rpc "$_RPC" \
     --faucet "$_FAUCET" \
     --wallet "$WORKDIRS/$_WORKDIR/config/client.yaml" \
     --out-config "$_WALRUS_CONFIG" \
     --out-descriptor "$_DESCRIPTOR" \
     --n-shards 1000 \
-    --chain-id "$_LIVE_CHAIN_ID"; then
-    warn_user "localnet Walrus deploy failed (non-fatal); the localnet Walrus mock will be unavailable until the next successful '$_WORKDIR start'/'regen'."
+    --chain-id "$_LIVE_CHAIN_ID" 2>&1 |
+    tee "$_deploy_log" |
+    grep -vE '^\[NOTE\] Updating dependencies '
+  local _deploy_rc=${PIPESTATUS[0]}
+
+  if [ "$_deploy_rc" -ne 0 ]; then
+    # Surface the full (unfiltered) output on failure for diagnosis.
+    cat "$_deploy_log" >&2
+    warn_user "localnet Walrus deploy failed (non-fatal); full log at $_deploy_log. The localnet Walrus mock will be unavailable until the next successful '$_WORKDIR start'/'regen'."
     return 0
   fi
 
