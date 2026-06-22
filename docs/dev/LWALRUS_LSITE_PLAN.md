@@ -14,10 +14,14 @@ localnet", and a fund-free always-on test (`scripts/tests/050_walrus_tests/test_
 SEMANTICALLY compares only the SUPPORTED surface vs the shipped `walrus`, ignoring the
 unsupported list — flagging drift (new/removed/changed) among supported commands.
 
-FOLLOW-UP: `update-walrus-pin` maintenance script (detect-by-default / `--apply`),
-target rev = the walrus version `testnet update` installs; re-pins the 7 Cargo.toml
-rev lines + re-vendors embedded-contracts + regenerates CONTRACTS.sha256, fail-loud,
-guarded by the parity test. (The current pin differs from the shipped walrus v1.50.0.)
+FOLLOW-UP — `scripts/dev/update-walrus-pin` IMPLEMENTED (detect-by-default / `--apply`).
+Target rev = the commit of the `walrus` binary `testnet update` installs (resolved from
+`walrus --version` via the `~/repos/walrus-reference-main` checkout). Detect (read-only):
+exit 0 in-sync / 3 re-pin-available / 1 error. `--apply` rewrites the walrus `rev =` lines
+in both Cargo.toml, re-vendors `embedded-contracts/` + regenerates CONTRACTS.sha256,
+rebuilds, and runs verify + the lwalrus parity test, fail-loud (run on a branch). Detect
+validated 2026-06-22: pin `1049b56` vs shipped `dac31b8` (walrus 1.50.0) → re-pin available;
+the actual `--apply` re-pin is not yet run (deliberate, may need WalrusLocalClient-mirror fixes).
 
 ## Goal
 

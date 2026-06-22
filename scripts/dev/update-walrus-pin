@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# update-walrus-pin — keep the localnet-Walrus stack's pinned walrus rev aligned with
+# the `walrus` binary that `testnet update` installs.
+#
+# The localnet stack (rust/walrus-local-sdk + rust/localnet-tools: WalrusLocalClient,
+# sb-local, lwalrus, and the vendored embedded-contracts/) is git-pinned to ONE walrus
+# rev. testnet/mainnet, by contrast, run the precompiled `walrus` binary Mysten ships.
+# When those drift apart, localnet stops behaving like the real networks and the
+# lwalrus parity test compares two different versions. This tool detects the drift and
+# (with --apply) re-pins to match.
+#
+# Run it periodically — in particular before promoting dev -> main.
+#
+# Modes:
+#   (default)  DETECT, read-only. Reports in-sync / re-pin-available / error.
+#                exit 0 = in sync,  exit 3 = re-pin available,  exit 1 = error.
+#   --apply    Re-pin: rewrite the walrus `rev =` lines in both Cargo.toml, re-vendor
+#                embedded-contracts/ from the walrus repo @ target rev, regenerate
+#                CONTRACTS.sha256, rebuild, and run verify + the lwalrus parity test.
+#                FAIL-LOUD: on any build/test failure it stops and leaves the working
+#                tree for a human (a new walrus rev can break the SDK mirror / contract
+#                ABI). Best run on a dedicated branch so the diff is easy to review.
+#
+# Target rev = the commit of the installed `walrus` binary (workdirs/{testnet,mainnet}/
+# bin/walrus --version -> "walrus <semver>-<gitshort>"), resolved to a full rev via a
+# local walrus checkout (WALRUS_REFERENCE_PATH or ~/repos/walrus-reference-main).
+
+set -uo pipefail   # deliberately NOT -e: errors are handled explicitly with clear messages.
+
+SUIBASE_DIR="$HOME/suibase"
+LNT="$SUIBASE_DIR/rust/localnet-tools"
+SDK="$SUIBASE_DIR/rust/walrus-local-sdk"
+EMB="$LNT/embedded-contracts"
+PKGS=(wal wal_exchange walrus walrus_subsidies)
+WALRUS_DIR="${WALRUS_REFERENCE_PATH:-$HOME/repos/walrus-reference-main}"
+
+APPLY=false
+case "${1:-}" in
+  --apply) APPLY=true ;;
+  ""|--detect) APPLY=false ;;
+  *) echo "usage: update-walrus-pin [--apply]" >&2; exit 1 ;;
+esac
+
+note() { echo "[update-walrus-pin] $*"; }
+die()  { echo "[update-walrus-pin] ERROR: $*" >&2; exit 1; }
+
+# --- current pin (first walrus.git rev in localnet-tools/Cargo.toml) ---
+CUR_REV=$(grep -m1 'walrus.git", rev = "' "$LNT/Cargo.toml" 2>/dev/null | sed 's/.*rev = "\([0-9a-f]*\)".*/\1/')
+[ -n "$CUR_REV" ] || die "could not parse the current walrus rev from $LNT/Cargo.toml"
+
+# --- installed walrus (what 'testnet update' shipped) ---
+WALRUS_BIN=""
+for c in "$SUIBASE_DIR/workdirs/testnet/bin/walrus" "$SUIBASE_DIR/workdirs/mainnet/bin/walrus"; do
+  [ -x "$c" ] && { WALRUS_BIN="$c"; break; }
+done
+[ -n "$WALRUS_BIN" ] || die "no installed 'walrus' binary found in workdirs/{testnet,mainnet}/bin. Run 'testnet update' first."
+VER_LINE=$("$WALRUS_BIN" --version 2>/dev/null | tail -1)         # e.g. "walrus 1.50.0-dac31b8cb87c"
+SHORT=$(printf '%s' "$VER_LINE" | sed -n 's/.*-\([0-9a-f]\{7,\}\)$/\1/p')
+[ -n "$SHORT" ] || die "could not parse a git commit from 'walrus --version' output: '$VER_LINE'"
+
+note "installed walrus : $VER_LINE  (commit ${SHORT})"
+note "current pin      : ${CUR_REV}"
+
+# Fast path: the pinned rev already starts with the installed short hash -> in sync,
+# no network needed.
+if [ "${CUR_REV#"$SHORT"}" != "$CUR_REV" ]; then
+  note "IN SYNC: the localnet-Walrus pin already matches the shipped walrus (${SHORT})."
+  ( cd "$LNT" && ./verify-embedded-contracts.sh ) || die "embedded-contracts drift despite a matching rev — re-vendor with --apply."
+  exit 0
+fi
+
+# --- resolve the installed short hash to a full rev via a walrus checkout ---
+[ -d "$WALRUS_DIR/.git" ] || die "no walrus checkout at $WALRUS_DIR (set WALRUS_REFERENCE_PATH, or run scripts/dev/manage-local-repos.sh)."
+git -C "$WALRUS_DIR" fetch -q --all --tags 2>/dev/null || note "warn: 'git fetch' on the walrus checkout failed (offline?); trying local objects."
+TARGET_REV=$(git -C "$WALRUS_DIR" rev-parse "${SHORT}^{commit}" 2>/dev/null)
+[ -n "$TARGET_REV" ] || die "could not resolve commit ${SHORT} in $WALRUS_DIR (fetch failed / commit not reachable). Update the checkout and retry."
+
+note "target rev       : ${TARGET_REV}"
+
+if [ "$CUR_REV" = "$TARGET_REV" ]; then
+  note "IN SYNC: pin already equals the shipped walrus rev."
+  ( cd "$LNT" && ./verify-embedded-contracts.sh ) || die "embedded-contracts drift despite a matching rev — re-vendor with --apply."
+  exit 0
+fi
+
+note "RE-PIN AVAILABLE: ${CUR_REV}  ->  ${TARGET_REV}"
+if ! $APPLY; then
+  echo
+  note "Detect-only. Re-run with --apply to re-pin (rewrites Cargo rev lines, re-vendors"
+  note "embedded-contracts, rebuilds, and runs verify + the lwalrus parity test)."
+  exit 3
+fi
+
+# ======================= APPLY =======================
+note "Applying re-pin. Recommend running this on a dedicated branch."
+
+# 1. Rewrite every walrus.git rev line in both Cargo.toml (7 lines today).
+for f in "$LNT/Cargo.toml" "$SDK/Cargo.toml"; do
+  [ -f "$f" ] || die "missing $f"
+  sed -i "s|\(walrus\.git\", rev = \"\)[0-9a-f]\{40\}\"|\1${TARGET_REV}\"|g" "$f" || die "failed to rewrite rev in $f"
+done
+_left=$(grep -rln "rev = \"${CUR_REV}\"" "$LNT/Cargo.toml" "$SDK/Cargo.toml" 2>/dev/null)
+[ -z "$_left" ] || die "some old rev lines were not rewritten in: $_left"
+note "rewrote walrus rev in localnet-tools + walrus-local-sdk Cargo.toml"
+
+# 2. Re-vendor embedded-contracts/ from the walrus repo @ target rev.
+git -C "$WALRUS_DIR" checkout -q "$TARGET_REV" 2>/dev/null || die "could not checkout $TARGET_REV in $WALRUS_DIR"
+[ -d "$WALRUS_DIR/contracts" ] || die "no contracts/ in $WALRUS_DIR @ $TARGET_REV (sparse-checkout missing contracts?)"
+for p in "${PKGS[@]}"; do
+  [ -d "$WALRUS_DIR/contracts/$p" ] || die "contracts/$p missing @ $TARGET_REV"
+  rm -rf "${EMB:?}/$p"
+  cp -a "$WALRUS_DIR/contracts/$p" "$EMB/$p" || die "failed to vendor contracts/$p"
+done
+note "re-vendored ${PKGS[*]} into embedded-contracts/"
+
+# 3. Regenerate CONTRACTS.sha256 (format: '<sha256>  ./<pkg>/<path>', stable sort).
+( cd "$EMB" && find ./wal ./wal_exchange ./walrus ./walrus_subsidies -type f \
+    | LC_ALL=C sort | xargs sha256sum > CONTRACTS.sha256 ) || die "failed to regenerate CONTRACTS.sha256"
+note "regenerated embedded-contracts/CONTRACTS.sha256"
+
+# 4. Rebuild (cargo picks up the new git rev and updates Cargo.lock). Needs libclang;
+#    set the known dev locations if present (CI has them in standard paths).
+[ -z "${LIBCLANG_PATH:-}" ] && [ -e "$HOME/.local/libclang/libclang.so" ] && export LIBCLANG_PATH="$HOME/.local/libclang"
+if [ -z "${BINDGEN_EXTRA_CLANG_ARGS:-}" ]; then
+  for g in /usr/lib/gcc/x86_64-linux-gnu/*/include; do
+    [ -d "$g" ] && { export BINDGEN_EXTRA_CLANG_ARGS="-I$g -I/usr/include -I/usr/include/x86_64-linux-gnu"; break; }
+  done
+fi
+_log="${TMPDIR:-/tmp}/update-walrus-pin-build.log"
+note "rebuilding localnet-tools (this can take a while; log: $_log)"
+( cd "$LNT" && cargo build --release ) >"$_log" 2>&1
+if [ $? -ne 0 ]; then
+  tail -25 "$_log" >&2
+  die "cargo build FAILED after re-pin (new walrus rev likely changed the API/ABI). Fix the WalrusLocalClient mirror / contracts, then re-run. Full log: $_log"
+fi
+note "cargo build OK"
+
+# 5. Verify embedded-contracts integrity+parity, then the lwalrus parity test.
+( cd "$LNT" && ./verify-embedded-contracts.sh ) || die "verify-embedded-contracts FAILED after re-vendor."
+CI_WORKDIR=testnet "$SUIBASE_DIR/scripts/tests/050_walrus_tests/test_lwalrus_parity.sh" || die "lwalrus parity test FAILED after re-pin."
+
+echo
+note "RE-PIN COMPLETE: ${CUR_REV} -> ${TARGET_REV}"
+note "Review 'git diff' (Cargo.toml x2, Cargo.lock x2, embedded-contracts/), then commit."
+note "Tip: bump the localnet-tools crate minor version so 'localnet update' rebuilds it."
+exit 0
