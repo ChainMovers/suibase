@@ -12,9 +12,10 @@ use crate::network_monitor::{
 };
 use crate::shared_types::{
     GlobalsProxyMT, REQUEST_FAILED_BODY_READ, REQUEST_FAILED_CONFIG_DISABLED,
-    REQUEST_FAILED_NO_SERVER_AVAILABLE, REQUEST_FAILED_NO_SERVER_RESPONDING,
-    REQUEST_FAILED_NOT_GRPC_CAPABLE, REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX,
-    SEND_FAILED_RESP_HTTP_STATUS, SEND_FAILED_UNSPECIFIED_ERROR,
+    REQUEST_FAILED_GRPC_COMPRESSED, REQUEST_FAILED_NO_SERVER_AVAILABLE,
+    REQUEST_FAILED_NO_SERVER_RESPONDING, REQUEST_FAILED_NOT_GRPC_CAPABLE,
+    REQUEST_FAILED_RESP_BUILDER, REQUEST_FAILED_RESP_BYTES_RX, SEND_FAILED_RESP_HTTP_STATUS,
+    SEND_FAILED_UNSPECIFIED_ERROR,
 };
 
 use anyhow::{anyhow, Result};
@@ -687,6 +688,36 @@ impl ProxyServer {
                         .await;
                     return resp;
                 }
+                ForwardOutcome::CompressedResponse { encoding } => {
+                    // Upstream ignored our `grpc-accept-encoding: identity` and
+                    // compressed the response (seen intermittently behind some
+                    // CDN-fronted public endpoints). The Sui CLI can't decode
+                    // it. The upstream IS gRPC-capable, so do NOT mark it
+                    // NOT_GRPC_CAPABLE — score it as a normal per-attempt
+                    // failure (counts against this server's success rate AND
+                    // nudges its health score down so it is deprioritized) and
+                    // retry the next upstream. Per-attempt so port-level stats
+                    // increment once, via the final outcome below.
+                    log::warn!(
+                        "grpc: upstream '{}' returned grpc-encoding='{}' despite identity request; retrying next upstream",
+                        base_url,
+                        encoding
+                    );
+                    let _ = report
+                        .req_resp_err_per_attempt(
+                            *server_idx,
+                            req_initiation_time,
+                            resp_received_time,
+                            retry_count,
+                            REQUEST_FAILED_GRPC_COMPRESSED,
+                        )
+                        .await;
+                    last_error_response = Some(grpc_no_upstream_response(&format!(
+                        "upstream compressed response with `{}` (proxy requested identity)",
+                        encoding
+                    )));
+                    server_failures = server_failures.saturating_add(1);
+                }
                 ForwardOutcome::NotGrpc {
                     status,
                     content_type,
@@ -858,6 +889,36 @@ impl ProxyServer {
                 grpc_no_upstream_response(&format!(
                     "upstream returned non-gRPC response (HTTP {})",
                     status
+                ))
+            }
+            ForwardOutcome::CompressedResponse { encoding } => {
+                // Streaming methods can't be retried across upstreams (a
+                // half-sent request body can't be replayed), so surface a clear
+                // gRPC error rather than forwarding frames the client can't
+                // decode. The proxy requested identity; the upstream ignored it.
+                // Score the per-attempt failure against this server (success
+                // rate + health), then the final req_fail records the
+                // port-level outcome — mirrors the NotGrpc streaming arm.
+                log::warn!(
+                    "grpc(stream): upstream '{}' returned grpc-encoding='{}' despite identity request",
+                    base_url,
+                    encoding
+                );
+                let _ = report
+                    .req_resp_err_per_attempt(
+                        server_idx,
+                        req_initiation_time,
+                        resp_received_time,
+                        0,
+                        REQUEST_FAILED_GRPC_COMPRESSED,
+                    )
+                    .await;
+                let _ = report
+                    .req_fail(1, REQUEST_FAILED_NO_SERVER_RESPONDING)
+                    .await;
+                grpc_no_upstream_response(&format!(
+                    "upstream compressed streaming response with `{}` (proxy requested identity)",
+                    encoding
                 ))
             }
             ForwardOutcome::HttpError { status, .. } => {
