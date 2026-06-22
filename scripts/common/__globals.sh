@@ -392,7 +392,10 @@ is_installed() {
 
 # True (0) when libclang -- required by bindgen in the Rust build (zstd-sys / rocksdb-sys) --
 # is discoverable the way clang-sys looks for it: an explicit LIBCLANG_PATH, the ldconfig
-# cache, the standard llvm lib dirs, or (on macOS) the Xcode toolchain.
+# cache, the standard llvm lib dirs, or (on macOS) the Xcode toolchain. As a last resort it
+# also finds libclang installed from the `libclang` pip wheel (the no-root setup on dev
+# machines / CI without apt libclang-dev) and exports LIBCLANG_PATH so the Rust build can use
+# it -- clang-sys does NOT search those user-local locations on its own.
 is_libclang_installed() {
   [ -n "$LIBCLANG_PATH" ] && return 0
   if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libclang[.-]'; then
@@ -407,6 +410,18 @@ is_libclang_installed() {
     xcode-select -p >/dev/null 2>&1 && return 0
     [ -e /Library/Developer/CommandLineTools/usr/lib/libclang.dylib ] && return 0
   fi
+  # libclang from the `libclang` pip wheel (no root needed). clang-sys won't look here,
+  # so when found, export LIBCLANG_PATH to its directory for the actual build.
+  for _f in \
+    "$HOME/.local/libclang/libclang.so"* \
+    "$HOME"/.local/lib/python*/site-packages/clang/native/libclang.so* \
+    "$HOME"/.local/lib/libclang*.so*; do
+    if [ -e "$_f" ]; then
+      LIBCLANG_PATH="$(dirname "$_f")"
+      export LIBCLANG_PATH
+      return 0
+    fi
+  done
   return 1
 }
 export -f is_libclang_installed
