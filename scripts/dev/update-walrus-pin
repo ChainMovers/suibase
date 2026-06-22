@@ -45,9 +45,11 @@ esac
 note() { echo "[update-walrus-pin] $*"; }
 die()  { echo "[update-walrus-pin] ERROR: $*" >&2; exit 1; }
 
-# --- current pin (first walrus.git rev in localnet-tools/Cargo.toml) ---
+# --- current pins (walrus rev + the sui-types tag) in localnet-tools/Cargo.toml ---
 CUR_REV=$(grep -m1 'walrus.git", rev = "' "$LNT/Cargo.toml" 2>/dev/null | sed 's/.*rev = "\([0-9a-f]*\)".*/\1/')
 [ -n "$CUR_REV" ] || die "could not parse the current walrus rev from $LNT/Cargo.toml"
+CUR_SUI_TAG=$(grep -m1 'MystenLabs/sui", tag = "' "$LNT/Cargo.toml" 2>/dev/null | sed 's/.*tag = "\([^"]*\)".*/\1/')
+[ -n "$CUR_SUI_TAG" ] || die "could not parse the current sui-types tag from $LNT/Cargo.toml"
 
 # --- installed walrus (what 'testnet update' shipped) ---
 WALRUS_BIN=""
@@ -62,29 +64,30 @@ SHORT=$(printf '%s' "$VER_LINE" | sed -n 's/.*-\([0-9a-f]\{7,\}\)$/\1/p')
 note "installed walrus : $VER_LINE  (commit ${SHORT})"
 note "current pin      : ${CUR_REV}"
 
-# Fast path: the pinned rev already starts with the installed short hash -> in sync,
-# no network needed.
-if [ "${CUR_REV#"$SHORT"}" != "$CUR_REV" ]; then
-  note "IN SYNC: the localnet-Walrus pin already matches the shipped walrus (${SHORT})."
-  ( cd "$LNT" && ./verify-embedded-contracts.sh ) || die "embedded-contracts drift despite a matching rev — re-vendor with --apply."
-  exit 0
-fi
-
 # --- resolve the installed short hash to a full rev via a walrus checkout ---
 [ -d "$WALRUS_DIR/.git" ] || die "no walrus checkout at $WALRUS_DIR (set WALRUS_REFERENCE_PATH, or run scripts/dev/manage-local-repos.sh)."
 git -C "$WALRUS_DIR" fetch -q --all --tags 2>/dev/null || note "warn: 'git fetch' on the walrus checkout failed (offline?); trying local objects."
 TARGET_REV=$(git -C "$WALRUS_DIR" rev-parse "${SHORT}^{commit}" 2>/dev/null)
 [ -n "$TARGET_REV" ] || die "could not resolve commit ${SHORT} in $WALRUS_DIR (fetch failed / commit not reachable). Update the checkout and retry."
 
-note "target rev       : ${TARGET_REV}"
+# walrus's OWN sui dependency tag — suibase's sui-types MUST match it, else two
+# sui_types versions collide in the graph (ObjectID/EventID type mismatches).
+SUI_TAG=$(git -C "$WALRUS_DIR" show "${TARGET_REV}:Cargo.toml" 2>/dev/null \
+  | grep -oE 'MystenLabs/sui", tag = "[^"]+"' | head -1 | sed 's/.*tag = "\([^"]*\)".*/\1/')
+[ -n "$SUI_TAG" ] || die "could not determine walrus's sui tag from its Cargo.toml @ ${TARGET_REV}."
 
-if [ "$CUR_REV" = "$TARGET_REV" ]; then
-  note "IN SYNC: pin already equals the shipped walrus rev."
+note "target rev       : ${TARGET_REV}"
+note "target sui-types : ${SUI_TAG}   (current: ${CUR_SUI_TAG})"
+
+if [ "$CUR_REV" = "$TARGET_REV" ] && [ "$CUR_SUI_TAG" = "$SUI_TAG" ]; then
+  note "IN SYNC: pin already equals the shipped walrus rev + its sui tag."
   ( cd "$LNT" && ./verify-embedded-contracts.sh ) || die "embedded-contracts drift despite a matching rev — re-vendor with --apply."
   exit 0
 fi
 
-note "RE-PIN AVAILABLE: ${CUR_REV}  ->  ${TARGET_REV}"
+note "RE-PIN AVAILABLE:"
+[ "$CUR_REV" != "$TARGET_REV" ]  && note "  walrus rev : ${CUR_REV} -> ${TARGET_REV}"
+[ "$CUR_SUI_TAG" != "$SUI_TAG" ] && note "  sui-types  : ${CUR_SUI_TAG} -> ${SUI_TAG}"
 if ! $APPLY; then
   echo
   note "Detect-only. Re-run with --apply to re-pin (rewrites Cargo rev lines, re-vendors"
@@ -95,14 +98,15 @@ fi
 # ======================= APPLY =======================
 note "Applying re-pin. Recommend running this on a dedicated branch."
 
-# 1. Rewrite every walrus.git rev line in both Cargo.toml (7 lines today).
+# 1. Rewrite the walrus rev AND the sui-types tag in both Cargo.toml.
 for f in "$LNT/Cargo.toml" "$SDK/Cargo.toml"; do
   [ -f "$f" ] || die "missing $f"
-  sed -i "s|\(walrus\.git\", rev = \"\)[0-9a-f]\{40\}\"|\1${TARGET_REV}\"|g" "$f" || die "failed to rewrite rev in $f"
+  sed -i "s|\(walrus\.git\", rev = \"\)[0-9a-f]\{40\}\"|\1${TARGET_REV}\"|g" "$f" || die "failed to rewrite walrus rev in $f"
+  sed -i "s|\(MystenLabs/sui\", tag = \"\)[^\"]*\"|\1${SUI_TAG}\"|g" "$f" || die "failed to rewrite sui-types tag in $f"
 done
 _left=$(grep -rln "rev = \"${CUR_REV}\"" "$LNT/Cargo.toml" "$SDK/Cargo.toml" 2>/dev/null)
-[ -z "$_left" ] || die "some old rev lines were not rewritten in: $_left"
-note "rewrote walrus rev in localnet-tools + walrus-local-sdk Cargo.toml"
+[ -z "$_left" ] || die "some old walrus rev lines were not rewritten in: $_left"
+note "rewrote walrus rev (${TARGET_REV:0:12}) + sui-types tag (${SUI_TAG}) in both Cargo.toml"
 
 # 2. Re-vendor embedded-contracts/ from the walrus repo @ target rev.
 git -C "$WALRUS_DIR" checkout -q "$TARGET_REV" 2>/dev/null || die "could not checkout $TARGET_REV in $WALRUS_DIR"

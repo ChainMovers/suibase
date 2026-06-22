@@ -44,11 +44,17 @@ const EXCHANGE_FUND_WAL: u64 = 1_000_000 * ONE_WAL;
 static EMBEDDED_CONTRACTS: include_dir::Dir<'static> =
     include_dir::include_dir!("$CARGO_MANIFEST_DIR/embedded-contracts");
 
-/// Extract the embedded contracts under `<deploy_dir>/contracts-src` and return that
-/// directory (the parent that contains the wal/wal_exchange/walrus/walrus_subsidies
-/// package dirs, so their `../wal`-style local deps resolve).
+/// Extract the embedded contracts to a `contracts-src` dir BESIDE `deploy_dir`
+/// (a sibling, NOT nested under it) and return that directory — the parent that
+/// contains the wal/wal_exchange/walrus/walrus_subsidies package dirs so their
+/// `../wal`-style local deps resolve.
+///
+/// It must NOT live under `deploy_dir`: `create_and_init_system` COPIES the
+/// contract dir INTO `deploy_directory` (recreating the latter first), so a
+/// contract dir nested in `deploy_dir` is wiped mid-copy — surfacing as
+/// "contracts-src: No such file or directory" (walrus testnet-v1.50.0+).
 fn materialize_embedded_contracts(deploy_dir: &Path) -> Result<PathBuf> {
-    let out = deploy_dir.join("contracts-src");
+    let out = deploy_dir.with_file_name("walrus-localnet-contracts-src");
     if out.exists() {
         std::fs::remove_dir_all(&out).ok();
     }

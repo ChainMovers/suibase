@@ -33,17 +33,17 @@ repository = "https://github.com/ChainMovers/suibase"
 # The high-level Walrus client + the types we mirror (StoreArgs, BlobStoreResult,
 # QuiltStoreResult, ClientError/ClientResult). The whole point of this crate is to
 # return these exact types, so walrus-sdk is a core (non-optional) dependency.
-walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075" }
 # The on-chain Sui side (SuiContractClient, ReadClient, Blob/BlobWithAttribute move structs).
-walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"] }
+walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075", features = ["test-utils"] }
 # The storage-node API types — we return its `BlobStatus` from blob_status() (mirrors the SDK).
-walrus-storage-node-client = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+walrus-storage-node-client = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075" }
 # Encoder (real blob ids + quilt packing), keys, BlobId/QuiltPatchId/EncodingType.
-walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075" }
 # sui-types MUST use the IDENTICAL git+tag as walrus's workspace (testnet-v1.73.1)
 # so its ObjectID unifies with walrus-sui's transitive sui-types (a registry crate
 # or a different tag/rev would be a *distinct* ObjectID type -> compile error).
-sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.1" }
+sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.0" }
 # The lightweight (Sui-free) suibase discovery helper: workdir/keystore/address.
 suibase = { path = "../helper" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

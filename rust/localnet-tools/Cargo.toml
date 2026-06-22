@@ -1,6 +1,6 @@
 [package]
 name = "localnet-tools"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Suibase localnet dev tools: localnet Walrus deploy + the sb-local Walrus aggregator/publisher HTTP server."
@@ -32,13 +32,13 @@ walrus-local-sdk = { path = "../walrus-local-sdk" }
 # Same git pins as walrus-local-sdk so the types unify across the path dep.
 # walrus-localnet-deploy uses walrus-sui's test-utils (committee setup) + walrus-core keys;
 # sb-local uses walrus-sui move_structs::Blob + client::PostStoreAction + sui-types SuiAddress.
-walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"] }
-walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075", features = ["test-utils"] }
+walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075" }
 # lwalrus constructs StoreArgs and consumes BlobStoreResult — the SDK's own types.
 # walrus-local-sdk returns them but does not re-export them, so depend on walrus-sdk
 # directly at the SAME pin so the types unify across the path dep.
-walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
-sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.1" }
+walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "dac31b8cb87c3074dee61d21b2bd75c58cc53075" }
+sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.0" }
 
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

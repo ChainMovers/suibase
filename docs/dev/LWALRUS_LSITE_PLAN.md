@@ -14,14 +14,22 @@ localnet", and a fund-free always-on test (`scripts/tests/050_walrus_tests/test_
 SEMANTICALLY compares only the SUPPORTED surface vs the shipped `walrus`, ignoring the
 unsupported list — flagging drift (new/removed/changed) among supported commands.
 
-FOLLOW-UP — `scripts/dev/update-walrus-pin` IMPLEMENTED (detect-by-default / `--apply`).
-Target rev = the commit of the `walrus` binary `testnet update` installs (resolved from
-`walrus --version` via the `~/repos/walrus-reference-main` checkout). Detect (read-only):
-exit 0 in-sync / 3 re-pin-available / 1 error. `--apply` rewrites the walrus `rev =` lines
-in both Cargo.toml, re-vendors `embedded-contracts/` + regenerates CONTRACTS.sha256,
-rebuilds, and runs verify + the lwalrus parity test, fail-loud (run on a branch). Detect
-validated 2026-06-22: pin `1049b56` vs shipped `dac31b8` (walrus 1.50.0) → re-pin available;
-the actual `--apply` re-pin is not yet run (deliberate, may need WalrusLocalClient-mirror fixes).
+DONE — `scripts/dev/update-walrus-pin` (detect-by-default / `--apply`) AND the v1.50.0 re-pin.
+Target rev = the commit of the `walrus` binary `testnet update` installs (`walrus --version`
+→ resolved via the `~/repos/walrus-reference-main` checkout). Detect: exit 0 in-sync / 3
+re-pin-available / 1 error. `--apply` rewrites the walrus `rev =` lines, **auto-aligns the
+`sui-types` tag to walrus's own sui dep**, re-vendors `embedded-contracts/` + regenerates
+CONTRACTS.sha256, rebuilds, runs verify + the lwalrus parity test, fail-loud.
+
+Re-pin to v1.50.0 (`1049b56` → `dac31b8`) needed TWO non-obvious fixes the experiment
+surfaced (so a re-pin is NOT just a rev bump):
+1. **sui-types `testnet-v1.73.1` → `testnet-v1.73.0`** — walrus v1.50.0 pins sui at 1.73.0;
+   the mismatch put two `sui_types` in the graph (18 `ObjectID`/`EventID` errors). The
+   script now auto-aligns this.
+2. **`walrus_localnet_deploy` materializes embedded contracts BESIDE `deploy_dir`, not
+   inside it** — v1.50.0's `create_and_init_system` copies `contract_dir` INTO
+   `deploy_directory` (recreating it), wiping a nested contract dir.
+Validated end-to-end on localnet (build, verify, v1.50.0 deploy, full parity incl. round-trip).
 
 ## Goal
 
