@@ -3,7 +3,7 @@
 # This script is only intended for developers and continuous integration.
 #
 # It forces a Rust rebuild of the "localnet-tools" binaries (today:
-# walrus-localnet-deploy + sb-local, from rust/walrus-store) and reinstalls them
+# walrus-localnet-deploy + sb-local, from rust/localnet-tools) and reinstalls them
 # into workdirs/common/bin. Precompiled binaries are NOT used.
 #
 # Mirrors scripts/dev/update-daemon for the localnet-tools asset, so the two
@@ -29,7 +29,7 @@ rm -f "$SUIBASE_BIN_DIR/walrus-localnet-deploy" \
   "$SUIBASE_BIN_DIR/sb-local" \
   "$SUIBASE_BIN_DIR/localnet-tools-version.yaml"
 
-# Build + install from source (rust/walrus-store, localnet feature). Builds every
+# Build + install from source (rust/localnet-tools; no cargo features). Builds every
 # binary in localnet_tools_bin_names (walrus-localnet-deploy + sb-local).
 init_app_obj "localnet_tools" ""
 

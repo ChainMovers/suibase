@@ -1,0 +1,46 @@
+{
+  "name": "@suibase/walrus-local",
+  "version": "0.0.1",
+  "description": "Localnet-only drop-in for @mysten/walrus: WalrusLocalClient extends the real WalrusClient, routing the node-talking blob/quilt operations through Suibase's nodeless sb-local HTTP server while inheriting every on-chain operation against the localnet-deployed Walrus. Same API, same signatures — no storage nodes, no funds, no internet.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChainMovers/suibase.git",
+    "directory": "typescript/walrus-local-sdk"
+  },
+  "homepage": "https://suibase.io",
+  "keywords": ["sui", "walrus", "localnet", "suibase", "mysten"],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "npm run clean && tsc -p .",
+    "clean": "rm -rf dist",
+    "prepack": "npm run build",
+    "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:unit": "node --import tsx --test tests/unit/*.test.ts",
+    "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "peerDependencies": {
+    "@mysten/sui": "^2.19.0",
+    "@mysten/walrus": "^1.2.1"
+  },
+  "devDependencies": {
+    "@mysten/sui": "^2.19.0",
+    "@mysten/walrus": "^1.2.1",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

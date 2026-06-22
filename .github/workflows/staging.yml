@@ -217,7 +217,7 @@ jobs:
   # fetch safe to consume. Linux/glibc only (the binary is glibc-24.04, like sui).
   # NOTE: this gates the SHARED staging->main promotion, so a walrus/localnet
   # regression also holds back a daemon release. If that coupling becomes a problem,
-  # gate this job on a rust/localnet-tools or rust/walrus-store change (skip when unchanged) via a new
+  # gate this job on a rust/localnet-tools or rust/walrus-local-sdk change (skip when unchanged) via a new
   # detect-changes output, so daemon-only releases are not blocked by walrus.
   validate-localnet-tools:
     needs: detect-changes

@@ -20,10 +20,10 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
-use walrus_store::localnet::{LocalnetMockStore, QuiltInput, QuiltPatchData};
+use walrus_local_sdk::localnet::{LocalnetMockStore, QuiltInput, QuiltPatchData};
 
 use crate::wire::{QuiltPatchItem, QuiltStoreResult, StoredQuiltPatch};
-use crate::{bad_request, blob_store_result, internal_error, not_found, resolve_post_store, serve_bytes, PublisherQuery};
+use crate::{bad_request, blob_store_result, internal_error, not_found, persistence_of, resolve_post_store, serve_bytes, PublisherQuery};
 
 /// Header carrying the patch identifier on a quilt-patch read (matches the real daemon).
 const X_QUILT_PATCH_IDENTIFIER: HeaderName = HeaderName::from_static("x-quilt-patch-identifier");
@@ -111,7 +111,7 @@ async fn put_quilt(
         })
         .collect();
 
-    match store.store_quilt(patches, epochs, post_store).await {
+    match store.store_quilt(patches, epochs, persistence_of(&q), post_store).await {
         Ok(sq) => {
             let result = QuiltStoreResult {
                 blob_store_result: blob_store_result(sq.stored),
@@ -176,6 +176,10 @@ async fn get_by_patch_id(
     State(store): State<Arc<LocalnetMockStore>>,
     Path(quilt_patch_id): Path<String>,
 ) -> Response {
+    // Malformed id -> 400 (bad request), like the real aggregator; valid-but-absent -> 404.
+    if !store.is_valid_quilt_patch_id(&quilt_patch_id) {
+        return bad_request(&format!("malformed quilt patch id {quilt_patch_id}"));
+    }
     match store.read_quilt_patch(&quilt_patch_id).await {
         Ok(patch) => quilt_patch_response(&method, &headers, &quilt_patch_id, patch),
         Err(_) => not_found(

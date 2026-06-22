@@ -10,9 +10,7 @@
 //! Gated by `WALRUS_LOCALNET_TEST=1`. Lives in its own file (one test per binary) so
 //! it runs sequentially w.r.t. the other live suites and never contends on the wallet.
 
-#![cfg(feature = "localnet")]
-
-use walrus_store::WalrusStore;
+use walrus_local_sdk::localnet::LocalnetMockStore;
 
 #[tokio::test]
 async fn standalone_and_pooled_same_content_coexist() -> anyhow::Result<()> {
@@ -21,7 +19,7 @@ async fn standalone_and_pooled_same_content_coexist() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let store = WalrusStore::for_workdir("localnet").await?;
+    let store = LocalnetMockStore::open().await?;
 
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

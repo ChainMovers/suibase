@@ -56,7 +56,7 @@ else
 fi
 
 _WAIT_START_TIME=$SECONDS
-wait_for_json_rpc_up "any"
+wait_for_sui_client_up "any"
 _WAIT_END_TIME=$SECONDS
 
 # Display precise timing

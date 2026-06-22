@@ -97,7 +97,13 @@ start_suibase_daemon() {
 }
 export -f start_suibase_daemon
 
-wait_for_json_rpc_up() {
+# Block until the workdir(s) respond to `sui client` (or time out). Transport-agnostic:
+# it shells out to `sui client gas`, so it follows whatever RPC the sui CLI uses
+# (JSON-RPC today, gRPC as the CLI migrates) -- the readiness check needs no change when
+# JSON-RPC is dropped. (Formerly wait_for_json_rpc_up.) Note: sb-local has its OWN, stricter
+# gRPC readiness gate -- it polls gRPC GetObject(system_object) in walrus-local-sdk -- because
+# `sui client gas` answering does not imply the gRPC LedgerService serves arbitrary objects yet.
+wait_for_sui_client_up() {
   local _CMD=$1 # a specific workdir, "any", "none" or "exclude-localnet"
 
   # Array of valid workdirs
@@ -112,11 +118,11 @@ wait_for_json_rpc_up() {
   done
 
   if [ "$_WORKDIR_VALID" = false ] && [ "$_CMD" != "any" ] && [ "$_CMD" != "none" ] && [ "$_CMD" != "exclude-localnet" ]; then
-    warn_user "wait_for_json_rpc_up unexpected workdir name: $_CMD"
+    warn_user "wait_for_sui_client_up unexpected workdir name: $_CMD"
     return
   fi
 
-  # Block for up to 20 seconds for the JSON-RPC to be confirm up.
+  # Block for up to 20 seconds for the sui client to confirm the node responds.
   #
   # The first parameter controls which workdir can be checked.
   #
@@ -191,7 +197,7 @@ wait_for_json_rpc_up() {
 
     # Wait one second before trying again.
     if [ "$_i" -eq 5 ]; then
-      echo -n "Verifying JSON-RPC is responding..."
+      echo -n "Verifying Sui client connectivity..."
       _AT_LEAST_ONE_DOT=true
     fi
     if [ "$_i" -gt 5 ]; then
@@ -202,13 +208,13 @@ wait_for_json_rpc_up() {
   if [ "$_AT_LEAST_ONE_DOT" = true ]; then
     echo
     if [ "$_JSON_RPC_UP" = true ]; then
-      echo "JSON-RPC is up"
+      echo "Sui client connected"
     else
-      echo "JSON-RPC not responding. Try again later?"
+      echo "Sui client not responding. Try again later?"
     fi
   fi
 }
-export -f wait_for_json_rpc_up
+export -f wait_for_sui_client_up
 
 restart_suibase_daemon() {
   # Note: lock function is re-entrant. Won't block if this script is already holding the lock.
@@ -447,7 +453,7 @@ show_suibase_daemon_get_links() {
 
   if [ $SUIBASE_DAEMON_STARTED = true ]; then
     # Give a moment for the daemon to start.
-    wait_for_json_rpc_up "${WORKDIR_NAME}"
+    wait_for_sui_client_up "${WORKDIR_NAME}"
   fi
 
   local _DISP
