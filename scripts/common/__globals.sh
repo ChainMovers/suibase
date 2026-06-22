@@ -390,11 +390,43 @@ is_installed() {
   return
 }
 
+# True (0) when libclang -- required by bindgen in the Rust build (zstd-sys / rocksdb-sys) --
+# is discoverable the way clang-sys looks for it: an explicit LIBCLANG_PATH, the ldconfig
+# cache, the standard llvm lib dirs, or (on macOS) the Xcode toolchain.
+is_libclang_installed() {
+  [ -n "$LIBCLANG_PATH" ] && return 0
+  if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libclang[.-]'; then
+    return 0
+  fi
+  local _f
+  for _f in /usr/lib/llvm-*/lib/libclang.so* /usr/lib/*/libclang*.so* /usr/lib/libclang*.so* /usr/local/lib/libclang*.so*; do
+    [ -e "$_f" ] && return 0
+  done
+  if [ "$(uname -s)" = "Darwin" ]; then
+    # libclang ships inside the Xcode / Command Line Tools toolchain.
+    xcode-select -p >/dev/null 2>&1 && return 0
+    [ -e /Library/Developer/CommandLineTools/usr/lib/libclang.dylib ] && return 0
+  fi
+  return 1
+}
+export -f is_libclang_installed
+
 exit_if_rust_build_deps_missing() {
   # Check if all rust/cargo building dependencies are installed.
   is_installed cmake || setup_error "Need to install cmake. See https://docs.sui.io/build/install#prerequisites"
   is_installed rustc || setup_error "Need to install rust. See https://docs.sui.io/build/install#prerequisites"
   is_installed cargo || setup_error "Need to install cargo. See https://docs.sui.io/build/install#prerequisites"
+
+  # bindgen (pulled in transitively by the Rust build via zstd-sys / rocksdb-sys) needs
+  # libclang at build time. Without it the build runs for minutes and then dies deep in a
+  # cryptic clang-sys panic ("Unable to find libclang ..."); fail fast here with the fix.
+  if ! is_libclang_installed; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      setup_error "Missing libclang, required to build the Rust binaries (bindgen). Install the Xcode command line tools: xcode-select --install . See https://docs.sui.io/build/install#prerequisites"
+    else
+      setup_error "Missing libclang, required to build the Rust binaries (bindgen). Install it with: sudo apt-get install -y libclang-dev . See https://docs.sui.io/build/install#prerequisites"
+    fi
+  fi
 
   # Verify Rust is recent enough.
   version_greater_equal "$(rustc --version)" "$MIN_RUST_VERSION" || setup_error "Upgrade rust to a more recent version"
@@ -2705,7 +2737,22 @@ start_sui_process() {
       exit
     fi
 
+    # The node answered the health check (ALIVE=true above, via `sui client
+    # objects` -- independent of the PID scan), so the process IS up. Resolving
+    # its PID is a SEPARATE `ps`-table scan (get_process_pid) that can lag the
+    # health check on slow macOS CI runners -- a freshly-forked process takes a
+    # moment to surface in `ps`, and the macOS `comm` match is finicky (issue
+    # #79). A single scan intermittently came back empty and the caller
+    # (start_all_services) treats an empty PID as "not started" and aborts -- the
+    # mirror image of the stop path's reap-lag poll. So POLL until the PID
+    # surfaces. Normal case: the first scan finds it and the loop never runs.
+    local _pid_wait=0
     update_SUI_PROCESS_PID_var
+    while [ -z "$SUI_PROCESS_PID" ] && [ "$_pid_wait" -lt 10 ]; do
+      sleep 1
+      _pid_wait=$((_pid_wait + 1))
+      update_SUI_PROCESS_PID_var
+    done
     echo "localnet started ( pid $SUI_PROCESS_PID )"
     update_SUI_VERSION_var
     echo "$SUI_VERSION"
@@ -2898,7 +2945,7 @@ update_ACTIVE_ADDRESS_var() {
       if [ $_RETRY_COUNT -eq 0 ]; then
         echo "Getting active address for ${WORKDIR_NAME}"
       fi
-      wait_for_json_rpc_up "${WORKDIR_NAME}"
+      wait_for_sui_client_up "${WORKDIR_NAME}"
       _RETRY_COUNT=$((_RETRY_COUNT + 1))
     fi
   done
@@ -2930,7 +2977,7 @@ add_test_addresses() {
   local _CLIENT_FILE=$2
   local _WORDS_FILE=$3
 
-  wait_for_json_rpc_up "${WORKDIR_NAME}"
+  wait_for_sui_client_up "${WORKDIR_NAME}"
 
   # Track the highest ED25519 address during creation. This will tentatively become
   # the active address later.
@@ -3469,7 +3516,7 @@ sync_client_yaml() {
     fi
     if [ "$_EXPECTED_ENV" == "${WORKDIR_NAME}_proxy" ]; then
       # Block until verified that the proxy is responding (or timeout).
-      wait_for_json_rpc_up "${WORKDIR_NAME}"
+      wait_for_sui_client_up "${WORKDIR_NAME}"
     fi
   fi
 }
@@ -4279,18 +4326,26 @@ start_all_services() {
     fi
   fi
 
-  # Nodeless localnet Walrus HTTP API (sb-local): start after the local Sui node +
-  # faucet, gated on walrus_local_enabled + a present deploy descriptor. NON-FATAL: a
-  # failure only warns (the localnet itself and the Rust WalrusStore API are
-  # unaffected). Guarded on the function existing (sourced only for localnet).
-  if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process >/dev/null 2>&1; then
-    start_sb_local_process
-  fi
-
   # Success. All process that needed to be started were started.
   sync_client_yaml
   trig_daemons_refresh
-  wait_for_json_rpc_up "${WORKDIR_NAME}"
+  wait_for_sui_client_up "${WORKDIR_NAME}"
+
+  # Nodeless localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
+  # as-needed, then (re)start sb-local -- a single entry point mirroring
+  # start_suibase_daemon_as_needed above (build-if-stale + restart-on-upgrade + start-if-down).
+  # This plain-'start' fast path never reaches deploy_walrus_localnet, so this is what makes a
+  # 'localnet start' after '~/suibase/update' self-heal sb-local (the daemon already self-heals
+  # two calls up). NON-FATAL and gated on localnet + walrus_local_enabled inside the function;
+  # guarded here on it existing (sourced only for localnet).
+  #
+  # Started LAST -- AFTER wait_for_sui_client_up confirms the node answers -- because sb-local
+  # connects to the node (over gRPC) to read the Walrus system object. Starting it earlier only
+  # burned its connect-retry budget against a not-yet-ready node (gRPC object-serving readiness
+  # lags JSON-RPC readiness on a cold start).
+  if [ "$WORKDIR" = "localnet" ] && type -t start_sb_local_process_as_needed >/dev/null 2>&1; then
+    start_sb_local_process_as_needed
+  fi
 
   if [ "$_WERE_ALL_RUNNING" = true ]; then
     return $_NOOP_REQUEST

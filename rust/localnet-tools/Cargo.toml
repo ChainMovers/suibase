@@ -1,6 +1,6 @@
 [package]
 name = "localnet-tools"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Suibase localnet dev tools: nodeless Walrus deploy + the sb-local Walrus aggregator/publisher HTTP server."
@@ -8,10 +8,9 @@ homepage = "https://suibase.io"
 repository = "https://github.com/ChainMovers/suibase"
 
 # This crate hosts the BINARIES shipped in the `localnet-tools` precompiled asset
-# (consumed by Suibase localnet). The thin library that the binaries build on —
-# `WalrusStore` (the localnet mock + the real walrus-sdk backend) — lives in the
-# sibling `rust/walrus-store` crate. Keeping the bins here keeps walrus-store a thin,
-# enclave-safe library (WS7) and gives the tools room to grow.
+# (consumed by Suibase localnet). The library the binaries build on — `walrus-local-sdk`
+# (the localnet-only, drop-in mirror of the Mysten Walrus SDK + its nodeless mock engine)
+# — lives in the sibling `rust/walrus-local-sdk` crate.
 #
 # Binaries:
 #   - walrus-localnet-deploy : publishes nodeless Walrus on the running localnet
@@ -19,17 +18,18 @@ repository = "https://github.com/ChainMovers/suibase"
 #   - sb-local               : long-running localnet-only HTTP server exposing the
 #                              Walrus aggregator + publisher wire API.
 #
-# This crate is NEVER consumed by the enclave, so it needs no feature gating: it always
-# pulls walrus-store's `localnet` feature (and the heavy walrus/Sui graph) by design.
+# This crate is localnet-only (never consumed by the enclave): it always pulls the heavy
+# walrus/Sui graph by design.
 #
-# The Walrus/Sui deps are git-pinned to the SAME rev/tag as rust/walrus-store so their
+# The Walrus/Sui deps are git-pinned to the SAME rev/tag as rust/walrus-local-sdk so their
 # types (Blob, ObjectID, PostStoreAction, ...) unify across the path-dependency boundary.
 
 [dependencies]
-# The thin library: the WalrusStore API + the nodeless localnet mock (sb-local builds on it).
-walrus-store = { path = "../walrus-store", features = ["localnet"] }
+# The localnet Walrus library: the nodeless mock engine (sb-local builds on it) + the
+# WalrusLocalClient SDK mirror.
+walrus-local-sdk = { path = "../walrus-local-sdk" }
 
-# Same git pins as walrus-store so the types unify across the path dep.
+# Same git pins as walrus-local-sdk so the types unify across the path dep.
 # walrus-localnet-deploy uses walrus-sui's test-utils (committee setup) + walrus-core keys;
 # sb-local uses walrus-sui move_structs::Blob + client::PostStoreAction + sui-types SuiAddress.
 walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"] }

@@ -2,7 +2,7 @@
 
 # Live end-to-end test of sb-local: the localnet-only HTTP server exposing the Walrus
 # aggregator + publisher wire API (GET/PUT /v1/blobs, quilts), backed by the nodeless
-# WalrusStore. Exercises the DROP-IN contract a real Walrus client relies on.
+# LocalnetMockStore. Exercises the DROP-IN contract a real Walrus client relies on.
 #
 # Self-skipping: if sb-local is not reachable (no walrus-enabled localnet running), the
 # test SKIPS (exit 2) so it is safe in the fast scripts-tests suite. The heavy
@@ -144,7 +144,7 @@ pad = "=" * (-len(s) % 4)
 print(base64.urlsafe_b64decode(s + pad).hex())
 ' 2>/dev/null)
     if [ -n "$HEXKEY" ] && [ -f "$WORKDIRS/localnet/config/walrus-localnet-blobs/$HEXKEY.bin" ]; then
-        ok "interop: blob bytes present in the shared dir (Rust WalrusStore reads the same file)"
+        ok "interop: blob bytes present in the shared dir (Rust WalrusLocalClient reads the same file)"
     else
         fail "interop: shared-dir bytes file not found for $BLOBID"
     fi
@@ -201,7 +201,7 @@ import sys, json
 items = json.load(sys.stdin)
 ids = {i["identifier"] for i in items}
 assert {"alpha", "beta"} <= ids, ids
-assert all("patchId" in i and "tags" in i for i in items)
+assert all("patch_id" in i and "tags" in i for i in items)
 alpha = next(i for i in items if i["identifier"] == "alpha")
 assert alpha["tags"].get("kind") == "text", alpha["tags"]
 ' 2>/dev/null; then

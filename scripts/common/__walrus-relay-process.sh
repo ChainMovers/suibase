@@ -519,7 +519,23 @@ EOF
     setup_error "Failed to start walrus-upload-relay after 3 attempts"
   fi
 
+  # The server answered the health check (ALIVE=true), so the process IS up and
+  # serving. Resolving its PID is a SEPARATE `ps`-table scan (get_process_pid),
+  # which can lag the health check on slow macOS CI runners -- a freshly-forked
+  # process takes a moment to surface in `ps`, and the macOS `comm` match is
+  # already known to be finicky (issue #79). A single scan here intermittently
+  # came back empty and the caller (start_all_services) treats an empty PID as
+  # "relay not started" and aborts -- the mirror image of the stop path's
+  # reap-lag poll (see stop_walrus_relay_service_only). So POLL until the PID
+  # surfaces. Normal case: the first scan finds it and the loop never runs, so
+  # this adds no measurable delay to a healthy start.
+  local _pid_wait=0
   update_WALRUS_RELAY_PROCESS_PID_var
+  while [ -z "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_pid_wait" -lt 10 ]; do
+    sleep 1
+    _pid_wait=$((_pid_wait + 1))
+    update_WALRUS_RELAY_PROCESS_PID_var
+  done
   echo "walrus-upload-relay started ( pid $WALRUS_RELAY_PROCESS_PID )"
 }
 export -f start_walrus_relay_process

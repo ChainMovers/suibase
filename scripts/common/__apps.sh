@@ -1333,9 +1333,9 @@ sb_app_rust_build_and_install_generic() {
   case "$_ASSETS_NAME" in
   localnet-tools)
     # One cargo invocation builds every binary in bin_names (today:
-    # walrus-localnet-deploy + sb-local) from the rust/localnet-tools bins crate. That
-    # crate enables walrus-store's `localnet` feature via its own dependency, so there
-    # is no --features flag here.
+    # walrus-localnet-deploy + sb-local) from the rust/localnet-tools bins crate. It
+    # depends on the localnet-only walrus-local-sdk library (no cargo features), so
+    # there is no --features flag here.
     _PROFILE="release"
     _CARGO_ARGS=(--release)
     local _b

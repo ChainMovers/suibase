@@ -999,7 +999,7 @@ workdir_exec() {
     # Nodeless localnet Walrus (opt-in via walrus_local_enabled): if enabled but the
     # Walrus contracts are not deployed on this chain, the deploy only happens
     # on a regen (fresh chain id). Surface a footer advisory so 'status' is not
-    # silently green while WalrusStore is unusable. No-op unless WORKDIR=localnet
+    # silently green while the localnet Walrus mock is unusable. No-op unless WORKDIR=localnet
     # (where __walrus-localnet-deploy.sh was sourced).
     if [ "$WORKDIR" = "localnet" ] && [ "$IS_DAEMON_CALL" != "true" ]; then
       if is_walrus_localnet_deploy_needed "$WORKDIR"; then

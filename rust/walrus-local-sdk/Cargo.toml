@@ -1,0 +1,56 @@
+[package]
+name = "walrus-local-sdk"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Localnet-only, drop-in mirror of the Mysten Walrus SDK (walrus_sdk) for Suibase: nodeless localnet store returning the SDK's own types."
+homepage = "https://suibase.io"
+repository = "https://github.com/ChainMovers/suibase"
+
+# WHAT THIS CRATE IS
+#
+# A LOCALNET-ONLY mirror of the Mysten Labs Walrus SDK (`walrus_sdk`). `WalrusLocalClient`
+# mirrors the method signatures of `walrus_sdk::node_client::WalrusNodeClient<SuiContractClient>`
+# and returns the SDK's OWN types (`BlobStoreResult`, `QuiltStoreResult`, `ClientResult`, ...),
+# so caller code is drop-in: on a real network you use `walrus_sdk` directly; on localnet you
+# use this crate. The caller dispatches by network (see `compat::WalrusApi` for a generic seam).
+#
+# DESIGN INTENT (do not regress):
+#   - The REAL path is `walrus_sdk` used DIRECTLY — this crate inserts no glue there, so a bug
+#     here can only ever affect localnet (devs), never a real network. The one real-facing seam
+#     is `impl compat::WalrusApi for WalrusNodeClient`, which is PURE forwarding (one SDK call
+#     per method, no logic) precisely to keep that risk at zero.
+#   - This crate carries the localnet burden: it wraps the nodeless mock engine (`localnet`
+#     module) and reshapes its results into the SDK's types.
+#   - It is NEVER linked enclave-side; it freely pulls the heavy walrus/Sui graph (incl. suibase).
+#
+# Dependencies on the Walrus crates are git-pinned to ONE reference commit so the localnet
+# contracts (published from that commit's `contracts/`) match the `walrus-sui`/`walrus-sdk` API
+# used here. Keep this rev in sync with the Sui version Suibase localnet runs (testnet-v1.73.1).
+# See docs/dev/LOCALNET_WALRUS_PLAN.md (Q4).
+
+[dependencies]
+# The high-level Walrus client + the types we mirror (StoreArgs, BlobStoreResult,
+# QuiltStoreResult, ClientError/ClientResult). The whole point of this crate is to
+# return these exact types, so walrus-sdk is a core (non-optional) dependency.
+walrus-sdk = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+# The on-chain Sui side (SuiContractClient, ReadClient, Blob/BlobWithAttribute move structs).
+walrus-sui = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0", features = ["test-utils"] }
+# The storage-node API types — we return its `BlobStatus` from blob_status() (mirrors the SDK).
+walrus-storage-node-client = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+# Encoder (real blob ids + quilt packing), keys, BlobId/QuiltPatchId/EncodingType.
+walrus-core = { git = "https://github.com/MystenLabs/walrus.git", rev = "1049b56b6fc3ca5eff9ac601ae5ff507ea772fa0" }
+# sui-types MUST use the IDENTICAL git+tag as walrus's workspace (testnet-v1.73.1)
+# so its ObjectID unifies with walrus-sui's transitive sui-types (a registry crate
+# or a different tag/rev would be a *distinct* ObjectID type -> compile error).
+sui-types = { git = "https://github.com/MystenLabs/sui", tag = "testnet-v1.73.1" }
+# The lightweight (Sui-free) suibase discovery helper: workdir/keystore/address.
+suibase = { path = "../helper" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+
+[dev-dependencies]
+# Only the sb-local HTTP interop test needs it (parses the publisher's BlobStoreResult JSON).
+serde_json = "1"

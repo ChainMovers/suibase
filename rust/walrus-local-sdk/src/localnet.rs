@@ -1,7 +1,8 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Localnet nodeless mock for [`crate::WalrusStore`] (behind the `localnet` feature).
+//! Nodeless localnet mock engine — the lower-level store that [`crate::WalrusLocalClient`]
+//! (the drop-in `walrus_sdk` mirror) wraps, and that the `sb-local` HTTP facade builds on.
 //!
 //! Creates real `Blob`/`Storage` objects on the Suibase localnet Sui via PTBs +
 //! off-node held-key `certify_blob`, with bytes served from the filesystem. There
@@ -49,8 +50,8 @@ use walrus_core::{
         EncodingConfig, EncodingFactory,
     },
     keys::ProtocolKeyPair,
-    messages::{BlobPersistenceType, Confirmation, ConfirmationCertificate},
-    metadata::QuiltPatchInternalIdV1,
+    messages::{Confirmation, ConfirmationCertificate},
+    metadata::{QuiltMetadataV1, QuiltPatchInternalIdV1},
     BlobId, EncodingType, Epoch, QuiltPatchId,
 };
 use walrus_sui::{
@@ -59,7 +60,7 @@ use walrus_sui::{
         ReadClient, SuiContractClient,
     },
     config::load_wallet_context_from_path,
-    types::move_structs::{Blob, BlobWithAttribute},
+    types::move_structs::{Blob, BlobWithAttribute, PooledBlob},
 };
 
 use crate::{BlobHandle, BlobMeta, PoolHandle, PoolStatus};
@@ -72,11 +73,17 @@ const ENCODING_TYPE: EncodingType = EncodingType::RS2;
 /// direct node so dry-run/simulate + object reads work without the proxy.
 const LOCALNET_DIRECT_RPC: &str = "http://localhost:9000";
 
-/// Max attempts to construct the contract client when opening the store. Right after
-/// `localnet start`/`regen` the node answers chain-id but can briefly 404 the
-/// just-(re)loaded System object (localnet read-after-write lag — the same lag the
-/// deploy bin polls around). Retry rather than fail the (long-running) server's startup.
-const CONNECT_MAX_ATTEMPTS: u32 = 20;
+/// Default max attempts to construct the contract client when opening the store. Right after
+/// `localnet start`/`regen` the node answers JSON-RPC (chain-id) but its gRPC `LedgerService`
+/// can briefly NOT_FOUND the just-(re)loaded System object — gRPC object-serving readiness
+/// LAGS JSON-RPC readiness, especially on a slow cold start. This retry loop IS the gRPC
+/// readiness gate: it polls `GetObject` (via `SuiContractClient::new`) until it answers.
+///
+/// 40 × 2s ≈ 80s, chosen to equal-or-exceed the shell `/status` wait in
+/// `__sb-local-process.sh` (so the shell observes the real outcome instead of giving up
+/// first). Override with `SB_LOCAL_CONNECT_MAX_ATTEMPTS` (CI may want fewer; a very slow
+/// host more).
+const CONNECT_MAX_ATTEMPTS: u32 = 40;
 /// Seconds between connect attempts (≈ CONNECT_MAX_ATTEMPTS × this, total budget).
 const CONNECT_RETRY_SECS: u64 = 2;
 
@@ -160,6 +167,11 @@ struct BlobSidecar {
     /// in-file record for debuggability.
     #[serde(default)]
     pool_id: Option<String>,
+    /// `true` if the on-chain blob was registered Deletable (mirrors the caller's
+    /// `BlobPersistence`). Drives SDK-faithful `delete_owned_blob` (deletes only
+    /// deletable blobs). `#[serde(default)]` => older sidecars read as Permanent.
+    #[serde(default)]
+    deletable: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -330,9 +342,14 @@ impl LocalnetMockStore {
         // consumes it (cheap: it just re-reads the yaml + keystore).
         // contract_config BY REFERENCE; backoff BY VALUE (Default inferred from the
         // param type). gas_budget=None dry-runs to estimate (fine on localnet's node).
+        let max_attempts = std::env::var("SB_LOCAL_CONNECT_MAX_ATTEMPTS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(CONNECT_MAX_ATTEMPTS);
         let mut client = None;
         let mut last_err: Option<anyhow::Error> = None;
-        for attempt in 0..CONNECT_MAX_ATTEMPTS {
+        for attempt in 0..max_attempts {
             let wallet = load_wallet_context_from_path(Some(&wallet_yaml), None)
                 .context("loading localnet mock wallet")?;
             match SuiContractClient::new(
@@ -350,11 +367,11 @@ impl LocalnetMockStore {
                     break;
                 }
                 Err(e) => {
-                    if attempt + 1 < CONNECT_MAX_ATTEMPTS {
+                    if attempt + 1 < max_attempts {
                         eprintln!(
                             "sb-local: localnet not ready (attempt {}/{}): {e}; retrying in {}s…",
                             attempt + 1,
-                            CONNECT_MAX_ATTEMPTS,
+                            max_attempts,
                             CONNECT_RETRY_SECS
                         );
                         tokio::time::sleep(Duration::from_secs(CONNECT_RETRY_SECS)).await;
@@ -366,10 +383,25 @@ impl LocalnetMockStore {
         let client = match client {
             Some(c) => c,
             None => {
-                return Err(last_err.unwrap_or_else(|| anyhow!("unknown connect error"))).context(
-                    "constructing SuiContractClient against localnet (localnet still starting, \
-                     or a regen is needed?)",
-                )
+                // Differentiate so the message names the actual cause + fix (kept short). The
+                // shell only starts sb-local when the descriptor matches the live chain id, so a
+                // persistent NOT_FOUND here is warm-up lag (restart), NOT a stale deploy (regen).
+                let budget = max_attempts as u64 * CONNECT_RETRY_SECS;
+                let err = last_err.unwrap_or_else(|| anyhow!("unknown connect error"));
+                let detail = format!("{err:#}").to_lowercase();
+                let object_missing = detail.contains("not found") || detail.contains("code 5");
+                let msg = if object_missing {
+                    format!(
+                        "localnet still warming up: gRPC has not served the Walrus system object \
+                         after {budget}s — re-run 'localnet start' (regen only if it persists)"
+                    )
+                } else {
+                    format!(
+                        "localnet node not reachable at {LOCALNET_DIRECT_RPC} after {budget}s \
+                         — re-run 'localnet start'"
+                    )
+                };
+                return Err(err).context(msg);
             }
         };
 
@@ -403,7 +435,9 @@ impl LocalnetMockStore {
     /// acceptable on a regen-able localnet with faucet-minted WAL and is not worth
     /// crash-recovery machinery for a dev mock.
     pub async fn store(&self, bytes: &[u8], epochs: u32) -> Result<BlobHandle> {
-        let stored = self.store_blob(bytes, epochs, PostStoreAction::Keep).await?;
+        let stored = self
+            .store_blob(bytes, epochs, BlobPersistence::Permanent, PostStoreAction::Keep)
+            .await?;
         Ok(BlobHandle {
             blob_id: stored.blob.blob_id.to_string(),
             object_id: stored.blob.id.to_string(),
@@ -416,13 +450,16 @@ impl LocalnetMockStore {
     /// what happens to the `Blob` object after certify (Keep / TransferTo / Share —
     /// mapping the publisher's `send_object_to`/`share` query params).
     ///
-    /// Always Permanent (the publisher's deprecated `deletable` flag is a no-op; the
-    /// Permanent confirmation needs no blob object id, so the held-key signature is a
-    /// pure function of (epoch, blob_id)).
+    /// `persistence` selects Permanent vs Deletable (the SDK mirror passes the caller's
+    /// `StoreArgs.persistence`; `sb-local` passes Permanent). The held-key confirmation
+    /// is built from `blob.blob_persistence_type()`, so a Deletable blob's certificate
+    /// correctly binds to its object id (same path the pooled store uses) while a
+    /// Permanent one stays a pure function of (epoch, blob_id).
     pub async fn store_blob(
         &self,
         bytes: &[u8],
         epochs: u32,
+        persistence: BlobPersistence,
         post_store: PostStoreAction,
     ) -> Result<StoredBlob> {
         let unencoded_size = bytes.len() as u64;
@@ -470,8 +507,8 @@ impl LocalnetMockStore {
 
         self.ensure_wal_funded().await?;
 
-        // Reserve, then register as Permanent. encoded_size comes from the real
-        // metadata computed above (the encoded length of the erasure-coded blob).
+        // Reserve, then register with the requested persistence. encoded_size comes from
+        // the real metadata computed above (the encoded length of the erasure-coded blob).
         let storage = self
             .client
             .reserve_space(encoded_length, epochs)
@@ -479,15 +516,16 @@ impl LocalnetMockStore {
             .context("reserve_space (is the wallet funded with WAL?)")?;
         let mut blobs = self
             .client
-            .register_blobs(vec![(metadata, storage)], BlobPersistence::Permanent)
+            .register_blobs(vec![(metadata, storage)], persistence)
             .await
-            .context("register_blobs(Permanent)")?;
+            .with_context(|| format!("register_blobs({persistence:?})"))?;
         let mut blob = blobs
             .pop()
             .ok_or_else(|| anyhow!("register_blobs returned no Blob"))?;
 
         let blob_id_str = blob_id.to_string();
         let object_id_str = blob.id.to_string();
+        let deletable = blob.deletable;
 
         // Persist bytes + sidecar BEFORE certify, so a certified blob always has
         // servable local bytes (the object_id is already known from register).
@@ -500,19 +538,20 @@ impl LocalnetMockStore {
                 size: unencoded_size,
                 epochs,
                 pool_id: None,
+                deletable,
             },
         )?;
 
-        // Permanent confirmation: serializes as a single 0u8 tag with NO object id,
-        // so the signed message is a pure function of (epoch, blob_id) and is
-        // independent of blob.id (verified in walrus_core's own encoding test).
+        // The confirmation's persistence type comes from the registered blob: Permanent
+        // serializes as a single 0u8 tag (pure function of epoch+blob_id); Deletable binds
+        // to the blob's object id. `blob.blob_persistence_type()` returns the right variant.
         let epoch: Epoch = self
             .client
             .read_client()
             .current_epoch()
             .await
             .context("current_epoch")?;
-        let confirmation = Confirmation::new(epoch, blob_id, BlobPersistenceType::Permanent);
+        let confirmation = Confirmation::new(epoch, blob_id, blob.blob_persistence_type());
         let signed = self.held_key.sign_message(&confirmation);
         let certificate =
             ConfirmationCertificate::from_signed_messages_and_indices(vec![signed], vec![0u16])
@@ -566,6 +605,43 @@ impl LocalnetMockStore {
         }
     }
 
+    /// True iff `s` parses as a canonical Walrus `BlobId`. Lets the HTTP facade return
+    /// 400 (bad request) for a MALFORMED id vs 404 for a valid-but-absent one — matching
+    /// the real Walrus aggregator's behavior.
+    pub fn is_valid_blob_id(&self, s: &str) -> bool {
+        parse_blob_id(s).is_ok()
+    }
+
+    /// True iff `s` parses as a canonical `QuiltPatchId` (same 400-vs-404 distinction as
+    /// [`Self::is_valid_blob_id`]).
+    pub fn is_valid_quilt_patch_id(&self, s: &str) -> bool {
+        QuiltPatchId::from_str(s).is_ok()
+    }
+
+    /// Whether the standalone blob with this id was registered Deletable (read from its
+    /// sidecar). `None` when there is no standalone sidecar (unknown/absent blob). Drives
+    /// the mirror's SDK-faithful `delete_owned_blob` (which deletes only deletable blobs).
+    pub fn blob_is_deletable(&self, blob_id: &str) -> Option<bool> {
+        let id = parse_blob_id(blob_id).ok()?;
+        self.try_read_sidecar(id).ok().flatten().map(|s| s.deletable)
+    }
+
+    /// If this blob_id is stored in some pool (a pooled sidecar exists for it), return that
+    /// pool's id. Lets `blob_status` report a pooled-only blob as the Deletable, certified
+    /// blob it actually is on-chain (rather than letting the localnet storage layout leak
+    /// a `Nonexistent`). Returns the first match if several pools hold the same content.
+    pub fn find_pooled_pool_id(&self, blob_id: &str) -> Option<String> {
+        let id = parse_blob_id(blob_id).ok()?;
+        let needle = format!("{}.meta", hex_key(id));
+        let rd = std::fs::read_dir(self.data_dir.join("pools")).ok()?;
+        for entry in rd.flatten() {
+            if entry.path().join(&needle).exists() {
+                return entry.file_name().to_str().map(|s| s.to_string());
+            }
+        }
+        None
+    }
+
     /// Resolve a `Blob` object id to its `blob_id` + bytes (for the aggregator's
     /// `GET /v1/blobs/by-object-id/{id}` route). Reads the on-chain Blob to map the
     /// object id to its content id, then serves the bytes from the filesystem.
@@ -580,6 +656,26 @@ impl LocalnetMockStore {
         let blob_id = bwa.blob.blob_id.to_string();
         let bytes = self.read(&blob_id).await?;
         Ok((blob_id, bytes))
+    }
+
+    /// The committee shard count (the encoder's only network input). Exposed for the
+    /// SDK-mirror layer ([`crate::WalrusLocalClient`]) so it can build quilts.
+    pub async fn n_shards(&self) -> Result<NonZeroU16> {
+        self.client
+            .read_client()
+            .n_shards()
+            .await
+            .context("reading n_shards")
+    }
+
+    /// Fetch the on-chain `Blob` (+ optional attribute) for an object id — mirrors
+    /// `walrus_sdk::node_client::WalrusNodeClient::get_blob_by_object_id`.
+    pub async fn get_blob_by_object_id(&self, object_id: &ObjectID) -> Result<BlobWithAttribute> {
+        self.client
+            .read_client()
+            .get_blob_by_object_id(object_id)
+            .await
+            .with_context(|| format!("fetching Blob object {object_id}"))
     }
 
     // ----- stat ------------------------------------------------------------
@@ -698,6 +794,17 @@ impl LocalnetMockStore {
     /// the SAME pool aborts at register, because the pool's blob table rejects the
     /// duplicate blob id. (Unlike [`Self::store`], which dedups identical content.)
     pub async fn store_pooled(&self, pool_id: &str, bytes: &[u8]) -> Result<BlobHandle> {
+        let pooled = self.store_pooled_object(pool_id, bytes).await?;
+        Ok(BlobHandle {
+            blob_id: pooled.blob_id.to_string(),
+            object_id: pooled.id.to_string(),
+        })
+    }
+
+    /// Like [`Self::store_pooled`] but returns the on-chain [`PooledBlob`] move struct —
+    /// consumed by the SDK mirror's `reserve_and_store_blobs_in_storage_pool` to build a
+    /// wire-faithful `PooledBlobStoreResult`.
+    pub async fn store_pooled_object(&self, pool_id: &str, bytes: &[u8]) -> Result<PooledBlob> {
         let pool = ObjectID::from_str(pool_id).context("pool_id")?;
         let unencoded_size = bytes.len() as u64;
 
@@ -737,6 +844,7 @@ impl LocalnetMockStore {
                 size: unencoded_size,
                 epochs: 0,
                 pool_id: Some(pool_id.to_string()),
+                deletable: true, // pooled blobs are always registered Deletable
             },
         )?;
 
@@ -763,10 +871,7 @@ impl LocalnetMockStore {
             .await
             .context("certify_pooled_blobs (single-signer N=1 quorum)")?;
 
-        Ok(BlobHandle {
-            blob_id: blob_id_str,
-            object_id: object_id_str,
-        })
+        Ok(pooled)
     }
 
     /// Delete a pooled blob from `pool_id` (no certify) and remove its fs bytes.
@@ -846,6 +951,7 @@ impl LocalnetMockStore {
         &self,
         patches: Vec<QuiltInput>,
         epochs: u32,
+        persistence: BlobPersistence,
         post_store: PostStoreAction,
     ) -> Result<StoredQuilt> {
         if patches.is_empty() {
@@ -862,20 +968,32 @@ impl LocalnetMockStore {
             blobs.push(blob);
         }
 
-        // The quilt encoder needs the committee shard count (same as plain blobs).
-        let n_shards = self
-            .client
-            .read_client()
-            .n_shards()
-            .await
-            .context("reading n_shards")?;
+        let quilt = self.construct_quilt_v1(&blobs).await?;
+        self.store_quilt_v1(quilt, epochs, persistence, post_store).await
+    }
+
+    /// Pack `blobs` into a `QuiltV1` (pure compute — no chain, beyond the one-time
+    /// n_shards read the encoder needs). The mirror's `quilt_client().construct_quilt`
+    /// delegates here so the SDK two-step (`construct_quilt` then
+    /// `reserve_and_store_quilt`) has the same construction path as [`Self::store_quilt`].
+    pub async fn construct_quilt_v1(&self, blobs: &[QuiltStoreBlob<'_>]) -> Result<QuiltV1> {
+        let n_shards = self.n_shards().await?;
         let config = EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE);
-
-        // Pure-compute pack: blobs -> one quilt blob + embedded index.
-        let quilt = QuiltConfigV1::get_encoder(config, &blobs)
+        QuiltConfigV1::get_encoder(config, blobs)
             .construct_quilt()
-            .map_err(|e| anyhow!("constructing quilt: {e}"))?;
+            .map_err(|e| anyhow!("constructing quilt: {e}"))
+    }
 
+    /// Store an already-constructed `QuiltV1`: its packed bytes go through the normal
+    /// [`Self::store_blob`] path (M0 => the packed blob id IS the quilt id), and the
+    /// per-patch ids are read off the embedded index.
+    pub async fn store_quilt_v1(
+        &self,
+        quilt: QuiltV1,
+        epochs: u32,
+        persistence: BlobPersistence,
+        post_store: PostStoreAction,
+    ) -> Result<StoredQuilt> {
         // Snapshot the index (identifier + internal patch id + range + tags) BEFORE
         // consuming the quilt into its packed bytes.
         let index = quilt
@@ -898,8 +1016,11 @@ impl LocalnetMockStore {
 
         let quilt_bytes = quilt.into_data();
 
-        // Store the packed quilt as one normal Permanent blob (M0 => id == quilt_id).
-        let stored = self.store_blob(&quilt_bytes, epochs, post_store).await?;
+        // Store the packed quilt as one normal blob (M0 => id == quilt_id). Persistence is
+        // caller-controlled so a quilt can be Deletable (writeFiles({ deletable: true })).
+        let stored = self
+            .store_blob(&quilt_bytes, epochs, persistence, post_store)
+            .await?;
         let quilt_id = stored.blob.blob_id;
 
         let patches = patch_meta
@@ -987,6 +1108,34 @@ impl LocalnetMockStore {
         let config = EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE);
         QuiltV1::new_from_quilt_blob(bytes, config)
             .map_err(|e| anyhow!("reconstructing quilt {quilt_id}: {e}"))
+    }
+
+    /// Build a [`QuiltMetadataV1`] for a stored quilt: its id + the packed quilt blob's
+    /// `BlobMetadata` (recomputed by walrus-core's encoder) + the embedded index. Consumed
+    /// by the mirror's `get_quilt_metadata`.
+    pub async fn quilt_metadata_v1(&self, quilt_id: &str) -> Result<QuiltMetadataV1> {
+        let id = parse_blob_id(quilt_id)?;
+        let bytes = self.read(quilt_id).await?;
+        let n_shards = self.n_shards().await?;
+        let verified = EncodingConfig::new(n_shards)
+            .get_for_type(ENCODING_TYPE)
+            .compute_metadata(&bytes)
+            .map_err(|e| anyhow!("computing quilt metadata for {quilt_id}: {e}"))?;
+        let metadata = verified.metadata().clone();
+        let quilt = QuiltV1::new_from_quilt_blob(
+            bytes,
+            EncodingConfig::new(n_shards).get_for_type(ENCODING_TYPE),
+        )
+        .map_err(|e| anyhow!("reconstructing quilt {quilt_id}: {e}"))?;
+        let index = quilt
+            .quilt_index()
+            .map_err(|e| anyhow!("reading quilt index for {quilt_id}: {e}"))?
+            .clone();
+        Ok(QuiltMetadataV1 {
+            quilt_id: id,
+            metadata,
+            index,
+        })
     }
 
     // ----- WAL funding -----------------------------------------------------
@@ -1176,7 +1325,7 @@ fn direct_rpc_wallet(client_yaml: &Path, rpc: &str, out_dir: &Path) -> Result<Pa
 // Pure-logic unit tests (no live localnet / no walrus-Sui graph at runtime).
 // These exercise the blob-id key derivation, blob-id parsing, descriptor null
 // normalization, and the direct-rpc wallet rewrite. They only touch /tmp, so
-// they are safe to run in the per-push `cargo test --features localnet` (the
+// they are safe to run in the per-push `cargo test --lib` (the
 // live round-trip lives behind WALRUS_LOCALNET_TEST in tests/localnet_roundtrip).
 // ---------------------------------------------------------------------------
 #[cfg(test)]
@@ -1185,7 +1334,7 @@ mod tests {
 
     /// A unique scratch dir under the system temp dir (never the workdirs).
     fn tmp_dir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("walrus_store_ut_{}_{}", std::process::id(), tag));
+        let d = std::env::temp_dir().join(format!("walrus_local_sdk_ut_{}_{}", std::process::id(), tag));
         std::fs::create_dir_all(&d).unwrap();
         d
     }

@@ -49,6 +49,7 @@ Suibase files are an "open standard" and benefit from being easily found by many
 :::
 
 ::: details How will suibase get the Sui binaries?
-Suibase automatically install the proper binaries and repos from Mysten Labs matching each network.<br>
-To reduce versioning problems, your apps can easily be build with the same Rust code matching the binaries (e.g. Sui Rust SDK crates). [More Info]( ./scripts.md#faster-rust-and-move-build)
+Suibase automatically downloads and installs the proper precompiled Sui binaries from Mysten Labs matching each network.
+
+On a platform without a precompiled binary, Suibase automatically falls back to cloning the Sui repo and building the binaries locally.
 :::

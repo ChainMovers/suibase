@@ -394,10 +394,36 @@ test_disabled_walrus_relay() {
         fail "API call failed when walrus relay disabled"
     fi
 
-    # Re-enable walrus relay for subsequent tests
-    "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable >/dev/null 2>&1 || {
+    # Re-enable walrus relay for subsequent tests.
+    #
+    # This is a state-restore step, not the behavior under test. On slow macOS CI
+    # runners the immediately-preceding disable's process teardown can lag (kernel
+    # reap / listening-socket release), so the re-enable's service (re)start can
+    # transiently fail to bind -- the same class of race the disable/stop path
+    # already polls for (commit 0033f8ef). Retry a few times with a settle pause
+    # and, on persistent failure, surface the command output plus relay status
+    # instead of discarding them. The previous '>/dev/null 2>&1' left CI with an
+    # undiagnosable "Failed to re-enable walrus relay".
+    local reenable_output=""
+    local reenable_ok=false
+    local attempt
+    for attempt in 1 2 3; do
+        if reenable_output=$("$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable 2>&1); then
+            reenable_ok=true
+            break
+        fi
+        echo "Note: 'wal-relay enable' attempt $attempt failed, retrying after settle..."
+        sleep 3
+    done
+
+    if [ "$reenable_ok" != true ]; then
+        echo "----- 'wal-relay enable' output (last attempt) -----"
+        echo "$reenable_output"
+        echo "----- 'wal-relay status' -----"
+        "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay status 2>&1 || true
+        echo "----------------------------------------------------"
         fail "Failed to re-enable walrus relay"
-    }
+    fi
 
     echo "✓ Disabled walrus relay test completed"
 }

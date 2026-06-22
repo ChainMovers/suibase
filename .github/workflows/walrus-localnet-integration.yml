@@ -1,18 +1,17 @@
 name: Walrus Localnet Integration
 
-# Heavy end-to-end test of the nodeless localnet Walrus feature: builds the
-# walrus-store mock + deploy bin (the full walrus/Sui graph — git-pinned), deploys
-# nodeless Walrus on a real localnet via the regen hook, and runs both WalrusStore
-# integration suites: the blob round-trip (store -> read -> stat -> extend -> delete,
-# rust/walrus-store/tests/localnet_roundtrip.rs) and the storage-pool lifecycle
-# (create -> store_pooled -> pool_status -> extend -> grow -> delete,
-# rust/walrus-store/tests/localnet_pool.rs).
+# Heavy end-to-end test of the nodeless localnet Walrus feature: builds walrus-local-sdk
+# (the localnet-only, drop-in mirror of the Mysten Walrus SDK) + the localnet-tools bins
+# (the full walrus/Sui graph — git-pinned), deploys nodeless Walrus on a real localnet via
+# the regen hook, and runs the mirror's integration suites: the SDK-surface round-trip
+# (reserve_and_store_blobs -> read_blob -> dedup -> delete + quilt, driven through
+# WalrusLocalClient + compat::WalrusApi, rust/walrus-local-sdk/tests/localnet_roundtrip.rs)
+# and the storage-pool lifecycle (rust/walrus-local-sdk/tests/localnet_pool.rs).
 #
-# This is EXPENSIVE (the walrus-sui graph compile) so it is NOT on the per-push fast
-# suites. It runs on demand and weekly, plus when walrus-store changes land on dev.
-# The fast suites stay unaffected: scripts-tests runs the non-destructive M1 wiring
-# test (test_localnet_walrus_config.sh), and the default `cargo build` of walrus-store
-# pulls none of the heavy graph (the localnet feature is off by default).
+# This is EXPENSIVE (the walrus-sdk/walrus-sui graph compile) so it is NOT on the per-push
+# fast suites. It runs on demand and weekly, plus when the Walrus crates change on dev.
+# The fast suites stay unaffected: scripts-tests runs the non-destructive wiring test
+# (test_localnet_walrus_config.sh).
 
 on:
   workflow_dispatch:
@@ -21,8 +20,9 @@ on:
   push:
     branches: ["dev"]
     paths:
-      - "rust/walrus-store/**"
+      - "rust/walrus-local-sdk/**"
       - "rust/localnet-tools/**"
+      - "typescript/walrus-local-sdk/**"
       - ".github/workflows/walrus-localnet-integration.yml"
 
 jobs:
@@ -43,7 +43,12 @@ jobs:
 
       - uses: actions/checkout@v6
 
-      - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
+      - name: Set up Node.js (for the TS walrus-local-sdk integration suite)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Rust Toolchain (walrus-local-sdk pins 1.96 via rust-toolchain.toml)
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           rust-src-dir: "rust"
@@ -53,7 +58,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            rust/walrus-store -> target
+            rust/walrus-local-sdk -> target
             rust/localnet-tools -> target
           cache-on-failure: "true"
 
@@ -85,20 +90,29 @@ jobs:
         run: |
           # rust-toolchain.toml pins 1.96; ensure it is installed.
           rustup toolchain install 1.96 --profile minimal
-          # The localnet-tools bins crate enables walrus-store's `localnet` feature via its
-          # dependency, so no --features flag is needed.
-          cargo build --bin walrus-localnet-deploy --bin sb-local
+          # ALWAYS --release: walrus-core's erasure encoding is CPU-heavy and a debug build
+          # runs it ~50x slower (a 50KB publish is ~20s in debug vs ~0.4s encode in release).
+          # The precompiled asset is release too, so this matches production.
+          cargo build --release --bin walrus-localnet-deploy --bin sb-local
           # Stage the just-built bins where the lifecycle scripts look (install_type=user);
           # there is no precompiled asset to fetch in CI, so this is the dev fallback. With
           # sb-local present, 'localnet regen' below auto-starts the HTTP server.
           mkdir -p "$HOME/suibase/workdirs/common/bin"
-          cp target/debug/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
-          cp target/debug/sb-local "$HOME/suibase/workdirs/common/bin/sb-local"
+          cp target/release/walrus-localnet-deploy "$HOME/suibase/workdirs/common/bin/walrus-localnet-deploy"
+          cp target/release/sb-local "$HOME/suibase/workdirs/common/bin/sb-local"
 
       - name: Pure-logic unit tests (blob-id/descriptor/wallet — no live localnet)
-        working-directory: rust/walrus-store
+        working-directory: rust/walrus-local-sdk
         run: |
-          cargo test --features localnet --lib -- --nocapture
+          cargo test --lib -- --nocapture
+
+      - name: Compile-gate the testnet parity harness (no funds needed)
+        working-directory: rust/walrus-local-sdk
+        run: |
+          # The fund-gated testnet_parity test never RUNS in CI, but compiling it proves the
+          # mirror's compat::WalrusApi forwarding still matches the REAL walrus_sdk
+          # WalrusNodeClient surface — catching signature/type drift without a funded wallet.
+          cargo test --no-run --test testnet_parity
 
       - name: Enable walrus + regen (runs the nodeless deploy + starts sb-local)
         run: |
@@ -108,17 +122,21 @@ jobs:
           test -f "$HOME/suibase/workdirs/localnet/config/walrus-localnet.yaml" \
             || { echo "descriptor not written — deploy hook failed"; exit 1; }
 
-      - name: WalrusStore round-trip + pool lifecycle (held-key certify, fs bytes)
-        working-directory: rust/walrus-store
+      - name: Mirror round-trip + pool lifecycle (held-key certify, fs bytes)
+        working-directory: rust/walrus-local-sdk
         env:
           WALRUS_LOCALNET_TEST: "1"
         run: |
-          # Blob round-trip: store/read/stat/extend/delete (+ content dedup).
-          cargo test --features localnet --test localnet_roundtrip -- --nocapture
+          # SDK-surface round-trip via WalrusLocalClient + compat::WalrusApi, plus a quilt.
+          cargo test --test localnet_roundtrip -- --nocapture
+          # Extensive byte-range read coverage (many ranges + all input-error cases).
+          cargo test --test localnet_byte_range -- --nocapture
           # Storage pools: create/store_pooled/read/pool_status/extend/grow/delete.
-          cargo test --features localnet --test localnet_pool -- --nocapture
+          cargo test --test localnet_pool -- --nocapture
           # Pool/standalone namespace coexistence (identical content, no aliasing).
-          cargo test --features localnet --test localnet_pool_namespace -- --nocapture
+          cargo test --test localnet_pool_namespace -- --nocapture
+          # sb-local HTTP <-> Rust SDK interop (same store, both front doors).
+          SB_LOCAL_HTTP_TEST=1 cargo test --test localnet_sb_local_interop -- --nocapture
 
       - name: sb-local HTTP wire round-trip (aggregator + publisher + quilt, curl)
         env:
@@ -131,77 +149,33 @@ jobs:
           # curl PUT/GET/Range/dedup/404 + real-id equality + quilt round-trip + interop.
           ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
 
-  real-backend:
-    # Validates that the real walrus-sdk backend COMPILES in clean CI and that the WS7
-    # invariant holds for the `real` build (no `suibase`). The live testnet store/read
-    # test is fund-gated and simply SKIPS here (CI has no suibase workdir and no funds).
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - name: Free Disk Space (the walrus/Sui graph is large)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: false
-
-      - uses: actions/checkout@v6
-
-      - name: Install Rust Toolchain (walrus-store pins 1.96 via rust-toolchain.toml)
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          rust-src-dir: "rust"
-          cache: "false"
-
-      - name: Rust Caching
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            rust/walrus-store -> target
-            rust/localnet-tools -> target
-          cache-on-failure: "true"
-
-      - name: Build prerequisites (libclang for RocksDB/bindgen, etc.)
+      - name: TS walrus-local-sdk live round-trip (drop-in @mysten/walrus on localnet)
+        # @suibase/walrus-local-sdk extends the real @mysten/walrus WalrusClient: inherited
+        # on-chain ops (delete/extend/attributes/storageCost) run against the localnet Walrus,
+        # node-talking ops (writeBlob/readBlob/writeFiles/getFiles/getBlob/status) route through
+        # the sb-local built+staged above. WALRUS_LOCAL_SDK_TEST=1 makes a skip a hard failure.
+        working-directory: typescript/walrus-local-sdk
         env:
-          DEBIAN_FRONTEND: noninteractive
+          WALRUS_LOCAL_SDK_TEST: "1"
         run: |
-          # CI runners sometimes have unattended-upgrades/apt-daily holding the dpkg lock
-          # at startup, which made apt-get block until the job timed out (exit 124). Stop
-          # those services to free the lock; DPkg::Lock::Timeout waits gracefully, and the
-          # outer `timeout` is a hard 10-min fail-fast cap (apt normally takes <1 min).
-          sudo systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
-          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 update
-          sudo timeout 600 apt-get -o DPkg::Lock::Timeout=120 install -y curl cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
 
-      - name: Build the real backend (walrus-sdk)
-        working-directory: rust/walrus-store
+      - name: sb-local wire parity vs the real Walrus aggregator/publisher (errors-only)
         run: |
-          rustup toolchain install 1.96 --profile minimal
-          cargo build --features real
+          # Compare sb-local's HTTP contract — especially ERROR responses (GET nonexistent
+          # -> 404, malformed id -> 400, PUT bad params -> 4xx) — against the public Mysten
+          # testnet aggregator/publisher. Errors-only (no RUN_PUBLISHER_WRITES => no funds).
+          # Non-fatal: a transient outage of the external service must not fail this suite.
+          SB_LOCAL_BASE=http://localhost:45840 \
+          REAL_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space \
+          REAL_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space \
+            ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_wire_parity.sh || true
 
-      - name: WS7 — the `real` build must exclude suibase (enclave-safe)
-        working-directory: rust/walrus-store
+      - name: localnet regen wipe (no Walrus disk accumulation across regens)
         run: |
-          cargo tree --features real --prefix none 2>/dev/null \
-            | awk 'NF {print $1}' | sort -u > /tmp/real-deps.txt
-          echo "real dependency graph ($(wc -l < /tmp/real-deps.txt) crates)"
-          if grep -qx "suibase" /tmp/real-deps.txt; then
-            echo "::error::WS7 violation: 'suibase' is in the real (enclave-facing) build graph"
-            exit 1
-          fi
-          for c in walrus-sdk walrus-sui sui-types; do
-            grep -qx "$c" /tmp/real-deps.txt \
-              || { echo "::error::real build unexpectedly missing $c"; exit 1; }
-          done
-          echo "WS7 holds for the real build: walrus-sdk present, suibase absent."
-
-      - name: Testnet round-trip (fund-gated — SKIPS without a funded workdir)
-        working-directory: rust/walrus-store
-        run: |
-          # No suibase testnet workdir / no funds in CI -> the tests skip with a warning.
-          cargo test --features real --test testnet_roundtrip -- --nocapture
-          cargo test --features real --test testnet_pool -- --nocapture
+          # DESTRUCTIVE + must run LAST: seeds blob data, regens, and asserts the Walrus
+          # runtime is wiped + cleanly redeployed (fresh chain, 0 leftover blob files).
+          ~/suibase/scripts/tests/050_walrus_tests/test_localnet_walrus_regen_wipe.sh
