@@ -14,7 +14,7 @@ Suibase scripts append the proper --config, --context and wallet path to make su
 
 The scripts pass all your command line parameters as-is to the original Mysten Labs binaries.
 
-`lwalrus` is a bit different: the real `walrus` CLI talks directly to storage nodes, which the nodeless [localnet](#localnet) does not run — so `lwalrus` is a focused **subset** that serves the core storage commands (`store`, `read`, `blob-status`, `delete`) from the local engine. Commands that need real storage nodes, staking, or a daemon are not applicable; run `lwalrus --help` to see the "Not supported for localnet" list. For anything outside that subset, use the [Walrus HTTP API or `walrus_local_sdk`](#localnet).
+`lwalrus` is a bit different: the real `walrus` CLI talks directly to storage nodes, which the [localnet](#localnet) does not run — so `lwalrus` is a focused **subset** that serves the core storage commands (`store`, `read`, `blob-status`, `delete`) from the local engine. Commands that need real storage nodes, staking, or a daemon are not applicable; run `lwalrus --help` to see the "Not supported for localnet" list. For anything outside that subset, use the [Walrus HTTP API or `walrus_local_sdk`](#localnet).
 
 ## Updates
 Run `testnet update` or `mainnet update`.
@@ -46,7 +46,7 @@ Walrus storage is paid in **WAL**. How you obtain it depends on the network:
 
 - **Testnet** — convert SUI to WAL for free with `twalrus get-wal` (uses the testnet WAL exchange; defaults to 0.5 SUI, override with `--amount <MIST>`). Fund the wallet with SUI first via `tsui client faucet`.
 - **Mainnet** — WAL is a real token with no faucet or exchange command; acquire it on an exchange/DEX, then `mwalrus` spends it automatically.
-- **Localnet** — nothing to do: the nodeless Walrus mints WAL on demand (the deploy sets up a SUI→WAL exchange, and the publisher / `walrus_local_sdk` fund the wallet automatically on first use).
+- **Localnet** — nothing to do: the localnet Walrus mints WAL on demand (the deploy sets up a SUI→WAL exchange, and the publisher / `walrus_local_sdk` fund the wallet automatically on first use).
 
 ## File Locations
 Backup your wallets.
@@ -65,7 +65,7 @@ For advanced HTTP proxy functionality with request statistics and transparent fo
 
 ## Localnet
 
-Suibase also runs **Walrus on localnet** — a nodeless, self-contained Walrus (no storage nodes, no internet). Enable it in `~/suibase/workdirs/localnet/suibase.yaml`:
+Suibase also runs **Walrus on localnet** — a self-contained Walrus (no storage nodes, no internet). Enable it in `~/suibase/workdirs/localnet/suibase.yaml`:
 
 ```yaml
 walrus_local_enabled: true

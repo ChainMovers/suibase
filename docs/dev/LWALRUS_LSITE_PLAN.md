@@ -21,12 +21,12 @@ guarded by the parity test. (The current pin differs from the shipped walrus v1.
 
 ## Goal
 
-Add workdir-aware `lwalrus` and `lsite` to the **nodeless localnet**, mirroring
+Add workdir-aware `lwalrus` and `lsite` to the **localnet**, mirroring
 the existing `twalrus/tsite` (testnet) and `mwalrus/msite` (mainnet) wrappers.
 Those wrap the **real** `walrus`/`site-builder` binaries config-pointed at the
 real network. Localnet was excluded historically (`is_walrus_supported_by_workdir`
 is testnet/mainnet only; commit `84d77137` skips the walrus binary fetch for
-devnet/localnet) because nodeless localnet has no storage nodes.
+devnet/localnet) because the localnet has no storage nodes.
 
 ## Why this is feasible now
 
@@ -48,7 +48,7 @@ a thin shim: parse the `walrus` CLI arg surface, dispatch storage ops to
 - **`lwalrus` MUST be a shim, not a config-pointed real binary.** Confirmed: the
   real walrus `ClientConfig` has only `contract_config / rpc_urls /
   communication_config` — **no aggregator/publisher backend mode**. The real CLI
-  always talks directly to storage nodes, which nodeless localnet lacks. The t/m
+  always talks directly to storage nodes, which the localnet lacks. The t/m
   "config-only" trick is provably non-viable here.
 - **`lsite` needs ~zero new code.** `site-builder` embeds no walrus client — it
   shells out (`walrus json <input>`, `site-builder/src/walrus.rs:275-277`). So
@@ -71,7 +71,7 @@ binary aborts on missing node config before reaching them): `info`, `blob-id`,
 `convert-blob-id`, `list-blobs`, `list-patches-in-quilt`, `extend`,
 `burn-blobs`, `fund-shared-blob`, `share`, `*-blob-attribute`, `generate-sui-wallet`.
 
-**Bucket C — honest exceptions** (print a friendly "not applicable on nodeless
+**Bucket C — honest exceptions** (print a friendly "not applicable on
 localnet", do not fake): `stake` / `request-withdraw-stake` / `withdraw-stake` /
 `list-staked-wal` (no node pools), `node-admin`, `health` (no nodes),
 `pull-archive-blobs` / `blob-backfill` (operator tools), and **daemon mode**

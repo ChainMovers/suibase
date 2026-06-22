@@ -1,12 +1,12 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! `lwalrus` — a localnet-only, `walrus`-CLI-shaped frontend over the nodeless
+//! `lwalrus` — a localnet-only, `walrus`-CLI-shaped frontend over the localnet
 //! Walrus engine ([`WalrusLocalClient`] / the same store `sb-local` serves).
 //!
 //! WHY THIS EXISTS: the real Mysten `walrus` CLI talks DIRECTLY to storage nodes
 //! (its `ClientConfig` has no aggregator/publisher backend mode), and the suibase
-//! nodeless localnet runs no storage nodes. So the real binary cannot be merely
+//! localnet runs no storage nodes. So the real binary cannot be merely
 //! config-pointed at localnet the way `twalrus`/`mwalrus` point at the real
 //! networks. `lwalrus` dispatches the storage commands to the already-built
 //! `WalrusLocalClient` (rust/walrus-local-sdk), a drop-in mirror of `walrus_sdk`.
@@ -30,17 +30,17 @@ use walrus_local_sdk::WalrusLocalClient;
 use walrus_sdk::node_client::store_args::StoreArgs;
 
 /// Appended to `lwalrus --help`. Enumerates the `walrus` commands lwalrus does
-/// NOT implement on the nodeless localnet, grouped by reason. This is the single
+/// NOT implement on the localnet, grouped by reason. This is the single
 /// source of truth the parity test reads to know what to ignore — when `walrus`
 /// adds a command that is neither supported here nor listed below, the test
 /// fails so we triage it (support it, or add it here). Keep in sync with `walrus`.
 const NOT_SUPPORTED_HELP: &str = "\
-Not supported for localnet:
+Not supported for localnet (commands):
   Daemon/HTTP (suibase already serves these, and wal-relay covers the relay):
     aggregator, publisher, daemon
   Staking & committee (the localnet uses a held-key N=1 committee):
     stake, request-withdraw-stake, withdraw-stake, list-staked-wal
-  Storage-node operator (there are no storage nodes on a nodeless localnet):
+  Storage-node operator (there are no storage nodes on a localnet):
     node-admin, health, pull-archive-blobs, blob-backfill
   Not yet implemented in this MVP (planned):
     store-quilt, read-quilt, list-patches-in-quilt, info, blob-id, convert-blob-id,
@@ -48,12 +48,23 @@ Not supported for localnet:
     get-blob-attribute, set-blob-attribute, remove-blob-attribute,
     remove-blob-attribute-fields, generate-sui-wallet, json
 
-Invoking any command (or a flag) not in the list above prints \"Not supported for localnet\".";
+Not supported for localnet (options):
+  The binary, config, context, wallet and RPC are implicit (always the running
+  localnet), so these `walrus` global options are rejected:
+    --config, --context, --wallet, --rpc-url, --gas-budget, --trace-cli
+  No storage nodes / tip economy on a localnet, so these are rejected:
+    --dry-run, --force, --ignore-resources, --share, --end-epoch,
+    --earliest-expiry-time, --upload-relay, --skip-tip-confirmation,
+    --child-process-uploads, --timeout, --strict-consistency-check,
+    --skip-consistency-check, --no-status-check, --yes
+  (Supported: --epochs/--permanent on `store`, --out on `read`, and --json.)
+
+Invoking an unsupported command or global option prints \"Not supported for localnet\".";
 
 #[derive(Parser)]
 #[command(
     name = "lwalrus",
-    about = "Localnet Walrus CLI (nodeless): store/read/delete blobs on the suibase localnet",
+    about = "Localnet Walrus client",
     version,
     after_help = NOT_SUPPORTED_HELP,
     after_long_help = NOT_SUPPORTED_HELP
@@ -62,6 +73,23 @@ struct Cli {
     /// Emit machine-readable JSON instead of human-readable text.
     #[arg(long, global = true)]
     json: bool,
+
+    // Unsupported `walrus` global options. Accepted-but-rejected and HIDDEN from help
+    // (documented in NOT_SUPPORTED_HELP's options section): on the localnet the
+    // binary/config/context/wallet/RPC are implicit, so passing one of these prints a
+    // clear "Not supported for localnet: --X" instead of clap's "unexpected argument".
+    #[arg(long, global = true, hide = true)]
+    config: Option<String>,
+    #[arg(long, global = true, hide = true)]
+    context: Option<String>,
+    #[arg(long, global = true, hide = true)]
+    wallet: Option<String>,
+    #[arg(long = "rpc-url", global = true, hide = true)]
+    rpc_url: Option<String>,
+    #[arg(long = "gas-budget", global = true, hide = true)]
+    gas_budget: Option<String>,
+    #[arg(long = "trace-cli", global = true, hide = true)]
+    trace_cli: Option<String>,
 
     #[command(subcommand)]
     cmd: Cmd,
@@ -102,7 +130,7 @@ enum Cmd {
         #[arg(value_parser = parse_blob_id)]
         blob_id: BlobId,
     },
-    /// Any other `walrus` (sub)command — not supported on the nodeless localnet.
+    /// Any other `walrus` (sub)command — not supported on the localnet.
     #[command(external_subcommand)]
     NotSupported(Vec<String>),
 }
@@ -110,6 +138,24 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Reject unsupported global options with the same clear message as unsupported
+    // commands (these are HIDDEN in clap, so without this they'd error as "unexpected
+    // argument"). Checked before opening the engine — no running localnet needed.
+    for (name, present) in [
+        ("--config", cli.config.is_some()),
+        ("--context", cli.context.is_some()),
+        ("--wallet", cli.wallet.is_some()),
+        ("--rpc-url", cli.rpc_url.is_some()),
+        ("--gas-budget", cli.gas_budget.is_some()),
+        ("--trace-cli", cli.trace_cli.is_some()),
+    ] {
+        if present {
+            eprintln!("Not supported for localnet: {name}");
+            eprintln!("On localnet the binary/config/context/wallet/RPC are implicit.");
+            std::process::exit(1);
+        }
+    }
 
     // Handle the "unsupported command" path BEFORE opening the engine, so the
     // message is instant and does not depend on a running localnet.

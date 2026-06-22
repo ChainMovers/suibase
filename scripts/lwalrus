@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script calls the localnet 'lwalrus' binary (a nodeless, walrus-shaped CLI)
+# This script calls the localnet 'lwalrus' binary (a localnet, walrus-shaped CLI)
 # with the matching localnet config.
 #
 # Your localnet workdir should have been created with 'localnet start'/'localnet update',
@@ -12,7 +12,7 @@
 #    'lwalrus read <blob-id>'
 #
 # Unlike the real 'walrus' CLI (which talks directly to storage nodes), lwalrus serves
-# the nodeless localnet engine — see docs/dev/LWALRUS_LSITE_PLAN.md.
+# the localnet engine — see docs/dev/LWALRUS_LSITE_PLAN.md.
 
 SUIBASE_DIR="$HOME/suibase"
 

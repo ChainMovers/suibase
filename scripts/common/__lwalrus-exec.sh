@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Call the localnet 'lwalrus' binary (the nodeless, walrus-shaped CLI).
+# Call the localnet 'lwalrus' binary (the localnet, walrus-shaped CLI).
 #
 # You must source __globals.sh before __lwalrus-exec.sh.
 #

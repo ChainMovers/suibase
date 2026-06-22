@@ -55,9 +55,10 @@ echo "lwalrus: $LW"
 # ============================================================================
 echo "--- A: lwalrus self-checks ---"
 
-# A1: help advertises the explicit unsupported section.
-"$LW" --help 2>&1 | grep -q "Not supported for localnet:" || fail "lwalrus --help is missing the 'Not supported for localnet:' section"
-echo "  A1 ok: --help has the 'Not supported for localnet:' section"
+# A1: help advertises the explicit unsupported sections (commands + options).
+"$LW" --help 2>&1 | grep -q "Not supported for localnet (commands):" || fail "lwalrus --help is missing the 'Not supported for localnet (commands):' section"
+"$LW" --help 2>&1 | grep -q "Not supported for localnet (options):" || fail "lwalrus --help is missing the 'Not supported for localnet (options):' section"
+echo "  A1 ok: --help has both 'Not supported for localnet' (commands + options) sections"
 
 # A2: an unsupported command prints a clear message and exits non-zero.
 "$LW" stake 100 >/tmp/lwp_o 2>&1; rc=$?
@@ -75,6 +76,14 @@ echo "  A3 ok: malformed blob id -> exit 2 + walrus-matching message"
 "$LW" store >/tmp/lwp_o 2>&1; rc=$?
 [ "$rc" -eq 2 ] || fail "lwalrus store (missing FILE) should exit 2, got $rc"
 echo "  A4 ok: missing required arg -> exit 2"
+
+# A5: an unsupported global option (e.g. --config) is rejected with the clear message.
+# (Provide a FILE so the parse succeeds and the option check is what fires.)
+printf 'x' > /tmp/lwp_cfg.txt
+"$LW" store --config /tmp/whatever /tmp/lwp_cfg.txt >/tmp/lwp_o 2>&1; rc=$?
+[ "$rc" -ne 0 ] || fail "lwalrus store --config should be rejected (got exit 0)"
+grep -q "Not supported for localnet" /tmp/lwp_o || fail "lwalrus --config should print 'Not supported for localnet' (got: $(cat /tmp/lwp_o))"
+echo "  A5 ok: unsupported global option (--config) -> 'Not supported for localnet'"
 
 # ============================================================================
 # Section B — semantic surface parity vs the real walrus (when available)
@@ -102,8 +111,10 @@ else
   mapfile -t LW_SUPPORTED < <(real_commands "$LW")
   # lwalrus's explicit unsupported list: the 4-space-indented name lines under the
   # "Not supported for localnet:" section (prose headers are 2-space + capitalized).
+  # Only the COMMANDS sub-section (stop at the options sub-section). Option lines start
+  # with '--' so they would not match '^    [a-z]' anyway, but bounding is clearer.
   mapfile -t LW_UNSUPPORTED < <("$LW" --help 2>&1 \
-    | awk '/^Not supported for localnet:/{f=1;next} f' \
+    | awk '/^Not supported for localnet \(commands\):/{f=1;next} /^Not supported for localnet \(options\):/{f=0} f' \
     | grep -E '^    [a-z]' | tr ',' ' ' | tr -s ' ' '\n' | grep -E '^[a-z][a-z0-9-]*$' | sort -u)
 
   echo "  walrus commands: ${#WAL_CMDS[@]} | lwalrus supported: ${LW_SUPPORTED[*]} | unsupported-listed: ${#LW_UNSUPPORTED[@]}"
