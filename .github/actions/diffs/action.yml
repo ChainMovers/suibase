@@ -66,5 +66,6 @@ runs:
             - 'typescript/vscode-extension/**'
           isTypeScriptHelper:
             - 'typescript/helper/**'
+            - 'typescript/walrus-local-sdk/**'
             - 'scripts/tests/040_typescript_tests/**'
             - '.github/workflows/typescript-tests.yml'

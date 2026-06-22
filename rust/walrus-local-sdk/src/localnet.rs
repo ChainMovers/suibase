@@ -951,6 +951,7 @@ impl LocalnetMockStore {
         &self,
         patches: Vec<QuiltInput>,
         epochs: u32,
+        persistence: BlobPersistence,
         post_store: PostStoreAction,
     ) -> Result<StoredQuilt> {
         if patches.is_empty() {
@@ -968,7 +969,7 @@ impl LocalnetMockStore {
         }
 
         let quilt = self.construct_quilt_v1(&blobs).await?;
-        self.store_quilt_v1(quilt, epochs, post_store).await
+        self.store_quilt_v1(quilt, epochs, persistence, post_store).await
     }
 
     /// Pack `blobs` into a `QuiltV1` (pure compute — no chain, beyond the one-time
@@ -990,6 +991,7 @@ impl LocalnetMockStore {
         &self,
         quilt: QuiltV1,
         epochs: u32,
+        persistence: BlobPersistence,
         post_store: PostStoreAction,
     ) -> Result<StoredQuilt> {
         // Snapshot the index (identifier + internal patch id + range + tags) BEFORE
@@ -1014,9 +1016,10 @@ impl LocalnetMockStore {
 
         let quilt_bytes = quilt.into_data();
 
-        // Store the packed quilt as one normal Permanent blob (M0 => id == quilt_id).
+        // Store the packed quilt as one normal blob (M0 => id == quilt_id). Persistence is
+        // caller-controlled so a quilt can be Deletable (writeFiles({ deletable: true })).
         let stored = self
-            .store_blob(&quilt_bytes, epochs, BlobPersistence::Permanent, post_store)
+            .store_blob(&quilt_bytes, epochs, persistence, post_store)
             .await?;
         let quilt_id = stored.blob.blob_id;
 

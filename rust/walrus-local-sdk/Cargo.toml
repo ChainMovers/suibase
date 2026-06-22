@@ -1,6 +1,6 @@
 [package]
 name = "walrus-local-sdk"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Localnet-only, drop-in mirror of the Mysten Walrus SDK (walrus_sdk) for Suibase: nodeless localnet store returning the SDK's own types."

@@ -242,12 +242,13 @@ Routes (one process, one port, one router — the real `daemon` topology):
 |---|---|---|
 | `GET` | `/status` | `OK` (liveness) |
 | `GET` | `/v1/blobs/{blob_id}` | raw bytes + `ETag`/`Cache-Control`/`X-Content-Type-Options`; HTTP `Range` → `206`; `404` if absent |
+| `GET` | `/v1/blobs/{blob_id}/status` | localnet-only status probe (NOT a real-daemon route): `{exists, deletable, certifiedEpoch, endEpoch}` derived from chain; consumed by `@suibase/walrus-local`'s `getVerifiedBlobStatus` |
 | `GET` | `/v1/blobs/by-object-id/{object_id}` | raw bytes (resolve by Sui object id) |
-| `PUT` | `/v1/blobs` | `200` `BlobStoreResult` (camelCase tagged enum: `newlyCreated` / `alreadyCertified`). Query: `epochs` (default 1), `permanent`/`deletable` (no-op), `send_object_to=<addr>` xor `share=true` |
+| `PUT` | `/v1/blobs` | `200` `BlobStoreResult` (camelCase tagged enum: `newlyCreated` / `alreadyCertified`). Query: `epochs` (default 1), `deletable=true` (register Deletable, else Permanent), `send_object_to=<addr>` xor `share=true` |
 | `PUT` | `/v1/quilts` | `200` `QuiltStoreResult` (multipart: each file field-name = patch identifier; optional `_metadata` JSON `[{identifier,tags}]`) |
 | `GET` | `/v1/blobs/by-quilt-patch-id/{id}` | patch bytes + `X-Quilt-Patch-Identifier` |
 | `GET` | `/v1/blobs/by-quilt-id/{quilt_id}/{identifier}` | patch bytes |
-| `GET` | `/v1/quilts/{quilt_id}/patches` | `[{identifier, patchId, tags}]` |
+| `GET` | `/v1/quilts/{quilt_id}/patches` | `[{identifier, patch_id, tags}]` (snake_case `patch_id`, matching the real daemon's list endpoint) |
 
 The `GET /v1/blobs/{blob_id}` route honors the HTTP `Range` header (returns `206`),
 backed by the engine's byte-range slice — the same capability the Rust
@@ -272,6 +273,48 @@ nodeless can't provide it), `/v1alpha` streaming/concat, and JWT auth. The node-
 `@mysten/walrus` SDK targets testnet/mainnet storage nodes, **not** nodeless localnet —
 localnet clients use this HTTP wire API (or the Rust `WalrusLocalClient` API) instead. The
 pool ops aren't in the Walrus HTTP spec and stay Rust-engine-only.
+
+## TypeScript client — `@suibase/walrus-local` {#typescript-client}
+
+`typescript/walrus-local-sdk` is the TS drop-in for `@mysten/walrus`, for the many tools
+(and AI agents) that live in TypeScript. Unlike the Rust crate (which *mirrors* `walrus_sdk`),
+the TS one **extends Mysten's actual `WalrusClient`** — `class WalrusLocalClient extends
+WalrusClient` — so the parity is by construction:
+
+- It calls `super({ packageConfig, suiClient })` with the localnet deploy's package config
+  (system/staking/exchange object ids from `walrus-localnet.yaml`) + a localnet Sui client.
+- **Every on-chain method is inherited unchanged** and runs against the localnet-deployed
+  Walrus (same Move bytecode as testnet): `deleteBlob`, `extendBlob`, `read/writeBlobAttributes`,
+  `storageCost`, `systemState`, `createStorage`, `registerBlob`, …
+- Only the **node-talking** methods are overridden to use `sb-local`: `readBlob`, `writeBlob`,
+  `writeFiles`, `writeQuilt`, `getFiles`, `getBlob`, `getVerifiedBlobStatus`.
+- Inherently storage-node plumbing (`getSlivers`, `writeSliver`, `writeEncodedBlobToNodes`,
+  `writeBlobToUploadRelay`, `writeBlobFlow`/`writeFilesFlow`, …) throws `WalrusLocalError`
+  code `UNSUPPORTED` — no application calls these, and they have no meaning nodeless. (Pure
+  compute like `encodeBlob` is inherited and works.)
+
+```ts
+import { WalrusLocalClient } from "@suibase/walrus-local";
+import { WalrusFile } from "@mysten/walrus";
+
+const client = new WalrusLocalClient();  // localnet defaults; on testnet: new WalrusClient({ network: "testnet", suiClient })
+const { blobId, blobObject } = await client.writeBlob({ blob, deletable: true, epochs: 5, signer }); // -> sb-local
+await client.readBlob({ blobId });                                                  // -> sb-local
+await client.executeDeleteBlobTransaction({ blobObjectId: blobObject.id, signer }); // inherited, on-chain
+await client.getVerifiedBlobStatus({ blobId });                                     // -> sb-local /status route
+const written = await client.writeFiles({ files: [WalrusFile.from({ contents, identifier: "a" })], deletable: false, epochs: 3, signer });
+await client.getFiles({ ids: written.map((w) => w.id) });
+```
+
+Because it *is* a `WalrusClient`, the method signatures are identical to `@mysten/walrus`
+(latest, currently `1.2.x`) and the API ports verbatim to testnet/mainnet. The cross-environment
+blob-id fixture (`x37bth2QxQZBbjZS6F-6l9mU_-bp46CRfOo33IAwe2U`) is asserted from TS too.
+
+Two small sb-local additions support this client: a `deletable=true` publisher param (so
+`writeBlob({ deletable })` yields a deletable blob the inherited `deleteBlob` can remove) and
+a localnet-only `GET /v1/blobs/{id}/status` route (so `getVerifiedBlobStatus` — normally a
+storage-node quorum read — can be derived from chain). Requires **Node ≥ 22** (the
+`@mysten/sui` peer dep).
 
 ## WAL funding
 

@@ -23,7 +23,7 @@ use axum::{
 use walrus_local_sdk::localnet::{LocalnetMockStore, QuiltInput, QuiltPatchData};
 
 use crate::wire::{QuiltPatchItem, QuiltStoreResult, StoredQuiltPatch};
-use crate::{bad_request, blob_store_result, internal_error, not_found, resolve_post_store, serve_bytes, PublisherQuery};
+use crate::{bad_request, blob_store_result, internal_error, not_found, persistence_of, resolve_post_store, serve_bytes, PublisherQuery};
 
 /// Header carrying the patch identifier on a quilt-patch read (matches the real daemon).
 const X_QUILT_PATCH_IDENTIFIER: HeaderName = HeaderName::from_static("x-quilt-patch-identifier");
@@ -111,7 +111,7 @@ async fn put_quilt(
         })
         .collect();
 
-    match store.store_quilt(patches, epochs, post_store).await {
+    match store.store_quilt(patches, epochs, persistence_of(&q), post_store).await {
         Ok(sq) => {
             let result = QuiltStoreResult {
                 blob_store_result: blob_store_result(sq.stored),

@@ -12078,7 +12078,7 @@ dependencies = [
 
 [[package]]
 name = "walrus-local-sdk"
-version = "0.0.3"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde",

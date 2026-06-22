@@ -169,6 +169,7 @@ fn router(store: Arc<LocalnetMockStore>) -> Router {
         .route("/status", get(status))
         // Aggregator (reads).
         .route("/v1/blobs/{blob_id}", get(get_blob))
+        .route("/v1/blobs/{blob_id}/status", get(get_blob_status))
         .route("/v1/blobs/by-object-id/{object_id}", get(get_blob_by_object_id))
         // Publisher (writes).
         .route("/v1/blobs", put(put_blob))
@@ -216,6 +217,64 @@ async fn get_blob(
     }
 }
 
+/// `GET /v1/blobs/{blob_id}/status` — a localnet status probe (NOT a real-daemon route).
+/// `@mysten/walrus.getVerifiedBlobStatus` normally does a storage-node quorum read; on the
+/// nodeless localnet the status is DERIVED FROM CHAIN here so `@suibase/walrus-local-sdk`
+/// can reshape it into the SDK's `BlobStatus`. Mirrors the Rust mirror's `blob_status`:
+/// a standalone blob reports its on-chain Deletable/Permanent + certified/end epochs; a
+/// pooled-only blob reports Deletable+certified for its pool term; otherwise nonexistent.
+async fn get_blob_status(
+    State(store): State<Arc<LocalnetMockStore>>,
+    Path(blob_id): Path<String>,
+) -> Response {
+    if !store.is_valid_blob_id(&blob_id) {
+        return bad_request(&format!("malformed blob id {blob_id}"));
+    }
+    // Standalone blob: status derived from its on-chain Blob (matches what testnet reports).
+    if let Some(deletable) = store.blob_is_deletable(&blob_id) {
+        return match store.stat(&blob_id).await {
+            Ok(meta) => (
+                StatusCode::OK,
+                Json(json!({
+                    "exists": true,
+                    "deletable": deletable,
+                    "certifiedEpoch": meta.certified_epoch,
+                    "endEpoch": meta.end_epoch,
+                })),
+            )
+                .into_response(),
+            // The sidecar can outlive the on-chain Blob (e.g. it was delete_blob'd / burned
+            // externally via @mysten/walrus). Chain is the source of truth: a gone object is
+            // Nonexistent, not an error — matching what testnet reports after a delete.
+            Err(e) => {
+                let msg = format!("{e:#}").to_lowercase();
+                if msg.contains("not found") || msg.contains("does not exist") {
+                    (StatusCode::OK, Json(json!({ "exists": false }))).into_response()
+                } else {
+                    internal_error(&format!("blob status (stat) failed: {e:#}"))
+                }
+            }
+        };
+    }
+    // Pooled-only blob: a Deletable, certified blob living for its pool's term.
+    if let Some(pool_id) = store.find_pooled_pool_id(&blob_id) {
+        return match store.pool_status(&pool_id).await {
+            Ok(pool) => (
+                StatusCode::OK,
+                Json(json!({
+                    "exists": true,
+                    "deletable": true,
+                    "certifiedEpoch": pool.start_epoch,
+                    "endEpoch": pool.end_epoch,
+                })),
+            )
+                .into_response(),
+            Err(e) => internal_error(&format!("blob status (pool) failed: {e:#}")),
+        };
+    }
+    (StatusCode::OK, Json(json!({ "exists": false }))).into_response()
+}
+
 /// `GET /v1/blobs/by-object-id/{object_id}` — resolve a Sui `Blob` object id to its
 /// content id and serve the bytes (same headers/range semantics as `get_blob`).
 async fn get_blob_by_object_id(
@@ -239,9 +298,8 @@ async fn get_blob_by_object_id(
 
 /// Publisher query params (a superset of what we act on). Mirrors the real
 /// `PublisherQuery`; unknown params are tolerated (no `deny_unknown_fields`) so newer
-/// clients stay drop-in. `deletable`/`permanent`/`encoding_type`/`quilt_version`/
-/// `reuse_resources`/`force` are accepted but no-ops on the nodeless mock (always
-/// Permanent, single RS2 encoding).
+/// clients stay drop-in. `encoding_type`/`quilt_version`/`reuse_resources`/`force` are
+/// accepted but no-ops on the nodeless mock (single RS2 encoding).
 #[derive(Debug, Default, Deserialize)]
 pub(crate) struct PublisherQuery {
     /// Storage duration in epochs (default 1, matching the real publisher).
@@ -251,6 +309,20 @@ pub(crate) struct PublisherQuery {
     /// Wrap the created `Blob` in a shared object after store.
     #[serde(default)]
     pub share: bool,
+    /// Register the blob as Deletable (so it can later be `delete_blob`'d on-chain). The
+    /// engine certifies a Deletable blob the same way; defaults to false (Permanent). This
+    /// is what `@mysten/walrus.writeBlob({ deletable: true })` maps to via walrus-local-sdk.
+    #[serde(default)]
+    pub deletable: bool,
+}
+
+/// Map the `deletable` query flag to a `BlobPersistence`.
+pub(crate) fn persistence_of(q: &PublisherQuery) -> BlobPersistence {
+    if q.deletable {
+        BlobPersistence::Deletable
+    } else {
+        BlobPersistence::Permanent
+    }
 }
 
 /// `PUT /v1/blobs` — store the request body as a certified `Blob` and return the
@@ -271,10 +343,10 @@ async fn put_blob(
         Err(resp) => return resp,
     };
 
-    // sb-local stores Permanent (the publisher's deprecated `deletable` flag is a no-op,
-    // matching the real walrus daemon); the Deletable path is exercised via the Rust mirror.
+    // Honor `deletable=true` (Permanent by default). A Deletable blob can be removed later
+    // via the on-chain `delete_blob` path (`@mysten/walrus.deleteBlob`).
     match store
-        .store_blob(body.as_ref(), epochs, BlobPersistence::Permanent, post_store)
+        .store_blob(body.as_ref(), epochs, persistence_of(&q), post_store)
         .await
     {
         Ok(stored) => (StatusCode::OK, Json(blob_store_result(stored))).into_response(),

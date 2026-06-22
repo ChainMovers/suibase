@@ -22,6 +22,7 @@ on:
     paths:
       - "rust/walrus-local-sdk/**"
       - "rust/localnet-tools/**"
+      - "typescript/walrus-local-sdk/**"
       - ".github/workflows/walrus-localnet-integration.yml"
 
 jobs:
@@ -41,6 +42,11 @@ jobs:
           swap-storage: false
 
       - uses: actions/checkout@v6
+
+      - name: Set up Node.js (for the TS walrus-local-sdk integration suite)
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
 
       - name: Install Rust Toolchain (walrus-local-sdk pins 1.96 via rust-toolchain.toml)
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -142,6 +148,20 @@ jobs:
           ~/suibase/scripts/localnet status | grep -i "Walrus API" || true
           # curl PUT/GET/Range/dedup/404 + real-id equality + quilt round-trip + interop.
           ~/suibase/scripts/tests/050_walrus_tests/test_sb_local_http.sh
+
+      - name: TS walrus-local-sdk live round-trip (drop-in @mysten/walrus on localnet)
+        # @suibase/walrus-local-sdk extends the real @mysten/walrus WalrusClient: inherited
+        # on-chain ops (delete/extend/attributes/storageCost) run against the localnet Walrus,
+        # node-talking ops (writeBlob/readBlob/writeFiles/getFiles/getBlob/status) route through
+        # the sb-local built+staged above. WALRUS_LOCAL_SDK_TEST=1 makes a skip a hard failure.
+        working-directory: typescript/walrus-local-sdk
+        env:
+          WALRUS_LOCAL_SDK_TEST: "1"
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm test
 
       - name: sb-local wire parity vs the real Walrus aggregator/publisher (errors-only)
         run: |

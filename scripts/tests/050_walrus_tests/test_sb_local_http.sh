@@ -201,7 +201,7 @@ import sys, json
 items = json.load(sys.stdin)
 ids = {i["identifier"] for i in items}
 assert {"alpha", "beta"} <= ids, ids
-assert all("patchId" in i and "tags" in i for i in items)
+assert all("patch_id" in i and "tags" in i for i in items)
 alpha = next(i for i in items if i["identifier"] == "alpha")
 assert alpha["tags"].get("kind") == "text", alpha["tags"]
 ' 2>/dev/null; then

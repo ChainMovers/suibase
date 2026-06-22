@@ -1,5 +1,33 @@
 # LOCALNET_WALRUS_TS_PLAN
 
+> **STATUS: DONE (2026-06-21).** Implemented as `typescript/walrus-local-sdk`
+> (`@suibase/walrus-local`). See `docs/dev/LOCALNET_WALRUS_FEATURE.md` →
+> [TypeScript client](LOCALNET_WALRUS_FEATURE.md#typescript-client) and the package README.
+> NB: the design below evolved during implementation — the final approach is **NOT** the
+> original "thin HTTP client" but a **subclass of the real `@mysten/walrus` `WalrusClient`**.
+>
+> **Final architecture (supersedes the plan below).** `class WalrusLocalClient extends
+> WalrusClient`, constructed with `super({ packageConfig, suiClient })` against the localnet
+> deploy. Targets the **latest `@mysten/walrus` (1.2.x)** so signatures + the `WalrusFile`
+> quilt API match exactly. **On-chain methods are inherited unchanged** (delete/extend/
+> attributes/storageCost/systemState/…); only **node-talking** methods are overridden to use
+> sb-local (`readBlob`/`writeBlob`/`writeFiles`/`writeQuilt`/`getFiles`/`getBlob`/
+> `getVerifiedBlobStatus`); inherently node-only plumbing throws `UNSUPPORTED`.
+>
+> **Decisions made (by the user, during build):** extend `@mysten/walrus` (not hand-roll);
+> target latest (quilts via `WalrusFile`); match Mysten's constructor (`new WalrusLocalClient()`,
+> **no `forWorkdir`**); name `@suibase/walrus-local`. Deps: `@mysten/walrus` + `@mysten/sui`
+> (peer). **Node ≥ 22.** Two sb-local additions: a `deletable=true` PUT param + a localnet-only
+> `GET /v1/blobs/{id}/status` route.
+>
+> **Delivered + validated live (Node 22):** the full developer surface — writeBlob/readBlob,
+> deleteBlob/extendBlob/attributes/storageCost (inherited, on-chain), writeQuilt/writeFiles/
+> getFiles/getBlob (via sb-local), getVerifiedBlobStatus. Tests: 9 unit (errors + config) +
+> 11 live integration (gated; cross-env blob_id fixture proven from TS), 20/20 passing. The
+> remainder of this file is the **original** plan, kept for historical context only.
+
+---
+
 Short plan to bring the localnet Walrus experience to **TypeScript**, mirroring what
 `rust/walrus-local-sdk` did for Rust. Resume in a fresh session (this one ran out of context).
 
@@ -63,7 +91,7 @@ Confirm the **current `@mysten/walrus` TS SDK** surface (npm; training may be st
 ## Open questions / decisions for the user
 
 - Package home: new `typescript/walrus-local-sdk` vs a module inside `typescript/helper`?
-- Publish to npm (`@chainmovers/...`) or repo-internal only?
+- Publish to npm (`@suibase/...`) or repo-internal only? (resolved: name `@suibase/walrus-local`)
 - Should the TS client also expose pools (engine-only in Rust, not in the HTTP API today —
   sb-local would need pool routes first)?
 - How much to lean on `@mysten/walrus` types vs hand-rolled TS types for drop-in feel.

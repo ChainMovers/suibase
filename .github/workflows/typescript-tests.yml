@@ -120,3 +120,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bash "$HOME/suibase/scripts/tests/040_typescript_tests/npm_test_suibase_helper.sh"
+
+      - name: Build + unit-test @suibase/walrus-local-sdk
+        # The walrus-local-sdk unit tests are pure (errors + config resolution; no live
+        # localnet), so they run here on every dev push. Its LIVE integration suite runs in
+        # walrus-localnet-integration.yml (where a walrus_local_enabled localnet is up).
+        # Node 22 is required (the @mysten/sui peer dep); this job uses node-version 22.
+        working-directory: typescript/walrus-local-sdk
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          npm run test:unit

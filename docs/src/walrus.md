@@ -76,6 +76,7 @@ then run `localnet regen` to deploy it. This gives you:
 - **Automatic deployment** — the genuine Mysten Labs Walrus Move contracts (the same ones deployed on testnet) are published on localnet for you.
 - **An aggregator + publisher HTTP API** — the same `/v1/blobs` wire API as the real `walrus` daemon, at `http://localhost:45840`. Point any Walrus HTTP client at it by changing only the URL.
 - **[`walrus_local_sdk`](https://github.com/ChainMovers/suibase/tree/main/rust/walrus-local-sdk)** — a Rust crate that mirrors Mysten's `walrus_sdk` (same method signatures, same return types).
+- **[`@suibase/walrus-local`](https://github.com/ChainMovers/suibase/tree/main/typescript/walrus-local-sdk)** — a TypeScript drop-in that **extends Mysten's own `@mysten/walrus` `WalrusClient`**: it inherits every on-chain operation against the localnet Walrus and routes only the node-talking blob/quilt operations through this HTTP API. Same class, same methods, same signatures.
 
 Check it is running with `localnet status` (it shows a `Walrus API` line), then use it like any Walrus aggregator/publisher:
 
@@ -86,6 +87,19 @@ $ curl -X PUT --data-binary @myfile http://localhost:45840/v1/blobs
 $ curl http://localhost:45840/v1/blobs/<blobId> -o out
 # Inspect the real on-chain Blob object (its id is newlyCreated.blobObject.id)
 $ lsui client object <objectId>
+```
+
+From TypeScript, use the **exact same `@mysten/walrus` API** you'd use on testnet/mainnet — no funds, no nodes (requires Node ≥ 22):
+
+```ts
+import { WalrusLocalClient } from "@suibase/walrus-local";
+
+// On localnet: a drop-in WalrusClient. On testnet you'd write
+//   new WalrusClient({ network: "testnet", suiClient }) instead — same methods after that.
+const client = new WalrusLocalClient();
+const { blobId, blobObject } = await client.writeBlob({ blob, deletable: true, epochs: 5, signer });
+const bytes = await client.readBlob({ blobId });                       // node-talking -> sb-local
+await client.executeDeleteBlobTransaction({ blobObjectId: blobObject.id, signer }); // inherited, on-chain
 ```
 
 **Parity with testnet** is the goal: on-chain Blob objects, quilts, the SDK surface, and the HTTP error contract all match — so what works on localnet behaves the same on testnet/mainnet.
