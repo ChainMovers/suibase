@@ -28,14 +28,14 @@ pub enum BlobStoreResult {
         blob_object: Blob,
         /// What was done to register the blob (`registerFromScratch` on the mock).
         resource_operation: RegisterBlobOp,
-        /// WAL cost (0 on the faucet-funded nodeless localnet).
+        /// WAL cost (0 on the faucet-funded localnet).
         cost: u64,
         /// For a `share=true` PUT, the created `SharedBlob` object id.
         #[serde(skip_serializing_if = "Option::is_none")]
         shared_blob_object: Option<String>,
     },
     /// The blob was already certified + unexpired (content dedup). Mirrors the real
-    /// `alreadyCertified { blobId, <event|object>, endEpoch }` — the nodeless mock
+    /// `alreadyCertified { blobId, <event|object>, endEpoch }` — the localnet mock
     /// always knows the object id, so it emits the flattened `object` key.
     AlreadyCertified {
         /// Canonical Walrus blob id (URL-safe base64 string).
@@ -48,7 +48,7 @@ pub enum BlobStoreResult {
     },
 }
 
-/// The register operation performed (`resourceOperation`). The nodeless mock always
+/// The register operation performed (`resourceOperation`). The localnet mock always
 /// registers from scratch; the other real variants (reuse/extend) never occur here.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]

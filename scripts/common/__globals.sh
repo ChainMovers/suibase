@@ -4172,7 +4172,7 @@ stop_all_services() {
       return $_NOOP_REQUEST
     fi
   else
-    # Stop the nodeless localnet Walrus HTTP API first (it depends on the Sui RPC).
+    # Stop the localnet Walrus HTTP API first (it depends on the Sui RPC).
     # Noop if not running; guarded on the function existing (localnet-only source).
     if [ "$WORKDIR" = "localnet" ] && type -t stop_sb_local_process >/dev/null 2>&1; then
       stop_sb_local_process
@@ -4356,7 +4356,7 @@ start_all_services() {
   trig_daemons_refresh
   wait_for_sui_client_up "${WORKDIR_NAME}"
 
-  # Nodeless localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
+  # Localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
   # as-needed, then (re)start sb-local -- a single entry point mirroring
   # start_suibase_daemon_as_needed above (build-if-stale + restart-on-upgrade + start-if-down).
   # This plain-'start' fast path never reaches deploy_walrus_localnet, so this is what makes a

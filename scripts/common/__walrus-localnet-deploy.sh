@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 
-# Nodeless localnet Walrus deploy (Layer A).
+# Localnet Walrus deploy (Layer A).
 #
 # Publishes the Walrus Move packages to the *running* localnet Sui, sets up an
 # N=1 deterministic committee whose BLS key we hold (for off-node certify),
@@ -8,7 +8,7 @@
 #   - workdirs/localnet/config-default/walrus-config.yaml   (walrus CLI compatible: ids + rpc + wallet)
 #   - workdirs/localnet/config-default/walrus-localnet.yaml  (suibase descriptor: package id + held committee key + chain id)
 #
-# NO storage nodes are started (nodeless). Real Blob/Storage objects + held-key
+# NO storage nodes are started. Real Blob/Storage objects + held-key
 # certify happen on the localnet Sui; bytes are served from the filesystem by
 # the LocalnetMockStore engine (wrapped by the WalrusLocalClient SDK mirror).
 # See docs/dev/LOCALNET_WALRUS_PLAN.md.
@@ -111,7 +111,7 @@ export -f wait_for_localnet_rpc
 deploy_walrus_localnet() {
   local _WORKDIR="${1:-$WORKDIR}"
 
-  # Nodeless localnet Walrus is localnet-only.
+  # Localnet Walrus is localnet-only.
   if [ "$_WORKDIR" != "localnet" ]; then
     return 0
   fi
@@ -213,7 +213,7 @@ export -f deploy_walrus_localnet
 is_walrus_localnet_deploy_needed() {
   local _WORKDIR="${1:-$WORKDIR}"
 
-  # Nodeless localnet Walrus is localnet-only and opt-in (mirrors deploy gating).
+  # Localnet Walrus is localnet-only and opt-in (mirrors deploy gating).
   [ "$_WORKDIR" = "localnet" ] || return 1
   [ "${CFG_walrus_local_enabled:-false}" = "true" ] || return 1
 

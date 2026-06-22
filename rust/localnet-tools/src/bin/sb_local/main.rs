@@ -3,7 +3,7 @@
 
 //! `sb-local` ("suibase localnet") — a standalone, long-running, **localnet-only**
 //! HTTP server that exposes the **Walrus aggregator + publisher wire API**, backed by
-//! the nodeless [`LocalnetMockStore`]. It is a drop-in replacement for the real
+//! the self-contained [`LocalnetMockStore`]. It is a drop-in replacement for the real
 //! `walrus daemon` (combined aggregator + publisher) for localnet clients: point any
 //! existing Walrus HTTP client (curl, fetch, walrus-sites) at sb-local by changing
 //! only the URL.
@@ -61,7 +61,7 @@ const CACHE_CONTROL_VALUE: &str = "public, max-age=86400, stale-while-revalidate
 #[derive(Parser)]
 #[command(
     name = "sb-local",
-    about = "Suibase localnet Walrus aggregator+publisher HTTP server (nodeless)"
+    about = "Suibase localnet Walrus aggregator+publisher HTTP server"
 )]
 struct Cli {
     /// Address to bind (its OWN setting; independent of the faucet's). localhost-only
@@ -72,7 +72,7 @@ struct Cli {
     /// of the Walrus 458xx range).
     #[arg(long, default_value_t = 45840)]
     port: u16,
-    /// Suibase workdir. Only `localnet` is supported (nodeless mock is localnet-only).
+    /// Suibase workdir. Only `localnet` is supported (the mock is localnet-only).
     #[arg(long, default_value = "localnet")]
     workdir: String,
 }
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
 
     if cli.workdir != "localnet" {
         anyhow::bail!(
-            "sb-local supports only the localnet workdir (got '{}'); the nodeless \
+            "sb-local supports only the localnet workdir (got '{}'); the \
              Walrus mock is localnet-only",
             cli.workdir
         );
@@ -219,7 +219,7 @@ async fn get_blob(
 
 /// `GET /v1/blobs/{blob_id}/status` — a localnet status probe (NOT a real-daemon route).
 /// `@mysten/walrus.getVerifiedBlobStatus` normally does a storage-node quorum read; on the
-/// nodeless localnet the status is DERIVED FROM CHAIN here so `@suibase/walrus-local-sdk`
+/// localnet the status is DERIVED FROM CHAIN here so `@suibase/walrus-local-sdk`
 /// can reshape it into the SDK's `BlobStatus`. Mirrors the Rust mirror's `blob_status`:
 /// a standalone blob reports its on-chain Deletable/Permanent + certified/end epochs; a
 /// pooled-only blob reports Deletable+certified for its pool term; otherwise nonexistent.
@@ -299,7 +299,7 @@ async fn get_blob_by_object_id(
 /// Publisher query params (a superset of what we act on). Mirrors the real
 /// `PublisherQuery`; unknown params are tolerated (no `deny_unknown_fields`) so newer
 /// clients stay drop-in. `encoding_type`/`quilt_version`/`reuse_resources`/`force` are
-/// accepted but no-ops on the nodeless mock (single RS2 encoding).
+/// accepted but no-ops on the localnet mock (single RS2 encoding).
 #[derive(Debug, Default, Deserialize)]
 pub(crate) struct PublisherQuery {
     /// Storage duration in epochs (default 1, matching the real publisher).
@@ -377,7 +377,7 @@ pub(crate) fn blob_store_result(s: StoredBlob) -> BlobStoreResult {
                 encoded_length: s.encoded_length,
                 epochs_ahead: s.epochs,
             },
-            // The nodeless mock pays WAL from the faucet-funded exchange; report 0
+            // The localnet mock pays WAL from the faucet-funded exchange; report 0
             // (clients use the blobId/objectId, not the cost, on localnet).
             cost: 0,
             shared_blob_object: s.shared_object_id.map(|id| id.to_string()),

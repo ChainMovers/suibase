@@ -1,7 +1,7 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Nodeless localnet Walrus deploy (Layer A) for Suibase.
+//! Localnet Walrus deploy (Layer A) for Suibase.
 //!
 //! Publishes the Walrus Move packages to the *running* localnet Sui, sets up an
 //! N=1 deterministic committee whose BLS key we hold (for off-node `certify_blob`),
@@ -9,7 +9,7 @@
 //!   - <out-config>     walrus CLI config (contexts: ids + rpc + wallet)
 //!   - <out-descriptor> suibase descriptor (package id + held committee key + chain id)
 //!
-//! NO storage nodes are started (nodeless). Real Blob/Storage objects + held-key
+//! No storage nodes are started. Real Blob/Storage objects + held-key
 //! certify happen on the localnet Sui; bytes are served from the filesystem by the
 //! `LocalnetMockStore` engine (wrapped by the `WalrusLocalClient` SDK mirror). See
 //! docs/dev/LOCALNET_WALRUS_PLAN.md.
@@ -60,7 +60,7 @@ fn materialize_embedded_contracts(deploy_dir: &Path) -> Result<PathBuf> {
 }
 
 #[derive(Parser)]
-#[command(name = "walrus-localnet-deploy", about = "Nodeless localnet Walrus deploy for Suibase")]
+#[command(name = "walrus-localnet-deploy", about = "Localnet Walrus deploy for Suibase")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -252,7 +252,7 @@ fn write_walrus_config(
         None => String::new(),
     };
     let yaml = format!(
-        "# Suibase localnet Walrus config (NODELESS). Ephemeral: rewritten on each\n\
+        "# Suibase localnet Walrus config (no storage nodes). Ephemeral: rewritten on each\n\
          # 'localnet start'/'regen' by deploy_walrus_localnet(). Do not edit by hand.\n\
          contexts:\n\
          \x20 localnet:\n\
@@ -284,7 +284,7 @@ fn write_descriptor(
     epoch: u32,
 ) -> Result<()> {
     let yaml = format!(
-        "# Suibase nodeless localnet Walrus descriptor (ephemeral; rewritten each regen).\n\
+        "# Suibase localnet Walrus descriptor (ephemeral; rewritten each regen).\n\
          # Consumed by the LocalnetMockStore engine. NOT a walrus CLI file.\n\
          chain_id: {chain}\n\
          epoch: {epoch}\n\

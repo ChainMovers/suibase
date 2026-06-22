@@ -1,7 +1,7 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Nodeless localnet mock engine — the lower-level store that [`crate::WalrusLocalClient`]
+//! Localnet mock engine — the lower-level store that [`crate::WalrusLocalClient`]
 //! (the drop-in `walrus_sdk` mirror) wraps, and that the `sb-local` HTTP facade builds on.
 //!
 //! Creates real `Blob`/`Storage` objects on the Suibase localnet Sui via PTBs +
@@ -98,7 +98,7 @@ const WAL_FUNDING_SUI_MIST: u64 = 100 * ONE_SUI_MIST;
 // Descriptor (deploy-written) — `<workdir>/config/walrus-localnet.yaml`
 // ---------------------------------------------------------------------------
 
-/// The suibase nodeless descriptor written by `walrus-localnet-deploy`.
+/// The suibase localnet descriptor written by `walrus-localnet-deploy`.
 ///
 /// `opt()` in the deploy bin emits the unquoted literal `null` for `None`, which
 /// serde_yaml parses as `Value::Null -> Option::None`. We additionally normalize a
@@ -248,7 +248,7 @@ pub struct QuiltPatchData {
 // The store
 // ---------------------------------------------------------------------------
 
-/// Nodeless localnet Walrus store backed by the deploy-written descriptor.
+/// Localnet Walrus store backed by the deploy-written descriptor.
 pub struct LocalnetMockStore {
     /// One contract client against localhost:9000; inner mutable state is behind a
     /// `Mutex` inside the client, so every op below takes `&self`.

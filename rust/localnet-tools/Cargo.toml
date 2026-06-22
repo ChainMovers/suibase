@@ -3,17 +3,17 @@ name = "localnet-tools"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Suibase localnet dev tools: nodeless Walrus deploy + the sb-local Walrus aggregator/publisher HTTP server."
+description = "Suibase localnet dev tools: localnet Walrus deploy + the sb-local Walrus aggregator/publisher HTTP server."
 homepage = "https://suibase.io"
 repository = "https://github.com/ChainMovers/suibase"
 
 # This crate hosts the BINARIES shipped in the `localnet-tools` precompiled asset
 # (consumed by Suibase localnet). The library the binaries build on — `walrus-local-sdk`
-# (the localnet-only, drop-in mirror of the Mysten Walrus SDK + its nodeless mock engine)
+# (the localnet-only, drop-in mirror of the Mysten Walrus SDK + its localnet mock engine)
 # — lives in the sibling `rust/walrus-local-sdk` crate.
 #
 # Binaries:
-#   - walrus-localnet-deploy : publishes nodeless Walrus on the running localnet
+#   - walrus-localnet-deploy : publishes Walrus on the running localnet
 #                              (off-node N=1 committee), writes the descriptor.
 #   - sb-local               : long-running localnet-only HTTP server exposing the
 #                              Walrus aggregator + publisher wire API.
@@ -25,7 +25,7 @@ repository = "https://github.com/ChainMovers/suibase"
 # types (Blob, ObjectID, PostStoreAction, ...) unify across the path-dependency boundary.
 
 [dependencies]
-# The localnet Walrus library: the nodeless mock engine (sb-local builds on it) + the
+# The localnet Walrus library: the localnet mock engine (sb-local builds on it) + the
 # WalrusLocalClient SDK mirror.
 walrus-local-sdk = { path = "../walrus-local-sdk" }
 
@@ -63,14 +63,14 @@ name = "walrus-localnet-deploy"
 path = "src/bin/walrus_localnet_deploy.rs"
 
 # sb-local ("suibase localnet"): long-running localnet-only HTTP server exposing the
-# Walrus aggregator/publisher wire API, backed by the nodeless LocalnetMockStore.
+# Walrus aggregator/publisher wire API, backed by the LocalnetMockStore.
 [[bin]]
 name = "sb-local"
 path = "src/bin/sb_local/main.rs"
 
-# lwalrus: localnet-only `walrus`-shaped CLI over the nodeless engine
+# lwalrus: localnet-only `walrus`-shaped CLI over the localnet engine
 # (WalrusLocalClient). The real `walrus` CLI does direct storage-node I/O, which
-# nodeless localnet has none of — lwalrus dispatches the storage commands to the
+# localnet has no storage nodes for — lwalrus dispatches the storage commands to the
 # already-built WalrusLocalClient instead. See docs/dev/LWALRUS_LSITE_PLAN.md.
 [[bin]]
 name = "lwalrus"

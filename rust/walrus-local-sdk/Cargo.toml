@@ -3,7 +3,7 @@ name = "walrus-local-sdk"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Localnet-only, drop-in mirror of the Mysten Walrus SDK (walrus_sdk) for Suibase: nodeless localnet store returning the SDK's own types."
+description = "Localnet-only, drop-in mirror of the Mysten Walrus SDK (walrus_sdk) for Suibase: self-contained localnet store returning the SDK's own types."
 homepage = "https://suibase.io"
 repository = "https://github.com/ChainMovers/suibase"
 
@@ -20,7 +20,7 @@ repository = "https://github.com/ChainMovers/suibase"
 #     here can only ever affect localnet (devs), never a real network. The one real-facing seam
 #     is `impl compat::WalrusApi for WalrusNodeClient`, which is PURE forwarding (one SDK call
 #     per method, no logic) precisely to keep that risk at zero.
-#   - This crate carries the localnet burden: it wraps the nodeless mock engine (`localnet`
+#   - This crate carries the localnet burden: it wraps the localnet mock engine (`localnet`
 #     module) and reshapes its results into the SDK's types.
 #   - It is NEVER linked enclave-side; it freely pulls the heavy walrus/Sui graph (incl. suibase).
 #
