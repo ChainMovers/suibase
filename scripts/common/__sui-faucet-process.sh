@@ -91,7 +91,22 @@ start_sui_faucet_process() {
     exit 1
   fi
 
+  # The faucet answered the /gas health check (ALIVE=true above, independent of
+  # the PID scan), so the process IS up and serving. Resolving its PID is a
+  # SEPARATE `ps`-table scan (get_process_pid) that can lag the health check on
+  # slow macOS CI runners -- a freshly-forked process takes a moment to surface
+  # in `ps`, and the macOS `comm` match is finicky (issue #79). A single scan
+  # intermittently came back empty and the caller (start_all_services) treats an
+  # empty PID as "faucet not started" and aborts. So POLL until the PID surfaces,
+  # mirroring the stop path's reap-lag poll. Normal case: the first scan finds it
+  # and the loop never runs.
+  local _pid_wait=0
   update_SUI_FAUCET_PROCESS_PID_var
+  while [ -z "$SUI_FAUCET_PROCESS_PID" ] && [ "$_pid_wait" -lt 10 ]; do
+    sleep 1
+    _pid_wait=$((_pid_wait + 1))
+    update_SUI_FAUCET_PROCESS_PID_var
+  done
   echo "faucet started ( pid $SUI_FAUCET_PROCESS_PID )"
 }
 export -f start_sui_faucet_process

@@ -2737,7 +2737,22 @@ start_sui_process() {
       exit
     fi
 
+    # The node answered the health check (ALIVE=true above, via `sui client
+    # objects` -- independent of the PID scan), so the process IS up. Resolving
+    # its PID is a SEPARATE `ps`-table scan (get_process_pid) that can lag the
+    # health check on slow macOS CI runners -- a freshly-forked process takes a
+    # moment to surface in `ps`, and the macOS `comm` match is finicky (issue
+    # #79). A single scan intermittently came back empty and the caller
+    # (start_all_services) treats an empty PID as "not started" and aborts -- the
+    # mirror image of the stop path's reap-lag poll. So POLL until the PID
+    # surfaces. Normal case: the first scan finds it and the loop never runs.
+    local _pid_wait=0
     update_SUI_PROCESS_PID_var
+    while [ -z "$SUI_PROCESS_PID" ] && [ "$_pid_wait" -lt 10 ]; do
+      sleep 1
+      _pid_wait=$((_pid_wait + 1))
+      update_SUI_PROCESS_PID_var
+    done
     echo "localnet started ( pid $SUI_PROCESS_PID )"
     update_SUI_VERSION_var
     echo "$SUI_VERSION"
