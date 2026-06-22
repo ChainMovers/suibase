@@ -160,7 +160,7 @@ walrus_relay_metrics_port: ~
 walrus_local_enabled: false
 
 # sb-local: standalone localnet-only HTTP server exposing the Walrus aggregator +
-# publisher wire API (GET/PUT /v1/blobs, quilts), backed by the nodeless WalrusStore.
+# publisher wire API (GET/PUT /v1/blobs, quilts), backed by the nodeless LocalnetMockStore.
 # Started/stopped with the localnet lifecycle when walrus_local_enabled=true. Its bind/port
 # are its OWN independent settings. The port is in the Walrus 458xx family (where the
 # walrus-relay lives) with the suibase rightmost-digit = workdir convention (localnet=0),

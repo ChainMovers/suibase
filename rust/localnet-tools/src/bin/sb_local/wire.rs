@@ -86,10 +86,12 @@ pub struct StoredQuiltPatch {
     pub range: Option<(u64, u64)>,
 }
 
-/// One element of `GET /v1/quilts/{quilt_id}/patches` — mirrors the real
-/// `QuiltPatchItem`: `{ identifier, patchId, tags }`.
+/// One element of `GET /v1/quilts/{quilt_id}/patches` — mirrors the real daemon's
+/// `QuiltPatchItem`: `{ identifier, patch_id, tags }`. NB: this list-endpoint item is
+/// serialized **snake_case** by the real daemon (its `QuiltPatchItem` has NO
+/// `rename_all`), unlike the store-path `StoredQuiltPatch` above (which IS camelCase →
+/// `quiltPatchId`). We match the daemon exactly, so `patch_id` here is intentional.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QuiltPatchItem {
     /// The patch identifier.
     pub identifier: String,
