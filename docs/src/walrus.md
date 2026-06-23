@@ -14,7 +14,7 @@ Suibase scripts append the proper --config, --context and wallet path to make su
 
 The scripts pass all your command line parameters as-is to the original Mysten Labs binaries.
 
-`lwalrus` is a bit different: the real `walrus` CLI talks directly to storage nodes, which the [localnet](#localnet) does not run — so `lwalrus` is a focused **subset** that serves the core storage commands (`store`, `read`, `blob-status`, `delete`) from the local engine. Commands that need real storage nodes, staking, or a daemon are not applicable; run `lwalrus --help` to see the "Not supported for localnet" list. For anything outside that subset, use the [Walrus HTTP API or `walrus_local_sdk`](#localnet).
+`lwalrus` is a localnet-only **subset** of the `walrus` CLI (run `lwalrus --help` to see what it covers). Localnet Walrus is a work in progress, but already has **functional parity with the Rust and TypeScript SDKs**. The main gaps today are `site-builder` and the web portal.
 
 ## Updates
 Run `testnet update` or `mainnet update`.
@@ -23,13 +23,13 @@ This updates all binaries/configs to match the latest deployed testnet/mainnet.
 
 For localnet, `localnet update` refreshes its tools, and `localnet regen` re-deploys Walrus on a fresh chain.
 
-In rare case of testnet reset from Mysten Labs, you may need to do `~/suibase/update`... which is recommended to be done periodically anyway to keep Suibase itself up-to-date.
+Run `~/suibase/update` periodically to keep Suibase itself up-to-date.
 
 ## Wallets
 
 Some walrus commands require a wallet. By default, the active-address of the Suibase wallet is used.
 
-This wallet has 15 addresses automatically generated when you did install Suibase.
+This wallet has 15 addresses automatically generated when you installed Suibase.
 
 Use `tsui` and `msui`, instead of `sui`, to access the proper wallets. Some useful commands are:
 
@@ -76,10 +76,10 @@ then run `localnet regen` to deploy it. This gives you:
 - **Automatic deployment** — the genuine Mysten Labs Walrus Move contracts (the same ones deployed on testnet) are published on localnet for you.
 - **An aggregator + publisher HTTP API** — the same `/v1/blobs` wire API as the real `walrus` daemon, at `http://localhost:45840`. Point any Walrus HTTP client at it by changing only the URL.
 - **[`walrus_local_sdk`](https://github.com/ChainMovers/suibase/tree/main/rust/walrus-local-sdk)** — a Rust crate that mirrors Mysten's `walrus_sdk` (same method signatures, same return types).
-- **[`@suibase/walrus-local`](https://github.com/ChainMovers/suibase/tree/main/typescript/walrus-local-sdk)** — a TypeScript drop-in that **extends Mysten's own `@mysten/walrus` `WalrusClient`**: it inherits every on-chain operation against the localnet Walrus and routes only the node-talking blob/quilt operations through this HTTP API. Same class, same methods, same signatures.
+- **[`@suibase/walrus-local`](https://github.com/ChainMovers/suibase/tree/main/typescript/walrus-local-sdk)** — a TypeScript drop-in for Mysten's `@mysten/walrus` that works against the localnet Walrus. Same class, same methods, same signatures.
 - **`lwalrus`** — a localnet, `walrus`-style command-line tool for quick blob operations from the shell (a focused subset of the real `walrus` CLI; see `lwalrus --help`).
 
-Check it is running with `localnet status` (it shows a `Walrus API` line), then use it like any Walrus aggregator/publisher:
+Check it is running with `localnet status`, then use it like any Walrus aggregator/publisher:
 
 ```bash
 # Publish a file (the response contains the blobId)
@@ -99,7 +99,7 @@ $ lwalrus blob-status <blobId>
 $ lwalrus delete <blobId>           # deletable blobs only
 ```
 
-From TypeScript, use the **exact same `@mysten/walrus` API** you'd use on testnet/mainnet — no funds, no nodes (requires Node ≥ 22):
+From TypeScript, use the **exact same `@mysten/walrus` API** you'd use on testnet/mainnet (requires Node ≥ 22):
 
 ```ts
 import { WalrusLocalClient } from "@suibase/walrus-local";

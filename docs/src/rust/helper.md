@@ -2,7 +2,7 @@
 title: Rust Suibase Helper API
 ---
 
-As needed, read first the [Helper Overview](../helpers.md).
+As needed, first read the [Helper Overview](../helpers.md).
 
 For the complete API, check the [crates documentation](https://chainmovers.github.io/suibase-api-docs)
 

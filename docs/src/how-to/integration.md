@@ -6,4 +6,4 @@ editLink: true
 
 ## Walrus & Walrus Site Builder
 
-Walrus is now fully integrated, check instead the [Walrus page](../walrus.md) for more details.
+Walrus is now fully integrated; check the [Walrus page](../walrus.md) for more details instead.

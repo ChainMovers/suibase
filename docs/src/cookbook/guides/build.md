@@ -11,7 +11,7 @@ If you often build, then repeating local file access is obviously faster than re
 
 If you use the Rust SDK, replace your Git dependencies with "path".
 
-For Move dependencies replace Git dependencies with "local".
+For Move dependencies, replace Git dependencies with "local".
 
 For suibase users, a per-network Sui repo is already downloaded at `~/suibase/workdirs/<network>/sui-repo` (kept current with `<network> update`) — point your `path`/`local` dependencies there to re-use it.
 
@@ -34,13 +34,13 @@ $ cat ~/.cargo/config.toml
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 ```
 
-The performance gain varies widely, you have to try for yourself. Do not expect 10x faster... it accelerates only the link phase. Furthermore, the performance gap versus more recent GNU/LLVM linker release is closing.
+The performance gain varies widely; you have to try for yourself. Do not expect 10x faster... it accelerates only the link phase. Furthermore, the performance gap versus more recent GNU/LLVM linker releases is closing.
 
 ## How does my build time compare?
 
 See some profiling below.
 
-Measurements are for clean build of sui and sui-faucet only.
+Measurements are for a clean build of sui and sui-faucet only.
 
 ::: details Steps for measuring
 

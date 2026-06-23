@@ -31,7 +31,7 @@ editLink: true
 Suggested additions:
 
 - How to verify a Keypair
-- How to import/export (explain sui.keystore hexa need 'sui keytool convert' for wallet import).
+- How to import/export (explain that the sui.keystore hex format needs 'sui keytool convert' for wallet import).
 
 ## How to get a list of keypairs and addresses
 
