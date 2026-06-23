@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# DESTRUCTIVE: verifies that `localnet regen` properly WIPES the nodeless-Walrus state and
+# DESTRUCTIVE: verifies that `localnet regen` properly WIPES the localnet Walrus state and
 # redeploys cleanly — i.e. there is NO disk accumulation of blob data across regens.
 #
 # It seeds blob data (via the sb-local publisher), confirms the on-disk runtime dir is
@@ -31,7 +31,7 @@ chain_id_of() { sed -n 's/^chain_id:[[:space:]]*//p' "$1" 2>/dev/null | head -1;
 blob_count() { ls "$BLOB_DIR" 2>/dev/null | grep -cE '\.(bin|meta)$'; }
 
 if [ ! -f "$DESCRIPTOR" ]; then
-  echo "SKIP: nodeless Walrus is not deployed on localnet (no $DESCRIPTOR) — enable"
+  echo "SKIP: Walrus is not deployed on localnet (no $DESCRIPTOR) — enable"
   echo "      walrus_local_enabled + regen first. (Safe skip in the non-Walrus suite.)"
   exit 0
 fi

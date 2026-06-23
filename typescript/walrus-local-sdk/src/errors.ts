@@ -3,9 +3,11 @@
 
 /**
  * Error codes raised by {@link WalrusLocalError}. The `*_NOT_FOUND` / `BAD_REQUEST` /
- * `INVALID_BYTE_RANGE` / `INTERNAL` codes are derived from sb-local's wire error body
- * (`{ "error": { "reason", "message" } }`) and HTTP status — so error-matching callers
- * are drop-in with the real Walrus aggregator/publisher, which uses the same contract.
+ * `INVALID_BYTE_RANGE` / `INTERNAL` codes are derived from sb-local's wire error body —
+ * the Walrus aggregator/publisher `Status` envelope (`{ "error": { "status", "code",
+ * "message", "details": [{ "@type": "ErrorInfo", "reason", "domain", … }] } }`, with the
+ * machine-readable reason at `error.details[0].reason`) — and the HTTP status, so they
+ * match the real Walrus aggregator/publisher, which emits the same contract.
  */
 export type WalrusLocalErrorCode =
   // --- mapped from sb-local's wire error responses ---
@@ -60,9 +62,10 @@ export class WalrusLocalError extends Error {
 
 /**
  * Map an HTTP status + sb-local error `reason` to a {@link WalrusLocalErrorCode}.
- * `reason` is the `error.reason` field sb-local emits (`BLOB_NOT_FOUND`,
- * `QUILT_PATCH_NOT_FOUND`, `QUILT_NOT_FOUND`, `BAD_REQUEST`, `INVALID_BYTE_RANGE`,
- * `INTERNAL`); the status is the fallback when no/unknown reason is present.
+ * `reason` is read from the Status envelope's `error.details[0].reason` (legacy
+ * `error.reason` as fallback) — one of `BLOB_NOT_FOUND`, `QUILT_PATCH_NOT_FOUND`,
+ * `QUILT_NOT_FOUND`, `BAD_REQUEST`, `INVALID_BYTE_RANGE`, `INTERNAL`; the status is the
+ * fallback when no/unknown reason is present.
  */
 export function codeFromResponse(status: number, reason?: string): WalrusLocalErrorCode {
   switch (reason) {

@@ -153,14 +153,14 @@ walrus_relay_proxy_port: ~
 walrus_relay_local_port: ~
 walrus_relay_metrics_port: ~
 
-# Nodeless local Walrus (dev feature, opt-in). When true, 'localnet start'/'regen'
+# Self-contained local Walrus (dev feature, opt-in). When true, 'localnet start'/'regen'
 # deploys real Walrus Blob/Storage objects on the localnet Sui with an off-node
 # held-key committee (no storage nodes). Disabled by default so default localnet
 # start is unchanged. See docs/dev/LOCALNET_WALRUS_PLAN.md.
 walrus_local_enabled: false
 
 # sb-local: standalone localnet-only HTTP server exposing the Walrus aggregator +
-# publisher wire API (GET/PUT /v1/blobs, quilts), backed by the nodeless LocalnetMockStore.
+# publisher wire API (GET/PUT /v1/blobs, quilts), backed by the localnet LocalnetMockStore.
 # Started/stopped with the localnet lifecycle when walrus_local_enabled=true. Its bind/port
 # are its OWN independent settings. The port is in the Walrus 458xx family (where the
 # walrus-relay lives) with the suibase rightmost-digit = workdir convention (localnet=0),

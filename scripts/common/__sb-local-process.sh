@@ -4,7 +4,7 @@
 #
 # Lifecycle for "sb-local": the standalone, localnet-only HTTP server that exposes the
 # Walrus aggregator + publisher wire API (GET/PUT /v1/blobs, quilts), backed by the
-# nodeless LocalnetMockStore engine. It is managed exactly like the localnet faucet:
+# self-contained LocalnetMockStore engine (no storage nodes). It is managed exactly like the localnet faucet:
 # started on 'localnet start' and stopped on 'localnet stop', gated on
 # walrus_local_enabled=true. The suibase-daemon is NOT involved.
 #

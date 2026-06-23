@@ -1,13 +1,13 @@
-# Nodeless Local Walrus on Suibase Localnet — Implementation Plan
+# Local Walrus on Suibase Localnet — Implementation Plan
 
 **Status:** In progress on `dev` · **Gate-0 verdict:** ✅ **PASS — GO**
 (empirically confirmed on suibase localnet, 2026-06-17).
 
 **Milestone progress:**
 - ✅ **M0** Gate-0 spike — PASS (off-node certify verifies, extend works, regen-survives).
-- ✅ **M1** Nodeless deploy (Layer A) — `walrus_local_enabled` flag (default **off**, no auto-deploy),
+- ✅ **M1** Localnet deploy (Layer A) — `walrus_local_enabled` flag (default **off**, no auto-deploy),
   `walrus-localnet-deploy` bin (embeds vendored contracts), regen hook, static config test.
-- ✅ **M2** Nodeless store/read/stat/extend/delete — content dedup, write-bytes-before-certify,
+- ✅ **M2** Localnet store/read/stat/extend/delete — content dedup, write-bytes-before-certify,
   off-node held-key certify (N=1 committee). Unit tests + gated live round-trip + heavy CI workflow.
 - ✅ **M3** Storage pools — create/store_pooled/delete_pooled/pool_status/extend/grow + `encoded_size()`.
   Off-node held-key certify for **pooled** (Deletable) blobs verified live. 3-lens adversarial
@@ -19,7 +19,7 @@
 - ✅ **M5** Quilts (generic over `QuiltVersion`), byte-range read, and the `sb-local` HTTP facade
   (aggregator + publisher) + Suibase wiring (regen hook, `localnet status` line, scripts test).
 
-> This is the **working implementation plan / record** for a Suibase feature: a nodeless local
+> This is the **working implementation plan / record** for a Suibase feature: a self-contained local
 > Walrus on the suibase localnet, plus a localnet-only Rust client that is a **drop-in mirror** of
 > the Mysten Labs Walrus SDK (`walrus_sdk`). It mirrors the structure of
 > `docs/dev/WALRUS_RELAY_FEATURE.md`.
@@ -41,7 +41,7 @@ The crate `rust/walrus-local-sdk` (LOCALNET-ONLY) is a **drop-in mirror** of `wa
   tests — **not** by a shared wrapper that both paths route through.
 
 Because nothing wraps the real path, a bug in this crate can only ever affect localnet (devs); the
-real network is never touched. The localnet burden lives entirely in the nodeless mock engine
+real network is never touched. The localnet burden lives entirely in the localnet mock engine
 (`LocalnetMockStore`) and the thin reshaping in the mirror; the one real-facing seam
 (`impl compat::WalrusApi for WalrusNodeClient`) is **pure forwarding** (one SDK call per method, no
 logic) precisely to keep that risk at zero.
@@ -53,7 +53,7 @@ This crate is never linked enclave-side, so it freely pulls the heavy walrus/Sui
 
 Two coupled capabilities:
 
-1. **Nodeless local Walrus** on a Suibase localnet: real Walrus `Blob`/`Storage`/`StoragePool`
+1. **Self-contained local Walrus** on a Suibase localnet: real Walrus `Blob`/`Storage`/`StoragePool`
    objects created via Sui PTBs against genuinely-published Walrus Move packages, with blob
    **bytes stored on the local filesystem** (keyed by `blob_id`). **No storage nodes, no RocksDB,
    no erasure-coded slivers retained.** The single operation that normally requires a live node —
@@ -67,7 +67,7 @@ Two coupled capabilities:
    error telling the caller to use `walrus_sdk` directly). The caller names the network explicitly;
    there is **no global "active" workdir** consulted (see [Network selection](#network-selection)).
 
-### Why nodeless certify is possible (the crux — independently source-verified)
+### Why off-node certify is possible (the crux — independently source-verified)
 
 `certify_blob` is a **pure BLS-aggregate signature check** against the on-chain committee — no node
 liveness or networking is involved
@@ -172,7 +172,7 @@ Any `ESigVerification` on certify = **HARD NO-GO**.
   ────────────────────────────              ────────
   walrus_sdk::node_client::WalrusNodeClient   ◄ mirror ►  WalrusLocalClient::for_workdir("localnet")
   (used DIRECTLY, no glue)                          │
-          │                                   LocalnetMockStore  (the nodeless engine)
+          │                                   LocalnetMockStore  (the localnet engine)
           │                                         │
           │                                +--------+--------+
           │                                | suibase Helper  |  select_workdir("localnet")
@@ -212,7 +212,7 @@ symlink that multiple processes fight to switch; do not build new dependencies o
   localnet (embedded vendored contracts), stakes the N=1 committee, ends epoch 0, and writes the
   descriptor `<workdir>/config/walrus-localnet.yaml` (package id + system/staking/treasury/exchange
   object ids + held committee BLS keypair).
-- **Layer B (Rust):** the nodeless engine `LocalnetMockStore` builds PTBs and signs certs off-node;
+- **Layer B (Rust):** the localnet engine `LocalnetMockStore` builds PTBs and signs certs off-node;
   `WalrusLocalClient` mirrors `walrus_sdk` over it; `sb-local` exposes it over HTTP.
 
 ## Client surface (the real current API)
@@ -225,7 +225,7 @@ use walrus_local_sdk::WalrusLocalClient;
 use walrus_sdk::node_client::store_args::StoreArgs;
 use walrus_core::encoding::Primary;
 
-let client = WalrusLocalClient::for_workdir("localnet").await?;   // nodeless mock
+let client = WalrusLocalClient::for_workdir("localnet").await?;   // localnet mock
 let args = StoreArgs::default_with_epochs(5);
 
 // store -> Vec<BlobStoreResult> (the SDK's own type)
@@ -335,7 +335,7 @@ It is auto-started by `localnet regen` when the feature is enabled, and shows up
 | 3 | `scripts/common/__walrus-localnet-deploy.sh` | run the `walrus-localnet-deploy` bin: deploy + stake + end-epoch-0, write `<workdir>/config/walrus-localnet.yaml`. Idempotent; **no node/process management.** |
 | 4 | `scripts/common/__workdir-exec.sh` regen flow | after the Sui wipe and before `start_all_services`: run the deploy + repair + (if enabled) start `sb-local`, **non-fatal** (`warn_user` on failure). |
 | 5 | `scripts/defaults/localnet/suibase.yaml` | `walrus_local_enabled` flag (default off); non-colliding localnet ports for the `sb-local` HTTP server. |
-| 6 | `rust/walrus-local-sdk` | the localnet-only drop-in mirror crate (`WalrusLocalClient` + the quilt / byte-range sub-clients + `compat::WalrusApi`) over the nodeless engine. |
+| 6 | `rust/walrus-local-sdk` | the localnet-only drop-in mirror crate (`WalrusLocalClient` + the quilt / byte-range sub-clients + `compat::WalrusApi`) over the localnet engine. |
 | 7 | `rust/localnet-tools` | the bins crate: `walrus-localnet-deploy` (embeds vendored contracts) + `sb-local` (HTTP facade), both built on `walrus-local-sdk`. |
 | 8 | `scripts/tests/050_walrus_tests/` | scripts tests: non-destructive config wiring (fast suite) + the `sb-local` HTTP wire round-trip (CI). |
 
@@ -347,7 +347,7 @@ globals; must pass `scripts-tests` + `rust-tests`.
 ```
 rust/walrus-local-sdk/        # LOCALNET-ONLY drop-in mirror of walrus_sdk (no cargo features)
   src/lib.rs                  #   WalrusLocalClient + LocalQuiltClient + LocalByteRangeReadClient
-  src/localnet.rs             #   LocalnetMockStore (the nodeless engine) + storage pools + quilts
+  src/localnet.rs             #   LocalnetMockStore (the localnet engine) + storage pools + quilts
   src/compat.rs               #   WalrusApi dispatch trait (localnet impl + pure-forwarding real impl)
   tests/                      #   localnet_roundtrip, localnet_byte_range, localnet_pool,
                               #   localnet_pool_namespace, testnet_parity, common/ (shared parity body)
@@ -364,7 +364,7 @@ rust/localnet-tools/          # bins built on walrus-local-sdk
   `localnet_byte_range`, `localnet_pool`, `localnet_pool_namespace`) against a deployed localnet.
 - `WALRUS_TESTNET_TEST=1` + `WALRUS_TESTNET_CONFIG=/path/to/client_config.yaml` —
   the fund-gated real-network parity test (`testnet_parity`).
-- CI: `.github/workflows/walrus-localnet-integration.yml` — builds the bins, deploys nodeless Walrus
+- CI: `.github/workflows/walrus-localnet-integration.yml` — builds the bins, deploys self-contained Walrus
   on a real localnet via the regen hook, runs the unit tests + the live localnet suites + the
   `sb-local` HTTP wire round-trip. Expensive (the walrus/Sui graph compile), so it runs on demand,
   weekly, and when the Walrus crates change on `dev` — not on the per-push fast suites.

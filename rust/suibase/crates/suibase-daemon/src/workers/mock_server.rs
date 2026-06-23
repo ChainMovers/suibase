@@ -255,6 +255,23 @@ async fn handle_grpc_request(state: Arc<MockServerState>) -> Response {
             .unwrap();
     }
 
+    // Simulate a misbehaving upstream that compresses despite the proxy's
+    // `grpc-accept-encoding: identity`: a normal unary gRPC response tagged
+    // `grpc-encoding: gzip`. The Sui CLI's tonic client can't decode that, so
+    // the proxy must detect the encoding on the response headers and retry /
+    // reject rather than forward it verbatim. Setting the header is enough to
+    // trip the proxy's detection (it inspects the response `grpc-encoding`).
+    if behavior.grpc_compress_response {
+        let empty_frame: Bytes = Bytes::from_static(&[0u8, 0, 0, 0, 0]);
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("application/grpc"))
+            .header("grpc-encoding", "gzip")
+            .header("grpc-status", "0")
+            .body(Body::from(empty_frame))
+            .unwrap();
+    }
+
     // Minimal valid gRPC unary response:
     //   * status 200
     //   * content-type: application/grpc
