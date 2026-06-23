@@ -1,5 +1,5 @@
 ---
-title: "Proxy Server ( Multi-Link RPC )"
+title: "Proxy Server ( Multi-Link gRPC )"
 order: 2
 ---
 
