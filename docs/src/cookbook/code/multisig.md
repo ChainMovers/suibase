@@ -10,8 +10,7 @@ editLink: true
 
 - MultiSigs provide another level of security governance by requiring more than one key to sign transactions
 - MultiSigs are constructed with 2 or more keypairs, each with their own weight
-- Construction also requires a threshold. The threshold is checked at signature creation time and if the
-  associated sum of 'weights' of the keys provided are less than the threshold, signing will fail
+- Construction also requires a threshold. The threshold is checked at signature creation time and if the associated sum of 'weights' of the keys provided is less than the threshold, signing will fail
 - MultiSigs have a unique address
 - You can send objects to the MultiSig address like any other Sui address
 - To manipulate objects owned by the MultiSig address, you must sign with 1 or more of the keys of the constructed MultiSig

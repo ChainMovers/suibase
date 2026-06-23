@@ -2,7 +2,7 @@
 title: Python Suibase Helper
 ---
 
-As needed, read first the [Helper Overview](../helpers.md).
+As needed, first read the [Helper Overview](../helpers.md).
 
 ## Setup
 
@@ -31,7 +31,7 @@ The API very closely matches the [Rust API](https://chainmovers.github.io/suibas
 
 There is only one class: `Helper`
 
- Some demo calls for each methods:
+ Some demo calls for each method:
  ```python
 $ python3
 Python 3.10.6 (main, Mar 10 2023, 10:55:28) [GCC 11.3.0] on linux

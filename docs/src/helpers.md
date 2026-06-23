@@ -2,24 +2,24 @@
 title: Suibase Helpers Overview
 ---
 
-This page is an introduction. When ready, check the following for language specific docs:
+This page is an introduction. When ready, check the following for language-specific docs:
 [<iconify-icon class="font-icon icon" icon="marketeq:curve-arrow-right"></iconify-icon> Rust Helper](./rust/helper.md)
 [<iconify-icon class="font-icon icon" icon="marketeq:curve-arrow-right"></iconify-icon> Python Helper](./python/helper.md)<br>
 
 ## What is a Suibase Helper?
 An API providing information to accelerate the development and testing of Sui apps.
 
-Your app get access to:
+Your app gets access to:
 - Package ID of most recently published modules (can query by name).
 - IDs of the shared objects created on last publish of your module.
 - active client address (can also query by alias).
 - A healthy RPC URL for a specific network (e.g. devnet).
-- Various utility functions to help automating development.
+- Various utility functions to help automate development.
 
 **How it works?**
 The magic happens when you do a workdir "publish" command (e.g. ```testnet publish```). This is a drop-in replacement of the Sui binary approach (e.g. ```sui publish```) and the same parameters can be specified.
 
-The Suibase command calls the proper Mysten Labs Sui client version matching the network. It adds parameters to save the output in a JSON file. The data is copied in the Suibase workdir structure, and becomes accessible to your apps through an Helper API.
+The Suibase command calls the proper Mysten Labs Sui client version matching the network. It adds parameters to save the output in a JSON file. The data is copied in the Suibase workdir structure, and becomes accessible to your apps through a Helper API.
 
 
 ### Example 1: What is the active client address for localnet?
@@ -110,7 +110,7 @@ TODO
 :::
 
 #### Example 3: Which URL should be used right now for testnet?
-Suibase monitor RPC health of multiple servers and return the best URL to use.
+Suibase monitors RPC health of multiple servers and returns the best URL to use.
 
 ::: code-tabs
 

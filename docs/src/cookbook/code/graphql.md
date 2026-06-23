@@ -20,7 +20,7 @@ editLink: true
     - Release 0.50.0 includes an 'experimental' implementation, subject to change
     - Provides Synchronous and asynchronous GraphQL clients
     - Read queries, DryRun and Execute transactions are supported
-    - Introduces `QueryNodes` that are the equivalent to pysui `Builders`
+    - Introduces `QueryNodes` that are the equivalent of pysui `Builders`
     - Parity of QueryNodes to Builders is complete
     - Exposes ability for developers to write their own GraphQL queries
     - `SuiConfiguration` must point to either Sui's `testnet` or `mainnet` RPC URLs
@@ -159,7 +159,7 @@ NA at this time
 
 ## DryRun example 2
 
-This demonstrates performing a DryRun of a transactions kind
+This demonstrates performing a DryRun of a transaction's kind
 
 ::: code-tabs
 

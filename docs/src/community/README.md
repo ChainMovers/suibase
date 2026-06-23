@@ -5,7 +5,7 @@ headerDepth: 0
 ---
 
 
-For Suibase and any SDK/tool projects welcome to join:
+For Suibase and any SDK/tool projects, you are welcome to join:
 
   * [ChainMovers Discord](https://discord.com/invite/Erb6SwsVbH)
 

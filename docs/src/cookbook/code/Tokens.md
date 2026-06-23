@@ -9,7 +9,7 @@ editLink: true
 ::: tip Fact Sheet
 :::
 
-Great for first time contributor.
+Great for first-time contributors.
 
 Suggested subjects:
 
