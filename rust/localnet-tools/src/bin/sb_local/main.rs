@@ -539,6 +539,44 @@ pub(crate) fn internal_error(message: &str) -> Response {
         .into_response()
 }
 
+/// The real Walrus aggregator/publisher error domain (`DAEMON_ERROR_DOMAIN` in
+/// walrus `walrus-storage-node-client/src/api/errors.rs`).
+const DAEMON_ERROR_DOMAIN: &str = "daemon.walrus.space";
+
+/// Build the Walrus aggregator/publisher error envelope — the Google-API `Status`
+/// struct the real `walrus daemon` emits (walrus rev 1049b56,
+/// `walrus-storage-node-client/src/api/errors.rs`): the machine-readable `reason`
+/// lives at `error.details[0].reason` (NOT `error.reason`), with a gRPC-style
+/// `status` label + HTTP `code` and the daemon's `domain`. Emitting it wire-identical
+/// lets any Walrus aggregator/publisher consumer (any AIP-193 `Status` reader keying off
+/// `error.details[0].reason`) parse sb-local's errors exactly as it parses the real
+/// service's.
 fn error_body(reason: &str, message: &str) -> serde_json::Value {
-    json!({ "error": { "reason": reason, "message": message } })
+    let (status, code) = status_fields(reason);
+    json!({
+        "error": {
+            "status": status,
+            "code": code,
+            "message": message,
+            "details": [
+                {
+                    "@type": "ErrorInfo",
+                    "reason": reason,
+                    "domain": DAEMON_ERROR_DOMAIN,
+                    "metadata": {}
+                }
+            ]
+        }
+    })
+}
+
+/// Map an sb-local `reason` to the real Walrus `(status label, HTTP code)` pair
+/// (the flattened `StatusCode` fields), matching the daemon's `ApiStatusCode` table.
+fn status_fields(reason: &str) -> (&'static str, u16) {
+    match reason {
+        "BLOB_NOT_FOUND" | "QUILT_NOT_FOUND" | "QUILT_PATCH_NOT_FOUND" => ("NOT_FOUND", 404),
+        "BAD_REQUEST" => ("INVALID_ARGUMENT", 400),
+        "INVALID_BYTE_RANGE" => ("RANGE_NOT_SATISFIABLE", 416),
+        _ => ("INTERNAL", 500),
+    }
 }

@@ -28,8 +28,9 @@ production.
 ## Usage
 
 ```ts
-import { WalrusLocalClient } from "@suibase/walrus-local";
-import { WalrusFile } from "@mysten/walrus";
+// Single-import drop-in: this package re-exports the FULL @mysten/walrus surface
+// (WalrusFile, WalrusBlob, the error classes, …) alongside WalrusLocalClient.
+import { WalrusLocalClient, WalrusFile } from "@suibase/walrus-local";
 
 // Localnet defaults: Sui RPC http://127.0.0.1:9000, sb-local from suibase.yaml (45840),
 // package config read from the deploy descriptor. No network/workdir switch.
@@ -75,8 +76,29 @@ storage-node plumbing — `getSlivers`, `getSecondarySliver`, `getBlobMetadata`,
 `writeEncodedBlobToNodes`, `writeBlobToUploadRelay`, `writeBlobFlow`, `writeFilesFlow`, … No
 application calls these directly; on a nodeless localnet they have no meaning.
 
-Errors are thrown as `WalrusLocalError` with a `code` (`BLOB_NOT_FOUND`, `BAD_REQUEST`,
-`UNSUPPORTED`, `SERVER_UNREACHABLE`, …).
+### Errors are drop-in with `@mysten/walrus`
+
+Because the full `@mysten/walrus` surface is re-exported, every error **class** is importable
+from this package and `instanceof` checks resolve correctly:
+
+```ts
+import { WalrusLocalClient, BlobNotCertifiedError, RetryableWalrusClientError } from "@suibase/walrus-local";
+
+try {
+  await client.readBlob({ blobId });
+} catch (e) {
+  if (e instanceof RetryableWalrusClientError) { /* retry — works on localnet AND testnet */ }
+}
+```
+
+- A read of a **missing/uncertified blob** (`readBlob`, `getBlob().getBytes()`, `getFiles` on a
+  plain blob id) throws the real **`BlobNotCertifiedError`** (a `RetryableWalrusClientError`) —
+  the exact class and message testnet throws — so retry-on-retryable loops port verbatim.
+- Localnet-specific failures throw **`WalrusLocalError`** with a `code` (`BAD_REQUEST`,
+  `QUILT_PATCH_NOT_FOUND`, `SERVER_UNREACHABLE`, `UNSUPPORTED`, …). sb-local's HTTP errors use
+  the **same wire envelope** as the real Walrus aggregator/publisher — the Google-API `Status`
+  struct with the machine-readable reason at `error.details[0].reason` — so any aggregator/
+  publisher client parses them identically.
 
 ## Localnet differences (vs testnet/mainnet)
 
@@ -103,12 +125,24 @@ npm run typecheck
 npm run build
 npm run test:unit          # pure tests, no server (Node 22)
 npm test                   # unit + live integration (auto-skips if localnet is down)
+npm run test:differential  # opt-in: compares against REAL testnet (needs funds; see below)
 ```
 
 The integration suite self-skips when the localnet / sb-local is unreachable; set
 `WALRUS_LOCAL_SDK_TEST=1` to make "not available" a hard failure (used by the
 `walrus-localnet-integration` CI). The Rust counterpart is
 [`walrus-local-sdk`](https://github.com/ChainMovers/suibase/tree/main/rust/walrus-local-sdk).
+
+**Testnet differential** (`tests/differential/`) proves cross-environment parity for real:
+it runs the same write / read / status / error operations through the genuine `@mysten/walrus`
+on **testnet** and this client on **localnet**, asserting blob-id equality *and* error-shape
+equivalence (via a `normalizeWalrusError()` contract). It is **off by default** and only ever
+*skips* — never fails — when the flag is unset, the key is missing, the network is down, or the
+wallet is unfunded, so CI stays green with no secrets. Run it with a funded testnet wallet:
+
+```bash
+WALRUS_TESTNET_DIFF=1 WALRUS_TESTNET_KEY=suiprivkey1… npm run test:differential
+```
 
 ## License
 
