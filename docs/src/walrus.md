@@ -2,7 +2,7 @@ Walrus is fully integrated with Suibase, so it "just works" out of the box.
 
 Suibase makes it easy to develop concurrently with Walrus localnet, testnet and mainnet with the peace of mind that every operation is done with the proper binary and config matching the network.
 
-The [**localnet**](#localnet) is especially valuable: being fast and deterministic, it is ideal for GitHub Actions and AI coding agent workflows — no wallets to fund, no public network to wait on. Blob reads are served straight from local disk in well under a millisecond.
+The [**localnet**](#localnet) is especially valuable: being fast and deterministic, it is ideal for GitHub Actions and AI coding agent workflows — no wallets to fund, no public network to wait on. Blob reads are served straight from local disk in milliseconds.
 
 ## Walrus
 

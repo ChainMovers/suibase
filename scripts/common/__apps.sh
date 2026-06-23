@@ -1091,13 +1091,20 @@ sb_app_set_local_vars() {
         _LOCAL_BRANCH=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD)
         if version_less_than "$_LOCAL_BIN_version" "$_LOCAL_SRC_VERSION"; then
           _ALL_INSTALLED="false"
-          # main AND staging both use precompiled; dev/pre-staging build
-          # from source. Keep the message in sync with sb_app_install's
-          # actual routing decision below (around line 1349).
-          if [ "$_LOCAL_BRANCH" = "main" ] || [ "$_LOCAL_BRANCH" = "staging" ]; then
-            echo "$_ASSETS_NAME source is at $_LOCAL_SRC_VERSION but installed binary is $_LOCAL_BIN_version; checking sui-binaries for a matching release"
-          else
-            echo "$_ASSETS_NAME source ($_LOCAL_SRC_VERSION) is ahead of installed binary ($_LOCAL_BIN_version) on branch $_LOCAL_BRANCH; rebuilding from source"
+          # Announce the pending update ONCE per CLI command. set_local_vars is a
+          # state-computing callback invoked several times before the install runs
+          # (e.g. start_suibase_daemon_as_needed re-checks it under the mutex lock),
+          # so without this guard the message repeats back-to-back. Keyed per asset
+          # + version pair so a genuinely different asset still gets its own line.
+          local _upd_key="${_ASSETS_NAME}:${_LOCAL_SRC_VERSION}:${_LOCAL_BIN_version}"
+          if [[ "${SUIBASE_UPDATE_MSG_SHOWN:-}" != *"|${_upd_key}|"* ]]; then
+            # main AND staging use the precompiled; dev/pre-staging build from source.
+            if [ "$_LOCAL_BRANCH" = "main" ] || [ "$_LOCAL_BRANCH" = "staging" ]; then
+              echo "$_ASSETS_NAME source is at $_LOCAL_SRC_VERSION but installed binary is $_LOCAL_BIN_version; checking for a matching precompiled release"
+            else
+              echo "$_ASSETS_NAME source ($_LOCAL_SRC_VERSION) is ahead of installed binary ($_LOCAL_BIN_version) on branch $_LOCAL_BRANCH; rebuilding from source"
+            fi
+            SUIBASE_UPDATE_MSG_SHOWN="${SUIBASE_UPDATE_MSG_SHOWN:-}|${_upd_key}|"
           fi
         fi
       fi
