@@ -1,11 +1,11 @@
 # Contributing to Suibase
 
-## Releasing a new `suibase-daemon` version
+## Releasing a new version
 
-A daemon release is a coordinated change across three repos: this one
+A release is a coordinated change across three repos: this one
 (`suibase`), [`chainmovers/sui-binaries`](https://github.com/chainmovers/sui-binaries)
-(which publishes precompiled binaries for end users), and the user's local
-suibase checkout.
+(which publishes the precompiled binaries — `suibase-daemon` and the
+`localnet-tools` bundle — for end users), and the user's local suibase checkout.
 
 The release pipeline below makes the coordination automatic. **You should
 not need to time anything manually** — running `~/suibase/scripts/dev/merge`
@@ -28,8 +28,8 @@ dev ──merge script──► pre-staging ──cron auto──► staging ─
 
 | Workflow | Fires on | What it does |
 | --- | --- | --- |
-| `pre-staging.yml` | push to `pre-staging` | If `chainmovers/sui-binaries` doesn't yet have a release tag for the daemon version in this branch's `Cargo.toml`, push that `Cargo.toml` into `chainmovers/sui-binaries:triggers/suibase-daemon/` — which is wired on that side to build + publish the binary. Always exits green. |
-| `staging-promote.yml` | cron, every 15 min | Polls `chainmovers/sui-binaries`. When the matching release tag exists and `pre-staging` is ahead of `staging`, opens an auto-merge PR `pre-staging → staging`. Silent when there's nothing to promote (no alarm). |
+| `pre-staging.yml` | push to `pre-staging` | A matrix over **both** suibase-owned precompiled assets (`suibase-daemon` from `rust/suibase/Cargo.toml`, `localnet-tools` from `rust/localnet-tools/Cargo.toml`). For each: if `chainmovers/sui-binaries` doesn't yet have a release tag for that asset's version, push its `Cargo.toml` into `chainmovers/sui-binaries:triggers/<asset>/` — which is wired on that side to build + publish the binary. Always exits green. |
+| `staging-promote.yml` | cron every 15 min, + a fast-path `repository_dispatch` fired by `sui-binaries` on publish | Polls `chainmovers/sui-binaries`. When **both** matching release tags (`suibase-daemon-v<ver>` AND `localnet-tools-v<ver>`) are published with assets and `pre-staging` is ahead of `staging`, opens an auto-merge PR `pre-staging → staging`. Gating on both avoids promoting before a just-bumped asset finishes building. Silent when there's nothing to promote (no alarm). |
 | `staging.yml` | push to `staging` | Downloads the just-published precompiled, installs it, runs the release-tests sanity suite against it. On green, opens an auto-merge PR `staging → main`. Failures here are real bugs. |
 | `release-tests.yml` | push to `main` | Defense-in-depth smoke test. By the time main updates, staging already validated everything, so this is expected to be green every time. |
 
@@ -128,7 +128,11 @@ without an explicit build step — the routing handles it.
     `scripts-tests.yml`, `typescript-tests.yml`, `lint.yml`.
   - `pre-staging` pushes fire `pre-staging.yml` only (no tests).
   - `staging` pushes fire `staging.yml` only.
-  - `main` pushes fire `release-tests.yml` and `main-nightly-tests.yml`.
+  - `main` pushes fire `release-tests.yml`.
+  - `dev-nightly-tests.yml` is a **daily cron** (`0 6 * * *`) + manual dispatch — it
+    runs the suite on `dev` against Mysten Labs' cutting-edge `main` branch
+    (`run-all.sh --main_branch`). It is an upstream forward-compatibility canary,
+    NOT a release gate.
 - Every workflow that drives the daemon goes through the install +
   start-daemon flow, which automatically picks source-vs-precompiled per
   the branch-aware routing.

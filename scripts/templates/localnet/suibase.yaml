@@ -12,3 +12,4 @@
 # default_repo_branch: "main"
 # force_tag: "mainnet-v1.18.0"
 # enable_local_repo: true
+# walrus_local_enabled: true

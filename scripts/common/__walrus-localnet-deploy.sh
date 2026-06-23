@@ -74,8 +74,23 @@ update_localnet_tools_bin() {
   # build streams cargo progress but can run for minutes, so a silent run reads as a
   # hang. The install runs in a subshell so even a hard error (setup_error) inside the
   # app machinery cannot abort 'localnet start/regen' -- the deploy is non-fatal.
-  echo "Building localnet tools (done once, might take a long time...)"
-  [ -n "$SUIBASE_LOGS_DIR" ] && echo "  (full log: $SUIBASE_LOGS_DIR/cargo-build.log)"
+  # Announce ONCE per CLI command and match the ACTUAL action: this runs from
+  # more than one place during a single 'localnet update'/'regen' (the deploy
+  # step and the sb-local start step), and on main/staging it downloads the
+  # precompiled rather than building. "Building" is only correct for a source
+  # build (dev/pre-staging); the precompiled path prints its own
+  # "Downloading precompiled ..." from inside the install.
+  if [ "${SUIBASE_LOCALNET_TOOLS_MSG_SHOWN:-}" != "true" ]; then
+    local _ltb_branch
+    _ltb_branch=$(git -C "$SUIBASE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [ "$_ltb_branch" = "main" ] || [ "$_ltb_branch" = "staging" ]; then
+      echo "Setting up localnet tools (done once)..."
+    else
+      echo "Building localnet tools (done once, might take a long time...)"
+      [ -n "$SUIBASE_LOGS_DIR" ] && echo "  (full log: $SUIBASE_LOGS_DIR/cargo-build.log)"
+    fi
+    SUIBASE_LOCALNET_TOOLS_MSG_SHOWN="true"
+  fi
   (app_call "localnet_tools" "install") || true
 
   # Re-derive readiness from the SAME multi-bin is_installed the gate above uses (not the
