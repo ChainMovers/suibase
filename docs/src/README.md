@@ -53,13 +53,13 @@ actions:
 <div class="vp-feature-wrapper" style="transition: transform 0.25s ease-in-out 0.24s, opacity 0.25s ease-in-out 0.24s; transform: translateY(0px); opacity: 1;">
 <div class="vp-features">
 
-<a class="route-link vp-feature-item link" href="/how-to/install.html" aria-label="Fast Installation" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/how-to/localnet.html" aria-label="AI Friendly" style="text-decoration: none">
   <h3 class="vp-feature-title">
-    <iconify-icon class="font-icon icon" icon="fluent-mdl2:installation"></iconify-icon>
-    <span style="position: relative; top: 3px">Fast Installation</span>
+    <iconify-icon class="font-icon icon" icon="lucide:bot"></iconify-icon>
+    <span style="position: relative; top: 3px">AI Friendly</span>
   </h3>
   <p class="vp-feature-details">
-    Simple "update" command to get latest official Sui client release. In most cases, no build necessary.
+    A self-contained localnet you can <code>regen</code> to the same known-good state in seconds — no faucet, funds, or internet to stall agents or CI.
   </p>
 </a>
 
@@ -73,23 +73,23 @@ actions:
   </p>
 </a>
 
-<a class="route-link vp-feature-item link" href="/walrus.html" aria-label="Walrus" style="text-decoration: none">
-  <h3 class="vp-feature-title">
-    <iconify-icon class="font-icon icon" icon="lucide:database"></iconify-icon>
-    <span style="position: relative; top: 3px">Walrus</span>
-  </h3>
-  <p class="vp-feature-details">
-    Fully integrated. All needed binaries and configs remain in-synch with latest networks.
-  </p>
-</a>
-
 <a class="route-link vp-feature-item link" href="/how-to/localnet.html" aria-label="A &quotBetter&quot Localnet" style="text-decoration: none">
   <h3 class="vp-feature-title">
     <iconify-icon class="font-icon icon" icon="octicon:thumbsup-16"></iconify-icon>
     <span style="position: relative; top: 3px">A &quotBetter&quot Localnet</span>
   </h3>
   <p class="vp-feature-details">
-    Easy start/stop commands gives you 15 deterministic addresses with an abundance of Sui coins.
+    Easy start/stop commands for a complete local Sui network — with a built-in explorer and local Walrus services.
+  </p>
+</a>
+
+<a class="route-link vp-feature-item link" href="/walrus.html" aria-label="Walrus" style="text-decoration: none">
+  <h3 class="vp-feature-title">
+    <iconify-icon class="font-icon icon" icon="lucide:database"></iconify-icon>
+    <span style="position: relative; top: 3px">Walrus</span>
+  </h3>
+  <p class="vp-feature-details">
+    Fully integrated. All needed binaries and configs remain in sync with the latest networks.
   </p>
 </a>
 
@@ -103,13 +103,13 @@ actions:
   </p>
 </a>
 
-<a class="route-link vp-feature-item link" href="/intro.html" aria-label="Version Matching" style="text-decoration: none">
+<a class="route-link vp-feature-item link" href="/how-to/install.html" aria-label="Fast Installation" style="text-decoration: none">
   <h3 class="vp-feature-title">
-    <iconify-icon class="font-icon icon" icon="fluent:plug-disconnected-48-regular"></iconify-icon>
-    <span style="position: relative; top: 3px">Version Matching</span>
+    <iconify-icon class="font-icon icon" icon="fluent-mdl2:installation"></iconify-icon>
+    <span style="position: relative; top: 3px">Fast Installation</span>
   </h3>
   <p class="vp-feature-details">
-    Eliminate version mismatch bugs. Distinct Sui and Walrus client are installed to match each network (devnet, testnet, mainnet).
+    Simple "update" command to get the latest official Sui client release. In most cases, no build necessary.
   </p>
 </a>
 
@@ -119,7 +119,7 @@ actions:
     <span style="position: relative; top: 3px">More to come</span>
   </h3>
   <p class="vp-feature-details">
-    ... new tools in the work. Suibase is a grant recipient from the Sui Foundation.
+    ... new tools in the works. Suibase is a grant recipient from the Sui Foundation.
   </p>
 </a>
 

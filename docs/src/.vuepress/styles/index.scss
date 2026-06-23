@@ -79,3 +79,21 @@ a:has(polygon) {
 .flex-grow {
   flex-grow: 1;
 }
+
+// Wrap the copy-paste agent prompt (and other tip-box code) instead of
+// scrolling it horizontally — easier to read in the narrow content column.
+.hint-container.tip div[class*="language-"] pre {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+// Always show the copy button on tip-box code (not only on hover) — the whole
+// point of the agent prompt is that it is one click to copy.
+.hint-container.tip div[class*="language-"] .vp-copy-code-button {
+  opacity: 1;
+}
+
+// Hide the language label ("text") in the corner — it is noise on a prose prompt.
+.hint-container.tip div[class*="language-"]::before {
+  display: none;
+}

@@ -21,7 +21,7 @@ You do not call ```sui``` directly anymore, instead call ```dsui```:
 $ dsui client active-address
 0x92c03721eabfc753453b097d14d87e4012a9fe562da3582a6a023da7c6120c95
 ```
-You no longer have to "switch env". You can assume ```dsui``` always transparently execute with the proper binary and keystore for devnet (in same way, ```tsui``` for testnet, ```msui``` for mainnet).
+You no longer have to "switch env". You can assume ```dsui``` always transparently executes with the proper binary and keystore for devnet (in the same way, ```tsui``` for testnet, ```msui``` for mainnet).
 
 Type ```devnet``` for help.
 
@@ -41,7 +41,7 @@ Do ```dsui client gas``` or ```dsui client balance``` to see the balance changes
 | mainnet  | ~/suibase/workdirs/**mainnet**/config/sui.keystore  |
 
 
-Suibase is design to make it easy for your apps find what it needs consistently ([More Info]( ../references.md)).
+Suibase is designed to make it easy for your apps to find what they need consistently ([More Info]( ../references.md)).
 
 ## Status
 You can check the client version and devnet services status with ```devnet status```.

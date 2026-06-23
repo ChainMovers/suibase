@@ -8,7 +8,7 @@ editLink: true
 
 ::: tip Fact Sheet
 
-- Sui cli `sui client` will automatically generate a alias file (~/.sui/sui_config/sui.aliases) starting in version 1.16.0
+- Sui cli `sui client` will automatically generate an alias file (~/.sui/sui_config/sui.aliases) starting in version 1.16.0
 - The alias file has a 1:1 mapping of alias names to the public key of the associated keypair
 - The alias name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)
 - Command line caveats:
@@ -17,7 +17,7 @@ editLink: true
 - PySui support of aliases:
     - pysui will check for alias file when using `default_config()`, if not found it will generate one that complies with Sui 1.16.0 alias file format
     - pysui's `SuiConfig` has methods to list, rename, use aliases for address and keypair lookups, and address or keypair lookup of aliases
-    - pysui enforces min and max aliases lengths to be between 3 and 64 characters. However; if alias name in alias file is modified manually pysui will continue to operate
+    - pysui enforces min and max alias lengths to be between 3 and 64 characters. However, if alias name in alias file is modified manually pysui will continue to operate
     - An alias can be provided in the creation of new address/keypairs as well as recovering of same
     - pysui docs on [Aliases](https://pysui.readthedocs.io/en/latest/aliases.html)
 

@@ -2,7 +2,7 @@
 
 Walrus Relay delegates high-bandwidth operations to a backend server, enabling mobile and web apps to store data on Walrus without the burden of uploading to multiple storage nodes directly.
 
-Suibase provides a local relay process for testing your applications before using production services. The binary used are downloaded from Mysten Lab, and are therefore compatible with the official networks.
+Suibase provides a local relay process for testing your applications before using production services. The binaries used are downloaded from Mysten Labs, and are therefore compatible with the official networks.
 
 **Resources:**
 - [Walrus SDK](https://sdk.mystenlabs.com/walrus)

@@ -433,7 +433,7 @@ console.log({ result });
 ## How to make a Move call
 
 You can make a move call only if you provide a package, module and a function.
-The standardized rule of a move call is : `package::module::function`.
+The standardized rule of a move call is: `package::module::function`.
 
 ::: code-tabs
 
@@ -546,7 +546,7 @@ executing a transaction. The following key values are the _available_ options:
 ```
 
 Using the above in your transaction execution calls would return _all_ information about the transaction.
-However; you can choose individual flags individually or in combination.
+However, you can choose flags individually or in combination.
 
 ::: code-tabs
 

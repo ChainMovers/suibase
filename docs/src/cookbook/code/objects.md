@@ -8,16 +8,16 @@ editLink: true
 
 ::: tip Fact Sheet
 
-- Addressses are not objects
+- Addresses are not objects
 - Objects are the instantiation (creation) of a move module's **struct**
-- Coins (including gas), other NFT and/or arbitrary structures are objects
+- Coins (including gas), other NFTs and/or arbitrary structures are objects
 - Not all objects are addressable on the chain. To be addressable, **structs** must have the `has key` ability
 - Addressable objects are identified by a 32 byte array usually represented as a hex string. For example: **0x002bd2d4aac5da6af372a842baf98590213a6bf4160eb0b46ec0cc3d626b42d3**
-- Addressable objects can be queried from client SDK or CLI by it's hex string identifier
+- Addressable objects can be queried from client SDK or CLI by its hex string identifier
 - In addition to field values, queried objects also reveal other attributes such as **owner**
-- Objects ownership may be one of: _AddressOwner_, _ObjectOwner_, _Shared_ or _Immutable_
+- Object ownership may be one of: _AddressOwner_, _ObjectOwner_, _Shared_ or _Immutable_
 - With the exception of objects with _Immutable_ ownership, objects can be modified by the module that created them
-- Manipulating the data returned from querying an object has no effect on the chain objects data
+- Manipulating the data returned from querying an object has no effect on the chain object's data
 
 :::
 
@@ -235,7 +235,7 @@ kind of information you want returned. The following key values are the _availab
 ```
 
 Using the above in your object fetch calls would return _all_ information about the object.
-However; you can choose individual flags individually or in combination.
+However, you can choose individual flags or use them in combination.
 
 ::: code-tabs
 

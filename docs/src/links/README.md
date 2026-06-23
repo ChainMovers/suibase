@@ -5,11 +5,11 @@ contributors: true
 editLink: true
 ---
 
-Curated resources for Sui devs - Project with no activity for >1 year are removed.
+Curated resources for Sui devs - Projects with no activity for >1 year are removed.
 
 ::: details How to add a link?
 Either [edit it yourself]( ../community/editors.html ) or request someone else on our [Discord #cookbook channel]( https://discord.com/invite/Erb6SwsVbH ).<br>
-Target audience are developers. Not the right place for NFT marketplaces or exchanges.
+Target audience is developers. Not the right place for NFT marketplaces or exchanges.
 :::
 
 ## Official Sui sites
@@ -26,7 +26,7 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 |                          | CosmoStation |    [GitHub](https://github.com/cosmostation/suikotlin)     |
 |        **Python**        |   Axiom:1    |        [GitHub](https://github.com/FrankC01/pysui)         |
 |         **Rust**         | Mysten Labs  |         [docs](https://docs.sui.io/devnet/build/)          |
-| **Typescript/Javacript** | Mysten Labs  | [GitHub](https://github.com/MystenLabs/sui/tree/main/sdk/) |
+| **Typescript/Javascript** | Mysten Labs  | [GitHub](https://github.com/MystenLabs/sui/tree/main/sdk/) |
 
 ## VSCode Extensions (Recommended)
 |                                          Name                                          |                         Description                         |
@@ -47,8 +47,8 @@ Target audience are developers. Not the right place for NFT marketplaces or exch
 |                   [indexer.xyz](https://indexer.xyz)                   |                  Multi-chain GraphQL data services                   |
 |                [status.sui.io](https://status.sui.io/)                 |                 Official Mysten Labs network status                  |
 |                   [suiscan.xyz](https://suiscan.xyz)                   |     Rich blockchain explorer for validators, packages, analytics     |
-|                 [suivision.xyz](https://suivision.xyz)                 |    Well-done explorer, with portfolio view support for many Defi     |
-| [Local Sui Explorer](https://www.npmjs.com/package/sui-explorer-local) | Basic explorer aimed for localnet, which is also included in Suibase |
+|                 [suivision.xyz](https://suivision.xyz)                 |    Well-done explorer, with portfolio view support for many DeFi projects     |
+| [Local Sui Explorer](https://www.npmjs.com/package/sui-explorer-local) | Basic explorer aimed at localnet, which is also included in Suibase |
 
 
 ## Wallets
