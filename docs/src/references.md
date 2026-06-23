@@ -1,17 +1,17 @@
 
 # Workdir Conventions
 
-Suibase define a few conventions to coordinate among SDKs, apps and user.
+Suibase defines a few conventions to coordinate among SDKs, apps and users.
 
 ::: tip
 
-This section present more advanced subjects. If just starting to use Suibase scripts, then you may want to skip it.
+This section presents more advanced subjects. If just starting to use Suibase scripts, then you may want to skip it.
 
 :::
 
 ## Filesystem Path Convention
 
-There are 5 <WORKDIR\>: `active`, `localnet`, `devnet`, `testnet` and `mainnet`
+There are 4 <WORKDIR\>: `localnet`, `devnet`, `testnet` and `mainnet`
 
 Each <WORKDIR\> has the following components:
 
@@ -23,7 +23,7 @@ Each <WORKDIR\> has the following components:
 | published-data | Info about last package published from this <WORKDIR\>. Can be retrieved through JSON files or suibase SDK helpers.                   |
 | workdir-exec   | Script allowing any app to call the right "workdir script".<br> Example: `$ ~/suibase/workdirs/localnet/workdir-exec update` is equivalent to the shortcut `$ localnet update` |
 
-Applications can expect the components to be always at these **fix** locations:
+Applications can expect the components to be always at these **fixed** locations:
 ```text
  ~/suibase/
      └─ workdirs/
@@ -60,9 +60,9 @@ Applications can expect the components to be always at these **fix** locations:
 ## What is the publish-output.json?
 It is the output of a publish command.
 
-Example, type `$ cd ~/suibase/rust/demo-app && localnet publish`). This will create a publish-output.json file in `~/suibase/workdirs/localnet/published-data/demo/most-recent`
+Example, type `$ cd ~/suibase/rust/demo-app && localnet publish`. This will create a publish-output.json file in `~/suibase/workdirs/localnet/published-data/demo/most-recent`
 
-The published-output.json can then be parsed by your app to get package and object IDs of the published module(s).
+The publish-output.json can then be parsed by your app to get package and object IDs of the published module(s).
 
 That info is also available in two convenient JSON files: package-id.json and created-objects.json.
 

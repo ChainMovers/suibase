@@ -17,7 +17,7 @@ Have your applications query toward the addresses of the local proxy server:
 | testnet     | ```http://localhost:44342```    |
 | mainnet     | ```http://localhost:44343```    |
 
-The proxy forward/retry/distribute your queries among all the healthy RPC nodes configured.
+The proxy forwards/retries/distributes your queries among all the healthy RPC nodes configured.
 
 All suibase scripts (and the corresponding client.yaml) are already configured to use the proxy server by default.
 
@@ -31,24 +31,24 @@ The workdir ```links``` command (e.g. ```testnet links```) shows status for all 
 <img :src="$withBase('/assets/testnet-links.png')" alt="testnet links"><br>
 
 ::: details Details on cumulative request stats
-Each **user query** is counted only once in one of the following metric depending upon its outcome.<br>
+Each **user query** is counted only once in one of the following metrics depending upon its outcome.<br>
 **Success first attempt**: One healthy RPC node was selected and the request succeeded immediately.<br>
 **Success after retry**: One healthy RPC node was selected but failed, the request eventually succeeded after retries with one or more other servers (when safe to retry). From a user perspective, the request succeeded as if a single RPC node was used.<br>
-**Failure bad request**: It was determined that the request was malformed and would not succeed with any RPC nodes. Therefore the request is not retried and the failure is reported immediately. Check the response for hint on how to fix the request.<br>
+**Failure bad request**: It was determined that the request was malformed and would not succeed with any RPC nodes. Therefore the request is not retried and the failure is reported immediately. Check the response for a hint on how to fix the request.<br>
 **Failure others**: All other scenarios when the response was not a gRPC success. The proxy response will have more information.<br>
 :::
 
 ::: details Details on individual server stats
-**Status**: Either OK or DOWN. Goes DOWN on any failure related to the server not responding. Every 15 seconds the proxy does a health check toward every nodes to verify availability and measure response time.<br>
-**Health%**: Varies from -100% (most unealthy) to 100% (healthiest). This is intended for  relative comparison between all servers. The score factors duration of healthy state or failures, frequency of retries and rate limitation etc... any positive value is considered healthy (Status OK).<br>
+**Status**: Either OK or DOWN. Goes DOWN on any failure related to the server not responding. Every 15 seconds the proxy does a health check toward every node to verify availability and measure response time.<br>
+**Health%**: Varies from -100% (most unhealthy) to 100% (healthiest). This is intended for  relative comparison between all servers. The score factors duration of healthy state or failures, frequency of retries and rate limitation etc... any positive value is considered healthy (Status OK).<br>
 **Load%**: Distribution of the **user** request among all nodes. The sum of the load% is 100%. Health check queries are not included in this stat.<br>
 **RespT**: The time between the health check query and the response time. Average of the last 20 queries (the result from the most recent query has more weight).<br>
-**Success%**: Ratio of **user** request that were successful after the server was selected and considered healthy. Will typically be 100%, a value below 100% signify the server did unexpectadly fails on a user query (Note: the query might have been retried on another server and succeeded from a user perspective).<br>
+**Success%**: Ratio of **user** requests that were successful after the server was selected and considered healthy. Will typically be 100%, a value below 100% signifies the server did unexpectedly fail on a user query (Note: the query might have been retried on another server and succeeded from a user perspective).<br>
 :::
 
 
 ## RPC links configuration
-Out of the box, suibase come with a set of public RPC links known to be operating. This is maintained by the community and updated whenever you do ```~/suibase/update```.
+Out of the box, suibase comes with a set of public RPC links known to be operating. This is maintained by the community and updated whenever you do ```~/suibase/update```.
 
 You can add your own RPC links by editing your workdir's suibase.yaml file.
 Example with two RPC nodes:
@@ -77,11 +77,11 @@ Mandatory RPC node address. Typically ````https://<node name>:443````
 The metric address. Not commonly provided by public nodes. For future use. You can specify it, but currently not used. [ Default = None ]
 
 **priority**
-A preference order when selecting between multiple servers. It is used, as an example, when the proxy server is initializing and the health of the remote RPC nodes are not yet all known. A node with a smaller priority number might be selected first. All default links provided by suibase are in 10 to 20 range [ Default = 20 ]
+A preference order when selecting between multiple servers. It is used, as an example, when the proxy server is initializing and the health of the remote RPC nodes is not yet all known. A node with a smaller priority number might be selected first. All default links provided by suibase are in the 10 to 20 range [ Default = 20 ]
 :::
 
 ## Upgrade
-The proxy server update and restart as needed when you do ```~/suibase/update```.
+The proxy server updates and restarts as needed when you do ```~/suibase/update```.
 
 ## Stopping and Disabling
 Use the workdir ```stop``` command (e.g. ```devnet stop```) to temporarily disable the proxy services for a specific workdir.<br>
@@ -103,6 +103,6 @@ Replace "sui_testnet_xxxxxxxxx" with the API key specific to your shinami accoun
 
 Do the same for mainnet in ```~/suibase/workdirs/mainnet/suibase.yaml```.
 
-The proxy server automatically detect and apply the changes after you save the .yaml file.
+The proxy server automatically detects and applies the changes after you save the .yaml file.
 
-Many other commercial RPC services can be added in same way.
+Many other commercial RPC services can be added in the same way.

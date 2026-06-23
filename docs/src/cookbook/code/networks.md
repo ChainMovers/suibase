@@ -4,7 +4,7 @@ contributors: true
 editLink: true
 ---
 
-## Connecting to specific network environment
+## Connecting to a specific network environment
 
 When you are working on Sui development, you will need to connect to a specific Sui Full node on a Sui network.
 
@@ -48,7 +48,7 @@ const client = new SuiClient({ url: getFullnodeUrl('localnet') });
 
 ## Getting Test Sui
 
-If you want to test transactions on Sui network you need first to get Sui coins in your wallet. To receive test Sui in your wallet you have to make a request to the faucet server.
+If you want to test transactions on the Sui network, you first need to get Sui coins in your wallet. To receive test Sui in your wallet you have to make a request to the faucet server.
 
 ::: code-tabs
 

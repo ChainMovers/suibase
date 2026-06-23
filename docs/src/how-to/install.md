@@ -3,6 +3,16 @@ title: Installation
 order: 1
 ---
 
+::: tip Using an agent? Try this prompt
+Paste this into your AI coding agent:
+
+```text:no-line-numbers
+Install Suibase by following https://suibase.io/how-to/install.html
+Then make sure ~/.local/bin is on my PATH.
+Suibase is self-contained, so don't touch the standard Sui directory (~/.sui).
+```
+:::
+
 ## Requirements
 **Supported operating systems**
   * Linux Ubuntu >=20.04 recommended (works also with Arch Linux)
@@ -20,7 +30,7 @@ $ git clone https://github.com/chainmovers/suibase.git
 $ ~/suibase/install
 ```
 - All Suibase files are created in ```~/suibase``` and ```~/.local/bin```
-- ```~/.local/bin``` must be listed in the PATH env variable ( on some setup you may have to [add it manually](https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path) ).
+- ```~/.local/bin``` must be listed in the PATH env variable ( on some setups you may have to [add it manually](https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path) ).
 
 
 
@@ -29,8 +39,8 @@ $ ~/suibase/install
 ```shell
 $ ~/suibase/update
 ```
-Will pull latest from GitHub to only update suibase itself.
-To update sui clients, use instead the workdir scripts (e.g. ```mainnet update```)
+This will pull the latest from GitHub to update only suibase itself.
+To update sui clients, use the workdir scripts instead (e.g. ```mainnet update```)
 <br>
 
 ## Uninstall
@@ -44,7 +54,7 @@ $ rm -r ~/suibase
 
 
 ## Install FAQ
-::: details Why suibase need to be cloned in user home (~)?
+::: details Why does suibase need to be cloned in user home (~)?
 Suibase files are an "open standard" and benefit from being easily found by many apps and sdks. The user home is the most convenient solution.
 :::
 
