@@ -8,6 +8,19 @@ Only notable changes are documented here. See GitHub commits for all changes.
 
 Suibase adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12] 2026-06-23
+### Added
+
+- Localnet Walrus. Set `walrus_local_enabled: true` in the localnet `suibase.yaml`
+  (then `localnet regen`) to run a self-contained, nodeless Walrus aggregator + publisher
+  on localnet — no storage nodes, no funds, no internet. Blob ids match testnet/mainnet.
+  See https://suibase.io/walrus for details.
+- `lwalrus`: a localnet `walrus`-style CLI over the localnet Walrus.
+- Localnet Walrus SDKs that drop in for `@mysten/walrus`: `@suibase/walrus-local`
+  (TypeScript) and the `walrus-local-sdk` Rust crate — same API and signatures, so code
+  written against localnet runs verbatim on testnet/mainnet.
+
+
 ## [0.1.11] 2026-05-22  
 ### Added
 
