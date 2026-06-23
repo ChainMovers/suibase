@@ -392,7 +392,10 @@ is_installed() {
 
 # True (0) when libclang -- required by bindgen in the Rust build (zstd-sys / rocksdb-sys) --
 # is discoverable the way clang-sys looks for it: an explicit LIBCLANG_PATH, the ldconfig
-# cache, the standard llvm lib dirs, or (on macOS) the Xcode toolchain.
+# cache, the standard llvm lib dirs, or (on macOS) the Xcode toolchain. As a last resort it
+# also finds libclang installed from the `libclang` pip wheel (the no-root setup on dev
+# machines / CI without apt libclang-dev) and exports LIBCLANG_PATH so the Rust build can use
+# it -- clang-sys does NOT search those user-local locations on its own.
 is_libclang_installed() {
   [ -n "$LIBCLANG_PATH" ] && return 0
   if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libclang[.-]'; then
@@ -407,6 +410,18 @@ is_libclang_installed() {
     xcode-select -p >/dev/null 2>&1 && return 0
     [ -e /Library/Developer/CommandLineTools/usr/lib/libclang.dylib ] && return 0
   fi
+  # libclang from the `libclang` pip wheel (no root needed). clang-sys won't look here,
+  # so when found, export LIBCLANG_PATH to its directory for the actual build.
+  for _f in \
+    "$HOME/.local/libclang/libclang.so"* \
+    "$HOME"/.local/lib/python*/site-packages/clang/native/libclang.so* \
+    "$HOME"/.local/lib/libclang*.so*; do
+    if [ -e "$_f" ]; then
+      LIBCLANG_PATH="$(dirname "$_f")"
+      export LIBCLANG_PATH
+      return 0
+    fi
+  done
   return 1
 }
 export -f is_libclang_installed
@@ -2593,6 +2608,28 @@ get_process_pid() {
 }
 export -f get_process_pid
 
+pid_terminated() {
+  # Returns 0 (terminated -> treat as stopped) when the pid no longer exists OR
+  # exists only as a zombie/defunct entry awaiting reap (already dead, harmless).
+  # Returns 1 only when the pid is a real LIVE process. Pid-exact: never matches a
+  # different process and never depends on the flaky macOS `ps -o comm` name match
+  # (issue #79). Note: plain `kill -0` succeeds for a zombie too, hence the state
+  # check. An empty state after a successful kill -0 means the pid vanished between
+  # the two probes (just reaped) -> also terminated.
+  local _PID="$1"
+  [ -z "$_PID" ] && return 0
+  if ! kill -0 "$_PID" 2>/dev/null; then
+    return 0
+  fi
+  local _state
+  _state=$(ps -o state= -p "$_PID" 2>/dev/null | { head -n 1; cat >/dev/null 2>&1; })
+  case "$_state" in
+    ""|Z*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+export -f pid_terminated
+
 update_SUI_PROCESS_PID_var() {
   if $SUI_BASE_NET_MOCK; then return; fi
 
@@ -4130,18 +4167,19 @@ stop_all_services() {
         return $_NOOP_REQUEST
       fi
 
+      # Capture the pid BEFORE stop_walrus_relay_process overwrites the var.
+      local _relay_pid="$WALRUS_RELAY_PROCESS_PID"
+
       stop_walrus_relay_process
 
-      # Verify it stopped. POLL (see stop_walrus_relay_service_only): `ps` can
-      # briefly still show a just-SIGKILL'd process (reap lag on slow macOS CI).
+      # Verify by pid-exact liveness (not a name scan); a defunct/zombie survivor
+      # is already dead. See stop_walrus_relay_service_only / pid_terminated.
       local _vr_count=0
-      update_WALRUS_RELAY_PROCESS_PID_var
-      while [ -n "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_vr_count" -lt 10 ]; do
+      while ! pid_terminated "$_relay_pid" && [ "$_vr_count" -lt 10 ]; do
         sleep 1
         _vr_count=$((_vr_count + 1))
-        update_WALRUS_RELAY_PROCESS_PID_var
       done
-      if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
+      if ! pid_terminated "$_relay_pid"; then
         setup_error "Failed to stop walrus relay. Try again. Use \"$WORKDIR status\" to monitor the situation."
       fi
     else
@@ -4149,7 +4187,7 @@ stop_all_services() {
       return $_NOOP_REQUEST
     fi
   else
-    # Stop the nodeless localnet Walrus HTTP API first (it depends on the Sui RPC).
+    # Stop the localnet Walrus HTTP API first (it depends on the Sui RPC).
     # Noop if not running; guarded on the function existing (localnet-only source).
     if [ "$WORKDIR" = "localnet" ] && type -t stop_sb_local_process >/dev/null 2>&1; then
       stop_sb_local_process
@@ -4202,22 +4240,24 @@ stop_walrus_relay_service_only() {
     return 1
   fi
 
+  # Capture the pid BEFORE stop_walrus_relay_process overwrites the var.
+  local _relay_pid="$WALRUS_RELAY_PROCESS_PID"
+
   # Stop the walrus relay process (this produces the expected output)
   stop_walrus_relay_process
 
-  # Verify it was stopped. POLL, don't single-check: a just-SIGKILL'd process can
-  # briefly still appear in `ps` (kernel-reap lag, esp. on slow macOS CI runners),
-  # so an immediate re-check intermittently reported "may still be running" and
-  # aborted the disable before its confirmation printed (flaky relay/yaml tests).
+  # Verify by pid-exact liveness (not a name scan): a just-SIGKILL'd relay can
+  # linger as a zombie/defunct entry (it was backgrounded and reparented to
+  # launchd), which the macOS `ps -o comm` name scan mis-handled and wrongly
+  # reported as "may still be running" for ~13s on slow CI. pid_terminated treats
+  # a gone-or-defunct pid as stopped and only a real live process as a failure.
   local _verify_count=0
-  update_WALRUS_RELAY_PROCESS_PID_var
-  while [ -n "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_verify_count" -lt 10 ]; do
+  while ! pid_terminated "$_relay_pid" && [ "$_verify_count" -lt 10 ]; do
     sleep 1
     _verify_count=$((_verify_count + 1))
-    update_WALRUS_RELAY_PROCESS_PID_var
   done
-  if [ -n "$WALRUS_RELAY_PROCESS_PID" ]; then
-    setup_error "Failed to stop walrus relay process ( pid $WALRUS_RELAY_PROCESS_PID ). The process may still be running. Try 'testnet wal-relay disable' again."
+  if ! pid_terminated "$_relay_pid"; then
+    setup_error "Failed to stop walrus relay process ( pid $_relay_pid ). The process may still be running. Try '$WORKDIR wal-relay disable' again."
   fi
 
   # Success. process that needed to be stopped was stopped.
@@ -4331,7 +4371,7 @@ start_all_services() {
   trig_daemons_refresh
   wait_for_sui_client_up "${WORKDIR_NAME}"
 
-  # Nodeless localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
+  # Localnet Walrus HTTP API (sb-local): build the localnet-tools binaries
   # as-needed, then (re)start sb-local -- a single entry point mirroring
   # start_suibase_daemon_as_needed above (build-if-stale + restart-on-upgrade + start-if-down).
   # This plain-'start' fast path never reaches deploy_walrus_localnet, so this is what makes a

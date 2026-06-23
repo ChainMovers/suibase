@@ -228,8 +228,13 @@ export class SbLocalTransport {
     let reason: string | undefined;
     let message = `HTTP ${resp.status}`;
     try {
-      const body = (await resp.json()) as { error?: { reason?: string; message?: string } };
-      if (body.error?.reason) reason = body.error.reason;
+      const body = (await resp.json()) as {
+        error?: { reason?: string; message?: string; details?: { reason?: string }[] };
+      };
+      // The Walrus aggregator/publisher Status envelope carries the machine-readable
+      // reason at `error.details[0].reason`; fall back to the legacy `error.reason`
+      // (older sb-local builds) so this transport reads both shapes across a rollout.
+      reason = body.error?.details?.[0]?.reason ?? body.error?.reason;
       if (body.error?.message) message = body.error.message;
     } catch {
       // non-JSON error body

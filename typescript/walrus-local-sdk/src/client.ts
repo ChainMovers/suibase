@@ -22,7 +22,7 @@ import type { ClientWithCoreApi } from "@mysten/sui/client";
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import type { Signer } from "@mysten/sui/cryptography";
 import { Transaction } from "@mysten/sui/transactions";
-import { WalrusBlob, WalrusClient, WalrusFile } from "@mysten/walrus";
+import { BlobNotCertifiedError, WalrusBlob, WalrusClient, WalrusFile } from "@mysten/walrus";
 import type {
   GetBlobMetadataOptions,
   GetSecondarySliverOptions,
@@ -76,6 +76,26 @@ function unsupported(method: string): WalrusLocalError {
   );
 }
 
+/**
+ * Read blob bytes through sb-local, translating a not-found (sb-local 404 /
+ * `BLOB_NOT_FOUND`) into the real `@mysten/walrus` {@link BlobNotCertifiedError} — the
+ * exact class (a `RetryableWalrusClientError`) and message `@mysten/walrus.readBlob`
+ * throws for an uncertified/nonexistent blob — so `instanceof` checks and retry-on-
+ * retryable loops behave identically on localnet and testnet. Other sb-local failures
+ * (quilt-patch not-found, bad-request, server-unreachable) pass through as
+ * {@link WalrusLocalError}.
+ */
+async function readBlobMapped(sbLocal: SbLocalTransport, blobId: string): Promise<Uint8Array> {
+  try {
+    return await sbLocal.readBlob(blobId);
+  } catch (err) {
+    if (err instanceof WalrusLocalError && err.code === "BLOB_NOT_FOUND") {
+      throw new BlobNotCertifiedError(`The specified blob ${blobId} is not certified.`, { cause: err });
+    }
+    throw err;
+  }
+}
+
 export class WalrusLocalClient extends WalrusClient {
   /** sb-local HTTP transport (the nodeless aggregator+publisher). */
   private readonly sbLocal: SbLocalTransport;
@@ -98,7 +118,7 @@ export class WalrusLocalClient extends WalrusClient {
     // `readBlob` and `getSecondarySliver` are instance arrow-properties on the parent (set
     // in its constructor, after super() ran), so they must be overridden by assignment here.
     this.readBlob = async ({ blobId }: ReadBlobOptions): Promise<Uint8Array> => {
-      return this.sbLocal.readBlob(blobId);
+      return readBlobMapped(this.sbLocal, blobId);
     };
     this.getSecondarySliver = async (_options: GetSecondarySliverOptions): Promise<never> => {
       throw unsupported("getSecondarySliver");
@@ -340,7 +360,7 @@ export class WalrusLocalClient extends WalrusClient {
     for (const id of ids) {
       const cls = classifyWalrusId(id);
       if (cls.kind === "blob") {
-        const bytes = await this.sbLocal.readBlob(id);
+        const bytes = await readBlobMapped(this.sbLocal, id);
         out.push(
           new WalrusFile({
             reader: { getIdentifier: async () => null, getTags: async () => ({}), getBytes: async () => bytes },
@@ -423,7 +443,7 @@ export class WalrusLocalClient extends WalrusClient {
       blobId,
       getIdentifier: async (): Promise<string | null> => null,
       getTags: async (): Promise<Record<string, string>> => ({}),
-      getBytes: async (): Promise<Uint8Array> => sbLocal.readBlob(blobId),
+      getBytes: async (): Promise<Uint8Array> => readBlobMapped(sbLocal, blobId),
       async getQuiltReader() {
         const list = await sbLocal.listQuiltPatches(blobId);
         const byPatchId = new Map(list.map((p) => [p.patch_id, p]));

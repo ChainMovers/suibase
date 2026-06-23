@@ -1566,6 +1566,18 @@ pub fn grpc_streaming_behavior() -> MockServerBehavior {
     }
 }
 
+/// Behavior knob: answer gRPC requests with a normal unary response tagged
+/// `grpc-encoding: gzip` — a misbehaving upstream that compresses despite the
+/// proxy requesting identity. Used to verify the proxy detects the unsupported
+/// encoding and retries/rejects rather than forwarding undecodable frames to
+/// the client.
+pub fn grpc_compress_behavior() -> MockServerBehavior {
+    MockServerBehavior {
+        grpc_compress_response: true,
+        ..Default::default()
+    }
+}
+
 pub fn failing_behavior(failure_rate: f64) -> MockServerBehavior {
     MockServerBehavior {
         failure_rate,
@@ -1577,6 +1589,7 @@ pub fn failing_behavior(failure_rate: f64) -> MockServerBehavior {
         cache_ttl_secs: 300,
         respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     }
 }
 
@@ -1592,6 +1605,7 @@ pub fn slow_behavior(latency_ms: u32) -> MockServerBehavior {
         cache_ttl_secs: 300,
         respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     }
 }
 
@@ -1607,5 +1621,6 @@ pub fn error_response_behavior(error_response: serde_json::Value) -> MockServerB
         cache_ttl_secs: 300,
         respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     }
 }

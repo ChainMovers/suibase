@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Non-destructive checks for the nodeless localnet Walrus (M1) wiring.
+# Non-destructive checks for the localnet Walrus (M1) wiring.
 #
 # Verifies the opt-in config gate, the localnet walrus-config template, the
 # precompiled-binary app registration, and the deploy/regen wiring are present and
@@ -35,7 +35,7 @@ check() {
     fi
 }
 
-echo "=== M1: nodeless localnet Walrus wiring (non-destructive) ==="
+echo "=== M1: localnet Walrus wiring (non-destructive) ==="
 
 # 1. localnet walrus-config.yaml template (deploy-filled placeholders).
 TEMPLATE="$SCRIPTS/templates/localnet/config-default/walrus-config.yaml"

@@ -8,7 +8,7 @@ Suibase makes it easy to create "workdirs", each defining a distinct development
 Other features like:
   * Simple "update" commands to keep all your binaries in-sync with the latest network version.
   * **$ lsui/dsui/tsui/msui** scripts calls the **proper** sui binary+config combination for localnet, devnet, testnet or mainnet respectively. No "switch env" needed anymore.
-  * **$ twalrus/mwalrus** and **tsite/msite** scripts for always using proper binaries and configs combination with Walrus.
+  * **$ twalrus/mwalrus/lwalrus** and **tsite/msite** scripts for always using proper binaries and configs combination with Walrus (`lwalrus` is a localnet subset; see [Walrus](walrus.md)).
   * **$ localnet star/stop/status** scripts and faucet.
   * **$ localnet regen** to reset the network with consistent tests addresses and alias (all pre-funded with an abundance of Sui).
 

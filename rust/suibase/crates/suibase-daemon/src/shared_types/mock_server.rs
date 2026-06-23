@@ -54,6 +54,14 @@ pub struct MockServerBehavior {
     /// never-ending body).
     #[serde(default)]
     pub grpc_stream_forever: bool,
+
+    /// When true, answer gRPC requests with a normal unary response but tag it
+    /// `grpc-encoding: gzip` — simulating a misbehaving upstream that ignores
+    /// the proxy's `grpc-accept-encoding: identity` and compresses anyway. The
+    /// Sui CLI's tonic client can't decode that, so the proxy must detect the
+    /// response encoding and retry/reject instead of forwarding it verbatim.
+    #[serde(default)]
+    pub grpc_compress_response: bool,
 }
 
 impl Default for MockServerBehavior {
@@ -68,6 +76,7 @@ impl Default for MockServerBehavior {
             cache_ttl_secs: 300,  // 5 minutes default
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
         }
     }
 }
@@ -612,6 +621,7 @@ mod tests {
             cache_ttl_secs: 60,
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
         };
         
         state.set_behavior(new_behavior.clone());
@@ -642,6 +652,7 @@ mod tests {
             cache_ttl_secs: 300,
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
         };
         
         // Test serialization/deserialization

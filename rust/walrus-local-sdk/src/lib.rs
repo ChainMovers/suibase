@@ -14,7 +14,7 @@
 //! use walrus_sdk::node_client::store_args::StoreArgs;
 //! use walrus_core::encoding::Primary;
 //!
-//! let client = WalrusLocalClient::for_workdir("localnet").await?;       // nodeless mock
+//! let client = WalrusLocalClient::for_workdir("localnet").await?;       // localnet mock
 //! let args = StoreArgs::default_with_epochs(5);
 //! let results = client.reserve_and_store_blobs(vec![b"hello".to_vec()], &args).await?;
 //! let blob_id = results[0].blob_id().unwrap();
@@ -28,7 +28,7 @@
 //!
 //! DESIGN INTENT (do not regress): on a real network you use `walrus_sdk` DIRECTLY —
 //! this crate inserts no glue there, so a bug here only ever affects localnet (devs).
-//! The localnet burden lives in [`localnet`] (the nodeless mock engine) and the thin
+//! The localnet burden lives in [`localnet`] (the localnet mock engine) and the thin
 //! reshaping below; the real-facing seam ([`compat::WalrusApi`] for `WalrusNodeClient`)
 //! is pure forwarding.
 
@@ -166,7 +166,7 @@ fn stored_blob_to_result(s: StoredBlob) -> BlobStoreResult {
 /// Drop-in localnet mirror of `walrus_sdk::node_client::WalrusNodeClient<SuiContractClient>`.
 ///
 /// Construct with [`WalrusLocalClient::for_workdir`] (only `"localnet"` is valid —
-/// for a real network you use `walrus_sdk` directly). Wraps the nodeless mock
+/// for a real network you use `walrus_sdk` directly). Wraps the localnet mock
 /// [`LocalnetMockStore`] and reshapes its results into the SDK's own types.
 pub struct WalrusLocalClient {
     engine: LocalnetMockStore,
@@ -192,7 +192,7 @@ impl WalrusLocalClient {
         Self::open().await
     }
 
-    /// Access the underlying nodeless engine — the localnet-only lower-level API
+    /// Access the underlying localnet engine — the localnet-only lower-level API
     /// (rich `StoredBlob`, storage pools, quilt index). NOT part of the SDK mirror;
     /// used by the `sb-local` HTTP facade and the pool tests.
     pub fn engine(&self) -> &LocalnetMockStore {
@@ -288,7 +288,7 @@ impl WalrusLocalClient {
 
     /// Best-effort blob status, returning the SDK's [`BlobStatus`]. NOTE: `walrus_sdk`'s
     /// status methods do quorum reads across storage nodes (and take a `read_client`); on
-    /// nodeless localnet a stored blob is always certified, so this synthesizes the status
+    /// localnet a stored blob is always certified, so this synthesizes the status
     /// from local state — `Deletable`/`Permanent` per how it was stored, `Nonexistent` if
     /// absent. For a Permanent blob the `status_event` is a zero placeholder (localnet has
     /// no Sui status event).

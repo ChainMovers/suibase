@@ -339,30 +339,50 @@ export async function verifyBlobOnWalrus(blobId: string): Promise<TestResult> {
  * Validate that the relay is responding
  */
 export async function validateRelayConnection(relayUrl: string): Promise<TestResult> {
-  try {
-    const response = await fetch(`${relayUrl}/v1/tip-config`);
-    
-    if (!response.ok) {
-      return {
+  // Poll with a bounded timeout instead of a single fetch. The suibase-daemon
+  // opens the relay proxy port asynchronously after the relay is enabled, so a
+  // single request right after start can race the proxy's bind/accept window and
+  // intermittently fail ("Failed to connect to relay") even though the proxy
+  // comes up shortly after. Retry until ready, then fail loudly on timeout.
+  const timeoutMs = 30000;
+  const intervalMs = 500;
+  const deadline = Date.now() + timeoutMs;
+  let lastResult: TestResult = {
+    success: false,
+    message: 'Failed to connect to relay',
+    details: {},
+  };
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${relayUrl}/v1/tip-config`);
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          message: 'Relay is responding correctly',
+          details: data,
+        };
+      }
+
+      lastResult = {
         success: false,
         message: `Relay returned HTTP ${response.status}`,
-        details: { status: response.status, statusText: response.statusText }
+        details: { status: response.status, statusText: response.statusText },
+      };
+    } catch (error) {
+      lastResult = {
+        success: false,
+        message: 'Failed to connect to relay',
+        details: { error: error instanceof Error ? error.message : String(error) },
       };
     }
-    
-    const data = await response.json();
-    return {
-      success: true,
-      message: 'Relay is responding correctly',
-      details: data
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: 'Failed to connect to relay',
-      details: { error: error instanceof Error ? error.message : String(error) }
-    };
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
+
+  return lastResult;
 }
 
 /**

@@ -14,9 +14,17 @@
  * `WalrusClient` (with `network: 'testnet'`) instead. Use `@mysten/walrus`'s own
  * `WalrusFile` for the quilt/file APIs.
  *
+ * This is a single drop-in barrel: it re-exports the **entire `@mysten/walrus` public
+ * surface** (`WalrusFile`, `WalrusBlob`, `blobIdFromInt`, the option types, and every
+ * error class — `BlobNotCertifiedError`, `RetryableWalrusClientError`, …) so migration
+ * code can `import { WalrusFile, BlobNotCertifiedError } from "@suibase/walrus-local"`
+ * unchanged. Error handling is drop-in too: a read of a missing blob throws the real
+ * `BlobNotCertifiedError` (a `RetryableWalrusClientError`), exactly as testnet does, so
+ * `instanceof` / retry-loop checks behave identically (see {@link WalrusLocalClient}).
+ *
  * @example
  * ```ts
- * import { WalrusLocalClient } from "@suibase/walrus-local";
+ * import { WalrusLocalClient, BlobNotCertifiedError } from "@suibase/walrus-local";
  *
  * const client = new WalrusLocalClient();                 // localnet defaults
  * const { blobId, blobObject } = await client.writeBlob({ blob, deletable: true, epochs: 5, signer });
@@ -24,6 +32,12 @@
  * await client.executeDeleteBlobTransaction({ blobObjectId: blobObject.id, signer }); // inherited, on-chain
  * ```
  */
+
+// Re-export the full @mysten/walrus surface (values + types + error classes) so this
+// package is a single-import drop-in. WalrusLocalClient (below) shadows nothing — none
+// of our names collide with @mysten/walrus's. Use WalrusLocalClient instead of the
+// re-exported WalrusClient on localnet.
+export * from "@mysten/walrus";
 
 export { WalrusLocalClient } from "./client.js";
 export type { WalrusLocalClientOptions } from "./client.js";

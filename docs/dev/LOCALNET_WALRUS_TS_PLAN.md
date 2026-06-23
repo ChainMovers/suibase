@@ -34,7 +34,7 @@ Short plan to bring the localnet Walrus experience to **TypeScript**, mirroring 
 ## Where we are (already done, Rust side)
 
 - **`sb-local`** is a running, wire-compatible Walrus **aggregator + publisher HTTP API** on
-  `http://localhost:45840` (nodeless localnet). Its wire contract — including error codes — is
+  `http://localhost:45840` (localnet). Its wire contract — including error codes — is
   verified equal to the real Mysten testnet aggregator/publisher
   (`scripts/tests/050_walrus_tests/test_sb_local_wire_parity.sh`).
 - **Cross-environment `blob_id` parity is proven**: the same content yields the same id on
@@ -58,7 +58,7 @@ Confirm the **current `@mysten/walrus` TS SDK** surface (npm; training may be st
    against sb-local by changing only the base URL → the TS story may be mostly **config + docs
    + a parity test**, not a new SDK.
 2. Its main `WalrusClient` is **node-talking** (reads/writes slivers from storage nodes). That
-   path **cannot** work on nodeless localnet — document it as unsupported on localnet; localnet
+   path **cannot** work on localnet — document it as unsupported on localnet; localnet
    uses the HTTP path.
 3. Check `@mysten/walrus` quilt + blob-status + by-object-id APIs and their HTTP equivalents
    (sb-local already serves quilts, by-object-id, by-quilt-patch-id, /v1/quilts).
@@ -73,8 +73,8 @@ Confirm the **current `@mysten/walrus` TS SDK** surface (npm; training may be st
   `suibase.yaml` defaults (45840).
 - **Plan B (only if @mysten/walrus has a clean HTTP client):** thin wrapper / docs showing how
   to point `@mysten/walrus` at sb-local — minimal code, maximal reuse.
-- **Out of scope:** mirroring the node-talking `WalrusClient` nodeless (the Rust mirror wrapped
-  an on-chain client; the TS node-client is sliver/encoding-heavy and not worth nodeless-faking).
+- **Out of scope:** mirroring the node-talking `WalrusClient` off-node (the Rust mirror wrapped
+  an on-chain client; the TS node-client is sliver/encoding-heavy and not worth off-node-faking).
 
 ## Milestones
 
@@ -107,7 +107,7 @@ Confirm the **current `@mysten/walrus` TS SDK** surface (npm; training may be st
 
 ## Autonomy verdict
 
-**Yes, largely autonomous**, and smaller than the Rust effort — the heavy lifting (nodeless
+**Yes, largely autonomous**, and smaller than the Rust effort — the heavy lifting (self-contained
 deploy, certify, wire-compatible HTTP, blob_id parity) is done. The main unknowns are the
 current `@mysten/walrus` API shape and the package-placement decision (resolve M0 + the open
 questions early). TS test infra exists (`typescript/helper` uses pnpm/vitest).
