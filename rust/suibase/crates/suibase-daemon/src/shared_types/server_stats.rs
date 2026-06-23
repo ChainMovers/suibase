@@ -29,9 +29,16 @@ pub const REQUEST_FAILED_NOT_STARTED: u8 = 8;
 // gateway returning HTML/JSON). Used by the gRPC forwarder to permanently
 // demote the server: scoring treats this reason as a hard down signal.
 pub const REQUEST_FAILED_NOT_GRPC_CAPABLE: u8 = 9;
+// Upstream answered HTTP 200 + application/grpc, but compressed the response
+// (e.g. `grpc-encoding: gzip`) despite the proxy requesting identity, so the
+// Sui CLI can't decode it. Unlike NOT_GRPC_CAPABLE this is NOT a capability
+// demotion (the upstream IS gRPC-capable, and the behavior is intermittent) —
+// it scores like a normal transient failure: counts against the server's
+// success rate and nudges its health score down so it is deprioritized.
+pub const REQUEST_FAILED_GRPC_COMPRESSED: u8 = 10;
 
 // !!! Update the following whenever you append a new reason above.
-pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_NOT_GRPC_CAPABLE;
+pub const REQUEST_FAILED_LAST_REASON: u8 = REQUEST_FAILED_GRPC_COMPRESSED;
 
 // Do not touch this.
 pub const REQUEST_FAILED_VEC_SIZE: usize = REQUEST_FAILED_LAST_REASON as usize + 1;
@@ -588,6 +595,42 @@ mod tests {
         assert!(
             !s.is_grpc_capable(),
             "is_grpc_capable should be false after NOT_GRPC_CAPABLE"
+        );
+    }
+
+    /// A gzip-compressed response (REQUEST_FAILED_GRPC_COMPRESSED) must count
+    /// against the server's success rate AND nudge its health score down — but,
+    /// unlike NOT_GRPC_CAPABLE, must NOT demote gRPC capability (the upstream is
+    /// gRPC-capable; the bad compression is intermittent / per-edge).
+    #[test]
+    fn grpc_compressed_lowers_success_rate_without_capability_demotion() {
+        let mut s = make_stats();
+        let t0 = EpochTimestamp::now();
+        let t1 = t0 + Duration::from_millis(10);
+
+        // One clean success, then one compressed-response failure on the
+        // same server (e.g. it served some requests fine, then an edge that
+        // compresses handled this one).
+        s.handle_resp_ok(t0, 0, 0, 1000);
+        let down_before = s.down_score;
+        s.handle_resp_err(t1, 0, 0, 1000, REQUEST_FAILED_GRPC_COMPRESSED);
+
+        let mut n_request = 0u64;
+        let mut n_success = 0u64;
+        s.get_accum_stats(&mut n_request, &mut n_success);
+        assert_eq!(n_success, 1, "only the clean response counts as a success");
+        assert_eq!(
+            n_request, 2,
+            "the compressed response must count as a request (so Success% = 1/2, not 1/1)"
+        );
+
+        assert!(
+            s.down_score > down_before,
+            "a compressed response must nudge the server's health score down"
+        );
+        assert!(
+            s.is_grpc_capable(),
+            "compression must NOT demote gRPC capability — it is intermittent"
         );
     }
 

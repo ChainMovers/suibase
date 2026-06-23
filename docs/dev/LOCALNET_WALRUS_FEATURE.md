@@ -1,8 +1,8 @@
-# Nodeless Local Walrus + the `walrus_sdk` Mirror (`WalrusLocalClient` / `sb-local`)
+# Self-Contained Local Walrus + the `walrus_sdk` Mirror (`WalrusLocalClient` / `sb-local`)
 
 ## Summary
 
-Suibase can stand up a **nodeless local Walrus** on its localnet: real Walrus
+Suibase can stand up a **self-contained local Walrus** on its localnet: real Walrus
 `Blob` / `Storage` / `StoragePool` objects are created on the localnet Sui via genuine
 PTBs against genuinely-published Walrus Move packages, blobs are **certified** with a
 real BLS certificate, and **WAL is really paid** — but there are **no storage nodes, no
@@ -13,7 +13,7 @@ The single operation that normally requires a live storage node — `certify_blo
 satisfied **off-node**: the deploy holds the N=1 committee's BLS secret key and
 self-signs the confirmation. This is sound because `certify_blob` is a pure on-chain
 BLS-aggregate check with no node liveness involved, and a one-member committee is a
-trivial quorum (see [the held-key model](#why-nodeless-certify-works)).
+trivial quorum (see [the held-key model](#why-off-node-certify-works)).
 
 On top of this engine sits **`WalrusLocalClient`**, a **drop-in mirror of the Mysten
 Labs Walrus SDK** (`walrus_sdk`). It mirrors the SDK's method signatures and returns the
@@ -35,7 +35,7 @@ parity tests** (including a live testnet run — see [Status](#status)).
             |                                  |
    WalrusNodeClient<SuiContractClient>   WalrusLocalClient::for_workdir("localnet")
    (talks to real storage nodes)               |
-                                         LocalnetMockStore  (the nodeless engine)
+                                         LocalnetMockStore  (the localnet engine)
                                                 |
                                       +---------+----------+
                                       | suibase Helper      |  per-store instance;
@@ -69,7 +69,7 @@ Two layers:
 
 ## Enabling it
 
-Nodeless Walrus is **off by default** — a plain localnet is unchanged. The crate is
+Localnet Walrus is **off by default** — a plain localnet is unchanged. The crate is
 localnet-only and never enclave-linked; it always pulls the heavy walrus/Sui graph (there
 are **no cargo features** to toggle). To turn it on:
 
@@ -98,7 +98,7 @@ is missing from the asset, and the consuming side is wired in `consts.yaml` /
 `__walrus-localnet-deploy.sh`). On a `dev` checkout they are source-built from
 `rust/localnet-tools` and staged under `workdirs/common/bin/`.
 
-## Why nodeless certify works {#why-nodeless-certify-works}
+## Why off-node certify works {#why-off-node-certify-works}
 
 `certify_blob` verifies a BLS-aggregate signature against the on-chain committee — no
 networking, no node liveness. Two facts make a single off-node signature a valid quorum:
@@ -132,7 +132,7 @@ use walrus_local_sdk::WalrusLocalClient;
 use walrus_sdk::node_client::store_args::StoreArgs;
 use walrus_core::encoding::Primary;
 
-let client = WalrusLocalClient::for_workdir("localnet").await?;   // nodeless mock
+let client = WalrusLocalClient::for_workdir("localnet").await?;   // localnet mock
 let args = StoreArgs::default_with_epochs(5);
 
 let results = client.reserve_and_store_blobs(vec![b"hello".to_vec()], &args).await?;
@@ -269,8 +269,8 @@ mint for the same bytes (verified: equals `walrus blob-id --n-shards 1000`). A c
 compute/verify ids and carry blob identity across networks.
 
 **Out of scope (by design):** the upload-**relay** protocol (it needs real storage nodes —
-nodeless can't provide it), `/v1alpha` streaming/concat, and JWT auth. The node-talking
-`@mysten/walrus` SDK targets testnet/mainnet storage nodes, **not** nodeless localnet —
+localnet has no storage nodes to provide it), `/v1alpha` streaming/concat, and JWT auth. The node-talking
+`@mysten/walrus` SDK targets testnet/mainnet storage nodes, **not** localnet —
 localnet clients use this HTTP wire API (or the Rust `WalrusLocalClient` API) instead. The
 pool ops aren't in the Walrus HTTP spec and stay Rust-engine-only.
 
@@ -290,7 +290,7 @@ WalrusClient` — so the parity is by construction:
   `writeFiles`, `writeQuilt`, `getFiles`, `getBlob`, `getVerifiedBlobStatus`.
 - Inherently storage-node plumbing (`getSlivers`, `writeSliver`, `writeEncodedBlobToNodes`,
   `writeBlobToUploadRelay`, `writeBlobFlow`/`writeFilesFlow`, …) throws `WalrusLocalError`
-  code `UNSUPPORTED` — no application calls these, and they have no meaning nodeless. (Pure
+  code `UNSUPPORTED` — no application calls these, and they have no meaning on localnet. (Pure
   compute like `encodeBlob` is inherited and works.)
 
 ```ts
@@ -363,7 +363,7 @@ types and the localnet-published Move contracts match what testnet/mainnet expos
   reachable (safe in the fast suite); set `SB_LOCAL_HTTP_TEST=1` to make a skip a failure.
 - **CI:**
   - `walrus-localnet-integration.yml` — heavy on-demand/weekly: builds the library + deploy
-    bin + sb-local, deploys nodeless Walrus on a real localnet via the regen hook, runs the
+    bin + sb-local, deploys localnet Walrus on a real localnet via the regen hook, runs the
     unit tests + all live suites + the sb-local HTTP wire test.
   - `staging.yml` `validate-localnet-tools` — validates the PRECOMPILED `walrus-localnet-deploy`
     (deploy on a real localnet) and the PRECOMPILED `sb-local` (HTTP wire round-trip).
@@ -379,7 +379,7 @@ WALRUS_LOCALNET_TEST=1 cargo test --test localnet_roundtrip
 | Milestone | State |
 |---|---|
 | M0 Gate-0 spike (off-node certify proof) | ✅ done |
-| M1 Nodeless deploy (Layer A bash) | ✅ done |
+| M1 Localnet deploy (Layer A bash) | ✅ done |
 | M2 engine store/read/delete + `get_blob_by_object_id` | ✅ done |
 | M3 Pool ops (create/store_pooled/delete_pooled/status/extend/grow) | ✅ done |
 | Real cross-environment blob ids (walrus-core encoder) | ✅ done (localnet id == `walrus blob-id`) |
@@ -395,7 +395,7 @@ WALRUS_LOCALNET_TEST=1 cargo test --test localnet_roundtrip
 - Working plan + Gate-0 proof + risks: `docs/dev/LOCALNET_WALRUS_PLAN.md`
 - sb-local HTTP facade plan: `docs/dev/SB_LOCAL_PLAN.md`
 - Library crate: `rust/walrus-local-sdk/` — `src/lib.rs` (`WalrusLocalClient` +
-  `LocalQuiltClient` + `LocalByteRangeReadClient`), `src/localnet.rs` (the nodeless mock
+  `LocalQuiltClient` + `LocalByteRangeReadClient`), `src/localnet.rs` (the localnet mock
   engine `LocalnetMockStore`), `src/compat.rs` (the `WalrusApi` dispatch seam). No binaries.
 - Bins crate: `rust/localnet-tools/` (deploy bin `src/bin/walrus_localnet_deploy.rs`,
   HTTP server `src/bin/sb_local/`, embedded contracts) — builds on `walrus-local-sdk`

@@ -1,7 +1,7 @@
 // Copyright (c) Suibase contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Full nodeless round-trip against a LIVE suibase localnet that has a Walrus
+//! Full round-trip against a LIVE suibase localnet that has a Walrus
 //! deployment (descriptor present), driven through the SDK-mirror surface
 //! (`WalrusLocalClient` + `compat::WalrusApi`): store -> read -> dedup -> delete,
 //! plus localnet-specific follow-up (read-after-delete fails, quilt round-trip).

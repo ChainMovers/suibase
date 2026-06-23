@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Live end-to-end test of sb-local: the localnet-only HTTP server exposing the Walrus
-# aggregator + publisher wire API (GET/PUT /v1/blobs, quilts), backed by the nodeless
+# aggregator + publisher wire API (GET/PUT /v1/blobs, quilts), backed by the self-contained
 # LocalnetMockStore. Exercises the DROP-IN contract a real Walrus client relies on.
 #
 # Self-skipping: if sb-local is not reachable (no walrus-enabled localnet running), the

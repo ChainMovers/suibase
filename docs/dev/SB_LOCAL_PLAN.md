@@ -1,7 +1,7 @@
 # `sb-local` — Suibase Localnet Walrus HTTP engine
 
-> The `sb-local` HTTP facade for nodeless localnet Walrus. Companion to
-> `docs/dev/LOCALNET_WALRUS_PLAN.md` (the nodeless-localnet design) and
+> The `sb-local` HTTP facade for localnet Walrus. Companion to
+> `docs/dev/LOCALNET_WALRUS_PLAN.md` (the localnet design) and
 > `docs/dev/LOCALNET_WALRUS_FEATURE.md` (the localnet Walrus feature). Read those
 > first.
 >
@@ -86,9 +86,9 @@ the SDK** and is **verified by parity tests** — not by a shared wrapper.
   `walrus_sdk` (exactly one SDK call per method, no logic): the real path stays
   transparent, so the bug burden lives only on localnet (dev-only).
 
-### The engine — `LocalnetMockStore` (nodeless mock)
+### The engine — `LocalnetMockStore` (localnet mock)
 
-`src/localnet.rs`. The nodeless mock **engine** the mirror wraps. It:
+`src/localnet.rs`. The localnet mock **engine** the mirror wraps. It:
 
 - creates **real** `Blob`/`Storage` objects on the suibase localnet Sui via PTBs +
   **off-node held-key certify** (N=1 committee BLS key from the deploy-written
@@ -126,7 +126,7 @@ surface): `encoded_size` / `create_pool` / `store_pooled` / `delete_pooled` /
 - **glibc, not musl** — `sb-local` lives in `localnet-tools` (pinned `ubuntu-24.04`
   glibc; RocksDB can't musl-link). Matches how MystenLabs/sui ships.
 - **Drop the walrus CLI** as a client target (`walrus store/read` are node-direct and
-  won't work nodeless). `sb-local` serves HTTP clients (curl/fetch/sites).
+  won't work on localnet). `sb-local` serves HTTP clients (curl/fetch/sites).
 
 ## Lifecycle (mirrors the localnet faucet)
 
@@ -175,7 +175,7 @@ client configured with SEPARATE `--aggregator`/`--publisher` URLs simply points 
 
 **Relay is OUT of scope (and cannot be drop-in).** The upload-relay is a different
 protocol (client encodes + relay fans slivers to storage NODES + client pays/signs)
-that fundamentally needs real storage nodes — nodeless can't provide it. `sb-local` is a
+that fundamentally needs real storage nodes — localnet can't provide it. `sb-local` is a
 drop-in for the AGGREGATOR + PUBLISHER only.
 
 **The contract:**
@@ -211,7 +211,7 @@ use walrus_sdk::node_client::store_args::StoreArgs;
 use walrus_core::encoding::Primary;
 
 # async fn f() -> walrus_sdk::error::ClientResult<()> {
-let client = WalrusLocalClient::for_workdir("localnet").await?;   // nodeless mock
+let client = WalrusLocalClient::for_workdir("localnet").await?;   // localnet mock
 let args = StoreArgs::default_with_epochs(5);
 
 // Store + read — identical to walrus_sdk on a real network.
@@ -270,7 +270,7 @@ rust/walrus-local-sdk/
                    localnet_pool_namespace, testnet_parity, common/ (shared parity body)
 
 rust/localnet-tools/                       the bins crate (builds on walrus-local-sdk)
-  src/bin/walrus_localnet_deploy.rs        the nodeless deploy tool
+  src/bin/walrus_localnet_deploy.rs        the localnet deploy tool
   src/bin/sb_local/{main,wire,quilt}.rs    the sb-local axum HTTP server
 ```
 

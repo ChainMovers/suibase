@@ -567,20 +567,15 @@ stop_walrus_relay_process() {
       kill -9 "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
     fi
 
-    # Settle the `ps` view before returning. Callers verify the stop with
-    # update_WALRUS_RELAY_PROCESS_PID_var (a `ps`-table scan), which lags kernel
-    # reaping after SIGKILL — so a caller's immediate re-check races on slow CI
-    # (macOS) runners and wrongly reports "process may still be running". Poll the
-    # SAME `ps` view here until it clears (re-SIGKILL'ing a stubborn survivor), so
-    # callers see a settled state. Leaves WALRUS_RELAY_PROCESS_PID empty when gone,
-    # or set if it truly never died (a real failure the caller should surface).
+    # Settle before returning so callers (which verify with pid_terminated) see a
+    # stable state. A just-SIGKILL'd relay can briefly remain as a zombie/defunct
+    # entry (it was backgrounded and reparented to launchd); pid_terminated treats
+    # that as stopped. Only re-SIGKILL a process that is still genuinely alive.
     local _settle=0
-    update_WALRUS_RELAY_PROCESS_PID_var
-    while [ -n "$WALRUS_RELAY_PROCESS_PID" ] && [ "$_settle" -lt 5 ]; do
+    while ! pid_terminated "$WALRUS_RELAY_PROCESS_PID" && [ "$_settle" -lt 5 ]; do
       kill -9 "$WALRUS_RELAY_PROCESS_PID" 2>/dev/null || true
       sleep 1
       _settle=$((_settle + 1))
-      update_WALRUS_RELAY_PROCESS_PID_var
     done
   fi
 

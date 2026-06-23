@@ -5,7 +5,7 @@
 #
 # Unlike CI (which runs the localnet suites and only COMPILE-checks testnet_parity), this
 # runs everything for real against:
-#   - a live suibase localnet with nodeless Walrus deployed (descriptor present), and
+#   - a live suibase localnet with Walrus deployed (descriptor present), and
 #   - a FUNDED testnet wallet (SUI for gas + WAL for storage).
 #
 # IMPORTANT: a SKIPPED test is treated as a FAILURE here. The point of this script is to

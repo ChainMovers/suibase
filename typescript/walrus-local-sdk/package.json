@@ -1,6 +1,6 @@
 {
   "name": "@suibase/walrus-local",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Localnet-only drop-in for @mysten/walrus: WalrusLocalClient extends the real WalrusClient, routing the node-talking blob/quilt operations through Suibase's nodeless sb-local HTTP server while inheriting every on-chain operation against the localnet-deployed Walrus. Same API, same signatures — no storage nodes, no funds, no internet.",
   "license": "Apache-2.0",
   "repository": {
@@ -27,9 +27,10 @@
     "build": "npm run clean && tsc -p .",
     "clean": "rm -rf dist",
     "prepack": "npm run build",
-    "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts tests/differential/*.test.ts",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+    "test:differential": "node --import tsx --test tests/differential/*.test.ts",
     "typecheck": "tsc -p . --noEmit"
   },
   "peerDependencies": {

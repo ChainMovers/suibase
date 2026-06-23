@@ -10,10 +10,16 @@ name: Release pipeline cron
 #
 #   dev → pre-staging ──(this workflow)──► staging → main
 #
-# Every 15 min, check whether `pre-staging` has a daemon version whose
-# matching release tag (`suibase-daemon-v<version>`) is published on
-# `chainmovers/sui-binaries`. If yes AND `pre-staging` is ahead of
-# `staging`, open an auto-merge PR `pre-staging → staging`.
+# Every 15 min, check whether BOTH precompiled assets `pre-staging` ships are
+# published on `chainmovers/sui-binaries`: `suibase-daemon-v<daemon-version>`
+# AND `localnet-tools-v<localnet-tools-version>`. If both are published AND
+# `pre-staging` is ahead of `staging`, open an auto-merge PR `pre-staging → staging`.
+#
+# Gating on BOTH matters: a change can bump localnet-tools without bumping the
+# daemon (or vice-versa), and the just-bumped asset is the one still building.
+# Waiting on the daemon tag alone (the original behavior) let a localnet-tools-only
+# bump promote before its precompiled finished — so `staging.yml`'s localnet-tools
+# validation raced the download and failed, stalling the pipeline at staging.
 #
 # Promotions happen via auto-merge PR (not direct branch push) so:
 #   1. branch protection on `staging` stays strict (no bypass needed)
@@ -26,12 +32,12 @@ on:
   schedule:
     - cron: "*/15 * * * *"   # every 15 min — safety net for missed dispatches
   workflow_dispatch:
-  # Fast path: chainmovers/sui-binaries fires this event after it
-  # finishes publishing a suibase-daemon release (assets uploaded,
-  # draft flipped). Cuts the average promote latency from ~7.5 min
+  # Fast path: chainmovers/sui-binaries fires one of these events after it
+  # finishes publishing a suibase-daemon OR a localnet-tools release (assets
+  # uploaded, draft flipped). Cuts the average promote latency from ~7.5 min
   # (half the cron interval) to ~1 min.
   repository_dispatch:
-    types: [daemon-published]
+    types: [daemon-published, localnet-tools-published]
 
 jobs:
   promote:
@@ -58,20 +64,23 @@ jobs:
           ref: pre-staging
           fetch-depth: 0
 
-      - name: Read daemon version from pre-staging
+      - name: Read pre-staging versions (daemon + localnet-tools)
         id: ver
         run: |
           # awk for portability — the GNU sed `\+` regex used previously
           # is not supported by BSD sed and silently no-ops on macOS.
           version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' \
             rust/suibase/Cargo.toml)
-          if [ -z "$version" ]; then
-            echo "::error::Could not parse daemon version from pre-staging's rust/suibase/Cargo.toml"
+          lt_version=$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' \
+            rust/localnet-tools/Cargo.toml)
+          if [ -z "$version" ] || [ -z "$lt_version" ]; then
+            echo "::error::Could not parse the daemon and/or localnet-tools version from pre-staging Cargo.toml(s)"
             exit 1
           fi
-          tag="suibase-daemon-v${version}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag"         >> "$GITHUB_OUTPUT"
+          echo "version=$version"                     >> "$GITHUB_OUTPUT"
+          echo "tag=suibase-daemon-v${version}"       >> "$GITHUB_OUTPUT"
+          echo "lt_version=$lt_version"               >> "$GITHUB_OUTPUT"
+          echo "lt_tag=localnet-tools-v${lt_version}" >> "$GITHUB_OUTPUT"
 
       - name: Compare pre-staging vs staging heads
         id: diff
@@ -106,41 +115,44 @@ jobs:
             echo "Nothing to promote — staging already contains pre-staging's tip."
           fi
 
-      - name: Check if matching sui-binaries release is PUBLISHED (not draft)
+      - name: Check matching sui-binaries releases are PUBLISHED (daemon + localnet-tools)
         id: tag_check
         if: steps.diff.outputs.ahead == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # The sui-binaries "Build Suibase Daemon" workflow creates the
-          # release tag as a DRAFT first, then uploads assets and publishes
-          # later. Promoting on the draft alone would leave staging.yml
-          # trying to download non-existent assets. Require the release to
-          # be fully published (isDraft == false) AND have assets attached
-          # before promoting.
-          set +e
-          state=$(gh release view "${{ steps.ver.outputs.tag }}" \
-            --repo chainmovers/sui-binaries \
-            --json isDraft,assets 2>/dev/null)
-          rc=$?
-          set -e
-          if [ $rc -ne 0 ] || [ -z "$state" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Waiting on chainmovers/sui-binaries to publish ${{ steps.ver.outputs.tag }} (tag not found yet) — will retry on next cron tick."
-            exit 0
-          fi
-          is_draft=$(echo "$state" | jq -r .isDraft)
-          asset_count=$(echo "$state" | jq -r '.assets | length')
-          if [ "$is_draft" = "true" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${{ steps.ver.outputs.tag }} exists but is still a draft (sui-binaries build in progress) — will retry on next cron tick."
-          elif [ "$asset_count" = "0" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${{ steps.ver.outputs.tag }} is published but has no assets yet — will retry on next cron tick."
-          else
-            echo "ready=true"  >> "$GITHUB_OUTPUT"
-            echo "::notice::sui-binaries has ${{ steps.ver.outputs.tag }} (published, $asset_count assets) — promoting to staging."
-          fi
+          # The sui-binaries build workflows create each release tag as a DRAFT
+          # first, then upload assets and publish later. Promoting on a draft (or
+          # a not-yet-created tag) would leave staging.yml trying to download
+          # non-existent assets. Require BOTH precompiled releases to be fully
+          # published (isDraft == false) AND have assets before promoting — a
+          # change may bump one asset's version without the other, and the
+          # just-bumped one is the one still building.
+          ready=true
+          for tag in "${{ steps.ver.outputs.tag }}" "${{ steps.ver.outputs.lt_tag }}"; do
+            set +e
+            state=$(gh release view "$tag" --repo chainmovers/sui-binaries --json isDraft,assets 2>/dev/null)
+            rc=$?
+            set -e
+            if [ $rc -ne 0 ] || [ -z "$state" ]; then
+              ready=false
+              echo "::notice::Waiting on chainmovers/sui-binaries to publish $tag (tag not found yet) — will retry on next cron tick."
+              continue
+            fi
+            is_draft=$(echo "$state" | jq -r .isDraft)
+            asset_count=$(echo "$state" | jq -r '.assets | length')
+            if [ "$is_draft" = "true" ]; then
+              ready=false
+              echo "::notice::$tag exists but is still a draft (sui-binaries build in progress) — will retry on next cron tick."
+            elif [ "$asset_count" = "0" ]; then
+              ready=false
+              echo "::notice::$tag is published but has no assets yet — will retry on next cron tick."
+            else
+              echo "::notice::sui-binaries has $tag (published, $asset_count assets)."
+            fi
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+          [ "$ready" = "true" ] && echo "::notice::Both precompiled releases are published — promoting pre-staging → staging."
 
       - name: Open auto-merge PR pre-staging → staging
         if: steps.diff.outputs.ahead == 'true' && steps.tag_check.outputs.ready == 'true'
@@ -178,8 +190,8 @@ jobs:
           gh pr create \
             --base staging \
             --head pre-staging \
-            --title "Promote pre-staging to staging (${{ steps.ver.outputs.tag }})" \
-            --body "Auto-opened by \`staging-promote.yml\` once chainmovers/sui-binaries published \`${{ steps.ver.outputs.tag }}\`. Will auto-merge once required checks pass."
+            --title "Promote pre-staging to staging (${{ steps.ver.outputs.tag }} + ${{ steps.ver.outputs.lt_tag }})" \
+            --body "Auto-opened by \`staging-promote.yml\` once chainmovers/sui-binaries published \`${{ steps.ver.outputs.tag }}\` and \`${{ steps.ver.outputs.lt_tag }}\`. Will auto-merge once required checks pass."
           number=$(gh pr list --base staging --head pre-staging --state open --json number --jq '.[0].number')
           # --auto is refused with "clean status" when the PR is already mergeable
           # (all required checks satisfied at creation); fall back to a direct merge.

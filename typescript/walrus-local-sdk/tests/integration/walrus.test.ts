@@ -13,7 +13,14 @@ import assert from "node:assert/strict";
 import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { WalrusFile } from "@mysten/walrus";
 
-import { WalrusLocalClient, WalrusLocalError } from "../../src/index.js";
+// Import the @mysten/walrus error classes FROM our barrel — this also asserts the
+// drop-in re-export (ERR-1): instanceof checks must resolve against @suibase/walrus-local.
+import {
+  BlobNotCertifiedError,
+  RetryableWalrusClientError,
+  WalrusLocalClient,
+  WalrusLocalError,
+} from "../../src/index.js";
 import { FIXTURE_BLOB_ID, FIXTURE_CONTENT, fromUtf8, loadLocalnetSigner, utf8 } from "../helpers.js";
 
 const REQUIRED = process.env.WALRUS_LOCAL_SDK_TEST === "1";
@@ -90,6 +97,9 @@ describe("WalrusLocalClient (drop-in @mysten/walrus on localnet)", () => {
 
     const after = await client!.getVerifiedBlobStatus({ blobId });
     assert.equal(after.type, "nonexistent");
+    // NOTE: a known localnet difference — unlike testnet, sb-local's nodeless mock store
+    // still serves the bytes of a deleted blob via readBlob (no storage-node GC), even
+    // though its on-chain status is `nonexistent` above. See README "Localnet differences".
   });
 
   // ----- inherited extendBlob -----
@@ -205,12 +215,15 @@ describe("WalrusLocalClient (drop-in @mysten/walrus on localnet)", () => {
     );
   });
 
-  // ----- error parity: missing / malformed blob -----
-  test("readBlob: unknown id -> BLOB_NOT_FOUND, malformed -> BAD_REQUEST", { skip }, async () => {
+  // ----- error parity: missing -> BlobNotCertifiedError (retryable), malformed -> BAD_REQUEST -----
+  test("readBlob: unknown id -> BlobNotCertifiedError (retryable), malformed -> BAD_REQUEST", { skip }, async () => {
+    // A valid-format but unstored blob throws the SAME class testnet does — a
+    // BlobNotCertifiedError, which is a RetryableWalrusClientError — so retry loops port.
     await assert.rejects(
       () => client!.readBlob({ blobId: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }),
-      (e: unknown) => e instanceof WalrusLocalError && e.code === "BLOB_NOT_FOUND",
+      (e: unknown) => e instanceof BlobNotCertifiedError && e instanceof RetryableWalrusClientError,
     );
+    // A malformed id is a client-side bad request (no @mysten/walrus retryable analog).
     await assert.rejects(
       () => client!.readBlob({ blobId: "not-a-valid-blob-id" }),
       (e: unknown) => e instanceof WalrusLocalError && e.code === "BAD_REQUEST",

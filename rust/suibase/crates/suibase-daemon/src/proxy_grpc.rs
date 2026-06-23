@@ -146,6 +146,31 @@ fn is_internal_routing_header(name: &http::HeaderName) -> bool {
         || n.eq_ignore_ascii_case(HEADER_SBSD_SERVER_HC)
 }
 
+/// gRPC message-encoding response header. Per the gRPC spec it is set whenever
+/// any message in the body is compressed.
+const GRPC_ENCODING_HEADER: &str = "grpc-encoding";
+
+/// If the response declares a `grpc-encoding` the client can't decode — i.e.
+/// anything other than absent or `identity` — return that encoding's name.
+///
+/// The proxy forces `grpc-accept-encoding: identity` on every upstream request
+/// (see `send_request`), so a spec-compliant upstream never compresses. An
+/// upstream that ignores it (observed intermittently behind some CDN-fronted
+/// public testnet endpoints) tags the response `grpc-encoding: gzip`; the Sui
+/// CLI's tonic client decodes only `identity` and would fail with
+/// `UNIMPLEMENTED: Content is compressed with gzip which isn't supported`.
+/// Detecting it here lets the dispatcher retry another upstream instead of
+/// forwarding frames the client cannot read.
+fn unsupported_grpc_encoding(headers: &http::HeaderMap) -> Option<String> {
+    let value = headers.get(GRPC_ENCODING_HEADER)?;
+    let encoding = value.to_str().ok()?.trim();
+    if encoding.is_empty() || encoding.eq_ignore_ascii_case("identity") {
+        None
+    } else {
+        Some(encoding.to_string())
+    }
+}
+
 /// A request that's been fully buffered and is ready to be sent to one or
 /// more upstreams. Produced by `InboundGrpcRequest::read` for whitelisted
 /// single-request methods so the caller can drive its own per-upstream retry
@@ -384,6 +409,14 @@ pub enum ForwardOutcome {
         status: StatusCode,
         content_type: String,
     },
+    /// Upstream answered HTTP 200 + `application/grpc`, but declared a
+    /// `grpc-encoding` the client can't decode (e.g. `gzip`) — despite the
+    /// proxy forcing `grpc-accept-encoding: identity`. Forwarding it verbatim
+    /// would make the Sui CLI fail with `UNIMPLEMENTED: Content is compressed
+    /// with <enc> which isn't supported`. The upstream IS gRPC-capable (so this
+    /// is NOT a NOT_GRPC_CAPABLE signal); caller should treat it as transient
+    /// and retry the next upstream.
+    CompressedResponse { encoding: String },
     /// Upstream couldn't be reached or response read failed.
     Error(String),
 }
@@ -549,6 +582,20 @@ async fn send_request(
             status,
             content_type,
         };
+    }
+
+    // The upstream ignored our `grpc-accept-encoding: identity` and compressed
+    // the response anyway. The Sui CLI's tonic client can't decode it; rather
+    // than stream gzip frames it will choke on, surface a retryable failure so
+    // the dispatcher tries the next upstream. Checked on the response HEADERS
+    // (before body streaming), so this costs nothing on the common path.
+    if let Some(encoding) = unsupported_grpc_encoding(resp.headers()) {
+        log::debug!(
+            "grpc: upstream {} returned grpc-encoding={} despite identity request",
+            base_url,
+            encoding
+        );
+        return ForwardOutcome::CompressedResponse { encoding };
     }
 
     // Stream the response body through to the client. We deliberately do NOT
@@ -1028,6 +1075,131 @@ mod tests {
             grpc_status.as_deref(),
             Some("0"),
             "TRAILERS frame with grpc-status must pass through"
+        );
+    }
+
+    // ----- compressed-response handling -----
+    //
+    // The proxy forces `grpc-accept-encoding: identity` on every upstream
+    // request, but a misbehaving upstream (observed intermittently behind some
+    // CDN-fronted public testnet endpoints) can ignore that and tag its
+    // response `grpc-encoding: gzip`. The Sui CLI's tonic client decodes only
+    // `identity`, so a forwarded-verbatim gzip response makes it fail with
+    // `UNIMPLEMENTED: Content is compressed with gzip which isn't supported`.
+    // The proxy must therefore NOT classify such a response as a forwardable
+    // `GrpcResponse`; it must surface it as a retryable failure so the buffered
+    // dispatch loop tries the next upstream instead of handing the client a
+    // response it cannot read.
+
+    /// Spawn a minimal in-process h2c gRPC upstream on an ephemeral port. Every
+    /// request gets HTTP 200 + `content-type: application/grpc` and (optionally)
+    /// a `grpc-encoding` header, with a single empty gRPC message as the body.
+    /// Returns the `http://host:port` base URL. `GrpcProxyClient` talks h2c to
+    /// `http://` upstreams (same as it does to a real localnet sui-node), so no
+    /// TLS is involved.
+    async fn spawn_grpc_mock_upstream(grpc_encoding: Option<&'static str>) -> String {
+        use hyper::service::service_fn;
+        use hyper_util::rt::TokioIo;
+        use hyper_util::server::conn::auto;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind mock upstream");
+        let addr = listener.local_addr().expect("local addr");
+
+        tokio::spawn(async move {
+            loop {
+                let (stream, _) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(_) => break,
+                };
+                let io = TokioIo::new(stream);
+                tokio::spawn(async move {
+                    let svc = service_fn(move |_req: Request<Incoming>| async move {
+                        let mut builder = Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "application/grpc");
+                        if let Some(enc) = grpc_encoding {
+                            builder = builder.header("grpc-encoding", enc);
+                        }
+                        // One empty length-prefixed gRPC message (flag + 4-byte len = 0).
+                        let body = Full::new(Bytes::from_static(&[0u8, 0, 0, 0, 0]));
+                        Ok::<_, std::convert::Infallible>(builder.body(body).unwrap())
+                    });
+                    let _ = auto::Builder::new(TokioExecutor::new())
+                        .serve_connection(io, svc)
+                        .await;
+                });
+            }
+        });
+
+        format!("http://{}", addr)
+    }
+
+    fn make_buffered_request(path: &str) -> BufferedGrpcRequest {
+        let mut headers = http::HeaderMap::new();
+        headers.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/grpc"),
+        );
+        headers.insert("te", HeaderValue::from_static("trailers"));
+        BufferedGrpcRequest {
+            method: http::Method::POST,
+            headers,
+            body_bytes: Bytes::from_static(&[0, 0, 0, 0, 0]),
+            path_and_query: path.to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn gzip_compressed_response_is_not_forwarded_as_success() {
+        let base_url = spawn_grpc_mock_upstream(Some("gzip")).await;
+        let client = Arc::new(GrpcProxyClient::new().expect("grpc client"));
+        let buf = make_buffered_request("/sui.rpc.v2.LedgerService/GetServiceInfo");
+
+        let outcome = forward_to_upstream(&buf, &base_url, client).await;
+
+        match outcome {
+            ForwardOutcome::CompressedResponse { encoding } => {
+                assert_eq!(encoding, "gzip", "the offending encoding must be reported");
+            }
+            ForwardOutcome::GrpcResponse(_) => panic!(
+                "a gzip-compressed gRPC response must NOT be classified as a \
+                 forwardable GrpcResponse — the Sui CLI cannot decode it"
+            ),
+            _ => panic!("expected CompressedResponse for a gzip-tagged response"),
+        }
+    }
+
+    #[test]
+    fn unsupported_grpc_encoding_flags_only_real_compression() {
+        let mut h = http::HeaderMap::new();
+        // Absent header → safe.
+        assert_eq!(unsupported_grpc_encoding(&h), None);
+        // Explicit identity → safe.
+        h.insert(GRPC_ENCODING_HEADER, HeaderValue::from_static("identity"));
+        assert_eq!(unsupported_grpc_encoding(&h), None);
+        // gzip → flagged.
+        h.insert(GRPC_ENCODING_HEADER, HeaderValue::from_static("gzip"));
+        assert_eq!(unsupported_grpc_encoding(&h), Some("gzip".to_string()));
+        // Any other non-identity encoding → flagged (zstd, deflate, …).
+        h.insert(GRPC_ENCODING_HEADER, HeaderValue::from_static("zstd"));
+        assert_eq!(unsupported_grpc_encoding(&h), Some("zstd".to_string()));
+    }
+
+    #[tokio::test]
+    async fn identity_response_is_forwarded_as_success() {
+        // Control: an upstream that honors `identity` (no grpc-encoding header)
+        // must still be forwarded as a normal gRPC response.
+        let base_url = spawn_grpc_mock_upstream(None).await;
+        let client = Arc::new(GrpcProxyClient::new().expect("grpc client"));
+        let buf = make_buffered_request("/sui.rpc.v2.LedgerService/GetServiceInfo");
+
+        let outcome = forward_to_upstream(&buf, &base_url, client).await;
+
+        assert!(
+            matches!(outcome, ForwardOutcome::GrpcResponse(_)),
+            "a normal (identity) gRPC response must be forwarded as a success"
         );
     }
 }

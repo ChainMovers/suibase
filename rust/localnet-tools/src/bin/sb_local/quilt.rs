@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Quilt HTTP routes (M5) for sb-local — drop-in for the real Walrus daemon's quilt
-//! API, backed by [`LocalnetMockStore`]'s nodeless quilt engine:
+//! API, backed by [`LocalnetMockStore`]'s localnet quilt engine:
 //!   - `PUT  /v1/quilts`                                multipart store -> `QuiltStoreResult`
 //!   - `GET  /v1/blobs/by-quilt-patch-id/{id}`          read a patch by its QuiltPatchId
 //!   - `GET  /v1/blobs/by-quilt-id/{quilt_id}/{ident}`  read a patch by quilt id + identifier

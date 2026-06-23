@@ -54,18 +54,21 @@ test_proxy_vs_direct_identical() {
     "$SUIBASE_DIR/scripts/$WORKDIR" wal-relay enable
     "$SUIBASE_DIR/scripts/$WORKDIR" start
     
-    # Wait for services to be fully up
+    # Wait for services to be READY via a bounded poll on an authoritative signal
+    # (port listening AND /v1/tip-config responding), not a fixed sleep. The daemon
+    # opens the proxy port (45852) asynchronously after the config change, so a
+    # fixed `sleep 3` + one-shot check raced the bind/accept window on slow CI and
+    # intermittently reported "Proxy port not listening". wait_for_process_ready
+    # returns as soon as ready (near-zero in the healthy case) and fails loudly on
+    # timeout, so a genuine never-opens (e.g. port conflict) is still surfaced.
     echo "Waiting for services to start..."
-    sleep 3
-
-    # Verify both proxy and backend are listening
-    if ! check_port_listening "$PROXY_PORT"; then
-        echo "ERROR: Proxy port $PROXY_PORT is not listening"
+    if ! wait_for_process_ready "$PROXY_PORT" "/v1/tip-config" 30; then
+        echo "ERROR: Proxy port $PROXY_PORT did not become ready within 30s"
         return 1
     fi
-    
-    if ! check_port_listening "$BACKEND_PORT"; then
-        echo "ERROR: Backend port $BACKEND_PORT is not listening"
+
+    if ! wait_for_process_ready "$BACKEND_PORT" "/v1/tip-config" 30; then
+        echo "ERROR: Backend port $BACKEND_PORT did not become ready within 30s"
         return 1
     fi
     

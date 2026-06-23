@@ -148,6 +148,7 @@ async fn test_behavior_configuration() -> Result<()> {
         cache_ttl_secs: 300,
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     };
     
     harness.configure_mock_server("mock-1", fail_behavior).await?;
@@ -207,6 +208,7 @@ async fn test_mock_server_rate_limit_responses() -> Result<()> {
         cache_ttl_secs: 300,
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     };
     
     harness.configure_mock_server("mock-1", rate_limit_behavior).await?;
@@ -222,6 +224,7 @@ async fn test_mock_server_rate_limit_responses() -> Result<()> {
         cache_ttl_secs: 300,
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     };
     
     harness.configure_mock_server("mock-0", slow_behavior.clone()).await?;
@@ -304,6 +307,7 @@ async fn test_mock_server_caching() -> Result<()> {
         cache_ttl_secs: 300, // 5 minute cache
         respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
     };
     
     harness.configure_mock_server("mock-0", caching_behavior).await?;
@@ -320,6 +324,7 @@ async fn test_mock_server_caching() -> Result<()> {
             cache_ttl_secs: 300,
             respond_non_grpc: false,
             grpc_stream_forever: false,
+            grpc_compress_response: false,
         };
         harness.configure_mock_server(&format!("mock-{}", i), fail_behavior).await?;
     }
