@@ -79,7 +79,7 @@ actions:
     <span style="position: relative; top: 3px">A &quotBetter&quot Localnet</span>
   </h3>
   <p class="vp-feature-details">
-    Easy start/stop commands for a complete local Sui network — with a built-in explorer and local Walrus services.
+    Easy start/stop commands, with a built-in explorer and local Walrus services.
   </p>
 </a>
 

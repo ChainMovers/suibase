@@ -192,6 +192,18 @@ if [ -n "$QUILTID" ] && [ -n "$PATCH_ALPHA" ]; then
     cmp -s "$TMP/alpha.txt" "$TMP/qa.txt" && ok "by-quilt-patch-id alpha bytes match" || fail "by-quilt-patch-id alpha mismatch"
     grep -qi "^x-quilt-patch-identifier:[[:space:]]*alpha" "$TMP/qhdr.txt" && ok "X-Quilt-Patch-Identifier header set" || fail "X-Quilt-Patch-Identifier missing"
 
+    # Parity: the real Walrus aggregator IGNORES Range on quilt-patch reads (always 200,
+    # full body), unlike a plain blob (206). sb-local must match -> 200 + full body + no
+    # Content-Range. (Regression for the serve_bytes-reuse divergence.)
+    QRCODE=$(cget -D "$TMP/qrhdr.txt" -o "$TMP/qrange.bin" -w "%{http_code}" \
+        -H "Range: bytes=0-3" "$BASE/v1/blobs/by-quilt-patch-id/$PATCH_ALPHA")
+    if [ "$QRCODE" = "200" ] && cmp -s "$TMP/alpha.txt" "$TMP/qrange.bin" \
+        && ! grep -qi "^content-range:" "$TMP/qrhdr.txt"; then
+        ok "Range on quilt patch -> 200 full body, no Content-Range (matches real aggregator)"
+    else
+        fail "quilt-patch Range expected 200+full body+no Content-Range (got code=$QRCODE, content-range-lines=$(grep -ci '^content-range:' "$TMP/qrhdr.txt"))"
+    fi
+
     cget "$BASE/v1/blobs/by-quilt-id/$QUILTID/beta" -o "$TMP/qb.txt"
     cmp -s "$TMP/beta.txt" "$TMP/qb.txt" && ok "by-quilt-id/{id}/beta bytes match" || fail "by-quilt-id beta mismatch"
 
