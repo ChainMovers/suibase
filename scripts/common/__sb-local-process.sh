@@ -35,25 +35,25 @@ export -f update_SB_LOCAL_BIN_var
 update_SB_LOCAL_PROCESS_PID_var() {
   # success/failure reflected by SB_LOCAL_PROCESS_PID (unset when not running).
   #
-  # Match the running sb-local regardless of WHICH candidate path launched it
-  # (precompiled common/bin vs a dev target build). Matching only the currently
-  # *resolved* path would miss a process started from a different path — e.g. after a
-  # mid-session rebuild/install flips the resolver from target/release to common/bin —
-  # so 'stop' would no-op (leaking the old process) and 'start' would try (and fail) to
-  # bind a duplicate. Probe every candidate path; first match wins.
-  local _candidates=(
-    "$WORKDIRS/common/bin/sb-local"
-    "$SUIBASE_DIR/rust/localnet-tools/target/release/sb-local"
-  )
-  local _c _PID
-  for _c in "${_candidates[@]}"; do
-    _PID=$(get_process_pid "$_c")
-    if [ "$_PID" != "NULL" ]; then
-      export SB_LOCAL_PROCESS_PID="$_PID"
-      return
-    fi
-  done
-  unset SB_LOCAL_PROCESS_PID
+  # Match the running sb-local by its DISTINCTIVE EXECUTABLE NAME ("sb-local") — the
+  # `ps -o comm` basename — NOT by a full launch path. The path as it appears in `ps` is
+  # unreliable: sb-local may have been launched from the precompiled common/bin OR a dev
+  # target/release build, with an ABSOLUTE or a cwd-RELATIVE argv (older starts used a
+  # relative path), and after an in-place binary rebuild the original path can even read
+  # as "(deleted)". A path-based match misses all of these, with three bad outcomes:
+  # 'status' wrongly reports "not running", 'stop' no-ops (leaking the process), and
+  # 'start' launches a duplicate that fails to bind the port. Matching the name is robust
+  # across every representation, works on Linux (comm = "sb-local") and macOS (comm = the
+  # full path, hence the basename strip), and is safe because no other process is named
+  # "sb-local". First match wins.
+  local _PID
+  _PID=$(ps x -o pid,comm 2>/dev/null | awk '
+    $1 ~ /^[0-9]+$/ { name = $2; sub(/.*\//, "", name); if (name == "sb-local") { print $1; exit } }')
+  if [ -n "$_PID" ]; then
+    export SB_LOCAL_PROCESS_PID="$_PID"
+  else
+    unset SB_LOCAL_PROCESS_PID
+  fi
 }
 export -f update_SB_LOCAL_PROCESS_PID_var
 
