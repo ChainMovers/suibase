@@ -87,13 +87,15 @@ a:has(polygon) {
   overflow-wrap: break-word;
 }
 
-// Always show the copy button on tip-box code (not only on hover) — the whole
-// point of the agent prompt is that it is one click to copy.
-.hint-container.tip div[class*="language-"] .vp-copy-code-button {
+// Show the copy button on ALL code blocks at all times (not only on hover) —
+// more discoverable, so users reliably get the prompt-stripped copy.
+div[class*="language-"] .vp-copy-code-button {
   opacity: 1;
 }
 
-// Hide the language label ("text") in the corner — it is noise on a prose prompt.
-.hint-container.tip div[class*="language-"]::before {
+// Hide the language label ("shell"/"bash"/"text"/…) in the corner: the always-on
+// copy button now occupies that spot, and an always-shown label overlaps it
+// (the plugin hides the label on hover for the same reason — we make it permanent).
+div[class*="language-"]::before {
   display: none;
 }

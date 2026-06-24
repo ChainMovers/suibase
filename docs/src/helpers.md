@@ -92,19 +92,52 @@ The Suibase command calls the proper Mysten Labs Sui client version matching the
 :::
 
 
-#### Example 2: What is my last published package ID on devnet?
+#### Example 2: What is my last published package ID on testnet?
 ::: code-tabs
 
 @tab:active Python
 
 ```python
-TODO
+    import suibase
+
+    sbh = suibase.Helper()
+    sbh.select_workdir("testnet")
+
+    # Package ID of the most recent publish of your module (query by name).
+    package_id = sbh.package_id("demo")
+    print(f"demo package ID: { package_id }")
+
+    # Shared objects created by that same publish (query by their Move type).
+    counters = sbh.published_new_objects("demo::Counter::Counter")
+    print(f"Counter shared object(s): { counters }")
+
+    ######## Console output #####
+    # demo package ID: 0x794fc1d80f18a02eb0b7094d2f5a9f9f40bcf653996291f7a7086404689a19b5
+    # Counter shared object(s): ['0xef876238524a33124a924aba5a141f2b317f1e61b12032e78fed5c6aba650093']
+    #############################
 ```
 
 @tab Rust
 
 ```rust
-TODO
+  use suibase::Helper;
+  fn main() {
+    let sbh = Helper::new();
+    if sbh.is_installed()? {
+       sbh.select_workdir("testnet")?;
+
+       // Package ID of the most recent publish of your module (query by name).
+       println!("demo package ID: {}", sbh.package_id("demo")?);
+
+       // Shared objects created by that same publish (query by their Move type).
+       let counters = sbh.published_new_objects("demo::Counter::Counter")?;
+       println!("Counter shared object(s): {:?}", counters);
+    }
+  }
+
+  //Console output:
+  //demo package ID: 0x794fc1d80f18a02eb0b7094d2f5a9f9f40bcf653996291f7a7086404689a19b5
+  //Counter shared object(s): ["0xef876238524a33124a924aba5a141f2b317f1e61b12032e78fed5c6aba650093"]
 ```
 
 :::
@@ -117,11 +150,34 @@ Suibase monitors RPC health of multiple servers and returns the best URL to use.
 @tab:active Python
 
 ```python
-TODO
+    import suibase
+
+    sbh = suibase.Helper()
+    sbh.select_workdir("testnet")
+
+    # Suibase monitors several RPC servers and returns the healthiest one.
+    url = sbh.rpc_url()
+    print(f"Best testnet RPC URL: { url }")
+
+    ######## Console output (the currently healthiest server) #####
+    # Best testnet RPC URL: https://fullnode.testnet.sui.io:443
+    #############################
 ```
 
 @tab Rust
 
 ```rust
-TODO
+  use suibase::Helper;
+  fn main() {
+    let sbh = Helper::new();
+    if sbh.is_installed()? {
+       sbh.select_workdir("testnet")?;
+
+       // Suibase monitors several RPC servers and returns the healthiest one.
+       println!("Best testnet RPC URL: {}", sbh.rpc_url()?);
+    }
+  }
+
+  //Console output (the currently healthiest server):
+  //Best testnet RPC URL: https://fullnode.testnet.sui.io:443
 ```

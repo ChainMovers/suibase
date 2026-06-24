@@ -17,7 +17,7 @@ $ lsui client active-address
 
 ```lsui``` is a *small* frontend to the Mysten Labs sui client, but its convenience is *huge*.<br>
 
-You no longer have to "switch env". You can assume ```lsui``` always transparently executes with the proper ```sui``` client and keystore for this localnet (in the same way, use ```dsui``` for devnet, and ```tsui``` for testnet).
+You no longer have to "switch env". You can assume ```lsui``` always transparently executes with the proper ```sui``` client and keystore for this localnet (similarly, use ```msui``` for mainnet, ```tsui``` for testnet).
 
 Type ```localnet``` for help.
 
@@ -32,8 +32,6 @@ Monitor the RPC node servers with ```localnet links``` ([More Info]( ./proxy.md#
 ## Upgrading Sui Client
 Do ```localnet update``` to update to the latest binaries.
 
-This also synchronizes the local repo. That way the Rust SDK and Move dependencies also use that same latest version.
-
 By default, the latest 'testnet' branch from Mysten Labs is used, you can choose a different branch by editing suibase.yaml ([More Info]( ./configure-suibase-yaml.md#change-default-repo-and-branch )).
 
 ## Regeneration
@@ -42,7 +40,7 @@ $ localnet regen
 ```
 Quickly brings back the network to its initial state (with the same addresses, aliases and funds back). Useful for wiping out the network after testing.
 
-The network is **always** initialized with 15 pre-funded addresses. 5 for each key type (ed25519, secp256k, secp256r1). Your Rust/Python apps can further access these addresses "by-name" for automated test setup.
+The network is **always** initialized with 15 pre-funded addresses. 5 for each key type (ed25519, secp256k, secp256r1). Your apps can further access these addresses programmatically by using [helpers](../helpers.md).
 
 ## Faucet (Method #1)
 Do ```lsui client faucet``` to get coins to the active-address.
