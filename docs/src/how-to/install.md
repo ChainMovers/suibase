@@ -3,9 +3,7 @@ title: Installation
 order: 1
 ---
 
-::: tip Using an agent? Try this prompt
-Paste this into your AI coding agent:
-
+::: tip Using an AI agent? Paste this prompt:
 ```text:no-line-numbers
 Install Suibase by following https://suibase.io/how-to/install.html
 Then make sure ~/.local/bin is on my PATH.
@@ -16,7 +14,7 @@ Suibase is self-contained, so don't touch the standard Sui directory (~/.sui).
 ## Requirements
 **Supported operating systems**
   * Linux Ubuntu >=20.04 recommended (works also with Arch Linux)
-  * macOS Monterey or later (Intel and Apple CPU)
+  * macOS Monterey or later (Apple Silicon)
   * Windows 10/11 with WSL2
 
 **Prerequisites**
@@ -30,7 +28,17 @@ $ git clone https://github.com/chainmovers/suibase.git
 $ ~/suibase/install
 ```
 - All Suibase files are created in ```~/suibase``` and ```~/.local/bin```
-- ```~/.local/bin``` must be listed in the PATH env variable ( on some setups you may have to [add it manually](https://unix.stackexchange.com/questions/26047/how-to-correctly-add-a-path-to-path) ).
+- ```~/.local/bin``` should be on your ```PATH```. If it isn't, copy the line for your shell and restart it:
+
+<!-- no-copy-code: two alternatives — the user must select the ONE line for their shell, not copy both. -->
+<div class="no-copy-code">
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # bash (Linux default)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc    # zsh (macOS default)
+```
+
+</div>
 
 
 

@@ -21,7 +21,7 @@ The proxy forwards/retries/distributes your queries among all the healthy RPC no
 
 All suibase scripts (and the corresponding client.yaml) are already configured to use the proxy server by default.
 
-Useful related workdir commands are start/stop/status and links (e.g. ```devnet start```, ```testnet links``` etc...).
+Useful related workdir commands are start/stop/status and links (e.g. ```testnet start```, ```testnet links``` etc...).
 
 ## Monitoring RPC Links
 The proxy runs in background when you start one of localnet, devnet, testnet or mainnet (e.g. ```devnet start```).

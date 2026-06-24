@@ -4,17 +4,17 @@ Suibase makes it easy to develop concurrently with Walrus localnet, testnet and 
 
 The [**localnet**](#localnet) is especially valuable: being fast and deterministic, it is ideal for GitHub Actions and AI coding agent workflows — no wallets to fund, no public network to wait on. Blob reads are served straight from local disk in milliseconds.
 
-## Walrus
+## Walrus CLI
 
-Use `twalrus` for testnet, `mwalrus` for mainnet, and `lwalrus` for localnet, instead of calling `walrus` directly.
+Use `twalrus` for testnet and `mwalrus` for mainnet, instead of calling `walrus` directly.
 
-For Walrus Sites, use `tsite` and `msite` instead of `site-builder` (testnet/mainnet; there is no `lsite` yet — Walrus Sites on localnet is planned).
+For Walrus Sites, use `tsite` and `msite` instead of `site-builder`.
 
 Suibase scripts append the proper --config, --context and wallet path to make sure you are using the correct mix of binaries and configs.
 
 The scripts pass all your command line parameters as-is to the original Mysten Labs binaries.
 
-`lwalrus` is a localnet-only **subset** of the `walrus` CLI (run `lwalrus --help` to see what it covers). Localnet Walrus is a work in progress, but already has **functional parity with the Rust and TypeScript SDKs**. The main gaps today are `site-builder` and the web portal.
+The exception is localnet: `lwalrus` uses a custom binary to short-circuit to local storage, and supports only a functional **subset**. See [Localnet](#localnet).
 
 ## Updates
 Run `testnet update` or `mainnet update`.
@@ -104,11 +104,12 @@ From TypeScript, use the **exact same `@mysten/walrus` API** you'd use on testne
 ```ts
 import { WalrusLocalClient } from "@suibase/walrus-local";
 
-// On localnet: a drop-in WalrusClient. On testnet you'd write
-//   new WalrusClient({ network: "testnet", suiClient }) instead — same methods after that.
+// On localnet: use WalrusLocalClient as a drop-in WalrusClient replacement.
+// On testnet: use new WalrusClient({ network: "testnet", suiClient }) instead.
+// Same methods after that.
 const client = new WalrusLocalClient();
 const { blobId, blobObject } = await client.writeBlob({ blob, deletable: true, epochs: 5, signer });
-const bytes = await client.readBlob({ blobId });                       // node-talking -> sb-local
+const bytes = await client.readBlob({ blobId });                       // node-talking
 await client.executeDeleteBlobTransaction({ blobObjectId: blobObject.id, signer }); // inherited, on-chain
 ```
 
