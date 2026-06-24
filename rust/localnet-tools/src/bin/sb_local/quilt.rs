@@ -23,7 +23,7 @@ use axum::{
 use walrus_local_sdk::localnet::{LocalnetMockStore, QuiltInput, QuiltPatchData};
 
 use crate::wire::{QuiltPatchItem, QuiltStoreResult, StoredQuiltPatch};
-use crate::{bad_request, blob_store_result, internal_error, not_found, persistence_of, resolve_post_store, serve_bytes, PublisherQuery};
+use crate::{bad_request, blob_store_result, internal_error, not_found, persistence_of, resolve_post_store, serve_bytes_full, PublisherQuery};
 
 /// Header carrying the patch identifier on a quilt-patch read (matches the real daemon).
 const X_QUILT_PATCH_IDENTIFIER: HeaderName = HeaderName::from_static("x-quilt-patch-identifier");
@@ -228,6 +228,12 @@ async fn list_patches(
 }
 
 /// Serve patch bytes with the aggregator headers + the `X-Quilt-Patch-Identifier` header.
+///
+/// Uses `serve_bytes_full` (always `200`, Range-IGNORED), NOT the Range-honoring
+/// `serve_bytes` — matching the real Walrus aggregator, whose quilt-patch responder
+/// (`build_quilt_patch_response`) always returns `200` and never inspects `Range` (only
+/// plain-blob reads honor `Range` → `206`). This keeps a `Range:` request on a quilt
+/// patch behaving identically on localnet and testnet/mainnet.
 fn quilt_patch_response(
     method: &Method,
     headers: &HeaderMap,
@@ -235,7 +241,7 @@ fn quilt_patch_response(
     patch: QuiltPatchData,
 ) -> Response {
     let identifier = patch.identifier.clone();
-    let mut resp = serve_bytes(method, headers, etag, patch.data);
+    let mut resp = serve_bytes_full(method, headers, etag, patch.data);
     if let Ok(v) = HeaderValue::from_str(&identifier) {
         resp.headers_mut().insert(X_QUILT_PATCH_IDENTIFIER, v);
     }
