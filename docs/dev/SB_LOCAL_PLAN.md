@@ -194,7 +194,10 @@ drop-in for the AGGREGATOR + PUBLISHER only.
   `quilt_version` [V1 only]) → `200` `QuiltStoreResult { blobStoreResult: BlobStoreResult,
   storedQuiltBlobs: [{ identifier, quiltPatchId, range }] }`. Reads:
   `GET /v1/blobs/by-quilt-patch-id/{id}` + `GET /v1/blobs/by-quilt-id/{quilt_id}/{identifier}`
-  → patch bytes + `X-Quilt-Patch-Identifier` header (+ tag headers);
+  → always `200` full patch bytes + `X-Quilt-Patch-Identifier` header (+ tag headers).
+  Quilt-patch reads do **not** honor `Range` (always `200`, never `206`) — matching the
+  real aggregator, whose quilt-patch responder ignores `Range` (only plain-blob reads
+  above support `Range` → `206`);
   `GET /v1/quilts/{quilt_id}/patches` → `[QuiltPatchItem{ identifier, patch_id, tags }]`.
 - `GET /status` — liveness.
 

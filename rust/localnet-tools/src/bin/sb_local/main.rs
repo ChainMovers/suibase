@@ -395,8 +395,29 @@ pub(crate) fn blob_store_result(s: StoredBlob) -> BlobStoreResult {
 // Shared response helpers
 // ---------------------------------------------------------------------------
 
-/// Serve blob bytes with the Walrus aggregator headers, honoring a single
-/// `Range: bytes=start-end` request (→ 206 + `Content-Range`/`Content-Length`).
+/// Serve the FULL body as `200 OK` with the Walrus aggregator headers — the `Range`
+/// header is ignored. This is the responder for **quilt-patch** reads: the real Walrus
+/// aggregator's `build_quilt_patch_response` always returns `200` and never inspects
+/// `Range`, unlike its plain-blob read (the only `Range` → `206` path). Keeping a
+/// separate Range-unaware responder mirrors that split, so a `Range:` request on a
+/// quilt patch behaves identically on localnet and on testnet/mainnet (full `200`).
+pub(crate) fn serve_bytes_full(
+    method: &Method,
+    req_headers: &HeaderMap,
+    etag: &str,
+    bytes: Vec<u8>,
+) -> Response {
+    // Use Body::from (NOT Json/Vec<u8>) so we control Content-Type exactly like the
+    // real daemon (it does not set a default Content-Type; see create_response_from_blob).
+    let mut response = (StatusCode::OK, Body::from(bytes)).into_response();
+    populate_aggregator_headers(method, req_headers, etag, response.headers_mut());
+    response
+}
+
+/// Serve **plain blob** bytes with the Walrus aggregator headers, honoring a single
+/// `Range: bytes=start-end` request (→ 206 + `Content-Range`/`Content-Length`). Use
+/// {@link serve_bytes_full} for quilt patches — the real aggregator honors `Range` on
+/// `/v1/blobs/{id}` but NOT on quilt-patch reads.
 pub(crate) fn serve_bytes(
     method: &Method,
     req_headers: &HeaderMap,
@@ -405,28 +426,23 @@ pub(crate) fn serve_bytes(
 ) -> Response {
     let total = bytes.len() as u64;
 
-    let mut response = if let Some(range) = req_headers.get(header::RANGE) {
-        match parse_single_range(range, total) {
-            Ok((start, end)) => {
-                let slice = bytes[start as usize..=end as usize].to_vec();
-                let mut r =
-                    (StatusCode::PARTIAL_CONTENT, Body::from(slice)).into_response();
-                let cr = format!("bytes {start}-{end}/{total}");
-                if let Ok(v) = HeaderValue::from_str(&cr) {
-                    r.headers_mut().insert(header::CONTENT_RANGE, v);
-                }
-                r.headers_mut()
-                    .insert(header::CONTENT_LENGTH, HeaderValue::from(end - start + 1));
-                r
-            }
-            Err(resp) => return resp,
-        }
-    } else {
-        // Use Body::from (NOT Json/Vec<u8>) so we control Content-Type exactly like the
-        // real daemon (it does not set a default Content-Type; see create_response_from_blob).
-        (StatusCode::OK, Body::from(bytes)).into_response()
+    let Some(range) = req_headers.get(header::RANGE) else {
+        return serve_bytes_full(method, req_headers, etag, bytes);
+    };
+    let (start, end) = match parse_single_range(range, total) {
+        Ok(v) => v,
+        Err(resp) => return resp,
     };
 
+    let slice = bytes[start as usize..=end as usize].to_vec();
+    let mut response = (StatusCode::PARTIAL_CONTENT, Body::from(slice)).into_response();
+    let cr = format!("bytes {start}-{end}/{total}");
+    if let Ok(v) = HeaderValue::from_str(&cr) {
+        response.headers_mut().insert(header::CONTENT_RANGE, v);
+    }
+    response
+        .headers_mut()
+        .insert(header::CONTENT_LENGTH, HeaderValue::from(end - start + 1));
     populate_aggregator_headers(method, req_headers, etag, response.headers_mut());
     response
 }
