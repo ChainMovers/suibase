@@ -12,19 +12,19 @@
     "docs:update-package": "pnpm dlx vp-update"
   },
   "devDependencies": {
-    "@vuepress/bundler-vite": "2.0.0-rc.17",
-    "@vuepress/plugin-docsearch": "2.0.0-rc.55",
-    "@vuepress/plugin-google-analytics": "2.0.0-rc.37",
-    "@vuepress/plugin-register-components": "2.0.0-rc.37",
-    "sass-embedded": "1.79.4",
-    "vue": "^3.5.10",
-    "vuepress": "2.0.0-rc.17",
-    "vuepress-theme-hope": "2.0.0-rc.58"
+    "@vuepress/bundler-vite": "2.0.0-rc.30",
+    "@vuepress/plugin-docsearch": "2.0.0-rc.130",
+    "@vuepress/plugin-google-analytics": "2.0.0-rc.130",
+    "@vuepress/plugin-register-components": "2.0.0-rc.132",
+    "sass-embedded": "1.100.0",
+    "vue": "^3.5.39",
+    "vuepress": "2.0.0-rc.30",
+    "vuepress-theme-hope": "2.0.0-rc.107"
   },
   "dependencies": {
-    "chart.js": "^4.4.4",
+    "chart.js": "^4.5.1",
     "flowchart.ts": "^3.0.1",
-    "katex": "^0.16.11",
-    "mermaid": "^10.9.2"
+    "katex": "^0.16.47",
+    "mermaid": "^11.16.0"
   }
 }

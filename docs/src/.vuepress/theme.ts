@@ -38,8 +38,6 @@ export default hopeTheme({
     url: "https://suibase.io",
   },
 
-  iconAssets: "iconify",
-
   logo: "/logo.png",
 
   repo: "chainmovers/suibase",
@@ -53,6 +51,48 @@ export default hopeTheme({
   docsDir: "docs/src/",
 
   hotReload: true,
+
+  markdown: {
+    align: true,
+    attrs: true,
+    chartjs: true,
+    echarts: false,
+    flowchart: true,
+    gfm: true,
+    include: true,
+    mark: true,
+    mermaid: true,
+    stylize: [
+      {
+        matcher: "Recommended",
+        replacer: ({ tag }) => {
+          if (tag === "em")
+            return {
+              tag: "Badge",
+              attrs: { type: "tip" },
+              content: "Recommended",
+            };
+        },
+      },
+    ],
+    sub: true,
+    sup: true,
+    vPre: true,
+    vuePlayground: false,
+
+    figure: false,
+    imgLazyload: true,
+    imgMark: true,
+    imgSize: true,
+
+    math: true,
+
+    alert: true,
+    hint: true,
+
+    tabs: true,
+    codeTabs: true,
+  },
 
   locales: {
     "/": {
@@ -103,6 +143,10 @@ export default hopeTheme({
     },*/
     git: true,
 
+    icon: {
+      assets: "iconify",
+    },
+
     // Redirect the retired /cookbook/* pages (and the cookbook-editor guide)
     // to the standalone Sui Cookbook.
     redirect: {
@@ -119,57 +163,6 @@ export default hopeTheme({
       apiKey: "7c6732e9f43a129ee2396d1c459db319", // gitleaks:allow
       indexName: "sui-base",
     },
-
-    // all features are enabled for demo, only preserve features you need here
-    mdEnhance: {
-      align: true,
-      attrs: true,
-      chart: true,
-      /*demo: true,*/
-      echarts: false,
-      flowchart: true,
-      gfm: true,
-      include: true,
-      mark: true,
-      mermaid: true,
-      /*playground: {
-        presets: ["ts", "vue"],
-      },*/
-      /*presentation: {
-        plugins: ["highlight", "math", "search", "notes", "zoom"],
-      },*/
-      stylize: [
-        {
-          matcher: "Recommended",
-          replacer: ({ tag }) => {
-            if (tag === "em")
-              return {
-                tag: "Badge",
-                attrs: { type: "tip" },
-                content: "Recommended",
-              };
-          },
-        },
-      ],
-      sub: true,
-      sup: true,
-      vPre: true,
-      vuePlayground: false,
-    },
-
-    markdownImage: {
-      // options
-      figure: false,
-      lazyload: true,
-      mark: true,
-      size: true,
-    },
-
-    markdownMath: true,
-
-    markdownHint: true,
-
-    markdownTab: true,
 
     // uncomment these if you want a pwa
     // pwa: {
