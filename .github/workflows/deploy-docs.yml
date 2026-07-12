@@ -42,7 +42,14 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: "latest"
+          # Pinned, not "latest": pnpm/action-setup's self-update step
+          # (switching from its bundled version to whatever "latest"
+          # resolves to on the registry) started crashing with "Cannot
+          # use 'in' operator to search for 'integrity' in undefined"
+          # — an upstream pnpm bug, unrelated to this repo. Pinning to
+          # the bundled version it installs cleanly skips that
+          # self-update path entirely.
+          version: "11.7.0"
           run_install: true
 
       - name: Copy pnpm dependency files
