@@ -1,0 +1,49 @@
+name: Quick Checks
+
+# A growable bucket for cheap, mechanical checks that need no build step
+# — pure file/state assertions that finish in seconds. Add a new check
+# here as its own step (or job, if it needs different permissions/setup)
+# rather than creating a new one-off workflow per check.
+#
+# This is wired into scripts/dev/merge's REQUIRED_WORKFLOWS gate, so a
+# red (or still-running) "Quick Checks" run on dev's tip blocks
+# promotion into the release pipeline — same as Lint/Rust Tests/etc.
+# If you add a check here, it's automatically part of that gate; no
+# further wiring needed on the CI side. (The merge script itself still
+# needs "Quick Checks" listed in REQUIRED_WORKFLOWS — already done.)
+#
+# Push-only (no pull_request), same reasoning as lint.yml: pull_request
+# races fast auto-merges from scripts/dev/merge, producing noisy
+# failures on closed PRs once GitHub deletes the synthetic merge ref.
+
+on:
+  push:
+    branches: [dev, staging, main]
+
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  quick-checks:
+    name: Quick Checks
+    runs-on: [ubuntu-latest]
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: docs/ci pins are in sync with docs/package.json
+        run: |
+          fail=0
+          if ! diff -q docs/package.json docs/ci/package.json.ci > /dev/null; then
+            echo "::error file=docs/ci/package.json.ci::docs/package.json and docs/ci/package.json.ci have diverged. The deploy workflow builds from the .ci copies, not the live files, so this drift means production would build with stale dependencies. Run: cd docs && cp package.json ci/package.json.ci && cp pnpm-lock.yaml ci/pnpm-lock.yaml.ci (see docs/ci/README.md)."
+            fail=1
+          fi
+          if ! diff -q docs/pnpm-lock.yaml docs/ci/pnpm-lock.yaml.ci > /dev/null; then
+            echo "::error file=docs/ci/pnpm-lock.yaml.ci::docs/pnpm-lock.yaml and docs/ci/pnpm-lock.yaml.ci have diverged. The deploy workflow builds from the .ci copies, not the live files, so this drift means production would build with stale dependencies. Run: cd docs && cp package.json ci/package.json.ci && cp pnpm-lock.yaml ci/pnpm-lock.yaml.ci (see docs/ci/README.md)."
+            fail=1
+          fi
+          exit "$fail"
