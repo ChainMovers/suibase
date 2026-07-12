@@ -8,7 +8,7 @@ editLink: true
 Curated resources for Sui devs - Projects with no activity for >1 year are removed.
 
 ::: details How to add a link?
-Either [edit it yourself]( ../community/editors.html ) or request someone else on our [Discord #cookbook channel]( https://discord.com/invite/Erb6SwsVbH ).<br>
+Either [edit it yourself]( https://chainmovers.github.io/sui-cookbook/editors.html ) or request someone else on our [Discord #cookbook channel]( https://discord.com/invite/Erb6SwsVbH ).<br>
 Target audience is developers. Not the right place for NFT marketplaces or exchanges.
 :::
 

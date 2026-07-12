@@ -2,6 +2,34 @@ import { hopeTheme } from "vuepress-theme-hope";
 import { enNavbar /*, zhNavbar*/ } from "./navbar/index.js";
 import { enSidebar /*, zhSidebar*/ } from "./sidebar/index.js";
 
+// The Sui Cookbook was split out into its own site:
+// https://chainmovers.github.io/sui-cookbook/
+// Keep the old suibase.io/cookbook/* URLs working by redirecting each one to
+// its 1:1 counterpart on the new site (generates a static redirect stub per
+// path at build time).
+const COOKBOOK_SITE = "https://chainmovers.github.io/sui-cookbook";
+const cookbookPaths = [
+  "", // /cookbook/            -> new site home
+  "code/", // section indexes
+  "guides/",
+  "code/Tokens.html",
+  "code/aliases.html",
+  "code/graphql.html",
+  "code/keypairs.html",
+  "code/multisig.html",
+  "code/networks.html",
+  "code/objects.html",
+  "code/transactions.html",
+  "guides/build.html",
+  "guides/fast_transactions.html",
+  "guides/fullnode.html",
+  "guides/progtxns.html",
+  "guides/sui-intro.html",
+];
+const cookbookRedirects: Record<string, string> = Object.fromEntries(
+  cookbookPaths.map((p) => [`/cookbook/${p}`, `${COOKBOOK_SITE}/${p}`]),
+);
+
 export default hopeTheme({
   hostname: "https://suibase.io",
 
@@ -74,6 +102,15 @@ export default hopeTheme({
       provider: "Waline",
     },*/
     git: true,
+
+    // Redirect the retired /cookbook/* pages (and the cookbook-editor guide)
+    // to the standalone Sui Cookbook.
+    redirect: {
+      config: {
+        ...cookbookRedirects,
+        "/community/editors.html": `${COOKBOOK_SITE}/editors.html`,
+      },
+    },
 
     docsearch: {
       // your options
