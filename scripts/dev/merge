@@ -86,9 +86,13 @@ echo
 echo "Verifying dev@${DEV_SHA:0:10} CI status..."
 
 # Workflows that ALL must be green on a dev push for a promotion to
-# be allowed. Lint covers syntax; the four matrices cover code.
+# be allowed. Lint covers syntax; the four matrices cover code; Quick
+# Checks covers cheap mechanical/state assertions (see
+# .github/workflows/quick-checks.yml — add new fast checks there and
+# they're covered by this gate automatically).
 REQUIRED_WORKFLOWS=(
   "Lint"
+  "Quick Checks"
   "Suibase Daemon Tests"
   "Rust Tests"
   "TypeScript Tests"
