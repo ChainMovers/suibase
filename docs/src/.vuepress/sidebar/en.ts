@@ -90,39 +90,12 @@ export const enSidebar = sidebar({
       ],
     },
     {
-      text: "Sui Cookbook",
-      prefix: "cookbook/",
-      link: "cookbook/README.md",
-      children: [
-        {
-          text: "Introduction",
-          link: "README.md",
-        },
-        {
-          text: "Guides",
-          collapsible: true,
-          prefix: "guides/",
-          children: "structure",
-        },
-        {
-          text: "Code Snippets",
-          collapsible: true,
-          prefix: "code/",
-          children: "structure",
-        },
-      ],
-    },
-    {
       text: "Community",
       link: "community/",
       children: [
         {
           text: "Forums / Contacts",
           link: "community/",
-        },
-        {
-          text: "Become an Editor",
-          link: "community/editors.md",
         },
       ],
     },
