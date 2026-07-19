@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# This script calls the Suiftly Drive CLI (`sui-drive`) pinned to Sui mainnet.
+#
+# Your mainnet workdir should have been created with 'mainnet start'/'mainnet update'.
+#
+# Use 'mdrive' like the Drive CLI, but against mainnet — the wrapper preselects
+# the network, so you never pass --network. Examples:
+#    'mdrive ls :/'                 list your vaults (the drive root)
+#    'mdrive'                       start an interactive session (REPL) on a TTY
+#    'mdrive -c "pwd ; ls :/"'      a non-interactive mini-session (scripts)
+#
+# See scripts/common/__drive-exec.sh for how the pinned binary is resolved/built.
+
+SUIBASE_DIR="$HOME/suibase"
+
+# Source '__globals.sh'.
+SCRIPT_COMMON_CALLER="$(readlink -f "$0")"
+WORKDIR="mainnet"
+# shellcheck source=SCRIPTDIR/common/__globals.sh
+source "$SUIBASE_DIR/scripts/common/__globals.sh" "$SCRIPT_COMMON_CALLER" "$WORKDIR"
+trap cleanup EXIT
+
+# shellcheck source=SCRIPTDIR/common/__drive-exec.sh
+source "$SUIBASE_DIR/scripts/common/__drive-exec.sh"
+
+# Trap the case of doing just a self-test for installation.
+if [[ "$1" == "suibase-script-name" ]]; then
+  # The installer verifies this echoes the script's own name.
+  echo "$DRIVE_SCRIPT"
+  exit
+fi
+
+drive_exec "$@"

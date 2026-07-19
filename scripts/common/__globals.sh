@@ -83,9 +83,11 @@ export WORKDIR_NAME="$WORKDIR"
 export SUI_SCRIPT
 export WALRUS_SCRIPT
 export SITE_BUILDER_SCRIPT
+export DRIVE_SCRIPT
 case $WORKDIR in
 localnet)
   SUI_SCRIPT="lsui"
+  DRIVE_SCRIPT="ldrive"
   ;;
 devnet)
   SUI_SCRIPT="dsui"
@@ -94,11 +96,13 @@ testnet)
   SUI_SCRIPT="tsui"
   WALRUS_SCRIPT="twalrus"
   SITE_BUILDER_SCRIPT="tsite"
+  DRIVE_SCRIPT="tdrive"
   ;;
 mainnet)
   SUI_SCRIPT="msui"
   WALRUS_SCRIPT="mwalrus"
   SITE_BUILDER_SCRIPT="msite"
+  DRIVE_SCRIPT="mdrive"
   ;;
 active)
   SUI_SCRIPT="asui"
