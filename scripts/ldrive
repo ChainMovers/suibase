@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script calls the Suiftly Drive CLI (`sui-drive`) pinned to your suibase localnet.
+# This script calls the Suibase Drive CLI (`sui-drive`) pinned to your suibase localnet.
 #
 # Your localnet workdir should have been created with 'localnet start'/'localnet update'.
 #

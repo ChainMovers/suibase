@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script calls the Suiftly Drive CLI (`sui-drive`) pinned to Sui mainnet.
+# This script calls the Suibase Drive CLI (`sui-drive`) pinned to Sui mainnet.
 #
 # Your mainnet workdir should have been created with 'mainnet start'/'mainnet update'.
 #

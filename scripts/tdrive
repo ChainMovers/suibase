@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script calls the Suiftly Drive CLI (`sui-drive`) pinned to Sui testnet (free).
+# This script calls the Suibase Drive CLI (`sui-drive`) pinned to Sui testnet (free).
 #
 # Your testnet workdir should have been created with 'testnet start'/'testnet update'.
 #

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Call the Suiftly Drive CLI (`sui-drive`) with the network pinned by the
+# Call the Suibase Drive CLI (`sui-drive`) with the network pinned by the
 # calling wrapper (`ldrive`/`tdrive`/`mdrive` -> localnet/testnet/mainnet).
 #
 # You must source __globals.sh before __drive-exec.sh.
