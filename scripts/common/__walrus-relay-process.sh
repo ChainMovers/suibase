@@ -456,10 +456,28 @@ EOF
   fi
 
   # Try up to 3 times to start the process.
-  end=$((SECONDS + 30))
+  #
+  # Each attempt gets its OWN deadline. The deadline used to be computed once
+  # before this loop, which quietly made "3 attempts" a single attempt with a
+  # 30s budget: as soon as attempt 1 exhausted it, attempts 2 and 3 spawned a
+  # process, evaluated `SECONDS -lt end` as false, and fell straight through
+  # without ever health-checking. That also destroyed the diagnostic -- the
+  # last attempt truncated the log (below) and never waited for anything to be
+  # written to it, so the failure handler reported an empty "Log contents:".
+  local end
+  local _relay_pid=""
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
   for _i in {1..3}; do
+    # Reap the process spawned by a previous failed attempt. Otherwise it
+    # lingers holding $_RELAY_PORT and the next attempt fails with "Address
+    # already in use" -- one of the very conditions this loop retries on.
+    if [ -n "$_relay_pid" ]; then
+      kill "$_relay_pid" >/dev/null 2>&1
+      wait "$_relay_pid" 2>/dev/null
+      _relay_pid=""
+    fi
+
     rm -f "$WALRUS_RELAY_DIR/walrus-relay-process.log" >/dev/null 2>&1
 
     # Start walrus-upload-relay process using workdir-specific binary
@@ -470,8 +488,10 @@ EOF
       --metrics-address "127.0.0.1:$_METRICS_PORT" \
       --relay-config "$_RELAY_CONFIG" \
       >"$WALRUS_RELAY_DIR/walrus-relay-process.log" 2>&1 &
+    _relay_pid=$!
 
     # Loop until confirms can connect, or exit if takes too much time.
+    end=$((SECONDS + 30))
     while [ $SECONDS -lt $end ]; do
       # Health check via tip-config endpoint
       CHECK_ALIVE=$(curl -s "http://localhost:$_RELAY_PORT/v1/tip-config" 2>/dev/null || true)

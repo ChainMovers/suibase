@@ -111,12 +111,20 @@ impl GeneralApiServer for GeneralApiImpl {
             None => return Err(RpcInputError::InvalidParams("workdir".to_string(), workdir).into()),
         };
 
-        // Prevent shell injection by not allowing some bash ways to chain commands.
-        if command.contains(';') || command.contains('&') || command.contains('|') {
+        // Prevent shell injection. `command` is concatenated into a `bash -c`
+        // string (send_shell_exec below runs `<workdir> <command>`), so it MUST
+        // carry NO shell metacharacter. The old `;`/`&`/`|` denylist was trivially
+        // bypassed by `$(…)`, backticks, redirects, newlines and quotes — an RCE.
+        // Allow only a workdir sub-command shape: ASCII alphanumerics plus space
+        // and `_ . -` (e.g. `start`, `stop`, `regen`, `set-active`). Everything
+        // else — the entire injection surface — is refused as invalid input.
+        let command_ok = !command.is_empty()
+            && command
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b' ' | b'_' | b'.' | b'-'));
+        if !command_ok {
             return Err(RpcInputError::InvalidParams("command".to_string(), command).into());
         }
-
-        // TODO Whitelist here the workdir commands that are allowed to be executed.
 
         let mut resp = SuccessResponse::new();
         resp.header.method = "workdirCommand".to_string();

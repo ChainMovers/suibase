@@ -94,6 +94,7 @@ jobs:
       - name: Sui Prerequesites (Ubuntu)
         if: runner.os == 'Linux'
         run: |
+          sudo apt-get update
           sudo apt-get install curl
 
       - name: Sui Prerequesites (macOS)
