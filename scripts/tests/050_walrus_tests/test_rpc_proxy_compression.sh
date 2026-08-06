@@ -12,9 +12,9 @@
 # The underlying concern is unchanged on the gRPC path (see the daemon commit
 # "proxy: retry gRPC upstreams returning gzip-compressed responses"), so the
 # same guarantee is asserted here over gRPC: whatever the upstream sends and
-# whatever encoding the client offers, the proxy must return a well-formed
-# frame the client can actually decode. See validate_grpc_frame() for why that
-# is not the same as "uncompressed" -- negotiated compression is legal.
+# whatever encoding the client offers, the proxy must hand the client an
+# UNCOMPRESSED frame. See validate_grpc_frame() for why that invariant is
+# stronger than plain gRPC negotiation, and why it has to be.
 
 set -e
 
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/__test_common.sh"
 
 TEST_NAME="RPC Proxy Compression Fix (gRPC)"
-TEST_DESCRIPTION="Verify suibase RPC proxy returns gRPC frames the client can decode"
+TEST_DESCRIPTION="Verify suibase RPC proxy never forwards compressed gRPC frames to the client"
 
 # Test configuration
 WORKDIR="testnet"
@@ -41,7 +41,8 @@ GRPC_PATH="/sui.rpc.v2.LedgerService/GetServiceInfo"
 EMPTY_GRPC_FRAME='\x00\x00\x00\x00\x00'
 
 # The client-offered encodings to exercise. Offering gzip is the interesting
-# case: the server may then legally compress, provided it says so.
+# case: a proxy that leaks the client's accept-encoding upstream (instead of
+# forcing identity) returns compressed frames for exactly these offers.
 declare -a TEST_ENCODINGS=(
     "identity"
     "gzip"
@@ -60,8 +61,8 @@ GRPC_HDR_FILE=""
 
 # Issue one gRPC request through the proxy.
 # Echoes the HTTP status code; writes the response body to $GRPC_RESP_FILE and
-# the response headers to $GRPC_HDR_FILE (needed to tell a legitimately
-# negotiated compressed message from a compressed one the client cannot decode).
+# the response headers to $GRPC_HDR_FILE (so a compressed response can report
+# which grpc-encoding leaked through).
 grpc_call_via_proxy() {
     local accept_encoding="$1"
     local timeout="${2:-10}"
@@ -133,17 +134,23 @@ setup_test_environment() {
 #   0 = frame the client can decode
 #   2 = malformed, or compressed in a way the client cannot decode
 #
-# Note on what is and isn't a bug. Per the gRPC spec, when the client advertises
-# an encoding via grpc-accept-encoding the server MAY compress the message: it
-# sets the per-message compression flag to 1 AND announces the algorithm in a
-# `grpc-encoding` response header, which is how the client knows to decompress.
-# That is correct behaviour, not the bug -- an earlier version of this test
-# asserted the flag was always 0, which merely encoded the behaviour of one
-# daemon build that happens never to compress.
+# The invariant is stronger than plain gRPC, and deliberately so. The proxy
+# DISCARDS the client's grpc-accept-encoding and forces `identity` on every
+# upstream request (proxy_grpc.rs, "Drop any inbound `grpc-accept-encoding`"),
+# because the Sui CLI's tonic client cannot decode message-level gzip. An
+# upstream that ignores that and answers `grpc-encoding: gzip` must be surfaced
+# as a retryable failure so the dispatcher tries the next upstream -- never
+# forwarded. See "proxy: retry gRPC upstreams returning gzip-compressed
+# responses".
 #
-# The actual bug is compressed bytes the client cannot decode: a set flag with
-# no `grpc-encoding` header, an algorithm the client never offered, or a raw
-# compressed stream in place of a gRPC frame.
+# So there is no client-side negotiation to honour: whatever the client offers,
+# a compressed frame reaching it means the contract is broken and the CLI will
+# fail with "UNIMPLEMENTED: Content is compressed with gzip which isn't
+# supported". The compression flag must be 0, always.
+#
+# The offered encodings are varied anyway because that is what makes a
+# regression visible: a proxy that leaks the client's accept-encoding upstream
+# only returns compressed frames for the offers that include gzip.
 validate_grpc_frame() {
     local offered="$1"
 
@@ -175,32 +182,27 @@ validate_grpc_frame() {
         return 2
     fi
 
-    # Byte 0 is the per-message compression flag.
+    # Byte 0 is the per-message compression flag. It must be 0 -- see the
+    # contract above.
     local flag="${header:0:2}"
     if [ "$flag" = "00" ]; then
         echo "  ✓ uncompressed frame (${actual_len}B payload)"
         return 0
     fi
 
-    # Flag set: legitimate only if the algorithm was announced and the client
-    # offered it.
+    # Compressed. Report the announced algorithm purely as a diagnostic -- it
+    # does not make the response acceptable, it just says which upstream
+    # encoding leaked through.
     local announced
     announced=$(grep -i "^grpc-encoding:" "$GRPC_HDR_FILE" 2>/dev/null |
         head -1 | cut -d: -f2- | tr -d ' \r\n')
 
-    if [ -z "$announced" ]; then
-        echo "  ✗ CRITICAL: compression flag 0x$flag but no grpc-encoding header"
-        echo "    the client is handed compressed bytes with no way to know the algorithm"
-        return 2
-    fi
-
-    if ! echo ",$offered," | grep -qi ",$announced,"; then
-        echo "  ✗ CRITICAL: response encoded with '$announced', which the client did not offer ($offered)"
-        return 2
-    fi
-
-    echo "  ✓ compressed frame, properly negotiated (grpc-encoding: $announced, ${actual_len}B payload)"
-    return 0
+    echo "  ✗ CRITICAL: compression flag is 0x$flag (expected 0x00)"
+    echo "    grpc-encoding: ${announced:-<absent>}, client offered: $offered"
+    echo "    the proxy must force 'grpc-accept-encoding: identity' upstream and"
+    echo "    retry rather than forward a compressed frame; the Sui CLI will fail"
+    echo "    with UNIMPLEMENTED: Content is compressed with ${announced:-gzip}"
+    return 2
 }
 
 # Test a single gRPC query through the proxy.
