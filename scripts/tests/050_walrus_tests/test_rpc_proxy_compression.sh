@@ -12,8 +12,9 @@
 # The underlying concern is unchanged on the gRPC path (see the daemon commit
 # "proxy: retry gRPC upstreams returning gzip-compressed responses"), so the
 # same guarantee is asserted here over gRPC: whatever the upstream sends and
-# whatever encoding the client offers, the proxy must return a well-formed,
-# uncompressed gRPC frame.
+# whatever encoding the client offers, the proxy must return a well-formed
+# frame the client can actually decode. See validate_grpc_frame() for why that
+# is not the same as "uncompressed" -- negotiated compression is legal.
 
 set -e
 
@@ -23,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/__test_common.sh"
 
 TEST_NAME="RPC Proxy Compression Fix (gRPC)"
-TEST_DESCRIPTION="Verify suibase RPC proxy returns well-formed uncompressed gRPC frames"
+TEST_DESCRIPTION="Verify suibase RPC proxy returns gRPC frames the client can decode"
 
 # Test configuration
 WORKDIR="testnet"
@@ -39,8 +40,8 @@ GRPC_PATH="/sui.rpc.v2.LedgerService/GetServiceInfo"
 #   bytes 1-4: message length, big-endian (0)
 EMPTY_GRPC_FRAME='\x00\x00\x00\x00\x00'
 
-# The client-offered encodings to exercise. Offering gzip is the case that
-# used to produce raw compressed bytes leaking through to the client.
+# The client-offered encodings to exercise. Offering gzip is the interesting
+# case: the server may then legally compress, provided it says so.
 declare -a TEST_ENCODINGS=(
     "identity"
     "gzip"
@@ -55,15 +56,19 @@ MAX_ATTEMPTS=${#TEST_ENCODINGS[@]}
 # Scratch files, set up in setup_test_environment.
 GRPC_REQ_FILE=""
 GRPC_RESP_FILE=""
+GRPC_HDR_FILE=""
 
 # Issue one gRPC request through the proxy.
-# Echoes the HTTP status code; writes the response body to $GRPC_RESP_FILE.
+# Echoes the HTTP status code; writes the response body to $GRPC_RESP_FILE and
+# the response headers to $GRPC_HDR_FILE (needed to tell a legitimately
+# negotiated compressed message from a compressed one the client cannot decode).
 grpc_call_via_proxy() {
     local accept_encoding="$1"
     local timeout="${2:-10}"
 
     curl -s --http2-prior-knowledge --max-time "$timeout" \
         -o "$GRPC_RESP_FILE" \
+        -D "$GRPC_HDR_FILE" \
         -w "%{http_code}" \
         -X POST "http://localhost:$PROXY_PORT$GRPC_PATH" \
         -H "content-type: application/grpc" \
@@ -85,6 +90,7 @@ setup_test_environment() {
 
     GRPC_REQ_FILE="$(mktemp)"
     GRPC_RESP_FILE="$(mktemp)"
+    GRPC_HDR_FILE="$(mktemp)"
     # shellcheck disable=SC2059
     printf "$EMPTY_GRPC_FRAME" >"$GRPC_REQ_FILE"
 
@@ -124,9 +130,23 @@ setup_test_environment() {
 }
 
 # Validate a gRPC response frame written to $GRPC_RESP_FILE.
-#   0 = valid uncompressed frame
-#   2 = compressed / malformed frame (the bug this test guards against)
+#   0 = frame the client can decode
+#   2 = malformed, or compressed in a way the client cannot decode
+#
+# Note on what is and isn't a bug. Per the gRPC spec, when the client advertises
+# an encoding via grpc-accept-encoding the server MAY compress the message: it
+# sets the per-message compression flag to 1 AND announces the algorithm in a
+# `grpc-encoding` response header, which is how the client knows to decompress.
+# That is correct behaviour, not the bug -- an earlier version of this test
+# asserted the flag was always 0, which merely encoded the behaviour of one
+# daemon build that happens never to compress.
+#
+# The actual bug is compressed bytes the client cannot decode: a set flag with
+# no `grpc-encoding` header, an algorithm the client never offered, or a raw
+# compressed stream in place of a gRPC frame.
 validate_grpc_frame() {
+    local offered="$1"
+
     local size
     size=$(wc -c <"$GRPC_RESP_FILE" | tr -d ' ')
 
@@ -139,24 +159,15 @@ validate_grpc_frame() {
     local header
     header=$(head_bytes_hex "$GRPC_RESP_FILE" 5)
 
-    # gzip magic (1f 8b) at the head means raw compressed bytes leaked through
-    # instead of a gRPC frame -- exactly the failure this test exists to catch.
+    # gzip magic (1f 8b) at offset 0 means a raw compressed stream arrived
+    # instead of a gRPC frame -- no framing at all, nothing can parse it.
     if [ "${header:0:4}" = "1f8b" ]; then
-        echo "  ✗ CRITICAL: response starts with gzip magic (raw compressed data)"
+        echo "  ✗ CRITICAL: response starts with gzip magic (raw compressed stream, not a gRPC frame)"
         return 2
     fi
 
-    # Byte 0 is the per-message compression flag. The proxy must decompress
-    # before handing the frame to the client, so this must be 0.
-    local flag="${header:0:2}"
-    if [ "$flag" != "00" ]; then
-        echo "  ✗ CRITICAL: gRPC compression flag is 0x$flag (expected 0x00)"
-        return 2
-    fi
-
-    # Bytes 1-4 are the big-endian payload length. If it disagrees with what
-    # actually arrived, the frame was mangled (e.g. length from the compressed
-    # form kept after decompressing).
+    # Bytes 1-4 are the big-endian payload length, and must agree with what
+    # actually arrived -- true whether or not the payload is compressed.
     local declared_len=$((16#${header:2:8}))
     local actual_len=$((size - 5))
     if [ "$declared_len" -ne "$actual_len" ]; then
@@ -164,6 +175,31 @@ validate_grpc_frame() {
         return 2
     fi
 
+    # Byte 0 is the per-message compression flag.
+    local flag="${header:0:2}"
+    if [ "$flag" = "00" ]; then
+        echo "  ✓ uncompressed frame (${actual_len}B payload)"
+        return 0
+    fi
+
+    # Flag set: legitimate only if the algorithm was announced and the client
+    # offered it.
+    local announced
+    announced=$(grep -i "^grpc-encoding:" "$GRPC_HDR_FILE" 2>/dev/null |
+        head -1 | cut -d: -f2- | tr -d ' \r\n')
+
+    if [ -z "$announced" ]; then
+        echo "  ✗ CRITICAL: compression flag 0x$flag but no grpc-encoding header"
+        echo "    the client is handed compressed bytes with no way to know the algorithm"
+        return 2
+    fi
+
+    if ! echo ",$offered," | grep -qi ",$announced,"; then
+        echo "  ✗ CRITICAL: response encoded with '$announced', which the client did not offer ($offered)"
+        return 2
+    fi
+
+    echo "  ✓ compressed frame, properly negotiated (grpc-encoding: $announced, ${actual_len}B payload)"
     return 0
 }
 
@@ -188,13 +224,13 @@ test_grpc_query() {
         return 1
     fi
 
-    validate_grpc_frame
+    validate_grpc_frame "$accept_encoding"
     local frame_result=$?
     if [ $frame_result -ne 0 ]; then
         return $frame_result
     fi
 
-    echo "  ✓ Query $attempt passed - well-formed uncompressed gRPC frame"
+    echo "  ✓ Query $attempt passed - client-decodable gRPC frame"
     return 0
 }
 
@@ -248,7 +284,7 @@ run_compression_tests() {
         return 1
     fi
 
-    echo "✓ No compression bugs detected - all responses are well-formed gRPC frames"
+    echo "✓ No compression bugs detected - all responses are client-decodable gRPC frames"
     return 0
 }
 
@@ -263,6 +299,7 @@ cleanup_test_environment() {
 
     [ -n "$GRPC_REQ_FILE" ] && rm -f "$GRPC_REQ_FILE"
     [ -n "$GRPC_RESP_FILE" ] && rm -f "$GRPC_RESP_FILE"
+    [ -n "$GRPC_HDR_FILE" ] && rm -f "$GRPC_HDR_FILE"
 
     return 0
 }
