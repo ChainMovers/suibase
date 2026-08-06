@@ -22,7 +22,13 @@ start_sui_faucet_process() {
   mkdir -p "$CONFIG_DATA_DIR/faucet.wal"
 
   # Try up to 3 times to start the process.
-  end=$((SECONDS + 30))
+  # Each attempt gets its OWN deadline (see the same fix in
+  # __walrus-relay-process.sh). Computing it once before the loop made "3
+  # attempts" a single attempt with a 30s budget: once exhausted, the remaining
+  # attempts spawned a process, found the deadline already passed, and fell
+  # through without health-checking -- leaving the spawned faucet behind and an
+  # empty log for the failure handler.
+  local end
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
   for _i in {1..3}; do
@@ -44,6 +50,7 @@ start_sui_faucet_process() {
     fi
 
     # Loop until confirms can connect, or exit if takes too much time.
+    end=$((SECONDS + 30))
     while [ $SECONDS -lt $end ]; do
       # If it returns an error about "JSON" then it is alive!
       if $SUI_BASE_NET_MOCK; then

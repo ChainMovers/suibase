@@ -35,7 +35,6 @@ use crate::api::impl_mock_api::MockApiImpl;
 
 use jsonrpsee::{core::server::Methods, server::ServerBuilder};
 use std::net::SocketAddr;
-use tower_http::cors::AllowOrigin;
 
 #[derive(Clone)]
 pub struct APIServerParams {
@@ -103,11 +102,15 @@ impl APIServerThread {
     async fn event_loop(self, _subsys: &SubsystemHandle) -> Result<()> {
         // Reference:
         // https://github.com/paritytech/jsonrpsee/blob/master/examples/examples/cors_server.rs
+        // SECURITY: never reflect arbitrary origins. This control API binds
+        // loopback (127.0.0.1:44399) but a browser runs on the same host, so a
+        // permissive `AllowOrigin::any()` let ANY website the user visited drive
+        // it cross-origin — a drive-by against a shell-executing surface. With no
+        // allowed origin, browsers block every cross-origin call; non-browser
+        // callers (the VS Code extension, curl, the Rust tests) send no `Origin`
+        // and are unaffected. A future same-host SPA adds its exact origin here.
         let cors = tower_http::cors::CorsLayer::new()
-            // Allow `POST` when accessing the resource
             .allow_methods(hyper::Method::POST)
-            // Allow requests from any origin
-            .allow_origin(AllowOrigin::any())
             .allow_headers([hyper::header::CONTENT_TYPE]);
 
         let service = ServiceBuilder::new().layer(cors);

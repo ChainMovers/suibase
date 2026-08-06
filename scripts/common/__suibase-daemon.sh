@@ -164,7 +164,6 @@ wait_for_sui_client_up() {
     return
   fi
 
-  local _SUI_RESP
   local _AT_LEAST_ONE_DOT=false
   local _JSON_RPC_UP=false
   local _WORKDIRS_IDX=0
@@ -177,17 +176,18 @@ wait_for_sui_client_up() {
     # shellcheck disable=SC2153
     local _SUI_EXEC="$WORKDIRS/$_WORKDIR_NAME/sui-exec"
 
-    # Do a sui "client gas" call, and verify that
-    # it returns something valid.
-
-    _SUI_RESP=$("$_SUI_EXEC" client gas --json 2>&1)
-    # echo "client gas for $_WORKDIR_NAME returns [$_SUI_RESP]"
-    if [ -n "$_SUI_RESP" ]; then
-      # Valid if starts with [ and end with ] ... or respond with "no addresses".
-      if [[ "$_SUI_RESP" =~ ^\[.*\]$ ]] || [[ "$_SUI_RESP" =~ "No managed addresses" ]]; then
-        _JSON_RPC_UP=true
-        break
-      fi
+    # Do a sui "client gas" call, and verify that the node answered.
+    #
+    # Use *only* the exit code: 0 when the CLI reached the node, non-zero
+    # otherwise (e.g. 1 with "tcp connect error" when the RPC is unreachable).
+    #
+    # Deliberately do not pattern-match the payload. Its shape is not stable
+    # across sui releases -- 1.77.1 changed "client gas --json" from a bare
+    # array to {"gasCoins": [...]}, which silently broke the previous check and
+    # made every workdir look permanently down.
+    if "$_SUI_EXEC" client gas --json >/dev/null 2>&1; then
+      _JSON_RPC_UP=true
+      break
     fi
 
     if [ "$_i" -eq 1 ] || [ "$_i" -eq 4 ] || [ "$_i" -eq 12 ]; then
