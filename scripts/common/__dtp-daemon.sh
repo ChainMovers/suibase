@@ -140,7 +140,13 @@ start_dtp_daemon() {
 
   # Try until can confirm the dtp-services is running healthy, or exit
   # if takes too much time.
-  end=$((SECONDS + 30))
+  # Each attempt gets its OWN deadline (see the same fix in
+  # __walrus-relay-process.sh). Computing it once before the loop made "3
+  # attempts" a single attempt with a 30s budget: once exhausted, the remaining
+  # attempts spawned a process, found the deadline already passed, and fell
+  # through without ever health-checking.
+  local end
+  local _next_retry
   ALIVE=false
   AT_LEAST_ONE_SECOND=false
   for _i in {1..3}; do
@@ -154,6 +160,8 @@ start_dtp_daemon() {
     # safely be ignored to /dev/null.
     nohup "$HOME/suibase/scripts/common/run-daemon.sh" dtp >/dev/null 2>&1 &
 
+    end=$((SECONDS + 30))
+    _next_retry=$((SECONDS + 10))
     while [ $SECONDS -lt $end ]; do
       if is_dtp_daemon_running; then
         ALIVE=true
@@ -166,7 +174,12 @@ start_dtp_daemon() {
       # Detect if should do a retry at starting it.
       # This is unlikely needed, but just in case there is a bug in
       # the startup logic...
-      if [ $SECONDS -gt $((SECONDS + 10)) ]; then
+      #
+      # The bound must be captured BEFORE the wait loop. This was
+      # `[ $SECONDS -gt $((SECONDS + 10)) ]`, which compares SECONDS against
+      # itself plus 10 and is therefore never true -- the early retry could
+      # never fire. Same shape as _NEXT_RETRY in __suibase-daemon.sh.
+      if [ $SECONDS -gt $_next_retry ]; then
         break
       fi
     done

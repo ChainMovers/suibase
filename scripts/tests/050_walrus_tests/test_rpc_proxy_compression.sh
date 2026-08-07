@@ -1,8 +1,20 @@
 #!/bin/bash
 
-# Test for RPC proxy binary response issue
-# This test reproduces a critical bug where suibase RPC proxy returns compressed binary data
-# instead of properly decompressed JSON responses when upstream servers use gzip compression.
+# Test for RPC proxy response integrity, on the gRPC path.
+#
+# Originally this drove JSON-RPC (sui_getChainIdentifier and friends) through
+# the proxy to prove the daemon hands back a decompressed response instead of
+# raw gzip bytes. Sui has since deprecated JSON-RPC on public fullnodes -- they
+# answer every method with -32601 "JSON-RPC on public fullnodes has been
+# deprecated. Please migrate to gRPC or GraphQL endpoints" -- so the JSON-RPC
+# form of this test can no longer reach a real upstream and asserts nothing.
+#
+# The underlying concern is unchanged on the gRPC path (see the daemon commit
+# "proxy: retry gRPC upstreams returning gzip-compressed responses"), so the
+# same guarantee is asserted here over gRPC: whatever the upstream sends and
+# whatever encoding the client offers, the proxy must hand the client an
+# UNCOMPRESSED frame. See validate_grpc_frame() for why that invariant is
+# stronger than plain gRPC negotiation, and why it has to be.
 
 set -e
 
@@ -11,260 +23,286 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source the walrus test common utilities (which includes build daemon functionality)
 . "$SCRIPT_DIR/__test_common.sh"
 
-TEST_NAME="RPC Proxy Compression Fix"
-TEST_DESCRIPTION="Verify suibase RPC proxy properly handles compressed responses from upstream servers"
+TEST_NAME="RPC Proxy Compression Fix (gRPC)"
+TEST_DESCRIPTION="Verify suibase RPC proxy never forwards compressed gRPC frames to the client"
 
 # Test configuration
 WORKDIR="testnet"
 PROXY_PORT="44342"
-MAX_ATTEMPTS=6
 
-# JSON-RPC test queries that are read-only and safe
-declare -a TEST_QUERIES=(
-    '{"jsonrpc":"2.0","id":1,"method":"sui_getLatestCheckpointSequenceNumber","params":[]}'
-    '{"jsonrpc":"2.0","id":2,"method":"sui_getChainIdentifier","params":[]}'
-    '{"jsonrpc":"2.0","id":3,"method":"sui_getReferenceGasPrice","params":[]}'
-    '{"jsonrpc":"2.0","id":4,"method":"sui_getTotalTransactionBlocks","params":[]}'
-    '{"jsonrpc":"2.0","id":5,"method":"sui_getProtocolConfig","params":[]}'
-    '{"jsonrpc":"2.0","id":6,"method":"sui_getValidatorsApy","params":[]}'
+# Unary, no-parameter gRPC method on the Sui LedgerService. The response
+# carries chain id / epoch / checkpoint height -- small and cheap. This is the
+# same call the daemon uses for its own upstream health probing.
+GRPC_PATH="/sui.rpc.v2.LedgerService/GetServiceInfo"
+
+# A gRPC request frame for an empty message:
+#   byte 0   : compression flag (0 = uncompressed)
+#   bytes 1-4: message length, big-endian (0)
+EMPTY_GRPC_FRAME='\x00\x00\x00\x00\x00'
+
+# The client-offered encodings to exercise. Offering gzip is the interesting
+# case: a proxy that leaks the client's accept-encoding upstream (instead of
+# forcing identity) returns compressed frames for exactly these offers.
+declare -a TEST_ENCODINGS=(
+    "identity"
+    "gzip"
+    "gzip,identity"
+    "gzip,deflate"
+    "deflate"
+    "identity,gzip"
 )
+
+MAX_ATTEMPTS=${#TEST_ENCODINGS[@]}
+
+# Scratch files, set up in setup_test_environment.
+GRPC_REQ_FILE=""
+GRPC_RESP_FILE=""
+GRPC_HDR_FILE=""
+
+# Issue one gRPC request through the proxy.
+# Echoes the HTTP status code; writes the response body to $GRPC_RESP_FILE and
+# the response headers to $GRPC_HDR_FILE (so a compressed response can report
+# which grpc-encoding leaked through).
+grpc_call_via_proxy() {
+    local accept_encoding="$1"
+    local timeout="${2:-10}"
+
+    curl -s --http2-prior-knowledge --max-time "$timeout" \
+        -o "$GRPC_RESP_FILE" \
+        -D "$GRPC_HDR_FILE" \
+        -w "%{http_code}" \
+        -X POST "http://localhost:$PROXY_PORT$GRPC_PATH" \
+        -H "content-type: application/grpc" \
+        -H "te: trailers" \
+        -H "grpc-accept-encoding: $accept_encoding" \
+        --data-binary "@$GRPC_REQ_FILE" 2>/dev/null
+}
+
+# Portable "first N bytes as lowercase hex, no spaces".
+# Uses od (BSD + GNU) rather than xxd, which is not guaranteed on macOS.
+head_bytes_hex() {
+    local file="$1"
+    local count="$2"
+    od -An -tx1 -N "$count" "$file" 2>/dev/null | tr -d ' \n'
+}
 
 setup_test_environment() {
     echo "--- Setting up test environment"
-    
+
+    GRPC_REQ_FILE="$(mktemp)"
+    GRPC_RESP_FILE="$(mktemp)"
+    GRPC_HDR_FILE="$(mktemp)"
+    # shellcheck disable=SC2059
+    printf "$EMPTY_GRPC_FRAME" >"$GRPC_REQ_FILE"
+
     # Setup clean environment and ensure BUILD version of daemon
     setup_clean_environment
     setup_test_workdir "$WORKDIR"
     backup_config_files "$WORKDIR"
-    
+
     # Ensure BUILD version of suibase-daemon is used (not precompiled)
     ensure_build_daemon
-    
+
     # Start daemon using safe method that ensures BUILD version
     safe_start_daemon
-    
+
     # Wait for daemon to be ready
     wait_for_daemon_running 15 true
-    
-    # Wait for proxy to be ready on the specific port
+
+    # Wait for the proxy to answer on the specific port.
+    #
+    # Probe with the real gRPC call rather than a bare GET. A GET is neither a
+    # JSON-RPC nor a gRPC request, so the daemon forwards it to the configured
+    # upstreams and it inherits their behaviour -- which today means it burns
+    # the retry budget and takes ~11s to return a 500, long past any sane
+    # readiness timeout, even while the proxy is perfectly healthy.
     local attempts=0
     while [ $attempts -lt 10 ]; do
-        if curl -s --max-time 2 "http://localhost:$PROXY_PORT" >/dev/null 2>&1; then
-            echo "✓ RPC proxy is responding"
+        if [ "$(grpc_call_via_proxy "identity" 2)" = "200" ]; then
+            echo "✓ RPC proxy is responding to gRPC"
             return 0
         fi
         ((attempts++))
         sleep 1
     done
-    
+
     echo "✗ RPC proxy failed to start within timeout"
     return 1
 }
 
-# Test if a response contains binary/compressed data
-is_binary_response() {
-    local response="$1"
-    
-    # Check for common binary/compressed data indicators
-    # gzip magic numbers, control characters, etc.
-    if echo "$response" | grep -q $'\x1f\x8b\x08'; then
-        return 0  # gzip header found
-    fi
-    
-    if echo "$response" | grep -q $'[\x00-\x08\x0E-\x1F\x7F]'; then
-        return 0  # control characters found
-    fi
-    
-    # Check for garbled JSON-like patterns that indicate compression
-    if echo "$response" | grep -q '�.*{.*}' || echo "$response" | grep -q '{.*�.*}'; then
-        return 0  # compressed JSON pattern
-    fi
-    
-    return 1  # appears to be normal text
-}
+# Validate a gRPC response frame written to $GRPC_RESP_FILE.
+#   0 = frame the client can decode
+#   2 = malformed, or compressed in a way the client cannot decode
+#
+# The invariant is stronger than plain gRPC, and deliberately so. The proxy
+# DISCARDS the client's grpc-accept-encoding and forces `identity` on every
+# upstream request (proxy_grpc.rs, "Drop any inbound `grpc-accept-encoding`"),
+# because the Sui CLI's tonic client cannot decode message-level gzip. An
+# upstream that ignores that and answers `grpc-encoding: gzip` must be surfaced
+# as a retryable failure so the dispatcher tries the next upstream -- never
+# forwarded. See "proxy: retry gRPC upstreams returning gzip-compressed
+# responses".
+#
+# So there is no client-side negotiation to honour: whatever the client offers,
+# a compressed frame reaching it means the contract is broken and the CLI will
+# fail with "UNIMPLEMENTED: Content is compressed with gzip which isn't
+# supported". The compression flag must be 0, always.
+#
+# The offered encodings are varied anyway because that is what makes a
+# regression visible: a proxy that leaks the client's accept-encoding upstream
+# only returns compressed frames for the offers that include gzip.
+validate_grpc_frame() {
+    local offered="$1"
 
-# Test that explicitly verifies compression/decompression is working
-test_compression_decompression() {
-    local query='{"jsonrpc":"2.0","id":1,"method":"sui_getLatestCheckpointSequenceNumber","params":[]}'
-    
-    echo "Testing explicit compression/decompression verification"
-    
-    # First, test direct upstream server with compression
-    echo "1/3: Testing direct upstream server with compression request"
-    local upstream_response
-    upstream_response=$(curl -s --max-time 10 \
-        -H "Content-Type: application/json" \
-        -H "Accept-Encoding: gzip, deflate" \
-        -d "$query" \
-        "https://fullnode.testnet.sui.io:443" 2>/dev/null)
-    
-    if [ $? -ne 0 ] || [ -z "$upstream_response" ]; then
-        echo "⚠ Could not test upstream server directly, skipping compression verification"
-        return 0  # Not a failure, just can't verify
-    fi
-    
-    # Verify upstream gives us valid JSON
-    if ! echo "$upstream_response" | jq . >/dev/null 2>&1; then
-        echo "⚠ Upstream server not returning valid JSON, skipping compression verification"
-        return 0
-    fi
-    
-    echo "✓ Upstream server responding with valid JSON"
-    
-    # Now test our proxy with explicit compression request
-    echo "2/3: Testing suibase proxy with compression request"
-    local proxy_response
-    proxy_response=$(curl -s --max-time 10 \
-        -H "Content-Type: application/json" \
-        -H "Accept-Encoding: gzip, deflate" \
-        -d "$query" \
-        "http://localhost:$PROXY_PORT" 2>/dev/null)
-    
-    if [ $? -ne 0 ] || [ -z "$proxy_response" ]; then
-        echo "✗ Proxy compression test failed - no response"
-        return 1
-    fi
-    
-    # Verify proxy response is uncompressed JSON
-    if is_binary_response "$proxy_response"; then
-        echo "✗ CRITICAL: Proxy returned compressed binary data!"
-        echo "This means our decompression fix is not working"
+    local size
+    size=$(wc -c <"$GRPC_RESP_FILE" | tr -d ' ')
+
+    # A gRPC frame is a 5-byte header plus payload.
+    if [ "$size" -lt 5 ]; then
+        echo "  ✗ response too short to be a gRPC frame ($size bytes)"
         return 2
     fi
-    
-    if ! echo "$proxy_response" | jq . >/dev/null 2>&1; then
-        echo "✗ Proxy returned invalid JSON"
-        return 1
+
+    local header
+    header=$(head_bytes_hex "$GRPC_RESP_FILE" 5)
+
+    # gzip magic (1f 8b) at offset 0 means a raw compressed stream arrived
+    # instead of a gRPC frame -- no framing at all, nothing can parse it.
+    if [ "${header:0:4}" = "1f8b" ]; then
+        echo "  ✗ CRITICAL: response starts with gzip magic (raw compressed stream, not a gRPC frame)"
+        return 2
     fi
-    
-    echo "✓ Proxy correctly returned uncompressed JSON"
-    
-    # Compare content to ensure proxy is working correctly
-    echo "3/3: Verifying proxy and upstream return equivalent data"
-    local upstream_id=$(echo "$upstream_response" | jq -r '.result // empty')
-    local proxy_id=$(echo "$proxy_response" | jq -r '.result // empty')
-    
-    if [ "$upstream_id" = "$proxy_id" ] && [ -n "$upstream_id" ]; then
-        echo "✓ Proxy and upstream return equivalent data"
-        echo "✓ Compression/decompression test PASSED"
-        return 0
-    else
-        echo "⚠ Proxy and upstream returned different results (acceptable for changing blockchain state)"
-        echo "✓ Compression/decompression test PASSED"
+
+    # Bytes 1-4 are the big-endian payload length, and must agree with what
+    # actually arrived -- true whether or not the payload is compressed.
+    local declared_len=$((16#${header:2:8}))
+    local actual_len=$((size - 5))
+    if [ "$declared_len" -ne "$actual_len" ]; then
+        echo "  ✗ CRITICAL: frame length mismatch (declared $declared_len, got $actual_len)"
+        return 2
+    fi
+
+    # Byte 0 is the per-message compression flag. It must be 0 -- see the
+    # contract above.
+    local flag="${header:0:2}"
+    if [ "$flag" = "00" ]; then
+        echo "  ✓ uncompressed frame (${actual_len}B payload)"
         return 0
     fi
+
+    # Compressed. Report the announced algorithm purely as a diagnostic -- it
+    # does not make the response acceptable, it just says which upstream
+    # encoding leaked through.
+    local announced
+    announced=$(grep -i "^grpc-encoding:" "$GRPC_HDR_FILE" 2>/dev/null |
+        head -1 | cut -d: -f2- | tr -d ' \r\n')
+
+    echo "  ✗ CRITICAL: compression flag is 0x$flag (expected 0x00)"
+    echo "    grpc-encoding: ${announced:-<absent>}, client offered: $offered"
+    echo "    the proxy must force 'grpc-accept-encoding: identity' upstream and"
+    echo "    retry rather than forward a compressed frame; the Sui CLI will fail"
+    echo "    with UNIMPLEMENTED: Content is compressed with ${announced:-gzip}"
+    return 2
 }
 
-# Test a single JSON-RPC query
-test_rpc_query() {
-    local query="$1"
+# Test a single gRPC query through the proxy.
+test_grpc_query() {
+    local accept_encoding="$1"
     local attempt="$2"
-    
-    echo "--- Test $attempt/$MAX_ATTEMPTS: Testing RPC query"
-    
-    # Make the request and capture both response and curl exit code
-    local response
-    local curl_exit_code
-    
-    response=$(curl -s --max-time 10 \
-        -H "Content-Type: application/json" \
-        -H "Accept-Encoding: gzip, deflate" \
-        -d "$query" \
-        "http://localhost:$PROXY_PORT" 2>/dev/null)
-    curl_exit_code=$?
-    
+
+    echo "--- Test $attempt/$MAX_ATTEMPTS: grpc-accept-encoding: $accept_encoding"
+
+    local http_code
+    http_code=$(grpc_call_via_proxy "$accept_encoding" 10)
+    local curl_exit_code=$?
+
     if [ $curl_exit_code -ne 0 ]; then
-        echo "⚠ Query $attempt failed - curl error $curl_exit_code"
+        echo "  ⚠ Query $attempt failed - curl error $curl_exit_code"
         return 1
     fi
-    
-    if [ -z "$response" ]; then
-        echo "⚠ Query $attempt failed - empty response"
+
+    if [ "$http_code" != "200" ]; then
+        echo "  ⚠ Query $attempt failed - HTTP $http_code"
         return 1
     fi
-    
-    # Check if response is binary/compressed
-    if is_binary_response "$response"; then
-        echo "✗ Query $attempt FAILED - received binary/compressed response!"
-        echo "First 100 chars of response: $(echo "$response" | head -c 100)"
-        echo "Response contains binary data - this indicates the compression bug is present"
-        return 2  # Special return code for compression bug
+
+    validate_grpc_frame "$accept_encoding"
+    local frame_result=$?
+    if [ $frame_result -ne 0 ]; then
+        return $frame_result
     fi
-    
-    # Try to parse as JSON to verify it's valid
-    if ! echo "$response" | jq . >/dev/null 2>&1; then
-        echo "⚠ Query $attempt failed - invalid JSON response"
-        echo "Response: $response"
-        return 1
-    fi
-    
-    echo "✓ Query $attempt passed - received valid JSON response"
+
+    echo "  ✓ Query $attempt passed - client-decodable gRPC frame"
     return 0
 }
 
 run_compression_tests() {
-    echo "--- Running RPC proxy compression tests"
-    
-    local total_tests=${#TEST_QUERIES[@]}
+    echo "--- Running RPC proxy compression tests (gRPC)"
+
+    local total_tests=${#TEST_ENCODINGS[@]}
     local passed_tests=0
     local failed_tests=0
     local compression_bugs=0
-    
-    for i in "${!TEST_QUERIES[@]}"; do
-        local query="${TEST_QUERIES[$i]}"
+
+    for i in "${!TEST_ENCODINGS[@]}"; do
+        local accept_encoding="${TEST_ENCODINGS[$i]}"
         local attempt=$((i + 1))
-        
-        test_rpc_query "$query" "$attempt"
+
+        test_grpc_query "$accept_encoding" "$attempt"
         local result=$?
-        
+
         case $result in
-            0)
-                ((passed_tests++))
-                ;;
-            1)
-                ((failed_tests++))
-                ;;
-            2)
-                ((compression_bugs++))
-                ;;
+        0)
+            ((passed_tests++))
+            ;;
+        1)
+            ((failed_tests++))
+            ;;
+        2)
+            ((compression_bugs++))
+            ;;
         esac
-        
+
         # Small delay between tests
         sleep 0.5
     done
-    
+
     echo "--- Test Results Summary"
     echo "  Total tests: $total_tests"
     echo "  Passed: $passed_tests"
     echo "  Failed (network/other): $failed_tests"
     echo "  Failed (compression bug): $compression_bugs"
-    
+
     if [ $compression_bugs -gt 0 ]; then
         echo "✗ CRITICAL: RPC proxy compression bug detected!"
-        echo "The suibase RPC proxy is returning compressed binary data instead of JSON."
-        echo "This breaks SuiClient and other JSON-RPC clients."
+        echo "The suibase RPC proxy is returning compressed or malformed gRPC frames."
+        echo "This breaks the sui CLI and other gRPC clients."
         echo "This test will FAIL to ensure the bug gets fixed."
         return 1
     fi
-    
+
     if [ $passed_tests -eq 0 ]; then
         echo "✗ All tests failed - RPC proxy appears to be non-functional"
         return 1
     fi
-    
-    echo "✓ No compression bugs detected - all responses are proper JSON"
+
+    echo "✓ No compression bugs detected - all responses are client-decodable gRPC frames"
     return 0
 }
 
 cleanup_test_environment() {
     echo "--- Cleaning up test environment"
-    
+
     # Restore config files
     restore_config_files "$WORKDIR"
-    
+
     # Clean up any port conflicts (stop processes using our ports)
     cleanup_port_conflicts
-    
+
+    [ -n "$GRPC_REQ_FILE" ] && rm -f "$GRPC_REQ_FILE"
+    [ -n "$GRPC_RESP_FILE" ] && rm -f "$GRPC_RESP_FILE"
+    [ -n "$GRPC_HDR_FILE" ] && rm -f "$GRPC_HDR_FILE"
+
     return 0
 }
 
@@ -275,23 +313,24 @@ main() {
     echo "Description: $TEST_DESCRIPTION"
     echo "Workdir: $WORKDIR"
     echo "Proxy Port: $PROXY_PORT"
-    echo "Test Queries: ${#TEST_QUERIES[@]}"
+    echo "gRPC Method: $GRPC_PATH"
+    echo "Test Queries: ${#TEST_ENCODINGS[@]}"
     echo ""
-    
+
     # Set up error handling
     trap cleanup_test_environment EXIT
-    
+
     # Run the test sequence
     if ! setup_test_environment; then
         echo "✗ Test environment setup failed"
         exit 1
     fi
-    
+
     if ! run_compression_tests; then
         echo "✗ $TEST_NAME FAILED"
         exit 1
     fi
-    
+
     echo "✓ $TEST_NAME PASSED"
     exit 0
 }
